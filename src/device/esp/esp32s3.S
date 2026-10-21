@@ -88,8 +88,8 @@
 .Ldcache_ctrl1_reg:
     .long 0x600C4004
 // End of the flash area for MMU mapping.
-.Lflash_data_end:
-    .long __flash_data_end - 1
+.Lflash_map_end:
+    .long _flash_map_end - 1
 .Ldrom_base:
     .long 0x3C000000
 
@@ -268,9 +268,9 @@ call_start_cpu0:
     l32r a4, .LCache_Set_IDROM_MMU_Size
     callx4 a4
 
-    // 4i. Identity map flash up to __flash_data_end. IROM and DROM share entries,
+    // 4i. Identity map flash up to _flash_map_end. IROM and DROM share entries,
     //     see mmu_ll_get_entry_id in esp-idf hal/esp32s3/include/hal/mmu_ll.h.
-    l32r a2, .Lflash_data_end          // a2 = last data byte (VMA in 0x3Cxxxxxx)
+    l32r a2, .Lflash_map_end           // a2 = last mapped byte (VMA in 0x3Cxxxxxx)
     l32r a3, .Ldrom_base               // a3 = 0x3C000000
     sub  a2, a2, a3                    // a2 = byte offset past DROM base
     srli a2, a2, 16                    // a2 = last page index

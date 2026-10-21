@@ -178,9 +178,11 @@ _heap_end = 0x3fceb710;
 
 _stack_size = 4K;
 
-/* IROM and DROM both map flash 1:1 from offset 0, see esp32s3.S. */
-PROVIDE(__flash_data_start = ALIGN(_irom_end - 0x42000000 + 0x3C000000, 4096));
+/* IROM and DROM both map flash 1:1 from offset 0, see esp32s3.S.
+ * The 64 bytes skip the image footer written by builder/esp.go. */
+PROVIDE(__flash_data_start = ALIGN(_irom_end - 0x42000000 + 0x3C000000 + 64, 4096));
 PROVIDE(__flash_data_end = 0x3C000000 + 4M);
+_flash_map_end = MAX(_irom_end - 0x42000000 + 0x3C000000, __flash_data_end);
 
 /* From ESP-IDF:
  * components/esp_rom/esp32/ld/esp32.rom.newlib-funcs.ld
