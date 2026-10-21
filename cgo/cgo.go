@@ -1494,7 +1494,9 @@ func (f *cgoFile) walker(cursor *astutil.Cursor, names map[string]clangCursor) b
 		}
 		if x.Name == "C" {
 			name := "_Cgo_" + node.Sel.Name
-			if found, ok := names[node.Sel.Name]; ok {
+			if node.Sel.Name == "unsigned" {
+				name = "_Cgo_uint"
+			} else if found, ok := names[node.Sel.Name]; ok {
 				name = f.getASTDeclName(node.Sel.Name, found, false)
 			}
 			cursor.Replace(&ast.Ident{
