@@ -36,7 +36,6 @@ type runner struct {
 	timeout           time.Duration
 	maxLoopIterations int
 	callsExecuted     uint64
-	interpErr         error  // set by Uint/Int when they encounter pointer data
 	xorshift32State   uint32 // state for runtime.fastrand
 	xorshift64State   uint64 // state for runtime.fastrand64
 }
