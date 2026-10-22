@@ -174,7 +174,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 				operands = append(operands, v)
 			}
 		}
-		if isRuntimeInst {
+		if isRuntimeInst && !(inst.opcode == llvm.Ret && len(operands) == len(inst.operands)) {
 			err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 			if err != nil {
 				return nil, mem, err
@@ -221,6 +221,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 		case llvm.Ret:
 			if !fn.deferFrame.IsNil() && len(mem.instructions) != 0 {
 				return nil, mem, r.rollbackAt(inst, "cannot partially evaluate a function with defer")
+			}
+			if fn.noruntime && len(mem.instructions) != 0 {
+				return nil, mem, r.rollbackAt(inst, "cannot partially evaluate a //go:noruntime function")
 			}
 			if time.Since(r.start) > r.timeout {
 				// Running for more than the allowed timeout; This shouldn't happen, but it does.
@@ -1182,6 +1185,9 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 	if !fn.deferFrame.IsNil() {
 		return r.rollbackAt(inst, "cannot partially evaluate a function with defer: "+opcodeName(inst.llvmInst))
 	}
+	if fn.noruntime {
+		return r.rollbackAt(inst, "cannot partially evaluate a //go:noruntime function: "+opcodeName(inst.llvmInst))
+	}
 	numOperands := inst.llvmInst.OperandsCount()
 	operands := make([]llvm.Value, numOperands)
 	for i := range numOperands {
@@ -1291,6 +1297,24 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		result = r.builder.CreateSRem(operands[0], operands[1], inst.name)
 	case llvm.ZExt:
 		result = r.builder.CreateZExt(operands[0], inst.llvmInst.Type(), inst.name)
+	case llvm.SExt:
+		result = r.builder.CreateSExt(operands[0], inst.llvmInst.Type(), inst.name)
+	case llvm.Trunc:
+		result = r.builder.CreateTrunc(operands[0], inst.llvmInst.Type(), inst.name)
+	case llvm.And:
+		result = r.builder.CreateAnd(operands[0], operands[1], inst.name)
+	case llvm.Or:
+		result = r.builder.CreateOr(operands[0], operands[1], inst.name)
+	case llvm.Xor:
+		result = r.builder.CreateXor(operands[0], operands[1], inst.name)
+	case llvm.Shl:
+		result = r.builder.CreateShl(operands[0], operands[1], inst.name)
+	case llvm.LShr:
+		result = r.builder.CreateLShr(operands[0], operands[1], inst.name)
+	case llvm.AShr:
+		result = r.builder.CreateAShr(operands[0], operands[1], inst.name)
+	case llvm.ICmp:
+		result = r.builder.CreateICmp(inst.llvmInst.IntPredicate(), operands[0], operands[1], inst.name)
 	default:
 		if inst.branch || inst.opcode == llvm.Switch || inst.opcode == llvm.IndirectBr {
 			return r.rollbackAt(inst, "branch on a value not known at compile time")
