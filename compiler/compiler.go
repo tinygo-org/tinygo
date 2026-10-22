@@ -89,6 +89,8 @@ type compilerContext struct {
 	program          *ssa.Program
 	diagnostics      []error
 	functionInfos    map[*ssa.Function]functionInfo
+	globalInfos      map[*ssa.Global]globalInfo
+	pragmaErrors     map[*ast.Comment]bool
 	callProperties   map[*ssa.Function]functionCallProperties
 	asyncifyCatchers map[llvm.Type]llvm.Value
 	directCatchers   map[llvm.Value]llvm.Value
@@ -116,6 +118,8 @@ func newCompilerContext(moduleName string, machine llvm.TargetMachine, config *C
 		machine:          machine,
 		targetData:       machine.CreateTargetData(),
 		functionInfos:    map[*ssa.Function]functionInfo{},
+		globalInfos:      map[*ssa.Global]globalInfo{},
+		pragmaErrors:     map[*ast.Comment]bool{},
 		callProperties:   map[*ssa.Function]functionCallProperties{},
 		asyncifyCatchers: map[llvm.Type]llvm.Value{},
 		directCatchers:   map[llvm.Value]llvm.Value{},
@@ -1208,6 +1212,9 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	}
 
 	b.addStandardDefinedAttributes(b.llvmFn)
+	if b.info.noruntime {
+		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-noruntime", ""))
+	}
 	if !b.info.exported {
 		// Do not set visibility for local linkage (internal or private).
 		// Otherwise a "local linkage requires default visibility"
@@ -1690,8 +1697,8 @@ func (b *builder) isOversizedAggregate(typ types.Type) bool {
 
 func (b *builder) isAggregateValue(typ types.Type) bool {
 	if tuple, ok := typ.(*types.Tuple); ok {
-		for i := 0; i < tuple.Len(); i++ {
-			if !isLLVMValueType(tuple.At(i).Type()) {
+		for v := range tuple.Variables() {
+			if !isLLVMValueType(v.Type()) {
 				return false
 			}
 		}
@@ -3062,11 +3069,21 @@ func isByteSliceToStringComparison(expr *ssa.Convert) bool {
 	if !isByteSliceToStringConvert(expr) {
 		return false
 	}
-	comparison := adjacentComparison(expr, isByteSliceToStringConvert)
-	return comparison != nil &&
-		isComparisonOp(comparison.Op) &&
-		isByteSliceToStringConvert(comparison.X) &&
-		isByteSliceToStringConvert(comparison.Y)
+	comparison := adjacentComparison(expr, isStringComparisonOperand)
+	return comparison != nil && isComparisonOp(comparison.Op)
+}
+
+// isStringComparisonOperand reports whether value cannot write memory or call
+// code, so it is safe to run between a conversion and its comparison.
+func isStringComparisonOperand(value ssa.Value) bool {
+	switch value := value.(type) {
+	case *ssa.UnOp:
+		return value.Op == token.MUL
+	case *ssa.Slice:
+		basic, ok := value.X.Type().Underlying().(*types.Basic)
+		return ok && basic.Info()&types.IsString != 0
+	}
+	return isByteSliceToStringConvert(value)
 }
 
 func isComparisonOp(op token.Token) bool {

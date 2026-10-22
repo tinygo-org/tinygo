@@ -100,7 +100,7 @@ func (spec *TargetSpec) overrideProperties(child *TargetSpec) error {
 			if src.Bool() {
 				dst.Set(src)
 			}
-		case reflect.Ptr: // for pointers, copy if not nil
+		case reflect.Pointer: // for pointers, copy if not nil
 			if !src.IsNil() {
 				dst.Set(src)
 			}
@@ -226,7 +226,7 @@ func LoadTarget(options *Options) (*TargetSpec, error) {
 		return nil, fmt.Errorf("%s : %w", options.Target, err)
 	}
 	switch spec.PanicUnwind {
-	case "", "auto", "explicit":
+	case "", "auto", "explicit", "none":
 	default:
 		return nil, fmt.Errorf("%s: invalid panic-unwind option %q", options.Target, spec.PanicUnwind)
 	}

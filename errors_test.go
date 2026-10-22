@@ -39,7 +39,10 @@ func TestErrors(t *testing.T) {
 		{name: "loader-invalidpackage"},
 		{name: "loader-nopackage"},
 		{name: "noheap", target: "cortex-m-qemu"},
+		{name: "noruntime"},
+		{name: "noruntime-use"},
 		{name: "optimizer"},
+		{name: "pragma"},
 		{name: "syntax"},
 		{name: "types"},
 	} {

@@ -107,17 +107,18 @@ var errVCOOverflow = errors.New("VCO calculation overflow; use lower MHz")
 // pllSearch enables searching for a good PLL configuration.
 // Example for 12MHz crystal and RP2040:
 //
-//	fbdiv, refdiv, pd1, pd2, _ := pllSearch{LockRefDiv:1}.CalcDivs(12*MHz, 125*MHz, MHz)
+//	fbdiv, refdiv, pd1, pd2, _ := calcPLLDivs(pllSearch{LockRefDiv: 1}, 12*MHz, 125*MHz, MHz)
 //
 // Example for 12MHz crystal and RP2350:
 //
-//	fbdiv, refdiv, pd1, pd2, _ := pllSearch{LockRefDiv:1}.CalcDivs(12*MHz, 150*MHz, MHz)
+//	fbdiv, refdiv, pd1, pd2, _ := calcPLLDivs(pllSearch{LockRefDiv: 1}, 12*MHz, 150*MHz, MHz)
 type pllSearch struct {
 	LowerVCO   bool
 	LockRefDiv uint8
 }
 
-func (ps pllSearch) CalcDivs(xoscRef, targetFreq, MHz uint64) (fbdiv uint64, refdiv, pd1, pd2 uint8, err error) {
+//go:noruntime
+func calcPLLDivs(ps pllSearch, xoscRef, targetFreq, MHz uint64) (fbdiv uint64, refdiv, pd1, pd2 uint8, err error) {
 	genTable()
 	var bestFreq, bestFbdiv uint64
 	var bestRefdiv, bestpd1, bestpd2 uint8
@@ -191,6 +192,7 @@ func abs(a int64) int64 {
 	return a
 }
 
+//go:noruntime
 func pllFreqOutPostdiv(xosc, fbdiv, MHz uint64, refdiv, postdiv1, postdiv2 uint8) (foutpostdiv uint64, err error) {
 	// testing grounds.
 	const (
@@ -248,6 +250,7 @@ var pdTable = [50]struct {
 	lovco [2]uint8
 }{}
 
+//go:noruntime
 func genTable() {
 	if pdTable[1].hivco[1] != 0 {
 		return // Already generated.
@@ -259,6 +262,8 @@ func genTable() {
 
 // genTableEntry stays separate to keep PLL calculation within interp's 1,000-entry
 // per-function basic block limit, rather than running at startup (interp/interpreter.go).
+//
+//go:noruntime
 func genTableEntry(product int) {
 	bestProdhi := 255
 	bestProdlo := 255

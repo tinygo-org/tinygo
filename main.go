@@ -1174,10 +1174,6 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 		return err
 	}
 
-	if err := flasher.EraseFlash(progressFunc); err != nil {
-		return fmt.Errorf("erase failed: %v", err)
-	}
-
 	// Flash with progress reporting
 	err = flasher.FlashImage(data, offset, progressFunc)
 	if err != nil {
@@ -1778,7 +1774,7 @@ func main() {
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, conservative, custom, precise, boehm)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
-	panicUnwind := flag.String("panic-unwind", "", "panic unwind strategy (auto, explicit)")
+	panicUnwind := flag.String("panic-unwind", "", "panic unwind strategy (auto, explicit, none)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, tasks, cores, threads, asyncify)")
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb, rtt)")
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
@@ -2062,10 +2058,7 @@ func main() {
 			bufs[i].done = make(chan struct{})
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			// Flush the output one test at a time.
 			// This ensures that outputs from different tests are not mixed together.
 			for i := range bufs {
@@ -2078,7 +2071,7 @@ func main() {
 					}
 				}
 			}
-		}()
+		})
 
 		// Build and run the tests concurrently.
 		// This uses an additional semaphore to reduce the memory usage.
@@ -2086,9 +2079,7 @@ func main() {
 		for i, pkg := range explicitPkgNames {
 			buf := &bufs[i]
 			testSema <- struct{}{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				defer func() { <-testSema }()
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
@@ -2108,7 +2099,7 @@ func main() {
 					default:
 					}
 				}
-			}()
+			})
 		}
 
 		// Wait for all tests to finish.

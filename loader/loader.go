@@ -13,6 +13,7 @@ import (
 	"go/token"
 	"go/types"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -396,7 +397,7 @@ func (p *Package) OriginalModuleDir() string {
 		if rel == "." || rel != importPath {
 			dir := p.OriginalDir()
 			if rel != "." {
-				for range strings.Split(rel, "/") {
+				for range strings.SplitSeq(rel, "/") {
 					dir = filepath.Dir(dir)
 				}
 			}
@@ -485,10 +486,8 @@ func (p *Package) RecordedPath(filename string) string {
 		return path.Join(p.RecordedDir(), "!cgo.go")
 	}
 	if p.program.config.TestConfig.CompileTestBinary {
-		for _, generated := range p.program.MainPkg().GoFiles {
-			if filename == generated {
-				return "_testmain.go"
-			}
+		if slices.Contains(p.program.MainPkg().GoFiles, filename) {
+			return "_testmain.go"
 		}
 	}
 	for _, root := range []string{
@@ -738,9 +737,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, parseFlags, p.program.config.GOOS())
 		p.CFlags = append(initialCFlags, cflags...)
 		p.CGoHeaders = headerCode
-		for path, hash := range accessedFiles {
-			p.FileHashes[path] = hash
-		}
+		maps.Copy(p.FileHashes, accessedFiles)
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
 		}

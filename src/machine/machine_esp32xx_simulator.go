@@ -1,4 +1,4 @@
-//go:build !baremetal && (xiao_esp32c3 || xiao_esp32s3)
+//go:build !baremetal && (xiao_esp32c3 || xiao_esp32s3 || m5stamp_fly)
 
 // Simulator support for ESP32-C3 and ESP32-S3 based boards.
 

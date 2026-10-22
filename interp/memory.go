@@ -166,7 +166,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 								}
 							}
 						}
-						if opcode == llvm.Br || opcode == llvm.Switch {
+						if isBranch(inst) || opcode == llvm.Switch {
 							// These don't affect memory. Skipped here because
 							// they also have a label as operand.
 							continue
@@ -275,7 +275,10 @@ func (mv *memoryView) getWritable(index uint32) object {
 	}
 	// Object is not currently in this view. Get it, and clone it for use.
 	obj := mv.get(index).clone()
-	mv.r.objects[index] = obj
+	if mv.objects == nil {
+		mv.objects = make(map[uint32]object)
+	}
+	mv.objects[index] = obj
 	return obj
 }
 
@@ -323,13 +326,23 @@ func (mv *memoryView) load(p pointerValue, size uint32) value {
 	}
 	v := obj.buffer.asRawValue(mv.r)
 	loadedBuf := v.buf[p.offset() : p.offset()+size]
-	if _, writable := mv.objects[p.index()]; writable {
-		// This object's buffer is owned by this view, which means a later
-		// store may mutate it in place (see store below). Copy the loaded
-		// slice so the returned value is not aliased with the live buffer.
-		loadedBuf = append([]uint64(nil), loadedBuf...)
+	if mv.owned(p.index()) {
+		// A store in an owning view may change the buffer in place, so copy
+		// the slice to keep the loaded value independent of it.
+		loadedBuf = slices.Clone(loadedBuf)
 	}
 	return rawValue{buf: loadedBuf}
+}
+
+// owned reports whether this view or a parent view holds the object, so that a
+// store in that view may change its buffer in place.
+func (mv *memoryView) owned(index uint32) bool {
+	for v := mv; v != nil; v = v.parent {
+		if _, ok := v.objects[index]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // Store to the value behind the given pointer. This overwrites the value in the
@@ -383,8 +396,8 @@ type value interface {
 	clone() value
 	asPointer(*runner) (pointerValue, error)
 	asRawValue(*runner) rawValue
-	Uint(*runner) uint64
-	Int(*runner) int64
+	Uint(*runner) (uint64, error)
+	Int(*runner) (int64, error)
 	toLLVMValue(llvm.Type, *memoryView) (llvm.Value, error)
 	String() string
 }
@@ -428,7 +441,8 @@ func (v literalValue) len(r *runner) uint32 {
 
 func (v literalValue) String() string {
 	// Note: passing a nil *runner to v.Int because we know it won't use it.
-	return strconv.FormatInt(v.Int(nil), 10)
+	n, _ := v.Int(nil)
+	return strconv.FormatInt(n, 10)
 }
 
 func (v literalValue) clone() value {
@@ -463,31 +477,31 @@ func (v literalValue) asRawValue(r *runner) rawValue {
 	return raw
 }
 
-func (v literalValue) Uint(r *runner) uint64 {
+func (v literalValue) Uint(r *runner) (uint64, error) {
 	switch value := v.value.(type) {
 	case uint64:
-		return value
+		return value, nil
 	case uint32:
-		return uint64(value)
+		return uint64(value), nil
 	case uint16:
-		return uint64(value)
+		return uint64(value), nil
 	case uint8:
-		return uint64(value)
+		return uint64(value), nil
 	default:
 		panic("inpterp: unknown literal type")
 	}
 }
 
-func (v literalValue) Int(r *runner) int64 {
+func (v literalValue) Int(r *runner) (int64, error) {
 	switch value := v.value.(type) {
 	case uint64:
-		return int64(value)
+		return int64(value), nil
 	case uint32:
-		return int64(int32(value))
+		return int64(int32(value)), nil
 	case uint16:
-		return int64(int16(value))
+		return int64(int16(value)), nil
 	case uint8:
-		return int64(int8(value))
+		return int64(int8(value)), nil
 	default:
 		panic("inpterp: unknown literal type")
 	}
@@ -576,14 +590,12 @@ func (v pointerValue) asRawValue(r *runner) rawValue {
 	return rv
 }
 
-func (v pointerValue) Uint(r *runner) uint64 {
-	r.interpErr = errUnsupportedInst
-	return 0
+func (v pointerValue) Uint(r *runner) (uint64, error) {
+	return 0, errUnsupportedInst
 }
 
-func (v pointerValue) Int(r *runner) int64 {
-	r.interpErr = errUnsupportedInst
-	return 0
+func (v pointerValue) Int(r *runner) (int64, error) {
+	return 0, errUnsupportedInst
 }
 
 func (v pointerValue) equal(rhs pointerValue) bool {
@@ -734,7 +746,8 @@ func (v rawValue) String() string {
 			// (the printed value will just be slightly wrong when debugging the
 			// interp package with GOOS=mips for example).
 			r := &runner{byteOrder: binary.LittleEndian}
-			return strconv.FormatInt(v.Int(r), 10)
+			n, _ := v.Int(r)
+			return strconv.FormatInt(n, 10)
 		}
 	}
 	return "<[…" + strconv.Itoa(len(v.buf)) + "]>"
@@ -759,48 +772,51 @@ func (v rawValue) asRawValue(r *runner) rawValue {
 	return v
 }
 
-func (v rawValue) bytes(r *runner) []byte {
+func (v rawValue) bytes() ([]byte, error) {
 	buf := make([]byte, len(v.buf))
 	for i, p := range v.buf {
 		if p > 255 {
-			r.interpErr = errUnsupportedInst
-			return buf
+			return nil, errUnsupportedInst
 		}
 		buf[i] = byte(p)
 	}
-	return buf
+	return buf, nil
 }
 
-func (v rawValue) Uint(r *runner) uint64 {
-	buf := v.bytes(r)
-	if r.interpErr != nil {
-		return 0
+func (v rawValue) Uint(r *runner) (uint64, error) {
+	buf, err := v.bytes()
+	if err != nil {
+		return 0, err
 	}
 
 	switch len(v.buf) {
 	case 1:
-		return uint64(buf[0])
+		return uint64(buf[0]), nil
 	case 2:
-		return uint64(r.byteOrder.Uint16(buf))
+		return uint64(r.byteOrder.Uint16(buf)), nil
 	case 4:
-		return uint64(r.byteOrder.Uint32(buf))
+		return uint64(r.byteOrder.Uint32(buf)), nil
 	case 8:
-		return r.byteOrder.Uint64(buf)
+		return r.byteOrder.Uint64(buf), nil
 	default:
 		panic("unknown integer size")
 	}
 }
 
-func (v rawValue) Int(r *runner) int64 {
+func (v rawValue) Int(r *runner) (int64, error) {
+	n, err := v.Uint(r)
+	if err != nil {
+		return 0, err
+	}
 	switch len(v.buf) {
 	case 1:
-		return int64(int8(v.Uint(r)))
+		return int64(int8(n)), nil
 	case 2:
-		return int64(int16(v.Uint(r)))
+		return int64(int16(n)), nil
 	case 4:
-		return int64(int32(v.Uint(r)))
+		return int64(int32(n)), nil
 	case 8:
-		return int64(int64(v.Uint(r)))
+		return int64(n), nil
 	default:
 		panic("unknown integer size")
 	}
@@ -899,13 +915,14 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 			return llvm.ConstPtrToInt(v, llvmType), nil
 		}
 		var n uint64
+		var err error
 		switch llvmType.IntTypeWidth() {
 		case 64:
-			n = rawValue{v.buf[:8]}.Uint(mem.r)
+			n, err = rawValue{v.buf[:8]}.Uint(mem.r)
 		case 32:
-			n = rawValue{v.buf[:4]}.Uint(mem.r)
+			n, err = rawValue{v.buf[:4]}.Uint(mem.r)
 		case 16:
-			n = rawValue{v.buf[:2]}.Uint(mem.r)
+			n, err = rawValue{v.buf[:2]}.Uint(mem.r)
 		case 8:
 			n = uint64(v.buf[0])
 		case 1:
@@ -915,6 +932,9 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 			}
 		default:
 			panic("unknown integer size")
+		}
+		if err != nil {
+			return llvm.Value{}, err
 		}
 		return llvm.ConstInt(llvmType, n, false), nil
 	case llvm.StructTypeKind:
@@ -974,7 +994,10 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 		}
 		// This is either a null pointer or a raw pointer for memory-mapped I/O
 		// (such as 0xe000ed00).
-		ptr := rawValue{v.buf[:mem.r.pointerSize]}.Uint(mem.r)
+		ptr, err := rawValue{v.buf[:mem.r.pointerSize]}.Uint(mem.r)
+		if err != nil {
+			return llvm.Value{}, err
+		}
 		if ptr == 0 {
 			// Null pointer.
 			return llvm.ConstNull(llvmType), nil
@@ -992,12 +1015,18 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 		}
 		return llvm.ConstIntToPtr(ptrValue, llvmType), nil
 	case llvm.DoubleTypeKind:
-		b := rawValue{v.buf[:8]}.Uint(mem.r)
+		b, err := rawValue{v.buf[:8]}.Uint(mem.r)
+		if err != nil {
+			return llvm.Value{}, err
+		}
 		f := math.Float64frombits(b)
 		return llvm.ConstFloat(llvmType, f), nil
 	case llvm.FloatTypeKind:
-		b := uint32(rawValue{v.buf[:4]}.Uint(mem.r))
-		f := math.Float32frombits(b)
+		b, err := rawValue{v.buf[:4]}.Uint(mem.r)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		f := math.Float32frombits(uint32(b))
 		return llvm.ConstFloat(llvmType, float64(f)), nil
 	default:
 		return llvm.Value{}, errors.New("interp: todo: raw value to LLVM value: " + llvmType.String())
@@ -1083,7 +1112,11 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 			if !lhs.set(llvmValue.Operand(0), r) || !rhs.set(llvmValue.Operand(1), r) {
 				return false
 			}
-			if r.interpretICmp(lhs, rhs, llvmValue.IntPredicate()) {
+			result, err := r.interpretICmp(lhs, rhs, llvmValue.IntPredicate())
+			if err != nil {
+				return false
+			}
+			if result {
 				v.buf[0] = 1 // result is true
 			} else {
 				v.buf[0] = 0 // result is false
@@ -1212,11 +1245,11 @@ func (v localValue) asRawValue(r *runner) rawValue {
 	panic("interp: localValue.asRawValue")
 }
 
-func (v localValue) Uint(r *runner) uint64 {
+func (v localValue) Uint(r *runner) (uint64, error) {
 	panic("interp: localValue.Uint")
 }
 
-func (v localValue) Int(r *runner) int64 {
+func (v localValue) Int(r *runner) (int64, error) {
 	panic("interp: localValue.Int")
 }
 
@@ -1306,7 +1339,10 @@ func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 	ptr, err := layoutValue.asPointer(r)
 	if err == errIntegerAsPointer {
 		// It's an integer, which means it's a small object.
-		layout := layoutValue.Uint(r)
+		layout, err := layoutValue.Uint(r)
+		if err != nil {
+			panic("interp: GC layout contains pointer data")
+		}
 		if layout == 0 {
 			panic("runtime.alloc called without a GC layout")
 		}
@@ -1340,7 +1376,10 @@ func (r *runner) readObjectLayout(layoutValue value) (uint64, *big.Int) {
 
 	// Read the object size in words and the bitmap from the global.
 	buf := r.objects[ptr.index()].buffer.(rawValue)
-	objectSizeWords := rawValue{buf: buf.buf[:r.pointerSize]}.Uint(r)
+	objectSizeWords, err := rawValue{buf: buf.buf[:r.pointerSize]}.Uint(r)
+	if err != nil {
+		panic("interp: GC layout contains pointer data")
+	}
 	rawByteValues := buf.buf[r.pointerSize:]
 	rawBytes := make([]byte, len(rawByteValues))
 	for i, v := range rawByteValues {

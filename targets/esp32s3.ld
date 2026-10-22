@@ -54,6 +54,9 @@ SECTIONS
         . = ALIGN(16);
         . += _stack_size;
         _stack_top = .;
+        . = ALIGN(16);
+        . += DEFINED(__num_stacks) && __num_stacks >= 2 ? _stack_size : 0;
+        _stack1_top = .;
     } >DRAM
 
     /* Global variables that are mutable and zero-initialized. */
@@ -93,6 +96,8 @@ SECTIONS
         /* Boot entry point and its literals */
         *(.literal.call_start_cpu0)
         *(.text.call_start_cpu0)
+        *(.literal.call_start_cpu1)
+        *(.text.call_start_cpu1)
 
         /* Xtensa exception/interrupt vector table — must be 0x400-aligned */
         . = ALIGN(0x400);
@@ -304,6 +309,7 @@ ets_install_uart_printf = 0x400005e8;
 ets_install_putc2 = 0x400005f4;
 PROVIDE( ets_delay_us = 0x40000600 );
 ets_get_stack_info = 0x4000060c;
+ets_set_appcpu_boot_addr = 0x40000720;
 ets_install_lock = 0x40000618;
 ets_backup_dma_copy = 0x40000624;
 ets_apb_backup_init_lock_func = 0x40000630;

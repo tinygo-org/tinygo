@@ -46,6 +46,29 @@ The interpreter runs an instruction just like it would if it were executed
 time. As indicated above, some instructions need to be executed at runtime
 instead.
 
+## Functions with no runtime uses (experiment)
+
+Experimental: this directive may change or be removed in a future release.
+
+The `//go:noruntime` directive requires a function to have no runtime uses
+after initialization code is evaluated. It does not make new code eligible for
+evaluation. Put the directive on a function definition, with no arguments.
+
+The compiler stores the directive as a `tinygo-noruntime` LLVM function
+attribute. After whole-program interpretation, the optimizer removes dead code
+and rejects any marked function that remains. This check runs before inlining
+and ThinLTO, at every optimization level. Unused functions are allowed. Runtime
+calls, exported functions, and function addresses retained by runtime code are
+not allowed. Temporary roots used to preserve the indirect ABI are excluded.
+
+This is a conservative check at the interpreter boundary. A call that a later
+LLVM optimization could remove is still an error. The directive does not change
+the interpreter's loop limit or supported operations. The error identifies the
+marked function and its first use outside other marked functions. It does not
+yet give the reason that interpretation stopped. Live method tables can retain
+a marked method even without a call to that method. The check rejects that
+retained address too, so prefer plain functions over methods.
+
 ## Memory
 
 Memory is represented as objects (the `object` type) that contains data that

@@ -131,6 +131,8 @@ ifneq ($(WASM), 0)
 	@$(MD5SUM) $(SMOKE_OUT).wasm
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o $(SMOKE_OUT).wasm -tags=xiao_esp32s3         examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).wasm
+	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o $(SMOKE_OUT).wasm -tags=m5stamp_fly          examples/machinetest
+	@$(MD5SUM) $(SMOKE_OUT).wasm
 endif
 
 smoketest-nrf: SMOKE_OUT = build/smoke/nrf
@@ -274,6 +276,10 @@ smoketest-rp2xxx: | build/smoke
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pico                examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pico -gc=leaking    examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pico -scheduler=cores examples/core-assign
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pico2 -scheduler=cores examples/core-assign
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pico-w              examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
@@ -491,6 +497,10 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32s3-generic     examples/machinetest
 	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32s3-generic -scheduler=cores examples/machinetest
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32s3-generic -scheduler=cores examples/core-assign
+	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32-mini32      	examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32c3-supermini   examples/blinky1
@@ -504,6 +514,8 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target m5stack             examples/machinetest
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target m5stamp-s3a         examples/machinetest
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target m5stamp-fly         examples/machinetest
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target m5stick-c           examples/machinetest
 	@$(MD5SUM) $(SMOKE_OUT).bin

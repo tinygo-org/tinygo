@@ -196,8 +196,8 @@ func ReadMemStats(m *MemStats) {
 	m.HeapSys = uint64(m.HeapInuse + m.HeapIdle)
 	m.GCSys = 0 // not provided by bdwgc
 	m.TotalAlloc = uint64(gcMemStats.allocd_bytes_before_gc + gcMemStats.bytes_allocd_since_gc)
-	m.Mallocs = 0 // not provided by bdwgc
-	m.Frees = 0   // not provided by bdwgc
+	m.Mallocs = gcMallocs
+	m.Frees = 0 // not provided by bdwgc
 	m.Sys = uint64(gcMemStats.obtained_from_os_bytes)
 	m.NumGC = uint32(gcMemStats.gc_no)
 

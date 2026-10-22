@@ -6,7 +6,7 @@
     "default-stack-size": 8192,
     "build-tags": ["badger2040_w", "cyw43439"],
     "ldflags": [
-        "--defsym=__flash_size=1020K"
+        "--defsym=__flash_size=2048K"
     ],
     "extra-files": [
         "targets/pico-boot-stage2.S"

@@ -58,7 +58,7 @@ func scheduleTaskNoWake(t *task.Task) {
 		runqueue.Push(t)
 		// ...and wake up a sleeping core, if there is one.
 		// (If all cores are already busy, this is a no-op).
-		schedulerWake()
+		schedulerWakeTask(t)
 	case task.RunStateRunning:
 		// Not yet paused (probably going to pause very soon), so let the
 		// Pause() function know it can resume immediately.
@@ -108,6 +108,40 @@ func Gosched() {
 // NumCPU returns the number of CPU cores on this system.
 func NumCPU() int {
 	return numCPU
+}
+
+// Wake a core that may run the given task.
+// Must be called with the scheduler lock held.
+func schedulerWakeTask(t *task.Task) {
+	if t.Affinity.Core != 0 {
+		schedulerWakeCore(uint32(t.Affinity.Core - 1))
+	} else {
+		schedulerWake()
+	}
+}
+
+//go:linkname assignCore machine.assignCore
+func assignCore(core int) {
+	if core < 0 || core >= numCPU {
+		panic("machine: core out of range")
+	}
+	t := task.Current()
+	if t.Affinity.Core != 0 {
+		panic("machine: AssignCore called twice")
+	}
+	if core != int(currentCPU()) && secondaryCoresReady.Load() == 0 {
+		panic("machine: AssignCore called before all cores have started")
+	}
+	t.Affinity.Core = uint8(core) + 1
+	if core == int(currentCPU()) {
+		return
+	}
+
+	// Move to the target core.
+	schedulerLock.Lock()
+	runqueue.Push(t)
+	schedulerWakeCore(uint32(core))
+	task.PauseLocked()
 }
 
 func addTimer(tn *timerNode) {
@@ -222,7 +256,15 @@ func scheduler(_ bool) {
 				sleepQueue = sleepQueue.Next
 				sleepingTask.Next = nil
 
+				if !sleepingTask.CanRunOn(currentCPU()) {
+					// Assigned to another core, so hand it over.
+					runqueue.Push(sleepingTask)
+					schedulerWakeTask(sleepingTask)
+					continue
+				}
+
 				// Run it now.
+				schedulerHandOffClock()
 				setCurrentTask(sleepingTask)
 				sleepingTask.RunState = task.RunStateRunning
 				schedulerLock.Unlock() // unlock before resuming, Pause() will lock again
@@ -245,6 +287,7 @@ func scheduler(_ bool) {
 				firingTimersAdd(tn)
 
 				// Run the callback stored in this timer node.
+				schedulerHandOffClock()
 				schedulerLock.Unlock()
 				tn.callback(tn, delay)
 				schedulerLock.Lock()
@@ -253,8 +296,9 @@ func scheduler(_ bool) {
 		}
 
 		// Check for ready-to-run tasks.
-		if runnable := runqueue.Pop(); runnable != nil {
+		if runnable := runqueue.PopCore(currentCPU()); runnable != nil {
 			// Resume it now.
+			schedulerHandOffClock()
 			setCurrentTask(runnable)
 			runnable.RunState = task.RunStateRunning
 			schedulerLock.Unlock() // unlock before resuming, Pause() will lock again
@@ -301,6 +345,14 @@ func scheduler(_ bool) {
 		// do.
 		// Wait until something happens (like an interrupt).
 		schedulerUnlockAndWait()
+	}
+}
+
+// This core stops watching the clock while it runs a task, so wake a waiting core
+// to watch it if tasks sleep or timers wait. Call with the scheduler lock held.
+func schedulerHandOffClock() {
+	if (sleepQueue != nil || timerQueue != nil) && !hasSleepingCore() {
+		schedulerWake()
 	}
 }
 

@@ -41,6 +41,10 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		fn.SetLinkage(llvm.ExternalLinkage)
 	}
 
+	if errs := CheckNoRuntime(mod); len(errs) != 0 {
+		return errs
+	}
+
 	// run a check of all of our code
 	if config.VerifyIR() {
 		errs := ircheck.Module(mod)
@@ -158,7 +162,13 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	// ThinLTO.
 	po := llvm.NewPassBuilderOptions()
 	defer po.Dispose()
-	passes := fmt.Sprintf("thinlto-pre-link<%s>", optLevel)
+	pipelineLevel := optLevel
+	if llvmutil.Version() >= 23 && (pipelineLevel == "Os" || pipelineLevel == "Oz") {
+		// LLVM 23 removed the Os/Oz pipeline levels. Use O2 instead, since
+		// the optsize/minsize function attributes are already set elsewhere.
+		pipelineLevel = "O2"
+	}
+	passes := fmt.Sprintf("thinlto-pre-link<%s>", pipelineLevel)
 	blockGlobalAllocPromotion(mod)
 	err := mod.RunPasses(passes, llvm.TargetMachine{}, po)
 	removeGlobalAllocPromotionMarker(mod)

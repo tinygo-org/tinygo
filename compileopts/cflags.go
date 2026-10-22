@@ -25,14 +25,13 @@ func RewriteCFlags(flags []string, rewrite func(string) string) []string {
 			"--sysroot=", "-isysroot=", "-isysroot", "-resource-dir=",
 			"-fmodule-map-file=", "-fmodules-cache-path=",
 		} {
-			if strings.HasPrefix(flag, prefix) {
-				flags[i] = prefix + rewrite(strings.TrimPrefix(flag, prefix))
+			if after, ok := strings.CutPrefix(flag, prefix); ok {
+				flags[i] = prefix + rewrite(after)
 				break
 			}
 		}
 		for _, prefix := range []string{"-fdebug-prefix-map=", "-ffile-prefix-map=", "-fmacro-prefix-map="} {
-			if strings.HasPrefix(flag, prefix) {
-				mapping := strings.TrimPrefix(flag, prefix)
+			if mapping, ok := strings.CutPrefix(flag, prefix); ok {
 				if sep := strings.LastIndexByte(mapping, '='); sep >= 0 {
 					flags[i] = prefix + rewrite(mapping[:sep]) + mapping[sep:]
 				}

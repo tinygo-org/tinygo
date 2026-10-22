@@ -2,6 +2,7 @@ package main
 
 import (
 	"time"
+	"unsafe"
 
 	"github.com/tinygo-org/tinygo/testdata/interfacepkg"
 )
@@ -103,6 +104,8 @@ func main() {
 		{false, named2(), named3()},
 		{true, namedptr1(), namedptr1()},
 		{false, namedptr1(), namedptr2()},
+		{true, *(*blankStruct)(unsafe.Pointer(&[2]int{1, 2})), *(*blankStruct)(unsafe.Pointer(&[2]int{1, 3}))},
+		{false, *(*blankStruct)(unsafe.Pointer(&[2]int{1, 2})), *(*blankStruct)(unsafe.Pointer(&[2]int{2, 2}))},
 	}
 	for i, tc := range interfaceEqualTests {
 		if (tc.lhs == tc.rhs) != tc.equal {
@@ -226,6 +229,11 @@ func blockDynamic(blocker DynamicBlocker) {
 
 func blockStatic(blocker StaticBlocker) {
 	blocker.Sleep()
+}
+
+type blankStruct struct {
+	a int
+	_ int
 }
 
 type Thing struct {

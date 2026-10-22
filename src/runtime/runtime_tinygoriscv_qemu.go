@@ -122,9 +122,10 @@ func handleInterrupt() {
 				checkpoint.Jump()
 			}
 		case riscv.MachineTimerInterrupt:
-			if sleepCheckpoint.Saved() {
-				// Set MTIMECMP to a high value so that MTIP goes low.
-				aclintMTIMECMP[hartID].Set(0xffff_ffff_ffff_ffff)
+			// Raise MTIMECMP so MTIP goes low, also after a stale wakeup.
+			// See RISC-V Privileged ISA, section 3.2.1.
+			aclintMTIMECMP[hartID].Set(0xffff_ffff_ffff_ffff)
+			if uint32(sleepingCore) == hartID && sleepCheckpoint.Saved() {
 				riscv.MCAUSE.Set(0)
 				sleepCheckpoint.Jump()
 			}
@@ -249,6 +250,8 @@ var sleepCheckpoint interrupt.Checkpoint
 func sleepTicks(d timeUnit) {
 	hartID := currentCPU()
 	if sleepCheckpoint.Save() {
+		sleepingCore = uint8(hartID)
+
 		// Configure timeout.
 		target := uint64(ticks() + d)
 		aclintMTIMECMP[hartID].Set(target)
@@ -260,10 +263,11 @@ func sleepTicks(d timeUnit) {
 	}
 
 	// We got awoken.
+	sleepingCore = 0xff
 }
 
 // Currently sleeping core, or 0xff.
-// Must only be accessed with the scheduler lock held.
+// Written with the scheduler lock held, read without it by the timer interrupt.
 var sleepingCore uint8 = 0xff
 
 // Return whether another core is sleeping.
@@ -481,10 +485,20 @@ func schedulerWake() {
 
 	if hart < 8 {
 		// There is a sleeping hart. Wake it.
+		schedulerWakeCore(uint32(hart))
+	}
+}
+
+// Wake the given core if it is sleeping. Must be called with the scheduler lock
+// held.
+func schedulerWakeCore(hart uint32) {
+	if sleepingHarts&(1<<hart) != 0 {
 		// Clear the sleeping bit before sending the wakeup.
 		sleepingHarts &^= 1 << hart
 		schedulerWakePending[hart].Store(1)
-		signalHart(uint32(hart))
+		signalHart(hart)
+	} else if uint32(sleepingCore) == hart {
+		interruptSleepTicksMulticore(0)
 	}
 }
 

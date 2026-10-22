@@ -211,6 +211,30 @@ define %inner @aggregateSelect(i1 %cond) {
   ret %inner %value
 }
 
+define i32 @aggregateSelectLoad(i1 %cond, %inner %other) {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %result = call %outer @wrap(ptr %p)
+  %inner = extractvalue %outer %result, 1
+  %selected = select i1 %cond, %inner %inner, %inner %other
+  %ptr = extractvalue %inner %selected, 0
+  %value = load i32, ptr %ptr
+  ret i32 %value
+}
+
+define i32 @pointerSelectLoad(i1 %cond, ptr %other) {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %ptr = select i1 %cond, ptr %p, ptr %other
+  %value = load i32, ptr %ptr
+  ret i32 %value
+}
+
+define void @pointerSelectStore(i1 %cond, ptr %other, ptr %dst) {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %ptr = select i1 %cond, ptr %p, ptr %other
+  store ptr %ptr, ptr %dst
+  ret void
+}
+
 define %inner @recursiveReturn() {
   %p = call ptr @runtime.alloc(i32 4, ptr null)
   %result = call %outer @recursive(ptr %p, i1 true)
