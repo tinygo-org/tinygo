@@ -279,7 +279,7 @@ exit:
 	if !isRecoverableError(runErr.Err) {
 		t.Errorf("expected a recoverable error, got %v", runErr.Err)
 	}
-	if want := "interp: loop ran too many iterations (in fill)"; runErr.Err.Error() != want {
-		t.Errorf("expected %q, got %q", want, runErr.Err.Error())
+	if want := ": interp: loop ran too many iterations (in fill)"; !strings.HasSuffix(runErr.Error(), want) {
+		t.Errorf("expected an error ending in %q, got %q", want, runErr.Error())
 	}
 }

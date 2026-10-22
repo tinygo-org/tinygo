@@ -12,32 +12,23 @@ import (
 )
 
 type recoverableError struct {
-	msg string
-	op  string // instruction involved, if any
-	fn  string // function being interpreted, if known
+	reason string
 }
 
 func (e *recoverableError) Error() string {
-	s := e.msg
-	if e.op != "" {
-		s += ": " + e.op
-	}
-	if e.fn != "" {
-		s += " (in " + e.fn + ")"
-	}
-	return s
+	return e.reason
 }
 
 // These errors are expected during normal execution and can be recovered from
 // by running the affected function at runtime instead of compile time.
 var (
-	errIntegerAsPointer = &recoverableError{msg: "interp: trying to use an integer as a pointer (memory-mapped I/O?)"}
-	errUnsupportedInst  = &recoverableError{msg: "interp: unsupported instruction"}
+	errIntegerAsPointer = &recoverableError{reason: "interp: trying to use an integer as a pointer (memory-mapped I/O?)"}
+	errUnsupportedInst  = &recoverableError{reason: "interp: unsupported instruction"}
 
 	// This is one of the errors that can be returned from toLLVMValue when the
 	// passed type does not fit the data to serialize. It is recoverable by
 	// serializing without a type (using rawValue.rawLLVMValue).
-	errInvalidPtrToIntSize = &recoverableError{msg: "interp: ptrtoint integer size does not equal pointer size"}
+	errInvalidPtrToIntSize = &recoverableError{reason: "interp: ptrtoint integer size does not equal pointer size"}
 )
 
 func isRecoverableError(err error) bool {
@@ -68,9 +59,14 @@ type Error struct {
 	inst llvm.Value
 }
 
-// Error returns the string of the first error in the list of errors.
+// Error returns the string of the first error in the list of errors. A
+// recoverable error also names the function it happened in.
 func (e *Error) Error() string {
-	return e.Pos.String() + ": " + e.Err.Error()
+	s := e.Pos.String() + ": " + e.Err.Error()
+	if isRecoverableError(e.Err) && !e.inst.IsNil() {
+		s += " (in " + e.inst.InstructionParent().Parent().Name() + ")"
+	}
+	return s
 }
 
 // errorAt returns an error value for the currently interpreted package at the
@@ -85,6 +81,12 @@ func (r *runner) errorAt(inst instruction, err error) *Error {
 		Traceback:  []ErrorLine{{Pos: pos, inst: inst.llvmInst}},
 		inst:       inst.llvmInst,
 	}
+}
+
+// rollbackAt returns a recoverable error at the location of the instruction,
+// which makes interp run the function at runtime instead.
+func (r *runner) rollbackAt(inst instruction, reason string) *Error {
+	return r.errorAt(inst, &recoverableError{reason: "interp: " + reason})
 }
 
 // materialize fills in the printed instructions of e and its traceback. It
