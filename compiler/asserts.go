@@ -41,7 +41,10 @@ func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value) {
 // normal meaning) and for creating a new slice, where 'capacity' means the
 // biggest possible slice capacity, 'low' means len and 'high' means cap. The
 // logic is the same in both cases.
-func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lowType, highType, maxType *types.Basic) {
+//
+// highLeMax must only be true if high is the length and max is the capacity of
+// the same slice, so high > max cannot happen.
+func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lowType, highType, maxType *types.Basic, highLeMax bool) {
 	if b.info.nobounds {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
@@ -68,12 +71,17 @@ func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lo
 	high = b.extendInteger(high, highType, capacityType)
 	max = b.extendInteger(max, maxType, capacityType)
 
-	// Now do the bounds check: low > high || high > capacity
-	outOfBounds1 := b.CreateICmp(llvm.IntUGT, low, high, "slice.lowhigh")
-	outOfBounds2 := b.CreateICmp(llvm.IntUGT, high, max, "slice.highmax")
-	outOfBounds3 := b.CreateICmp(llvm.IntUGT, max, capacity, "slice.maxcap")
-	outOfBounds := b.CreateOr(outOfBounds1, outOfBounds2, "slice.lowmax")
-	outOfBounds = b.CreateOr(outOfBounds, outOfBounds3, "slice.lowcap")
+	// Now do the bounds check: low > high || high > max || max > capacity.
+	// Checks that can never fail are left out.
+	outOfBounds := b.CreateICmp(llvm.IntUGT, low, high, "slice.lowhigh")
+	if !highLeMax && high != max {
+		outOfBounds2 := b.CreateICmp(llvm.IntUGT, high, max, "slice.highmax")
+		outOfBounds = b.CreateOr(outOfBounds, outOfBounds2, "slice.lowmax")
+	}
+	if max != capacity {
+		outOfBounds3 := b.CreateICmp(llvm.IntUGT, max, capacity, "slice.maxcap")
+		outOfBounds = b.CreateOr(outOfBounds, outOfBounds3, "slice.lowcap")
+	}
 	b.createRuntimeAssert(outOfBounds, "slice", "slicePanic")
 }
 

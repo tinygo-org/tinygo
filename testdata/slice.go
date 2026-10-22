@@ -168,6 +168,7 @@ func main() {
 	println("len:", len(rs))
 
 	testRangeLoops()
+	testSliceBounds()
 }
 
 // Range loops evaluate the slice once and keep their own copy of the index.
@@ -239,6 +240,32 @@ func testRangeLoops() {
 		}
 	}
 	println("range nested:", sum)
+}
+
+var sliceSink []byte
+
+func slicePanics(name string, f func()) {
+	defer func() {
+		println(name, recover() != nil)
+	}()
+	f()
+}
+
+// Test that slicing a slice still panics for every out of range case.
+func testSliceBounds() {
+	b := make([]byte, 10, 20)
+	low, high, max := makeInt(5), makeInt(15), makeInt(20)
+	slicePanics("b[len:]", func() { sliceSink = b[makeInt(10):] })
+	slicePanics("b[len+1:]", func() { sliceSink = b[makeInt(11):] })
+	slicePanics("b[:cap]", func() { sliceSink = b[:makeInt(20)] })
+	slicePanics("b[:cap+1]", func() { sliceSink = b[:makeInt(21)] })
+	slicePanics("b[low:high]", func() { sliceSink = b[low:high] })
+	slicePanics("b[high:low]", func() { sliceSink = b[high:low] })
+	slicePanics("b[low:high:max]", func() { sliceSink = b[low:high:max] })
+	slicePanics("b[low:high:cap+1]", func() { sliceSink = b[low:high:makeInt(21)] })
+	slicePanics("b[low:max:high]", func() { sliceSink = b[low:max:high] })
+	slicePanics("b[-1:]", func() { sliceSink = b[makeInt(-1):] })
+	slicePanics("b[:-1]", func() { sliceSink = b[:makeInt(-1)] })
 }
 
 func printslice(name string, s []int) {
