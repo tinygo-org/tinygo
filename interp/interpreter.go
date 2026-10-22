@@ -1316,6 +1316,10 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		result = r.builder.CreateAShr(operands[0], operands[1], inst.name)
 	case llvm.ICmp:
 		result = r.builder.CreateICmp(inst.llvmInst.IntPredicate(), operands[0], operands[1], inst.name)
+	case llvm.GetElementPtr:
+		result = r.builder.CreateGEP(inst.llvmInst.GEPSourceElementType(), operands[0], operands[1:], inst.name)
+	case llvm.Select:
+		result = r.builder.CreateSelect(operands[0], operands[1], operands[2], inst.name)
 	default:
 		if inst.branch || inst.opcode == llvm.Switch || inst.opcode == llvm.IndirectBr {
 			err := &recoverableError{msg: "interp: branch on a value not known at compile time", fn: fn.name}
