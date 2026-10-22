@@ -234,3 +234,52 @@ func TestInterpPartialPointer(t *testing.T) {
 		t.Errorf("expected %v, got %v", errUnsupportedInst, err)
 	}
 }
+
+// TestInterpRollbackReason checks that the error that makes interp roll back
+// names its cause and the function being interpreted.
+func TestInterpRollbackReason(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "rollback.ll")
+	ir := `target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64--linux"
+
+define i64 @fill(i64 %n) {
+entry:
+  br label %loop
+loop:
+  %i = phi i64 [ 0, %entry ], [ %next, %loop ]
+  %next = add i64 %i, 1
+  %done = icmp eq i64 %next, %n
+  br i1 %done, label %exit, label %loop
+exit:
+  ret i64 %next
+}
+`
+	if err := os.WriteFile(path, []byte(ir), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	buf, err := llvm.NewMemoryBufferFromFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+
+	r := newRunner(mod, time.Minute, 10, false)
+	defer r.dispose()
+	_, _, runErr := r.run(r.getFunction(mod.NamedFunction("fill")), []value{literalValue{uint64(100)}}, nil, "")
+	if runErr == nil {
+		t.Fatal("expected the loop limit to stop interpretation")
+	}
+	if !isRecoverableError(runErr.Err) {
+		t.Errorf("expected a recoverable error, got %v", runErr.Err)
+	}
+	if want := "interp: loop ran too many iterations (in fill)"; runErr.Err.Error() != want {
+		t.Errorf("expected %q, got %q", want, runErr.Err.Error())
+	}
+}

@@ -57,7 +57,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			blockCounts[currentBB]++
 			if r.maxLoopIterations > 0 && blockCounts[currentBB] > r.maxLoopIterations {
-				return nil, mem, r.errorAt(bb.instructions[0], errLoopTooLong)
+				err := &recoverableError{msg: "interp: loop ran too many iterations", fn: fn.name}
+				return nil, mem, r.errorAt(bb.instructions[0], err)
 			}
 
 			if len(mem.instructions) != startRTInsts {
@@ -66,7 +67,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					// Avoid doing this, as it can result in a large amount of extra machine code.
 					// This currently uses the branch from the last block, as there is no available information to give a better location.
 					lastBBInsts := fn.blocks[lastBB].instructions
-					return nil, mem, r.errorAt(lastBBInsts[len(lastBBInsts)-1], errLoopUnrolled)
+					err := &recoverableError{msg: "interp: loop unrolled", fn: fn.name}
+					return nil, mem, r.errorAt(lastBBInsts[len(lastBBInsts)-1], err)
 				}
 
 				// Flag the last block as having run stuff at runtime.
@@ -221,7 +223,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		switch inst.opcode {
 		case llvm.Ret:
 			if !fn.deferFrame.IsNil() && len(mem.instructions) != 0 {
-				return nil, mem, r.errorAt(inst, errDeferUnsupported)
+				err := &recoverableError{msg: "interp: cannot partially evaluate a function with defer", fn: fn.name}
+				return nil, mem, r.errorAt(inst, err)
 			}
 			if time.Since(r.start) > r.timeout {
 				// Running for more than the allowed timeout; This shouldn't happen, but it does.
@@ -368,7 +371,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 			case callFn.name == "internal/task.Pause":
 				// Task scheduling isn't possible at compile time.
-				return nil, mem, r.errorAt(inst, errUnsupportedRuntimeInst)
+				err := &recoverableError{msg: "interp: goroutine would block", fn: fn.name}
+				return nil, mem, r.errorAt(inst, err)
 			case callFn.name == "runtime.fastrand" || callFn.name == "runtime.fastrand64":
 				// Use a local sequence instead of the global RNG state. The
 				// state is replaced by initRand before initAll runs anyway.
@@ -1177,7 +1181,8 @@ func intOperands(r *runner, lhs, rhs value) (int64, int64, error) {
 
 func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
 	if !fn.deferFrame.IsNil() {
-		return r.errorAt(inst, errDeferUnsupported)
+		err := &recoverableError{msg: "interp: cannot partially evaluate a function with defer", op: inst.opcodeName(), fn: fn.name}
+		return r.errorAt(inst, err)
 	}
 	numOperands := inst.llvmInst.OperandsCount()
 	operands := make([]llvm.Value, numOperands)
@@ -1286,7 +1291,12 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 	case llvm.ZExt:
 		result = r.builder.CreateZExt(operands[0], inst.llvmInst.Type(), inst.name)
 	default:
-		return r.errorAt(inst, errUnsupportedRuntimeInst)
+		if inst.branch || inst.opcode == llvm.Switch || inst.opcode == llvm.IndirectBr {
+			err := &recoverableError{msg: "interp: branch on a value not known at compile time", fn: fn.name}
+			return r.errorAt(inst, err)
+		}
+		err := &recoverableError{msg: "interp: cannot emit instruction at runtime", op: inst.opcodeName(), fn: fn.name}
+		return r.errorAt(inst, err)
 	}
 	locals[inst.localIndex] = localValue{result}
 	mem.instructions = append(mem.instructions, result)
