@@ -413,17 +413,18 @@ jobs:
     # in that process to avoid doing lots of duplicate work and to avoid
     # complications around precompiled libraries such as compiler-rt shipped as
     # part of the release tarball.
+    # Both run on arm64 runners. arm64 builds natively. arm still cross compiles
+    # and uses qemu-arm for llvm-config, since these runners can't run AArch32.
     strategy:
       matrix:
         goarch: [ arm, arm64 ]
         include:
           - goarch: arm64
-            toolchain: aarch64-linux-gnu
             libc: arm64
           - goarch: arm
             toolchain: arm-linux-gnueabihf
             libc: armhf
-    runs-on: ubuntu-22.04 # note: use the oldest image available! (see above)
+    runs-on: ubuntu-22.04-arm # note: use the oldest image available! (see above)
     needs: build-linux
     steps:
       - name: Checkout
@@ -434,10 +435,12 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends \
-              qemu-user \
-              g++-${{ matrix.toolchain }} \
-              libc6-dev-${{ matrix.libc }}-cross
+          if [ -n "${{ matrix.toolchain }}" ]; then
+            sudo apt-get install --no-install-recommends \
+                qemu-user \
+                g++-${{ matrix.toolchain }} \
+                libc6-dev-${{ matrix.libc }}-cross
+          fi
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -472,7 +475,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-22-linux-${{ matrix.goarch }}-v1-${{ hashFiles('llvm-version.txt') }}
+          key: llvm-build-22-linux-${{ matrix.goarch }}-v2-${{ hashFiles('llvm-version.txt') }}
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -499,7 +502,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-${{ matrix.goarch }}-v6-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-${{ matrix.goarch }}-v7-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
