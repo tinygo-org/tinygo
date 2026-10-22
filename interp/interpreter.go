@@ -57,8 +57,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			blockCounts[currentBB]++
 			if r.maxLoopIterations > 0 && blockCounts[currentBB] > r.maxLoopIterations {
-				err := &recoverableError{msg: "interp: loop ran too many iterations", fn: fn.name}
-				return nil, mem, r.errorAt(bb.instructions[0], err)
+				return nil, mem, r.rollbackAt(bb.instructions[0], "loop ran too many iterations")
 			}
 
 			if len(mem.instructions) != startRTInsts {
@@ -67,8 +66,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					// Avoid doing this, as it can result in a large amount of extra machine code.
 					// This currently uses the branch from the last block, as there is no available information to give a better location.
 					lastBBInsts := fn.blocks[lastBB].instructions
-					err := &recoverableError{msg: "interp: loop unrolled", fn: fn.name}
-					return nil, mem, r.errorAt(lastBBInsts[len(lastBBInsts)-1], err)
+					return nil, mem, r.rollbackAt(lastBBInsts[len(lastBBInsts)-1], "loop unrolled")
 				}
 
 				// Flag the last block as having run stuff at runtime.
@@ -223,8 +221,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		switch inst.opcode {
 		case llvm.Ret:
 			if !fn.deferFrame.IsNil() && len(mem.instructions) != 0 {
-				err := &recoverableError{msg: "interp: cannot partially evaluate a function with defer", fn: fn.name}
-				return nil, mem, r.errorAt(inst, err)
+				return nil, mem, r.rollbackAt(inst, "cannot partially evaluate a function with defer")
 			}
 			if time.Since(r.start) > r.timeout {
 				// Running for more than the allowed timeout; This shouldn't happen, but it does.
@@ -371,8 +368,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 			case callFn.name == "internal/task.Pause":
 				// Task scheduling isn't possible at compile time.
-				err := &recoverableError{msg: "interp: goroutine would block", fn: fn.name}
-				return nil, mem, r.errorAt(inst, err)
+				return nil, mem, r.rollbackAt(inst, "goroutine would block")
 			case callFn.name == "runtime.fastrand" || callFn.name == "runtime.fastrand64":
 				// Use a local sequence instead of the global RNG state. The
 				// state is replaced by initRand before initAll runs anyway.
@@ -1096,7 +1092,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if r.debug {
 				fmt.Fprintln(os.Stderr, indent+inst.String())
 			}
-			return nil, mem, r.errorAt(inst, errUnsupportedInst)
+			return nil, mem, r.rollbackAt(inst, "unsupported instruction: "+opcodeName(inst.llvmInst))
 		}
 	}
 	return nil, mem, r.errorAt(bb.instructions[len(bb.instructions)-1], errors.New("interp: reached end of basic block without terminator"))
@@ -1181,8 +1177,7 @@ func intOperands(r *runner, lhs, rhs value) (int64, int64, error) {
 
 func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
 	if !fn.deferFrame.IsNil() {
-		err := &recoverableError{msg: "interp: cannot partially evaluate a function with defer", op: inst.opcodeName(), fn: fn.name}
-		return r.errorAt(inst, err)
+		return r.rollbackAt(inst, "cannot partially evaluate a function with defer: "+opcodeName(inst.llvmInst))
 	}
 	numOperands := inst.llvmInst.OperandsCount()
 	operands := make([]llvm.Value, numOperands)
@@ -1292,11 +1287,9 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		result = r.builder.CreateZExt(operands[0], inst.llvmInst.Type(), inst.name)
 	default:
 		if inst.branch || inst.opcode == llvm.Switch || inst.opcode == llvm.IndirectBr {
-			err := &recoverableError{msg: "interp: branch on a value not known at compile time", fn: fn.name}
-			return r.errorAt(inst, err)
+			return r.rollbackAt(inst, "branch on a value not known at compile time")
 		}
-		err := &recoverableError{msg: "interp: cannot emit instruction at runtime", op: inst.opcodeName(), fn: fn.name}
-		return r.errorAt(inst, err)
+		return r.rollbackAt(inst, "cannot emit instruction at runtime: "+opcodeName(inst.llvmInst))
 	}
 	locals[inst.localIndex] = localValue{result}
 	mem.instructions = append(mem.instructions, result)
