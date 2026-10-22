@@ -186,9 +186,9 @@ slice.next:                                       ; preds = %entry
   %0 = call %runtime._string @runtime.stringFromBytes(ptr %a.data, i32 0, i32 %a.cap, ptr undef) #4
   %1 = extractvalue %runtime._string %0, 0
   call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
-  br i1 false, label %slice.throw, label %slice.next5
+  br i1 false, label %slice.throw, label %slice.next3
 
-slice.next5:                                      ; preds = %slice.next
+slice.next3:                                      ; preds = %slice.next
   call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
   %2 = extractvalue %runtime._string %0, 0
   %3 = extractvalue %runtime._string %0, 1
@@ -339,9 +339,9 @@ slice.next:                                       ; preds = %entry
   %1 = extractvalue %runtime._string %0, 0
   call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
   %slice.highmax1 = icmp ult i32 %b.cap, 2
-  br i1 %slice.highmax1, label %slice.throw, label %slice.next5
+  br i1 %slice.highmax1, label %slice.throw, label %slice.next3
 
-slice.next5:                                      ; preds = %slice.next
+slice.next3:                                      ; preds = %slice.next
   call void @runtime.trackPointer(ptr %b.data, ptr nonnull %stackalloc, ptr undef) #4
   %2 = extractvalue %runtime._string %0, 0
   %3 = extractvalue %runtime._string %0, 1
