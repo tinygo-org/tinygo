@@ -50,6 +50,8 @@ type file struct {
 	// appendMode rather than at the end.
 	pfd pollFD
 
+	nb nbState
+
 	appendMode bool
 }
 
@@ -60,6 +62,9 @@ func (f *file) close() (err error) {
 	}
 	if f.pfd.Exist() {
 		return f.pfd.Close()
+	}
+	if f.closeDeferred() {
+		return nil
 	}
 	return f.handle.Close()
 }

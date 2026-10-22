@@ -112,7 +112,14 @@ func (f *File) Read(b []byte) (n int, err error) {
 	if f.handle == nil {
 		err = ErrClosed
 	} else {
-		n, err = f.handle.Read(b)
+		h := f.handle
+		n, err = h.Read(b)
+		for err != nil && f.wouldBlock(h, err) {
+			if err = f.waitIO(h, false); err != nil {
+				break
+			}
+			n, err = h.Read(b)
+		}
 	}
 	// TODO: want to always wrap, like upstream, but ReadFile() compares against exactly io.EOF?
 	if err != nil && err != io.EOF {
@@ -136,6 +143,11 @@ func (f *File) ReadAt(b []byte, offset int64) (n int, err error) {
 
 	for len(b) > 0 {
 		m, e := f.handle.ReadAt(b, offset)
+		if e != nil && f.wouldBlock(f.handle, e) {
+			if e = f.waitIO(f.handle, false); e == nil {
+				continue
+			}
+		}
 		if e != nil {
 			// TODO: want to always wrap, like upstream, but TestReadAtEOF compares against exactly io.EOF?
 			if e != io.EOF {
@@ -159,7 +171,25 @@ func (f *File) Write(b []byte) (n int, err error) {
 	if f.handle == nil {
 		err = ErrClosed
 	} else {
-		n, err = f.handle.Write(b)
+		// Loop over short writes, as a non-blocking fd may accept part of b.
+		h := f.handle
+		for {
+			m, e := h.Write(b)
+			n += m
+			b = b[m:]
+			if e != nil && f.wouldBlock(h, e) {
+				e = f.waitIO(h, true)
+			} else if e == nil && len(b) > 0 && m == 0 {
+				e = io.ErrUnexpectedEOF
+			}
+			if e != nil {
+				err = e
+				break
+			}
+			if len(b) == 0 {
+				break
+			}
+		}
 	}
 	if err != nil {
 		err = &PathError{Op: "write", Path: f.name, Err: err}
@@ -193,6 +223,11 @@ func (f *File) WriteAt(b []byte, offset int64) (n int, err error) {
 	}
 	for len(b) > 0 {
 		m, e := f.handle.WriteAt(b, offset)
+		if e != nil && f.wouldBlock(f.handle, e) {
+			if e = f.waitIO(f.handle, true); e == nil {
+				continue
+			}
+		}
 		if e != nil {
 			err = &PathError{Op: "writeat", Path: f.name, Err: e}
 			break
