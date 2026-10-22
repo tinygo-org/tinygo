@@ -13,22 +13,26 @@ import (
 
 type recoverableError struct {
 	msg string
+	op  string // instruction involved, if any
+	fn  string // function being interpreted, if known
 }
 
 func (e *recoverableError) Error() string {
-	return e.msg
+	s := e.msg
+	if e.op != "" {
+		s += ": " + e.op
+	}
+	if e.fn != "" {
+		s += " (in " + e.fn + ")"
+	}
+	return s
 }
 
 // These errors are expected during normal execution and can be recovered from
 // by running the affected function at runtime instead of compile time.
 var (
-	errIntegerAsPointer       = &recoverableError{msg: "interp: trying to use an integer as a pointer (memory-mapped I/O?)"}
-	errUnsupportedInst        = &recoverableError{msg: "interp: unsupported instruction"}
-	errUnsupportedRuntimeInst = &recoverableError{msg: "interp: unsupported instruction (to be emitted at runtime)"}
-	errDeferUnsupported       = &recoverableError{msg: "interp: cannot partially evaluate a function with defer"}
-	errMapAlreadyCreated      = &recoverableError{msg: "interp: map already created"}
-	errLoopUnrolled           = &recoverableError{msg: "interp: loop unrolled"}
-	errLoopTooLong            = &recoverableError{msg: "interp: loop ran too many iterations"}
+	errIntegerAsPointer = &recoverableError{msg: "interp: trying to use an integer as a pointer (memory-mapped I/O?)"}
+	errUnsupportedInst  = &recoverableError{msg: "interp: unsupported instruction"}
 
 	// This is one of the errors that can be returned from toLLVMValue when the
 	// passed type does not fit the data to serialize. It is recoverable by
