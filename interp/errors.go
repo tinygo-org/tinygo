@@ -11,27 +11,34 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+type recoverableError struct {
+	msg string
+}
+
+func (e *recoverableError) Error() string {
+	return e.msg
+}
+
 // These errors are expected during normal execution and can be recovered from
 // by running the affected function at runtime instead of compile time.
 var (
-	errIntegerAsPointer       = errors.New("interp: trying to use an integer as a pointer (memory-mapped I/O?)")
-	errUnsupportedInst        = errors.New("interp: unsupported instruction")
-	errUnsupportedRuntimeInst = errors.New("interp: unsupported instruction (to be emitted at runtime)")
-	errDeferUnsupported       = errors.New("interp: cannot partially evaluate a function with defer")
-	errMapAlreadyCreated      = errors.New("interp: map already created")
-	errLoopUnrolled           = errors.New("interp: loop unrolled")
-	errLoopTooLong            = errors.New("interp: loop ran too many iterations")
+	errIntegerAsPointer       = &recoverableError{msg: "interp: trying to use an integer as a pointer (memory-mapped I/O?)"}
+	errUnsupportedInst        = &recoverableError{msg: "interp: unsupported instruction"}
+	errUnsupportedRuntimeInst = &recoverableError{msg: "interp: unsupported instruction (to be emitted at runtime)"}
+	errDeferUnsupported       = &recoverableError{msg: "interp: cannot partially evaluate a function with defer"}
+	errMapAlreadyCreated      = &recoverableError{msg: "interp: map already created"}
+	errLoopUnrolled           = &recoverableError{msg: "interp: loop unrolled"}
+	errLoopTooLong            = &recoverableError{msg: "interp: loop ran too many iterations"}
+
+	// This is one of the errors that can be returned from toLLVMValue when the
+	// passed type does not fit the data to serialize. It is recoverable by
+	// serializing without a type (using rawValue.rawLLVMValue).
+	errInvalidPtrToIntSize = &recoverableError{msg: "interp: ptrtoint integer size does not equal pointer size"}
 )
 
-// This is one of the errors that can be returned from toLLVMValue when the
-// passed type does not fit the data to serialize. It is recoverable by
-// serializing without a type (using rawValue.rawLLVMValue).
-var errInvalidPtrToIntSize = errors.New("interp: ptrtoint integer size does not equal pointer size")
-
 func isRecoverableError(err error) bool {
-	return err == errIntegerAsPointer || err == errUnsupportedInst ||
-		err == errUnsupportedRuntimeInst || err == errDeferUnsupported || err == errMapAlreadyCreated ||
-		err == errLoopUnrolled || err == errLoopTooLong || err == errInvalidPtrToIntSize
+	var target *recoverableError
+	return errors.As(err, &target)
 }
 
 // ErrorLine is one line in a traceback. The position may be missing.
