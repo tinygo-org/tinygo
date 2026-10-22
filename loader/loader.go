@@ -728,18 +728,21 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 				"-ffile-prefix-map="+filepath.Join(p.program.goroot, "src")+"="+p.program.config.CSourcePath("."),
 			)
 		}
-		cgoFlags := make(map[string][]string)
-		for _, name := range []string{"CGO_CPPFLAGS", "CGO_CFLAGS", "CGO_CXXFLAGS"} {
-			flags, err := shlex.Split(goenv.Get(name))
+		var env cgo.Flags
+		for _, v := range []struct {
+			name  string
+			flags *[]string
+		}{
+			{"CGO_CPPFLAGS", &env.CPPFlags},
+			{"CGO_CFLAGS", &env.CFlags},
+			{"CGO_CXXFLAGS", &env.CXXFlags},
+		} {
+			flags, err := shlex.Split(goenv.Get(v.name))
 			if err != nil {
-				return nil, fmt.Errorf("failed to split %s: %w", name, err)
+				return nil, fmt.Errorf("failed to split %s: %w", v.name, err)
 			}
-			cgoFlags[name] = flags
+			*v.flags = flags
 		}
-		initialCFlags = append(initialCFlags, cgoFlags["CGO_CPPFLAGS"]...)
-		initialCXXFlags := append([]string(nil), initialCFlags...)
-		initialCXXFlags = append(initialCXXFlags, cgoFlags["CGO_CXXFLAGS"]...)
-		initialCFlags = append(initialCFlags, cgoFlags["CGO_CFLAGS"]...)
 		// LLVM 15's driver changes the process cwd. Set only FileManager's cwd.
 		// See clang/lib/Driver/Driver.cpp and clang/lib/Basic/FileManager.cpp.
 		parseFlags := append(append([]string(nil), initialCFlags...), "-Xclang", "-working-directory", "-Xclang", p.Dir)
@@ -749,12 +752,13 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			p.ImportPath,
 			p.program.fset,
 			parseFlags,
+			env,
 			p.program.config.GOOS(),
 			p.program.config.GOARCH(),
 			p.program.config.BuildTags(),
 		)
-		p.CFlags = append(initialCFlags, cflags...)
-		p.CXXFlags = append(initialCXXFlags, cxxflags...)
+		p.CFlags = slices.Concat(initialCFlags, cflags)
+		p.CXXFlags = slices.Concat(initialCFlags, cxxflags)
 		p.CGoHeaders = headerCode
 		maps.Copy(p.FileHashes, accessedFiles)
 		if errs != nil {

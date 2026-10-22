@@ -6,11 +6,8 @@
 // as a preprocessing step, with the main advantage being that debug information
 // is kept intact as much as possible.
 //
-// Conditional #cgo flags match the target GOOS, GOARCH, and active tags.
-// See https://pkg.go.dev/cmd/cgo for the build constraint syntax.
-//
-// CPPFLAGS apply to both C and C++. CFLAGS and CXXFLAGS apply only to their
-// respective languages.
+// #cgo lines follow https://pkg.go.dev/cmd/cgo, including build constraints
+// and which flags apply to C and C++.
 package cgo
 
 // This file extracts the `import "C"` statement from the source and modifies
@@ -34,6 +31,11 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
+// Flags holds the CGO_CPPFLAGS, CGO_CFLAGS, and CGO_CXXFLAGS environment flags.
+type Flags struct {
+	CPPFlags, CFlags, CXXFlags []string
+}
+
 // cgoPackage holds all CGo-related information of a package.
 type cgoPackage struct {
 	generated       *ast.File
@@ -55,6 +57,8 @@ type cgoPackage struct {
 	cppflags        []string // preprocessor flags shared by C and C++
 	cflags          []string // CFlags from #cgo lines
 	cxxflags        []string // C++ flags from #cgo lines
+	packageCFlags   []string // env and #cgo flags for C files
+	packageCXXFlags []string // env and #cgo flags for C++ files
 	ldflags         []string // LDFlags from #cgo lines
 	visitedFiles    map[string][]byte
 	cgoHeaders      []string
@@ -260,10 +264,10 @@ func _Cgo___get_errno() error {
 // with libclang, and modifies the AST to use this information. It returns a
 // newly created *ast.File that should be added to the list of to-be-parsed
 // files, the CGo header snippets that should be compiled (for inline
-// functions), the C, C++, and linker flags found in #cgo lines, and a map of file
-// hashes of the accessed C header files. If there is one or more error, it
-// returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos, goarch string, buildTags []string) ([]*ast.File, []string, []string, []string, []string, map[string][]byte, []error) {
+// functions), the C, C++, and linker flags from env and #cgo lines, and a map
+// of file hashes of the accessed C header files. If there is one or more error,
+// it returns these in the []error slice but still modifies the AST.
+func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, env Flags, goos, goarch string, buildTags []string) ([]*ast.File, []string, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		packageName:     files[0].Name.Name,
 		currentDir:      dir,
@@ -384,9 +388,10 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Disable _FORTIFY_SOURCE as it causes problems on macOS.
 	// Note that it is only disabled for memcpy (etc) calls made from Go, which
 	// have better alternatives anyway.
-	cflagsForCGo := append([]string{"-D_FORTIFY_SOURCE=0"}, cflags...)
-	cflagsForCGo = append(cflagsForCGo, p.cppflags...)
-	cflagsForCGo = append(cflagsForCGo, p.cflags...)
+	// Flag order matches CFlags in cmd/go/internal/work/exec.go.
+	p.packageCFlags = slices.Concat(env.CPPFlags, p.cppflags, env.CFlags, p.cflags)
+	p.packageCXXFlags = slices.Concat(env.CPPFlags, p.cppflags, env.CXXFlags, p.cxxflags)
+	cflagsForCGo := slices.Concat([]string{"-D_FORTIFY_SOURCE=0"}, cflags, p.packageCFlags)
 
 	// Retrieve types such as C.int, C.longlong, etc from C.
 	p.newCGoFile(nil, -1).readNames(builtinAliasTypedefs, cflagsForCGo, "", func(names map[string]clangCursor) {
@@ -443,9 +448,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	cflags = append(append([]string(nil), p.cppflags...), p.cflags...)
-	cxxflags := append(append([]string(nil), p.cppflags...), p.cxxflags...)
-	return p.cgoFiles, p.cgoHeaders, cflags, cxxflags, p.ldflags, p.visitedFiles, p.errors
+	return p.cgoFiles, p.cgoHeaders, p.packageCFlags, p.packageCXXFlags, p.ldflags, p.visitedFiles, p.errors
 }
 
 func (p *cgoPackage) newCGoFile(file *ast.File, index int) *cgoFile {
