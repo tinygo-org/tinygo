@@ -18,27 +18,38 @@ import (
 )
 
 func TestCGoCompilerFlags(t *testing.T) {
-	t.Setenv("CGO_CPPFLAGS", "-DSHARED_ENV=1")
-	t.Setenv("CGO_CFLAGS", "-DC_ENV=1")
-	t.Setenv("CGO_CXXFLAGS", "-std=c++17 -DCXX_ENV=1")
 	dir := t.TempDir()
-	source := `package probe
+	for name, content := range map[string]string{
+		"pkginc/order.h": "#define ORDER 1\n",
+		"envinc/order.h": "#define ORDER 2\n",
+		"probe.go": `package probe
 /*
-#cgo CPPFLAGS: -DSHARED_DIRECTIVE=1
+#cgo CPPFLAGS: -Ipkginc -DSHARED_DIRECTIVE=1
 #cgo CFLAGS: -DC_DIRECTIVE=1
 #cgo CXXFLAGS: -std=c++17 -DCXX_DIRECTIVE=1
-#if !defined(SHARED_ENV) || !defined(C_ENV) || !defined(SHARED_DIRECTIVE) || !defined(C_DIRECTIVE)
-#error missing C flags
+#include "order.h"
+#if ORDER != 1
+#error wrong include order
 #endif
 #if defined(CXX_ENV) || defined(CXX_DIRECTIVE)
 #error C++ flags passed to C parser
 #endif
 */
 import "C"
-`
-	if err := os.WriteFile(filepath.Join(dir, "probe.go"), []byte(source), 0o600); err != nil {
-		t.Fatal(err)
+`,
+	} {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
+	envInc := "-I" + filepath.Join(dir, "envinc")
+	t.Setenv("CGO_CPPFLAGS", "-DSHARED_ENV=1")
+	t.Setenv("CGO_CFLAGS", envInc+" -DC_ENV=1")
+	t.Setenv("CGO_CXXFLAGS", "-DCXX_ENV=1")
 	p := &Package{
 		PackageJSON: PackageJSON{Dir: dir, ImportPath: "probe", CgoFiles: []string{"probe.go"}},
 		FileHashes:  make(map[string][]byte),
@@ -56,23 +67,16 @@ import "C"
 	if _, err := p.parseFiles(); err != nil {
 		t.Fatal(err)
 	}
+	pkgInc := "-I" + filepath.Join(dir, "pkginc")
 	for _, test := range []struct {
 		flags []string
 		want  []string
-		omit  []string
 	}{
-		{p.CFlags, []string{"-DSHARED_ENV=1", "-DC_ENV=1", "-DSHARED_DIRECTIVE=1", "-DC_DIRECTIVE=1"}, []string{"-std=c++17", "-DCXX_ENV=1", "-DCXX_DIRECTIVE=1"}},
-		{p.CXXFlags, []string{"-DSHARED_ENV=1", "-std=c++17", "-DCXX_ENV=1", "-DSHARED_DIRECTIVE=1", "-DCXX_DIRECTIVE=1"}, []string{"-DC_ENV=1", "-DC_DIRECTIVE=1"}},
+		{p.CFlags, []string{"-DSHARED_ENV=1", pkgInc, "-DSHARED_DIRECTIVE=1", envInc, "-DC_ENV=1", "-DC_DIRECTIVE=1"}},
+		{p.CXXFlags, []string{"-DSHARED_ENV=1", pkgInc, "-DSHARED_DIRECTIVE=1", "-DCXX_ENV=1", "-std=c++17", "-DCXX_DIRECTIVE=1"}},
 	} {
-		for _, flag := range test.want {
-			if !slices.Contains(test.flags, flag) {
-				t.Errorf("flags %q do not contain %q", test.flags, flag)
-			}
-		}
-		for _, flag := range test.omit {
-			if slices.Contains(test.flags, flag) {
-				t.Errorf("flags %q contain %q", test.flags, flag)
-			}
+		if len(test.flags) < len(test.want) || !slices.Equal(test.flags[len(test.flags)-len(test.want):], test.want) {
+			t.Errorf("flags %q do not end with %q", test.flags, test.want)
 		}
 	}
 }
