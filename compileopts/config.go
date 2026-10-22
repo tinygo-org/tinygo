@@ -28,6 +28,7 @@ var libVersions = map[string]int{
 	"bdwgc":        4,
 	"picolibc":     2,
 	"wasmbuiltins": 1,
+	"compiler-rt":  1,
 }
 
 // Config keeps all configuration affecting the build in a single struct.
