@@ -25,9 +25,16 @@ declare i64 @ptrHash(ptr nocapture) local_unnamed_addr
 
 declare void @modifyAtomic(ptr) local_unnamed_addr
 
-declare i32 @"sync/atomic.SwapUint32"(ptr, i32, ptr) local_unnamed_addr
+define i32 @"sync/atomic.SwapUint32"(ptr %addr, i32 %new, ptr %context) local_unnamed_addr {
+  %old = atomicrmw xchg ptr %addr, i32 %new syncscope("singlethread") seq_cst, align 4
+  ret i32 %old
+}
 
-declare i1 @"sync/atomic.CompareAndSwapUint32"(ptr, i32, i32, ptr) local_unnamed_addr
+define i1 @"sync/atomic.CompareAndSwapUint32"(ptr %addr, i32 %old, i32 %new, ptr %context) local_unnamed_addr {
+  %pair = cmpxchg ptr %addr, i32 %old, i32 %new syncscope("singlethread") seq_cst seq_cst, align 4
+  %swapped = extractvalue { i32, i1 } %pair, 1
+  ret i1 %swapped
+}
 
 define void @runtime.initAll() unnamed_addr {
 entry:

@@ -253,6 +253,27 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					r.getValue(llvmInst.Operand(0)),
 					r.getValue(llvmInst.Operand(1)),
 				}
+			case atomicRMW:
+				// atomicrmw: [ptr, value, binop]
+				inst.name = llvmInst.Name()
+				if op, ok := atomicRMWBinOp(llvmInst); ok {
+					inst.operands = []value{
+						r.getValue(llvmInst.Operand(0)),
+						r.getValue(llvmInst.Operand(1)),
+						literalValue{uint8(op)},
+					}
+				}
+			case atomicCmpXchg:
+				// cmpxchg: [ptr, cmp, new, resultSize, successOffset]
+				inst.name = llvmInst.Name()
+				resultType := llvmInst.Type()
+				inst.operands = []value{
+					r.getValue(llvmInst.Operand(0)),
+					r.getValue(llvmInst.Operand(1)),
+					r.getValue(llvmInst.Operand(2)),
+					literalValue{r.targetData.TypeAllocSize(resultType)},
+					literalValue{r.targetData.ElementOffset(resultType, 1)},
+				}
 			case llvm.Alloca:
 				// Alloca allocates stack space for local variables.
 				numElements := r.getValue(inst.llvmInst.Operand(0)).(literalValue).value.(uint32)
@@ -413,6 +434,53 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 	return fn
 }
 
+// Opcodes from llvm-c/Core.h (LLVMOpcode) that go-llvm doesn't export.
+const (
+	atomicCmpXchg llvm.Opcode = 56
+	atomicRMW     llvm.Opcode = 57
+)
+
+// atomicRMWBinOp returns the operation of an atomicrmw instruction.
+// go-llvm doesn't wrap LLVMGetAtomicRMWBinOp, so read it from the IR text.
+func atomicRMWBinOp(inst llvm.Value) (llvm.AtomicRMWBinOp, bool) {
+	fields := strings.Fields(inst.String())
+	for i, field := range fields {
+		if field != "atomicrmw" {
+			continue
+		}
+		for _, op := range fields[i+1:] {
+			switch op {
+			case "volatile":
+				continue
+			case "xchg":
+				return llvm.AtomicRMWBinOpXchg, true
+			case "add":
+				return llvm.AtomicRMWBinOpAdd, true
+			case "sub":
+				return llvm.AtomicRMWBinOpSub, true
+			case "and":
+				return llvm.AtomicRMWBinOpAnd, true
+			case "nand":
+				return llvm.AtomicRMWBinOpNand, true
+			case "or":
+				return llvm.AtomicRMWBinOpOr, true
+			case "xor":
+				return llvm.AtomicRMWBinOpXor, true
+			case "max":
+				return llvm.AtomicRMWBinOpMax, true
+			case "min":
+				return llvm.AtomicRMWBinOpMin, true
+			case "umax":
+				return llvm.AtomicRMWBinOpUMax, true
+			case "umin":
+				return llvm.AtomicRMWBinOpUMin, true
+			}
+			return 0, false
+		}
+	}
+	return 0, false
+}
+
 // instructionNameMap maps from instruction opcodes to instruction names. This
 // can be useful for debug logging.
 var instructionNameMap = [...]string{
@@ -449,6 +517,8 @@ var instructionNameMap = [...]string{
 	llvm.Load:          "load",
 	llvm.Store:         "store",
 	llvm.GetElementPtr: "getelementptr",
+	atomicCmpXchg:      "cmpxchg",
+	atomicRMW:          "atomicrmw",
 
 	// Cast Operators
 	llvm.Trunc:    "trunc",
