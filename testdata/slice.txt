@@ -23,3 +23,14 @@ range reassign: 70 0
 range continue break: 8
 range write: 51
 range nested: 10
+b[len:] false
+b[len+1:] true
+b[:cap] false
+b[:cap+1] true
+b[low:high] false
+b[high:low] true
+b[low:high:max] false
+b[low:high:cap+1] true
+b[low:max:high] true
+b[-1:] true
+b[:-1] true

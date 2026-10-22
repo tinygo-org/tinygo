@@ -2860,7 +2860,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		capType := expr.Cap.Type().Underlying().(*types.Basic)
 		maxAllocationSize := b.maxSliceAllocationSize(llvmElemType)
 		maxSizeValue := llvm.ConstInt(b.uintptrType, maxAllocationSize, false)
-		b.createSliceBoundsCheck(maxSizeValue, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
+		b.createSliceBoundsCheck(maxSizeValue, sliceLen, sliceCap, sliceCap, lenType, capType, capType, false)
 
 		// Allocate the backing array.
 		sliceCapCast, err := b.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
@@ -2970,7 +2970,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			}
 
 			b.createNilCheck(expr.X, value, "slice")
-			b.createSliceBoundsCheck(llvmLen, low, high, max, lowType, highType, maxType)
+			b.createSliceBoundsCheck(llvmLen, low, high, max, lowType, highType, maxType, false)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
@@ -3010,7 +3010,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				max = oldCap
 			}
 
-			b.createSliceBoundsCheck(oldCap, low, high, max, lowType, highType, maxType)
+			b.createSliceBoundsCheck(oldCap, low, high, max, lowType, highType, maxType, expr.High == nil && expr.Max == nil)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
@@ -3054,7 +3054,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				high = oldLen
 			}
 
-			b.createSliceBoundsCheck(oldLen, low, high, high, lowType, highType, maxType)
+			b.createSliceBoundsCheck(oldLen, low, high, high, lowType, highType, maxType, false)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
