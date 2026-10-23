@@ -1733,6 +1733,30 @@ func isMemequalArrayComparison(expr *ssa.BinOp) bool {
 		(expr.Op == token.EQL || expr.Op == token.NEQ)
 }
 
+// isRangeLoopCompare returns whether expr is the loop condition of a range loop
+// over a slice, (index + 1) < len(slice). Neither side is ever negative.
+func isRangeLoopCompare(expr *ssa.BinOp) bool {
+	if expr.Op != token.LSS || expr.Block().Comment != "rangeindex.loop" {
+		return false
+	}
+	call, ok := expr.Y.(*ssa.Call)
+	if !ok {
+		return false
+	}
+	if builtin, ok := call.Call.Value.(*ssa.Builtin); !ok || builtin.Name() != "len" {
+		return false
+	}
+	next, ok := expr.X.(*ssa.BinOp)
+	if !ok || next.Op != token.ADD {
+		return false
+	}
+	if _, ok := next.X.(*ssa.Phi); !ok {
+		return false
+	}
+	one, ok := next.Y.(*ssa.Const)
+	return ok && one.Int64() == 1
+}
+
 func canUseDereferencePointer(unop *ssa.UnOp) bool {
 	if !isDereference(unop) {
 		return false
@@ -2599,6 +2623,11 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 		x := b.getValue(expr.X, getPos(expr))
 		y := b.getValue(expr.Y, getPos(expr))
+		if isRangeLoopCompare(expr) {
+			// An unsigned compare gives the same result here. It matches the
+			// unsigned bounds check of the element, which LLVM then removes.
+			return b.CreateICmp(llvm.IntULT, x, y, ""), nil
+		}
 		return b.createBinOp(expr.Op, expr.X.Type(), expr.Y.Type(), x, y, expr.Pos())
 	case *ssa.Call:
 		return b.createFunctionCall(expr.Common())
