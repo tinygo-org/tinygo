@@ -29,23 +29,6 @@ ENTRY(call_start_cpu0)
 
 SECTIONS
 {
-    /* Dummy section so that .rodata starts right after the image header
-     * and DROM segment header in the flash image.
-     */
-    .rodata_dummy (NOLOAD): ALIGN(4)
-    {
-        . += 0x18; /* esp_image_header_t at start of flash */
-        . += 0x8;  /* DROM segment header (8 bytes) */
-    } > DROM
-
-    /* Constant global variables, stored in flash (DROM). */
-    .rodata : ALIGN(4)
-    {
-        *(.rodata*)
-        . = ALIGN (4);
-        _drom_end = .;
-    } >DROM
-
     /* Put the stack at the bottom of DRAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
      */
@@ -76,6 +59,13 @@ SECTIONS
         _sdata = ABSOLUTE(.);
         *(.data .data.*)
         *(.dram*)
+
+        /* Physical flash offsets patched by the ESP image builder. */
+        _irom_flash_addr = ABSOLUTE(.);
+        LONG(0);
+        _drom_flash_addr = ABSOLUTE(.);
+        LONG(0);
+
         . = ALIGN (4);
         _edata = ABSOLUTE(.);
     } >DRAM
@@ -126,23 +116,57 @@ SECTIONS
         _iram_end = .;
     } >IRAM
 
-    /* Dummy section to put the IROM segment at the correct flash offset. */
+    /* Size of the RAM part of the image. Header, segments, padding to 16 bytes
+     * and the SHA-256 digest, as written by builder/esp.go. */
+    _ram_image_payload_size =
+        0x18 +
+        SIZEOF(.data) +
+        ((SIZEOF(.data) != 0) ? 0x08 : 0) +
+        SIZEOF(.iram) +
+        ((SIZEOF(.iram) != 0) ? 0x08 : 0);
+
+    _ram_image_size =
+        _ram_image_payload_size +
+        16 - (_ram_image_payload_size % 16) +
+        0x20;
+
+    /* The MMU maps 64 KB pages, so the low 16 bits of the IROM VMA must match
+     * its flash offset. IROM follows the RAM part of the image. */
     .text_dummy (NOLOAD): ALIGN(4)
     {
-        . += 0x18;                                                  /* esp_image_header_t */
-        . += SIZEOF(.rodata) + ((SIZEOF(.rodata) != 0) ? 0x8 : 0); /* DROM segment (optional) */
-        . += SIZEOF(.data)   + ((SIZEOF(.data)   != 0) ? 0x8 : 0); /* DRAM segment (optional) */
-        . += SIZEOF(.iram)   + 0x8;                                 /* IRAM segment */
-        . += 0x8;                                                   /* IROM segment header */
-    } > IROM
+        . += _ram_image_size % 0x10000;
+    } >IROM
 
-    /* IROM segment: main code executed from flash via cache. */
+    /* IROM occupies the first entries in the shared flash MMU table. */
     .text : ALIGN(4)
     {
+        _irom_start = .;
         *(.literal .text)
         *(.literal.* .text.*)
+        . = ALIGN(4);
         _irom_end = .;
     } >IROM
+
+    /* DROM uses the MMU entries after IROM, with the same low 16 bit rule. */
+    _irom_mmu_pages =
+        ((_irom_end - ORIGIN(IROM) + 0xFFFF) / 0x10000);
+
+    _drom_flash_offset =
+        _ram_image_size + SIZEOF(.text);
+
+    .rodata_dummy (NOLOAD): ALIGN(4)
+    {
+        . += _irom_mmu_pages * 0x10000;
+        . += _drom_flash_offset % 0x10000;
+    } >DROM
+
+    .rodata : ALIGN(4)
+    {
+        _drom_start = .;
+        *(.rodata*)
+        . = ALIGN(4);
+        _drom_end = .;
+    } >DROM
 
     /DISCARD/ :
     {
@@ -178,11 +202,18 @@ _heap_end = 0x3fceb710;
 
 _stack_size = 4K;
 
-/* IROM and DROM both map flash 1:1 from offset 0, see esp32s3.S.
- * The 64 bytes skip the image footer written by builder/esp.go. */
-PROVIDE(__flash_data_start = ALIGN(_irom_end - 0x42000000 + 0x3C000000 + 64, 4096));
-PROVIDE(__flash_data_end = 0x3C000000 + 4M);
-_flash_map_end = MAX(_irom_end - 0x42000000 + 0x3C000000, __flash_data_end);
+/* MMU entries for esp32s3.S. DROM follows IROM in the shared table, and the
+ * machine.Flash area follows DROM. It starts at the first 4K sector after DROM. */
+_drom_mmu_index = (_drom_start - 0x3C000000) / 0x10000;
+_drom_mmu_pages = (_drom_end - 0x3C000000 + 0xFFFF) / 0x10000 - _drom_mmu_index;
+_drom_flash_start = _drom_flash_offset - _drom_flash_offset % 0x10000 + _drom_start % 0x10000;
+_drom_flash_end = (_drom_flash_start < _drom_flash_offset ? _drom_flash_start + 0x10000 : _drom_flash_start) + (_drom_end - _drom_start);
+__flash_data_phys = ALIGN(_drom_flash_end, 4096);
+_flash_data_phys_end = MAX(__flash_data_phys, 4M);
+_flash_data_mmu_index = _drom_mmu_index + _drom_mmu_pages;
+_flash_data_mmu_pages = (_flash_data_phys_end + 0xFFFF) / 0x10000 - __flash_data_phys / 0x10000;
+PROVIDE(__flash_data_start = 0x3C000000 + _flash_data_mmu_index * 0x10000 + __flash_data_phys % 0x10000);
+PROVIDE(__flash_data_end = __flash_data_start + (_flash_data_phys_end - __flash_data_phys));
 
 /* From ESP-IDF:
  * components/esp_rom/esp32/ld/esp32.rom.newlib-funcs.ld
