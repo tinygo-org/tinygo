@@ -1733,8 +1733,8 @@ func isMemequalArrayComparison(expr *ssa.BinOp) bool {
 		(expr.Op == token.EQL || expr.Op == token.NEQ)
 }
 
-// isRangeLoopCompare returns whether expr is the loop condition of a range loop
-// over a slice, (index + 1) < len(slice). Neither side is ever negative.
+// isRangeLoopCompare returns whether expr is the (index + 1) < len(slice) test
+// of rangeIndexed in golang.org/x/tools/go/ssa. Neither side is ever negative.
 func isRangeLoopCompare(expr *ssa.BinOp) bool {
 	if expr.Op != token.LSS || expr.Block().Comment != "rangeindex.loop" {
 		return false
