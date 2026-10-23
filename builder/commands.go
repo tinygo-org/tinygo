@@ -28,21 +28,25 @@ func init() {
 	if runtime.GOOS == "darwin" {
 		// The newest LLVM release may still be under Homebrew's unversioned
 		// "llvm" formula, so that path is tried too.
-		var prefix, unversionedPrefix string
+		var prefix, lldPrefix, unversionedPrefix string
 		switch runtime.GOARCH {
 		case "amd64":
 			prefix = "/usr/local/opt/llvm@" + llvmMajor + "/bin/"
+			lldPrefix = "/usr/local/opt/lld@" + llvmMajor + "/bin/"
 			unversionedPrefix = "/usr/local/opt/llvm/bin/"
 		case "arm64":
 			prefix = "/opt/homebrew/opt/llvm@" + llvmMajor + "/bin/"
+			lldPrefix = "/opt/homebrew/opt/lld@" + llvmMajor + "/bin/"
 			unversionedPrefix = "/opt/homebrew/opt/llvm/bin/"
 		default:
 			// unknown GOARCH
 			panic(fmt.Sprintf("unknown GOARCH: %s on darwin", runtime.GOARCH))
 		}
 		commands["clang"] = append(commands["clang"], prefix+"clang-"+llvmMajor, unversionedPrefix+"clang-"+llvmMajor)
-		commands["ld.lld"] = append(commands["ld.lld"], prefix+"ld.lld", unversionedPrefix+"ld.lld")
-		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld", unversionedPrefix+"wasm-ld")
+		// Homebrew ships lld as a separate lld@N formula. Try it before $PATH,
+		// which may hold an lld from a different LLVM version.
+		commands["ld.lld"] = []string{"ld.lld-" + llvmMajor, lldPrefix + "ld.lld", prefix + "ld.lld", "ld.lld"}
+		commands["wasm-ld"] = []string{"wasm-ld-" + llvmMajor, lldPrefix + "wasm-ld", prefix + "wasm-ld", "wasm-ld"}
 		commands["lldb"] = append(commands["lldb"], prefix+"lldb", unversionedPrefix+"lldb")
 	}
 	// Add the path for when LLVM was installed with the installer from
