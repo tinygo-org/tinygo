@@ -293,6 +293,26 @@ func TestLargeSliceElement(t *testing.T) {
 	}
 }
 
+func TestLargeSliceElement32Bit(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	mod, errs := testCompilePackage(t, options, "slice-large-element.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	fn := mod.NamedFunction("main.makeLargeElementSlice")
+	if fn.IsNil() {
+		t.Fatal("missing function main.makeLargeElementSlice")
+	}
+	if ir := fn.String(); !strings.Contains(ir, "icmp ugt i32 %len, 127") {
+		t.Errorf("large element slice does not use the 32-bit allocation limit:\n%s", ir)
+	}
+}
+
 func TestNonBlockingSelectLargeSend(t *testing.T) {
 	options := &compileopts.Options{Target: "wasm"}
 	mod, errs := testCompilePackage(t, options, "channel-nonblocking-large.go")

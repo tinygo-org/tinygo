@@ -2820,7 +2820,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		elemSizeValue := llvm.ConstInt(b.uintptrType, elemSize, false)
 
 		maxSize := b.maxSliceSize(llvmElemType)
-		if elemSize > maxSize {
+		if maxSize == 0 {
 			// This seems to be checked by the typechecker already, but let's
 			// check it again just to be sure.
 			return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("slice element type is too big (%v bytes)", elemSize))
