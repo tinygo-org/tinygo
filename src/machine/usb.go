@@ -1,4 +1,4 @@
-//go:build sam || nrf52840 || rp2040 || rp2350 || stm32f4 || stm32f7 || stm32h7 || mimxrt1062
+//go:build sam || nrf52840 || rp2040 || rp2350 || stm32f4 || stm32f7 || stm32h7 || mimxrt1062 || (esp32s3 && usbotg)
 
 package machine
 
@@ -41,6 +41,9 @@ func initUSB() {
 //
 //go:linkname enableUSBCDC machine/usb/cdc.EnableUSBCDC
 func enableUSBCDC()
+
+//go:linkname cdcReset machine/usb/cdc.reset
+func cdcReset()
 
 type Serialer interface {
 	WriteByte(c byte) error
@@ -372,8 +375,9 @@ func EnableCDC(txHandler func(), rxHandler func([]byte), setupHandler func(usb.S
 		},
 		[]usb.SetupConfig{
 			{
-				Index:   usb.CDC_ACM_INTERFACE,
-				Handler: setupHandler,
+				Index:        usb.CDC_ACM_INTERFACE,
+				Handler:      setupHandler,
+				ResetHandler: cdcReset,
 			},
 		})
 }
