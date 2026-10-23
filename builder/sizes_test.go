@@ -85,6 +85,8 @@ func TestBinarySize(t *testing.T) {
 		{target: "cortex-m-qemu", path: "./testdata/size-slice", opt: "z"},
 		{target: "cortex-m-qemu", path: "./testdata/size-slice", opt: "2"},
 		{target: "cortex-m-qemu", path: "./testdata/size-defer", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-contains", opt: "z"},
+		{target: "pico2", path: "./testdata/size-contains", opt: "z"},
 		{target: "pico2", path: "./testdata/size-os", opt: "z"},
 		{target: "pico2", path: "./testdata/size-os", opt: "2"},
 
