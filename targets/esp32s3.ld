@@ -375,6 +375,7 @@ esp_rom_spiflash_erase_sector = 0x400009fc;
 esp_rom_spiflash_write = 0x40000a14;
 esp_rom_spiflash_read = 0x40000a20;
 esp_rom_spiflash_unlock = 0x40000a2c;
+rom_spiflash_legacy_data = 0x3fceffe4;
 Cache_Invalidate_Addr = 0x400016b0;
 
 /* Interrupt handling */

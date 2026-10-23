@@ -434,6 +434,7 @@ PROVIDE( esp_rom_spiflash_config_param = 0x40000134 );
 PROVIDE( esp_rom_spiflash_read_user_cmd = 0x40000138 );
 PROVIDE( esp_rom_spiflash_select_qio_pins = 0x4000013c );
 PROVIDE( esp_rom_spiflash_unlock = 0x40000140 );
+PROVIDE( rom_spiflash_legacy_data = 0x3fcdfff0 );
 PROVIDE( esp_rom_spi_flash_auto_sus_res = 0x40000144 );
 PROVIDE( esp_rom_spi_flash_send_resume = 0x40000148 );
 PROVIDE( esp_rom_spi_flash_update_id = 0x4000014c );
