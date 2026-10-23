@@ -167,7 +167,8 @@ SECTIONS
         _irom_end = .;
     } >IROM
 
-    PROVIDE(__flash_data_start = ALIGN(_irom_end - 0x42000000 + 0x3C000000, 4096));
+    /* The 64 bytes skip the image footer written by builder/esp.go. */
+    PROVIDE(__flash_data_start = ALIGN(_irom_end - 0x42000000 + 0x3C000000 + 64, 4096));
     PROVIDE(__flash_data_end = 0x3C000000 + 4M);
 
     /DISCARD/ :

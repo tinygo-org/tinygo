@@ -178,6 +178,12 @@ _heap_end = 0x3fceb710;
 
 _stack_size = 4K;
 
+/* IROM and DROM both map flash 1:1 from offset 0, see esp32s3.S.
+ * The 64 bytes skip the image footer written by builder/esp.go. */
+PROVIDE(__flash_data_start = ALIGN(_irom_end - 0x42000000 + 0x3C000000 + 64, 4096));
+PROVIDE(__flash_data_end = 0x3C000000 + 4M);
+_flash_map_end = MAX(_irom_end - 0x42000000 + 0x3C000000, __flash_data_end);
+
 /* From ESP-IDF:
  * components/esp_rom/esp32/ld/esp32.rom.newlib-funcs.ld
  * This is the subset that is sometimes used by LLVM during codegen, and thus
@@ -332,6 +338,13 @@ assist_debug_clock_enable = 0x400006f0;
 assist_debug_record_enable = 0x400006fc;
 clear_super_wdt_reset_flag = 0x40000708;
 disable_default_watchdog = 0x40000714;
+
+/* SPI flash */
+esp_rom_spiflash_erase_sector = 0x400009fc;
+esp_rom_spiflash_write = 0x40000a14;
+esp_rom_spiflash_read = 0x40000a20;
+esp_rom_spiflash_unlock = 0x40000a2c;
+Cache_Invalidate_Addr = 0x400016b0;
 
 /* Interrupt handling */
 intr_matrix_set = 0x40001b54;

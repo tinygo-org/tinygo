@@ -51,7 +51,11 @@ func (inst *instruction) String() string {
 	for i, op := range inst.operands {
 		operands[i] = op.String()
 	}
+	return inst.opcodeName() + " " + strings.Join(operands, " ")
+}
 
+// opcodeName returns the name of the instruction's opcode.
+func (inst *instruction) opcodeName() string {
 	name := ""
 	if inst.branch {
 		name = "br"
@@ -61,7 +65,7 @@ func (inst *instruction) String() string {
 	if name == "" {
 		name = "<unknown op>"
 	}
-	return name + " " + strings.Join(operands, " ")
+	return name
 }
 
 // compileFunction compiles a given LLVM function to an easier to interpret

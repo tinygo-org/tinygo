@@ -75,6 +75,19 @@ func TestBinarySize(t *testing.T) {
 		{target: "microbit", path: "examples/serial", opt: "z"},
 		{target: "wioterminal", path: "examples/pininterrupt", opt: "z"},
 
+		{target: "pico", path: "examples/serial", opt: "z"},
+		{target: "pico", path: "examples/serial", opt: "2"},
+		{target: "pico2", path: "examples/serial", opt: "z"},
+		{target: "pico2", path: "examples/serial", opt: "2"},
+		{target: "esp32c3-generic", path: "examples/serial", opt: "z"},
+		{target: "esp32c3-generic", path: "examples/serial", opt: "2"},
+
+		{target: "cortex-m-qemu", path: "./testdata/size-slice", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-slice", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-defer", opt: "z"},
+		{target: "pico2", path: "./testdata/size-os", opt: "z"},
+		{target: "pico2", path: "./testdata/size-os", opt: "2"},
+
 		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "z"},
 		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "2"},
 		{target: "riscv-qemu", path: "./testdata/size-corpus", opt: "z"},
