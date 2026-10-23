@@ -1,4 +1,4 @@
-//go:build esp32s3
+//go:build esp32s3 && !usbotg
 
 package machine
 
