@@ -46,7 +46,7 @@ import "C"
 // the other core.
 func BootselButton() bool {
 	state, multicore := rp2EnterFlashSafeSection()
-	defer rp2ExitFlashSafeSection(state, multicore)
-
-	return C.read_bootsel_button() != 0
+	res := C.read_bootsel_button()
+	rp2ExitFlashSafeSection(state, multicore)
+	return res != 0
 }
