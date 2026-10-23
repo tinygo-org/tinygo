@@ -152,9 +152,12 @@ movl %ebp, 20(%ebx)
 		asmString = `
 leaq 1f(%rip), %rax
 movq %rax, 8(%rbx)
+movq %rbp, 16(%rbx)
 xorq %rax, %rax
 1:`
-		constraints = "={rax},{rbx},~{rbx},~{rcx},~{rdx},~{rsi},~{rdi},~{rbp},~{r8},~{r9},~{r10},~{r11},~{r12},~{r13},~{r14},~{r15},~{xmm0},~{xmm1},~{xmm2},~{xmm3},~{xmm4},~{xmm5},~{xmm6},~{xmm7},~{xmm8},~{xmm9},~{xmm10},~{xmm11},~{xmm12},~{xmm13},~{xmm14},~{xmm15},~{xmm16},~{xmm17},~{xmm18},~{xmm19},~{xmm20},~{xmm21},~{xmm22},~{xmm23},~{xmm24},~{xmm25},~{xmm26},~{xmm27},~{xmm28},~{xmm29},~{xmm30},~{xmm31},~{fpsr},~{fpcr},~{flags},~{dirflag},~{memory}"
+		// rbp is saved and restored by tinygo_longjmp rather than clobbered,
+		// because it is reserved when the function keeps a frame pointer.
+		constraints = "={rax},{rbx},~{rbx},~{rcx},~{rdx},~{rsi},~{rdi},~{r8},~{r9},~{r10},~{r11},~{r12},~{r13},~{r14},~{r15},~{xmm0},~{xmm1},~{xmm2},~{xmm3},~{xmm4},~{xmm5},~{xmm6},~{xmm7},~{xmm8},~{xmm9},~{xmm10},~{xmm11},~{xmm12},~{xmm13},~{xmm14},~{xmm15},~{xmm16},~{xmm17},~{xmm18},~{xmm19},~{xmm20},~{xmm21},~{xmm22},~{xmm23},~{xmm24},~{xmm25},~{xmm26},~{xmm27},~{xmm28},~{xmm29},~{xmm30},~{xmm31},~{fpsr},~{fpcr},~{flags},~{dirflag},~{memory}"
 		// This list doesn't include AVX/AVX512 registers because TinyGo
 		// doesn't currently enable support for AVX instructions.
 	case "arm":
@@ -179,19 +182,17 @@ movs r0, #0`
 		asmString = `
 adr x2, 1f
 str x2, [x1, #8]
+str x29, [x1, #16]
 mov x0, #0
 1:
 `
 		constraints = "={x0},{x1},~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{q16},~{q17},~{q18},~{q19},~{q20},~{q21},~{q22},~{q23},~{q24},~{q25},~{q26},~{q27},~{q28},~{q29},~{q30},~{nzcv},~{ffr},~{memory}"
+		// The frame pointer is saved and restored by tinygo_longjmp, as it is
+		// reserved wherever frame pointers are kept.
 		if b.GOOS != "darwin" && b.GOOS != "windows" {
-			// These registers cause the following warning when compiling for
-			// MacOS and Windows:
-			//     warning: inline asm clobber list contains reserved registers:
-			//     X18, FP
-			//     Reserved registers on the clobber list may not be preserved
-			//     across the asm statement, and clobbering them may lead to
-			//     undefined behaviour.
-			constraints += ",~{x18},~{fp}"
+			// x18 is reserved on MacOS and Windows, and clobbering it there
+			// warns that it may not be preserved across the asm statement.
+			constraints += ",~{x18}"
 		}
 		// TODO: SVE registers, which we don't use in TinyGo at the moment.
 	case "avr":
