@@ -98,7 +98,7 @@ rundefers.end1:                                   ; preds = %rundefers.loophead4
   br label %recover
 }
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn
+; Function Attrs: nocallback nofree nounwind willreturn
 declare ptr @llvm.stacksave.p0() #2
 
 declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(28), ptr, ptr) #1
@@ -205,6 +205,218 @@ define internal void @"main.deferNoPanicCall$1"(ptr %context) unnamed_addr #0 {
 entry:
   call void @runtime.printlock(ptr undef) #4
   call void @runtime.printint32(i32 2, ptr undef) #4
+  call void @runtime.printunlock(ptr undef) #4
+  ret void
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.noPanicArithmetic(i32 %a, i32 %b, ptr %context) unnamed_addr #0 {
+entry:
+  %0 = add i32 %a, %b
+  %1 = icmp sgt i32 %0, 3
+  ret i1 %1
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.deferNoPanicArithmetic(i32 %a, i32 %b, ptr %context) unnamed_addr #0 {
+entry:
+  %defer.alloca = alloca { i32, ptr }, align 4
+  %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %deferPtr = getelementptr inbounds nuw i8, ptr %deferframe.buf, i32 24
+  %0 = call ptr @llvm.stacksave.p0()
+  call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
+  %1 = call align 1 dereferenceable(1) ptr @runtime.alloc(i32 1, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #4
+  %defer.next = load ptr, ptr %deferPtr, align 4
+  store i32 0, ptr %defer.alloca, align 4
+  %defer.alloca.repack11 = getelementptr inbounds nuw i8, ptr %defer.alloca, i32 4
+  store ptr %defer.next, ptr %defer.alloca.repack11, align 4
+  store ptr %defer.alloca, ptr %deferPtr, align 4
+  %2 = call i1 @main.noPanicArithmetic(i32 %a, i32 %b, ptr undef)
+  store i1 %2, ptr %1, align 1
+  br label %rundefers.block
+
+rundefers.after:                                  ; preds = %rundefers.end
+  %3 = load i1, ptr %1, align 1
+  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  ret i1 %3
+
+rundefers.block:                                  ; preds = %entry
+  br label %rundefers.loophead
+
+rundefers.loophead:                               ; preds = %rundefers.callback0, %rundefers.block
+  %4 = load ptr, ptr %deferPtr, align 4
+  %stackIsNil = icmp eq ptr %4, null
+  br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
+
+rundefers.loop:                                   ; preds = %rundefers.loophead
+  %stack.next.gep = getelementptr inbounds nuw i8, ptr %4, i32 4
+  %stack.next = load ptr, ptr %stack.next.gep, align 4
+  store ptr %stack.next, ptr %deferPtr, align 4
+  %callback = load i32, ptr %4, align 4
+  switch i32 %callback, label %rundefers.default [
+    i32 0, label %rundefers.callback0
+  ]
+
+rundefers.callback0:                              ; preds = %rundefers.loop
+  call void @"main.deferNoPanicArithmetic$1"(ptr undef)
+  br label %rundefers.loophead
+
+rundefers.default:                                ; preds = %rundefers.loop
+  unreachable
+
+rundefers.end:                                    ; preds = %rundefers.loophead
+  br label %rundefers.after
+
+recover:                                          ; preds = %rundefers.end1
+  ret i1 poison
+
+lpad:                                             ; No predecessors!
+  br label %rundefers.loophead4
+
+rundefers.loophead4:                              ; preds = %rundefers.callback010, %lpad
+  br i1 poison, label %rundefers.end1, label %rundefers.loop3
+
+rundefers.loop3:                                  ; preds = %rundefers.loophead4
+  switch i32 poison, label %rundefers.default2 [
+    i32 0, label %rundefers.callback010
+  ]
+
+rundefers.callback010:                            ; preds = %rundefers.loop3
+  br label %rundefers.loophead4
+
+rundefers.default2:                               ; preds = %rundefers.loop3
+  unreachable
+
+rundefers.end1:                                   ; preds = %rundefers.loophead4
+  br label %recover
+}
+
+; Function Attrs: allockind("alloc,zeroed") allocsize(0)
+declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #3
+
+; Function Attrs: nounwind
+define internal void @"main.deferNoPanicArithmetic$1"(ptr %context) unnamed_addr #0 {
+entry:
+  call void @runtime.printlock(ptr undef) #4
+  call void @runtime.printint32(i32 4, ptr undef) #4
+  call void @runtime.printunlock(ptr undef) #4
+  ret void
+}
+
+; Function Attrs: nounwind
+define hidden i32 @main.panicDivide(i32 %a, i32 %b, ptr %context) unnamed_addr #0 {
+entry:
+  %0 = icmp eq i32 %b, 0
+  br i1 %0, label %divbyzero.throw, label %divbyzero.next
+
+divbyzero.next:                                   ; preds = %entry
+  %1 = icmp eq i32 %b, -1
+  %2 = icmp eq i32 %a, -2147483648
+  %3 = and i1 %1, %2
+  %4 = select i1 %3, i32 1, i32 %b
+  %5 = sdiv i32 %a, %4
+  ret i32 %5
+
+divbyzero.throw:                                  ; preds = %entry
+  call void @runtime.divideByZeroPanic(ptr undef) #4
+  unreachable
+}
+
+declare void @runtime.divideByZeroPanic(ptr) #1
+
+; Function Attrs: nounwind
+define hidden i32 @main.deferPanicDivide(i32 %a, i32 %b, ptr %context) unnamed_addr #0 {
+entry:
+  %defer.alloca = alloca { i32, ptr }, align 4
+  %deferframe.buf = alloca %runtime.deferFrame, align 4
+  %deferPtr = getelementptr inbounds nuw i8, ptr %deferframe.buf, i32 24
+  %0 = call ptr @llvm.stacksave.p0()
+  call void @runtime.setupDeferFrame(ptr nonnull %deferframe.buf, ptr %0, ptr undef) #4
+  %1 = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #4
+  %defer.next = load ptr, ptr %deferPtr, align 4
+  store i32 0, ptr %defer.alloca, align 4
+  %defer.alloca.repack11 = getelementptr inbounds nuw i8, ptr %defer.alloca, i32 4
+  store ptr %defer.next, ptr %defer.alloca.repack11, align 4
+  store ptr %defer.alloca, ptr %deferPtr, align 4
+  %setjmp = call i32 asm "\0Amovs r0, #0\0Amov r2, pc\0Astr r2, [r1, #4]", "={r0},{r1},~{r1},~{r2},~{r3},~{r4},~{r5},~{r6},~{r7},~{r8},~{r9},~{r10},~{r11},~{r12},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{cpsr},~{memory}"(ptr nonnull %deferframe.buf) #5
+  %setjmp.result = icmp eq i32 %setjmp, 0
+  br i1 %setjmp.result, label %2, label %lpad
+
+2:                                                ; preds = %entry
+  %3 = call i32 @main.panicDivide(i32 %a, i32 %b, ptr undef)
+  store i32 %3, ptr %1, align 4
+  br label %rundefers.block
+
+rundefers.after:                                  ; preds = %rundefers.end
+  %4 = load i32, ptr %1, align 4
+  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  ret i32 %4
+
+rundefers.block:                                  ; preds = %2
+  br label %rundefers.loophead
+
+rundefers.loophead:                               ; preds = %rundefers.callback0, %rundefers.block
+  %5 = load ptr, ptr %deferPtr, align 4
+  %stackIsNil = icmp eq ptr %5, null
+  br i1 %stackIsNil, label %rundefers.end, label %rundefers.loop
+
+rundefers.loop:                                   ; preds = %rundefers.loophead
+  %stack.next.gep = getelementptr inbounds nuw i8, ptr %5, i32 4
+  %stack.next = load ptr, ptr %stack.next.gep, align 4
+  store ptr %stack.next, ptr %deferPtr, align 4
+  %callback = load i32, ptr %5, align 4
+  switch i32 %callback, label %rundefers.default [
+    i32 0, label %rundefers.callback0
+  ]
+
+rundefers.callback0:                              ; preds = %rundefers.loop
+  call void @"main.deferPanicDivide$1"(ptr undef)
+  br label %rundefers.loophead
+
+rundefers.default:                                ; preds = %rundefers.loop
+  unreachable
+
+rundefers.end:                                    ; preds = %rundefers.loophead
+  br label %rundefers.after
+
+recover:                                          ; preds = %rundefers.end1
+  %6 = load i32, ptr %1, align 4
+  call void @runtime.destroyDeferFrame(ptr nonnull %deferframe.buf, ptr undef) #4
+  ret i32 %6
+
+lpad:                                             ; preds = %entry
+  br label %rundefers.loophead4
+
+rundefers.loophead4:                              ; preds = %rundefers.callback010, %lpad
+  %7 = load ptr, ptr %deferPtr, align 4
+  %stackIsNil5 = icmp eq ptr %7, null
+  br i1 %stackIsNil5, label %rundefers.end1, label %rundefers.loop3
+
+rundefers.loop3:                                  ; preds = %rundefers.loophead4
+  %stack.next.gep6 = getelementptr inbounds nuw i8, ptr %7, i32 4
+  %stack.next7 = load ptr, ptr %stack.next.gep6, align 4
+  store ptr %stack.next7, ptr %deferPtr, align 4
+  %callback9 = load i32, ptr %7, align 4
+  switch i32 %callback9, label %rundefers.default2 [
+    i32 0, label %rundefers.callback010
+  ]
+
+rundefers.callback010:                            ; preds = %rundefers.loop3
+  call void @"main.deferPanicDivide$1"(ptr undef)
+  br label %rundefers.loophead4
+
+rundefers.default2:                               ; preds = %rundefers.loop3
+  unreachable
+
+rundefers.end1:                                   ; preds = %rundefers.loophead4
+  br label %recover
+}
+
+; Function Attrs: nounwind
+define internal void @"main.deferPanicDivide$1"(ptr %context) unnamed_addr #0 {
+entry:
+  call void @runtime.printlock(ptr undef) #4
+  call void @runtime.printint32(i32 6, ptr undef) #4
   call void @runtime.printunlock(ptr undef) #4
   ret void
 }
@@ -369,9 +581,6 @@ rundefers.default:                                ; preds = %rundefers.loop
 rundefers.end:                                    ; preds = %rundefers.loophead
   br label %recover
 }
-
-; Function Attrs: allockind("alloc,zeroed") allocsize(0)
-declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #3
 
 ; Function Attrs: nounwind
 define hidden void @main.deferLoop(ptr %context) unnamed_addr #0 {
@@ -563,7 +772,7 @@ rundefers.end4:                                   ; preds = %rundefers.loophead7
 
 attributes #0 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
 attributes #1 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
-attributes #2 = { nocallback nofree nosync nounwind willreturn }
+attributes #2 = { nocallback nofree nounwind willreturn }
 attributes #3 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" }
 attributes #4 = { nounwind }
 attributes #5 = { nounwind returns_twice }

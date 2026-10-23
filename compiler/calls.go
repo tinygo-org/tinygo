@@ -473,6 +473,7 @@ func instructionCallProperties(instruction ssa.Instruction) callProperties {
 		if binOpMayUnwind(instruction) {
 			return callMayUnwind
 		}
+		return 0
 	case *ssa.UnOp:
 		var properties callProperties
 		if instruction.Op == token.ARROW {
