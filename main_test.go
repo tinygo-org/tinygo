@@ -1622,6 +1622,44 @@ func TestRuntimeFatal(t *testing.T) {
 	}
 }
 
+// Test that a panic in a finalizer run inline by scheduler=none cannot be
+// recovered by the code that triggered the GC.
+func TestFinalizerPanic(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"finalizerpanic.go", "finalizerpanic-alloc.go"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			options := optionsFromTarget("cortex-m-qemu", sema)
+			options.Scheduler = "none"
+			emuCheck(t, options)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			output := &bytes.Buffer{}
+			_, err = buildAndRun("testdata/"+name, config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+				cmd.Stdout = nil
+				cmd.Stderr = nil
+				data, err := cmd.CombinedOutput()
+				output.Write(data)
+				return err
+			})
+			if err == nil {
+				t.Fatal("program unexpectedly exited successfully")
+			}
+			if want := "panic: finalizer panic"; !strings.Contains(output.String(), want) {
+				t.Fatalf("output does not contain %q:\n%s", want, output.String())
+			}
+			if strings.Contains(output.String(), "recovered:") || strings.Contains(output.String(), "finished") {
+				t.Fatalf("finalizer panic did not stop the program:\n%s", output.String())
+			}
+		})
+	}
+}
+
 // Test that the program can read stdin when the caller supplies it.
 func TestStdin(t *testing.T) {
 	t.Parallel()
