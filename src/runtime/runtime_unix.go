@@ -249,6 +249,17 @@ func nanosecondsToTicks(ns int64) timeUnit {
 func sleepTicks(d timeUnit) {
 	until := ticks() + d
 
+	if !hasScheduler {
+		var sleepFutex futex.Futex
+		for {
+			sleepFutex.WaitUntil(0, uint64(ticksToNanoseconds(d)))
+			d = until - ticks()
+			if d <= 0 {
+				return
+			}
+		}
+	}
+
 	for {
 		// Sleep for the given amount of time.
 		// If a signal arrived before going to sleep, or during the sleep, the
@@ -326,7 +337,7 @@ func allocateHeap() {
 	// first touched.
 	heapMaxSize = 1 * 1024 * 1024 * 1024 // 1GB for the entire heap
 	for {
-		addr := mmap(nil, heapMaxSize, flag_PROT_READ|flag_PROT_WRITE, flag_MAP_PRIVATE|flag_MAP_ANONYMOUS, -1, 0)
+		addr := mmap(nil, heapMaxSize, flag_PROT_READ|flag_PROT_WRITE, flag_MAP_PRIVATE|flag_MAP_ANONYMOUS|flag_MAP_NORESERVE, -1, 0)
 		if addr == unsafe.Pointer(^uintptr(0)) {
 			// Heap was too big to be mapped by mmap. Reduce the maximum size.
 			// We might want to make this a bit smarter than simply halving the
@@ -482,8 +493,15 @@ var signalRecvWaiter atomic.Pointer[task.Task]
 func signal_recv() uint32 {
 	// Function called from os/signal to get the next received signal.
 	for {
+		if !hasScheduler {
+			signalFutex.Store(0)
+		}
 		val := receivedSignals.Load()
 		if val == 0 {
+			if !hasScheduler {
+				signalFutex.Wait(0)
+				continue
+			}
 			// There are no signals to receive. Sleep until there are.
 			if signalRecvWaiter.Swap(task.Current()) != nil {
 				// We expect only a single goroutine to call signal_recv.
