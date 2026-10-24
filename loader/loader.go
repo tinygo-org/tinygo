@@ -24,7 +24,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/google/shlex"
 	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -737,7 +736,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			{"CGO_CFLAGS", &env.CFlags},
 			{"CGO_CXXFLAGS", &env.CXXFlags},
 		} {
-			flags, err := shlex.Split(goenv.Get(v.name))
+			flags, err := goenv.SplitFlags(goenv.Get(v.name))
 			if err != nil {
 				return nil, fmt.Errorf("failed to split %s: %w", v.name, err)
 			}
