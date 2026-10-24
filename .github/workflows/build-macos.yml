@@ -186,10 +186,33 @@ jobs:
           brew list -1 | grep python | while read formula; do brew unlink $formula; brew link --overwrite $formula; done
       - name: Install LLVM
         run: |
-          brew install llvm@${{ matrix.version }}
-          brew link llvm@${{ matrix.version }}
+          brew install llvm@${{ matrix.version }} lld binaryen
+          brew link --overwrite llvm@${{ matrix.version }}
+          # Older llvm@N formulas also ship ld.lld. Link the newest lld last,
+          # because that is the lld that Homebrew users get in $PATH.
+          brew unlink lld
+          brew link --overwrite lld
+          ld.lld --version
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Pull wasi-libc, macos-minimal-sdk
+        run: |
+          git submodule update --init lib/wasi-libc lib/macos-minimal-sdk
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v5
+        id: cache-llvm-source
+        with:
+          key: llvm-source-22-macos-homebrew-${{ hashFiles('llvm-version.txt') }}
+          path: llvm-project/compiler-rt
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v5
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: llvm-project/compiler-rt
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -199,6 +222,11 @@ jobs:
         run: go install -tags=llvm${{ matrix.version }}
       - name: Check binary
         run: tinygo version
+      - name: Link test programs
+        run: |
+          tinygo build -gc=leaking -o "$RUNNER_TEMP/alias" testdata/alias.go
+          "$RUNNER_TEMP/alias"
+          tinygo build -target=wasm-unknown -o "$RUNNER_TEMP/alias.wasm" testdata/alias.go
       - name: Build TinyGo (default LLVM)
         if: matrix.version == 20
         run: go install
