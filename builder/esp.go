@@ -95,6 +95,18 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		}
 		segments = ramSegments
 
+	case "esp32c3":
+		var ramSegments []*espImageSegment
+		for _, seg := range segments {
+			if (seg.addr >= 0x3C000000 && seg.addr < 0x3C800000) ||
+				(seg.addr >= 0x42000000 && seg.addr < 0x42800000) {
+				flashSegments = append(flashSegments, seg)
+			} else {
+				ramSegments = append(ramSegments, seg)
+			}
+		}
+		segments = ramSegments
+
 	case "esp32s3":
 		var ramSegments []*espImageSegment
 		for _, seg := range segments {
@@ -478,6 +490,22 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		}
 		outf.Write(make([]byte, dromOffset-outf.Len()))
 		outf.Write(esp32s3DromSegment.data)
+	}
+
+	// ESP32-C3 IROM and DROM are mapped 1:1, so the offset in the 8 MB flash
+	// address space is the offset in the image. See targets/esp32c3.ld.
+	if chip == "esp32c3" {
+		sort.SliceStable(flashSegments, func(i, j int) bool {
+			return flashSegments[i].addr&0x7FFFFF < flashSegments[j].addr&0x7FFFFF
+		})
+		for _, seg := range flashSegments {
+			offset := int(seg.addr & 0x7FFFFF)
+			if outf.Len() > offset {
+				return fmt.Errorf("ESP32-C3: segment at 0x%x overlaps the previous one", seg.addr)
+			}
+			outf.Write(make([]byte, offset-outf.Len()))
+			outf.Write(seg.data)
+		}
 	}
 
 	// QEMU (or more precisely, qemu-system-xtensa from Espressif) expects the
