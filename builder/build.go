@@ -600,6 +600,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			// anything, it only links the bitcode files together.
 			ctx := llvm.NewContext()
 			mod = ctx.NewModule("main")
+			// Use one Linker for all packages. LinkModules rescans the whole
+			// module on every call.
+			linker := llvm.NewLinker(mod)
+			defer linker.Dispose()
 			for _, pkgJob := range packageJobs {
 				pkgMod, err := ctx.ParseBitcodeFile(pkgJob.result)
 				if err != nil {
@@ -622,7 +626,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					}
 					fn.SetLinkage(llvm.LinkOnceODRLinkage)
 				}
-				err = llvm.LinkModules(mod, pkgMod)
+				err = linker.LinkModule(pkgMod)
 				if err != nil {
 					return fmt.Errorf("failed to link module: %w", err)
 				}
@@ -635,7 +639,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			// works fine. See:
 			// https://github.com/tinygo-org/tinygo/issues/4810
 			globalsMod := makeGlobalsModule(ctx, globalValues, machine)
-			llvm.LinkModules(mod, globalsMod)
+			if err := linker.LinkModule(globalsMod); err != nil {
+				return fmt.Errorf("failed to link globals module: %w", err)
+			}
 
 			// Create runtime.initAll function that calls the runtime
 			// initializer of each package.
