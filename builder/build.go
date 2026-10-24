@@ -707,7 +707,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			// Make sure stack sizes are loaded from a separate section so they can be
 			// modified after linking.
 			if config.AutomaticStackSize() {
-				stackSizeLoads = transform.CreateStackSizeLoads(mod, config)
+				stackSizeLoads, err = transform.CreateStackSizeLoads(mod, config)
+				if err != nil {
+					return err
+				}
 			}
 			return nil
 		},

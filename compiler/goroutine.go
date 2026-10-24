@@ -121,6 +121,9 @@ func (b *builder) createGo(instr *ssa.Go) {
 		// linking).
 		stackSizeFnType, stackSizeFn := b.getFunction(b.program.ImportedPackage("internal/task").Members["getGoroutineStackSize"].(*ssa.Function))
 		stackSize = b.createCall(stackSizeFnType, stackSizeFn, []llvm.Value{callee, llvm.Undef(b.dataPtrType)}, "stacksize")
+		// CreateStackSizeLoads needs a constant callee, so stop SimplifyCFG
+		// from merging calls into one that takes a select or phi.
+		stackSize.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("nomerge"), 0))
 	} else {
 		// The stack size is fixed at compile time. By emitting it here as a
 		// constant, it can be optimized.
