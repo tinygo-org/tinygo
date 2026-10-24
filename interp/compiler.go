@@ -51,16 +51,16 @@ func (inst *instruction) String() string {
 	for i, op := range inst.operands {
 		operands[i] = op.String()
 	}
-	return inst.opcodeName() + " " + strings.Join(operands, " ")
+	return opcodeName(inst.llvmInst) + " " + strings.Join(operands, " ")
 }
 
-// opcodeName returns the name of the instruction's opcode.
-func (inst *instruction) opcodeName() string {
+// opcodeName returns the name of the opcode of inst.
+func opcodeName(inst llvm.Value) string {
 	name := ""
-	if inst.branch {
+	if isBranch(inst) {
 		name = "br"
-	} else if int(inst.opcode) < len(instructionNameMap) {
-		name = instructionNameMap[inst.opcode]
+	} else if opcode := inst.InstructionOpcode(); int(opcode) < len(instructionNameMap) {
+		name = instructionNameMap[opcode]
 	}
 	if name == "" {
 		name = "<unknown op>"
