@@ -3,7 +3,6 @@
 package task
 
 import (
-	"internal/gclayout"
 	"unsafe"
 )
 
@@ -26,6 +25,7 @@ type state struct {
 	stackState
 
 	stackBase uintptr
+	stackSize uintptr
 	launched  bool
 
 	// finishing marks a goroutine that paused after it completed.
@@ -82,8 +82,9 @@ func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	s.args = args
 
 	// Create a stack.
-	stack := runtime_alloc(stackSize, gclayout.Conservative.AsPtr())
+	stack := allocStack(stackSize)
 	s.stackBase = uintptr(stack)
+	s.stackSize = stackSize
 
 	// Set up the stack canary, a random number that should be checked when
 	// switching from the task back to the scheduler. The stack canary pointer
@@ -219,7 +220,7 @@ func (t *Task) Resume() {
 		runtimeFatal("stack overflow")
 	}
 	if t.Exited {
-		runtime_freeTaskStack(t.state.stackBase)
+		releaseStack(t.state.stackBase, t.state.stackSize)
 		t.state = state{}
 		t.gcData = gcData{}
 		t.DeferFrame = nil

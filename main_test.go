@@ -584,6 +584,14 @@ func TestBuild(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
 			})
 
+			// Test that -gc=leaking reuses the stacks of exited goroutines.
+			t.Run("goroutines-leaking", func(t *testing.T) {
+				t.Parallel()
+				optionsLeaking := optionsFromTarget("wasip1", sema)
+				optionsLeaking.GC = "leaking"
+				runTest("goroutines-leaking.go", optionsLeaking, t, nil, nil)
+			})
+
 			// Test with -gc=boehm.
 			t.Run("gc.go-boehm", func(t *testing.T) {
 				t.Parallel()
