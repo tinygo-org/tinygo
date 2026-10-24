@@ -538,7 +538,7 @@ func TestBuild(t *testing.T) {
 	})
 
 	// Short mode skips the targets that every host can test. Linux CI tests
-	// them. The host-specific targets below continue to run.
+	// them without -short.
 	if !testing.Short() {
 		t.Run("EmulatedCortexM3", func(t *testing.T) {
 			t.Parallel()
@@ -594,7 +594,10 @@ func TestBuild(t *testing.T) {
 		})
 	}
 
-	if runtime.GOOS == "linux" {
+	// Linux CI also tests the other Linux architectures without -short, so
+	// short mode skips them. Windows CI runs only in short mode, so
+	// Windows386 continues to run.
+	if runtime.GOOS == "linux" && !testing.Short() {
 		for name, osArch := range supportedLinuxArches {
 			options := optionsFromOSARCH(osArch, sema)
 			if options.GOARCH != runtime.GOARCH { // Native architecture already run above.
