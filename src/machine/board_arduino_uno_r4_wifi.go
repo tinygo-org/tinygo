@@ -4,6 +4,9 @@
 //
 // - variants/UNOWIFIR4/variant.cpp
 // - variants/UNOWIFIR4/pinmux.inc
+//
+// Flashing requires the Arduino fork of bossac, found in PATH as "bossac".
+// See https://github.com/arduino/BOSSA
 
 package machine
 
