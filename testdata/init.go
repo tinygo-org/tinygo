@@ -1,6 +1,9 @@
 package main
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 func init() {
 	println("init")
@@ -20,6 +23,7 @@ func main() {
 	println("deferred init:", deferredInitValue)
 	initOnce.Do(func() { initOnceCalls++ })
 	println("once init:", onceInitValue, initOnceCalls)
+	println("atomic init:", atomicInitValue, atomicCounter, atomicPtr.Load() == &atomicTarget)
 
 	println(uint8SliceSrc[0])
 	println(uint8SliceDst[0])
@@ -44,6 +48,30 @@ func deferredInit() (result int) {
 func onceInit() int {
 	initOnce.Do(func() { initOnceCalls++ })
 	return initOnceCalls
+}
+
+var atomicCounter int32
+var atomicTarget int
+var atomicPtr atomic.Pointer[int]
+var atomicInitValue = atomicInit()
+
+func atomicInit() int32 {
+	n := atomic.AddInt32(&atomicCounter, 5)
+	n += atomic.AndInt32(&atomicCounter, 6)
+	n += atomic.OrInt32(&atomicCounter, 8)
+	n += atomic.SwapInt32(&atomicCounter, 3)
+	if atomic.CompareAndSwapInt32(&atomicCounter, 3, 7) {
+		n += 100
+	}
+	if atomic.CompareAndSwapInt32(&atomicCounter, 3, 9) {
+		n += 1000
+	}
+	atomicPtr.Store(&atomicTarget)
+	if atomicPtr.CompareAndSwap(&atomicTarget, nil) {
+		n += 10000
+	}
+	atomicPtr.Swap(&atomicTarget)
+	return n
 }
 
 type (

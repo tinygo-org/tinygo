@@ -12,6 +12,7 @@ v8: barba
 v9: 3 2 3 4
 deferred init: 41
 once init: 1 1
+atomic init: 10126 7 true
 3
 3
 5

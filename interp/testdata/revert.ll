@@ -6,8 +6,17 @@ declare void @externalCall(i64)
 declare i64 @ptrHash(ptr nocapture)
 
 declare void @modifyAtomic(ptr)
-declare i32 @"sync/atomic.SwapUint32"(ptr, i32, ptr)
-declare i1 @"sync/atomic.CompareAndSwapUint32"(ptr, i32, i32, ptr)
+
+define i32 @"sync/atomic.SwapUint32"(ptr %addr, i32 %new, ptr %context) {
+  %old = atomicrmw xchg ptr %addr, i32 %new syncscope("singlethread") seq_cst, align 4
+  ret i32 %old
+}
+
+define i1 @"sync/atomic.CompareAndSwapUint32"(ptr %addr, i32 %old, i32 %new, ptr %context) {
+  %pair = cmpxchg ptr %addr, i32 %old, i32 %new syncscope("singlethread") seq_cst seq_cst, align 4
+  %swapped = extractvalue { i32, i1 } %pair, 1
+  ret i1 %swapped
+}
 
 @foo.knownAtRuntime = global i64 0
 @bar.knownAtRuntime = global i64 0
