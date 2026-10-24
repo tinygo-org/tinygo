@@ -9,7 +9,7 @@ import (
 	"errors"
 )
 
-// avoid a heap allocation in GetRNG.
+// avoid a heap allocation in RandomUint32.
 var (
 	bytesAvailable uint8
 	buf            [4]uint8
@@ -18,9 +18,9 @@ var (
 	errNotEnoughRandomData = errors.New("rng: not enough random data available")
 )
 
-// GetRNG returns 32 bits of non-deterministic random data based on internal thermal noise.
+// RandomUint32 returns 32 bits of non-deterministic random data based on internal thermal noise.
 // According to Nordic's documentation, the random output is suitable for cryptographic purposes.
-func GetRNG() (ret uint32, err error) {
+func RandomUint32() (ret uint32, err error) {
 	// First check whether the SoftDevice is enabled.
 	// sd_rand_application_bytes_available_get cannot be called when the SoftDevice is not enabled.
 	if !isSoftDeviceEnabled() {
@@ -53,6 +53,15 @@ func GetRNG() (ret uint32, err error) {
 	}
 
 	return uint32(buf[0]) | uint32(buf[1])<<8 | uint32(buf[2])<<16 | uint32(buf[3])<<24, nil
+}
+
+// GetRNG returns a random uint32. See RandomUint32 for details.
+//
+// Deprecated: use RandomUint32 instead.
+//
+//go:fix inline
+func GetRNG() (uint32, error) {
+	return RandomUint32()
 }
 
 // This function is defined in the runtime, but we need it too.

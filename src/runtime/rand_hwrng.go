@@ -13,8 +13,8 @@ package runtime
 import "machine"
 
 func hardwareRand() (n uint64, ok bool) {
-	n1, err1 := machine.GetRNG()
-	n2, err2 := machine.GetRNG()
+	n1, err1 := machine.RandomUint32()
+	n2, err2 := machine.RandomUint32()
 	n = uint64(n1)<<32 | uint64(n2)
 	ok = err1 == nil && err2 == nil
 	return

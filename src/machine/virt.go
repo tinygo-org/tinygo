@@ -26,11 +26,11 @@ var rngBuf volatile.Register32
 var errNoRNG = errors.New("machine: no entropy source found")
 var errNoRNGData = errors.New("machine: entropy source didn't return enough data")
 
-// GetRNG returns random numbers from a VirtIO entropy source.
+// RandomUint32 returns random numbers from a VirtIO entropy source.
 // When running in QEMU, it requires adding the RNG device:
 //
 //	-device virtio-rng-device
-func GetRNG() (uint32, error) {
+func RandomUint32() (uint32, error) {
 	rngLock.Lock()
 
 	// Initialize the device on first use.
@@ -88,6 +88,15 @@ func GetRNG() (uint32, error) {
 	rngLock.Unlock()
 
 	return result, nil
+}
+
+// GetRNG returns a random uint32. See RandomUint32 for details.
+//
+// Deprecated: use RandomUint32 instead.
+//
+//go:fix inline
+func GetRNG() (uint32, error) {
+	return RandomUint32()
 }
 
 // Implement a driver for the VirtIO entropy device.
