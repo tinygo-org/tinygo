@@ -157,7 +157,7 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 		// Add files from TinyGo.
 		tinygoDir := filepath.Join(tinygoSrc, dir)
 		tinygoEntries, err := os.ReadDir(tinygoDir)
-		if err != nil {
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
 		}
 		var hasTinyGoFiles bool
