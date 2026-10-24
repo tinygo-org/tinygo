@@ -186,13 +186,14 @@ jobs:
           brew list -1 | grep python | while read formula; do brew unlink $formula; brew link --overwrite $formula; done
       - name: Install LLVM
         run: |
-          brew install llvm@${{ matrix.version }} lld binaryen
-          brew link --overwrite llvm@${{ matrix.version }}
-          # Older llvm@N formulas also ship ld.lld. Link the newest lld last,
-          # because that is the lld that Homebrew users get in $PATH.
-          brew unlink lld
-          brew link --overwrite lld
-          ld.lld --version
+          brew install llvm@${{ matrix.version }}
+          brew link llvm@${{ matrix.version }}
+      - name: Install lld, binaryen
+        run: |
+          # llvm@20 and later do not ship lld, so users install it after the
+          # first link fails. Older llvm@N formulas still ship it.
+          command -v ld.lld >/dev/null || brew install lld
+          brew install binaryen
       - name: Checkout
         uses: actions/checkout@v6
       - name: Pull wasi-libc, macos-minimal-sdk
