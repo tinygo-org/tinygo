@@ -294,6 +294,18 @@ func TestLargeSliceElement(t *testing.T) {
 	}
 }
 
+func TestLargeSliceElement32Bit(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	mod, errs := testCompilePackage(t, options, "slice-large-element.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	mod.Dispose()
+}
+
 func TestNonBlockingSelectLargeSend(t *testing.T) {
 	options := &compileopts.Options{Target: "wasm"}
 	mod, errs := testCompilePackage(t, options, "channel-nonblocking-large.go")
