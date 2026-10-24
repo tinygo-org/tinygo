@@ -181,6 +181,33 @@ func Get(name string) string {
 	}
 }
 
+// SplitFlags splits a CGO_*FLAGS value the same way as the go command.
+// See src/cmd/internal/quoted/quoted.go in the Go source tree.
+func SplitFlags(s string) ([]string, error) {
+	var f []string
+	for {
+		s = strings.TrimLeft(s, " \t\n\r")
+		if s == "" {
+			return f, nil
+		}
+		if quote := s[0]; quote == '"' || quote == '\'' {
+			i := strings.IndexByte(s[1:], quote)
+			if i < 0 {
+				return nil, fmt.Errorf("unterminated %c string", quote)
+			}
+			f = append(f, s[1:1+i])
+			s = s[2+i:]
+			continue
+		}
+		i := strings.IndexAny(s, " \t\n\r")
+		if i < 0 {
+			i = len(s)
+		}
+		f = append(f, s[:i])
+		s = s[i:]
+	}
+}
+
 // Find wasm-opt, or exit with an error.
 func findWasmOpt() string {
 	tinygoroot := sourceDir()
