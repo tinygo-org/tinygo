@@ -201,6 +201,18 @@ func nanotime() int64
 const i2cIntMask = esp.I2C_INT_STATUS_END_DETECT_INT_ST_Msk | esp.I2C_INT_STATUS_TRANS_COMPLETE_INT_ST_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk | esp.I2C_INT_STATUS_NACK_INT_ST_Msk
 
 func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
+	// After a NACK the controller keeps the bus busy for some microseconds.
+	// A start in this time does not complete and gives a timeout.
+	end := nanotime() + int64(timeoutMS)*1000000
+	for i2c.Bus.GetSR_BUS_BUSY() != 0 {
+		if nanotime() > end {
+			// Reset the FSM so a later call can recover, same as ESP-IDF
+			// https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1451
+			i2c.resetMaster()
+			return errI2CBusReadyTimeout
+		}
+	}
+
 	// Reset the FIFOs, bytes left after a NACK would go out in the next transaction.
 	// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1456
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(1)
