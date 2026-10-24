@@ -10,6 +10,7 @@ import (
 
 var (
 	validBuildModeOptions     = []string{"default", "c-shared", "wasi-legacy"}
+	validLibcOptions          = []string{"musl", "glibc"}
 	validGCOptions            = []string{"none", "leaking", "conservative", "custom", "precise", "boehm"}
 	validSchedulerOptions     = []string{"none", "tasks", "asyncify", "threads", "cores"}
 	validSerialOptions        = []string{"none", "uart", "usb", "rtt"}
@@ -34,6 +35,7 @@ type Options struct {
 	TrimPath                bool   // -trimpath flag
 	Opt                     string
 	GC                      string
+	Libc                    string // -libc flag
 	PanicStrategy           string
 	PanicUnwind             string
 	Scheduler               string
@@ -86,6 +88,18 @@ func (o *Options) Verify() error {
 			return fmt.Errorf(`invalid gc option '%s': valid values are %s`,
 				o.GC,
 				strings.Join(validGCOptions, ", "))
+		}
+	}
+
+	if o.Libc != "" {
+		valid := slices.Contains(validLibcOptions, o.Libc)
+		if !valid {
+			return fmt.Errorf(`invalid libc option '%s': valid values are %s`,
+				o.Libc,
+				strings.Join(validLibcOptions, ", "))
+		}
+		if o.GOOS != "linux" {
+			return fmt.Errorf("-libc=%s is only supported on linux, not %s", o.Libc, o.GOOS)
 		}
 	}
 
