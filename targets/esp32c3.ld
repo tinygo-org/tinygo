@@ -15,16 +15,11 @@
  *   - Memory in DRAM and IRAM is loaded at reset by the ROM bootloader.
  *     Luckily, this doesn't have significant alignment requirements.
  *
- * This linker script has been written to carefully work around (or with) these
- * limitations:
- *   - It adds dummy sections so that the bottom 16 bits of the virtual address
- *     and the physical address (in the generated firmware image) match.
- *   - It also offsets sections that share an address space using those same
- *     dummy sections.
- *   - It sorts the sections by load address, to avoid surprises as esptool.py
- *     also does it.
- * This way, it's possible to create a very small firmware image that still
- * conforms to the expectations of esptool.py and the ROM bootloader.
+ * This linker script works with these limitations:
+ *   - The ROM bootloader rejects IROM or DROM segments of 1 MiB or more, so
+ *     it only loads DRAM and IRAM. IROM and then DROM follow in flash.
+ *   - IROM and DROM are mapped 1:1, so the bottom 16 bits of the virtual
+ *     address and the flash offset match, and they don't overlap.
  */
 
 MEMORY
@@ -48,24 +43,6 @@ ENTRY(call_start_cpu0)
 
 SECTIONS
 {
-    /* Dummy section to make sure the .rodata section starts exactly behind the
-     * image header.
-     */
-    .rodata_dummy (NOLOAD): ALIGN(4)
-    {
-        . += 0x18; /* image header at start of flash: esp_image_header_t */
-        . += 0x8;  /* DROM segment header (8 bytes) */
-    } > DROM
-
-    /* Constant global variables, stored in DROM.
-     */
-    .rodata : ALIGN(4)
-    {
-        *(.rodata*)
-        *(.srodata*)
-        . = ALIGN (4);
-    } >DROM
-
     /* Put the stack at the bottom of DRAM, so that the application will
      * crash on stack overflow instead of silently corrupting memory.
      * See: http://blog.japaric.io/stack-overflow-protection/
@@ -138,25 +115,30 @@ SECTIONS
         __init_start = .;
         *(.init)
         __init_end = .;
+        . = ALIGN (4);
     } >IRAM
 
-    /* Dummy section to put the IROM segment exactly behind the IRAM segment.
-     * This has to follow the app image format exactly.
-     */
+    /* Size of the RAM part of the image. Header, segments, padding to 16 bytes
+     * and the SHA-256 digest, as written by builder/esp.go. */
+    _ram_image_payload_size =
+        0x18 +
+        SIZEOF(.data) + ((SIZEOF(.data) != 0) ? 0x8 : 0) +
+        SIZEOF(.iram) + 0x8;
+
+    _ram_image_size =
+        _ram_image_payload_size +
+        16 - (_ram_image_payload_size % 16) +
+        0x20;
+
+    /* The ROM only loads the RAM part of the image. IROM and DROM follow it
+     * in flash and esp32c3.S maps them 1:1, so each VMA offset is its flash
+     * offset. */
     .text_dummy (NOLOAD): ALIGN(4)
     {
-        /* Note: DRAM and DROM are not always present so the header should only
-         * be inserted if it actually exists.
-         */
-        . += 0x18;                                                 /* esp_image_header_t */
-        . += SIZEOF(.rodata) + ((SIZEOF(.rodata) != 0) ? 0x8 : 0); /* DROM segment (optional) */
-        . += SIZEOF(.data)   + ((SIZEOF(.data)   != 0) ? 0x8 : 0); /* DRAM segment (optional) */
-        . += SIZEOF(.iram)   + 0x8;                                /* IRAM segment */
-        . += 0x8;                                                  /* IROM segment header */
+        . += _ram_image_size;
     } > IROM
 
-    /* IROM segment. This contains all the actual code and is placed right after
-     * the DROM segment.
+    /* IROM segment. This contains all the actual code.
      */
     .text : ALIGN(4)
     {
@@ -164,11 +146,27 @@ SECTIONS
         *(.text.exception_vectors)
         . = ALIGN (4);
         *(.text .text.*)
+        . = ALIGN (4);
         _irom_end = .;
     } >IROM
 
-    /* The 64 bytes skip the image footer written by builder/esp.go. */
-    PROVIDE(__flash_data_start = ALIGN(_irom_end - 0x42000000 + 0x3C000000 + 64, 4096));
+    /* DROM and IROM share one address space, so DROM starts after IROM. */
+    .rodata_dummy (NOLOAD): ALIGN(4)
+    {
+        . += _ram_image_size + SIZEOF(.text);
+    } > DROM
+
+    /* Constant global variables, stored in DROM.
+     */
+    .rodata : ALIGN(4)
+    {
+        *(.rodata*)
+        *(.srodata*)
+        . = ALIGN (4);
+        _drom_end = .;
+    } >DROM
+
+    PROVIDE(__flash_data_start = ALIGN(_drom_end, 4096));
     PROVIDE(__flash_data_end = 0x3C000000 + 4M);
     PROVIDE(__flash_data_phys = __flash_data_start - 0x3C000000);
 
