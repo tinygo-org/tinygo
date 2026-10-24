@@ -274,21 +274,23 @@ func (spi *SPI) tx(tx []byte) error {
 	}
 
 	// Pick the DMA channel reserved for this SPI peripheral.
-	var ch *dmaChannel
+	var channel uint32
 	var dreq uint32
 	if spi.Bus == rp.SPI0 {
-		ch = &dmaChannels[spi0DMAChannel]
+		channel = spi0DMAChannel
 		dreq = rp.DREQ_SPI0_TX
 	} else { // SPI1
-		ch = &dmaChannels[spi1DMAChannel]
+		channel = spi1DMAChannel
 		dreq = rp.DREQ_SPI1_TX
 	}
+	ch := &dmaChannels[channel]
 
 	// Configure the DMA peripheral as follows:
 	//   - set read address, write address, and number of transfer units (bytes)
 	//   - increment read address (in memory), don't increment write address (SSPDR)
 	//   - set data size to single bytes
 	//   - set the DREQ so that the DMA will fill the SPI FIFO as needed
+	//   - chain to itself, which disables chaining
 	//   - start the transfer
 	ch.READ_ADDR.Set(uint32(unsafeNoEscape(unsafe.Pointer(unsafe.SliceData(tx)))))
 	ch.WRITE_ADDR.Set(uint32(uintptr(unsafe.Pointer(&spi.Bus.SSPDR))))
@@ -296,6 +298,7 @@ func (spi *SPI) tx(tx []byte) error {
 	ch.CTRL_TRIG.Set(rp.DMA_CH0_CTRL_TRIG_INCR_READ |
 		rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_SIZE_BYTE<<rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_Pos |
 		dreq<<rp.DMA_CH0_CTRL_TRIG_TREQ_SEL_Pos |
+		channel<<rp.DMA_CH0_CTRL_TRIG_CHAIN_TO_Pos |
 		rp.DMA_CH0_CTRL_TRIG_EN)
 
 	// Wait until the transfer is complete.
