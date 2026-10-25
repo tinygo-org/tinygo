@@ -258,6 +258,20 @@ func (p Pin) Get() bool {
 	return gpio.PDIR.HasBits(1 << pos)
 }
 
+// PortMaskSet returns the register and mask to set a given GPIO pin. This can
+// be used to implement bit-banged drivers.
+func (p Pin) PortMaskSet() (*uint32, uint32) {
+	gpio, _, pos := p.reg()
+	return &gpio.PSOR.Reg, 1 << pos
+}
+
+// PortMaskClear returns the register and mask to clear a given GPIO pin. This
+// can be used to implement bit-banged drivers.
+func (p Pin) PortMaskClear() (*uint32, uint32) {
+	gpio, _, pos := p.reg()
+	return &gpio.PCOR.Reg, 1 << pos
+}
+
 func (p Pin) Control() *volatile.Register32 {
 	_, pcr, _ := p.reg()
 	return pcr
