@@ -188,8 +188,32 @@ jobs:
         run: |
           brew install llvm@${{ matrix.version }}
           brew link llvm@${{ matrix.version }}
+      - name: Install lld, binaryen
+        run: |
+          # llvm@20 and later do not ship lld, so users install it after the
+          # first link fails. Older llvm@N formulas still ship it.
+          command -v ld.lld >/dev/null || brew install lld
+          brew install binaryen
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Pull wasi-libc, macos-minimal-sdk, bdwgc
+        run: |
+          git submodule update --init lib/wasi-libc lib/macos-minimal-sdk lib/bdwgc
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v5
+        id: cache-llvm-source
+        with:
+          key: llvm-source-22-macos-homebrew-${{ hashFiles('llvm-version.txt') }}
+          path: llvm-project/compiler-rt
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v5
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: llvm-project/compiler-rt
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -199,6 +223,11 @@ jobs:
         run: go install -tags=llvm${{ matrix.version }}
       - name: Check binary
         run: tinygo version
+      - name: Link test programs
+        run: |
+          tinygo build -o "$RUNNER_TEMP/alias" testdata/alias.go
+          "$RUNNER_TEMP/alias" | diff - testdata/alias.txt
+          tinygo build -target=wasm-unknown -o "$RUNNER_TEMP/alias.wasm" testdata/alias.go
       - name: Build TinyGo (default LLVM)
         if: matrix.version == 20
         run: go install
