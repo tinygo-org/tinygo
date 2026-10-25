@@ -19,7 +19,7 @@ var commands = map[string][]string{}
 
 func init() {
 	llvmMajor, _, _ := strings.Cut(llvm.Version, ".")
-	commands["clang"] = []string{"clang-" + llvmMajor}
+	commands["clang"] = []string{"clang-" + llvmMajor, "clang"}
 	commands["ld.lld"] = []string{"ld.lld-" + llvmMajor, "ld.lld"}
 	commands["wasm-ld"] = []string{"wasm-ld-" + llvmMajor, "wasm-ld"}
 	commands["lldb"] = []string{"lldb-" + llvmMajor, "lldb"}

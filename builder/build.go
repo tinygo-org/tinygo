@@ -929,7 +929,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			ldflags = append(ldflags, "--strip-debug", "--compress-relocations")
 		} else if config.Target.Linker == "ld.lld" {
 			// ld.lld is also used on Linux.
-			ldflags = append(ldflags, "--strip-debug")
+			if !slices.Contains(ldflags, "--strip-all") {
+				ldflags = append(ldflags, "--strip-debug")
+			}
 		} else {
 			// Other linkers may have different flags.
 			return result, errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
