@@ -1,0 +1,494 @@
+// qbs runs quick, broad, shallow tests on a connected board. It flashes a
+// program for each class of tests, collects the results over serial and
+// checks them.
+//
+//	go run ./tools/qbs -target pico
+//	go run ./tools/qbs -target arduino-uno-r4-wifi timing gc
+//
+// Classes:
+//
+//	timing   sleep accuracy and the device clock against the host clock
+//	compute  results of the same computations on the device and on the host
+//	gc       allocation, collection and fragmentation checks
+//	serial   echo, RX overrun, line and byte transfer on the default serial port
+package main
+
+import (
+	"flag"
+	"fmt"
+	"math"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
+
+	"go.bug.st/serial"
+
+	"github.com/tinygo-org/tinygo/tools/qbs/cases"
+)
+
+type tick struct {
+	device float64 // seconds on the device clock
+	host   time.Time
+}
+
+type testResult struct {
+	name    string
+	status  string
+	detail  string
+	elapsed time.Duration
+	vals    [][2]string
+	logs    []string
+	ticks   []tick
+	stray   []string
+	raw     map[string][]byte
+	// hostFail is set by a driver that found a problem while it ran.
+	hostFail string
+}
+
+// driver runs on the host when a test begins. It may send data to the device
+// and read from it.
+type driver func(l *link, t *testResult)
+
+type classResult struct {
+	class string
+	tests []*testResult
+	done  bool
+	err   string
+	raw   []byte
+}
+
+type link struct {
+	port serial.Port
+	buf  []byte
+	log  []byte
+}
+
+func (l *link) fill() {
+	var tmp [512]byte
+	n, _ := l.port.Read(tmp[:])
+	if n > 0 {
+		l.buf = append(l.buf, tmp[:n]...)
+		l.log = append(l.log, tmp[:n]...)
+	}
+}
+
+// readLine returns the next line and the time it was complete.
+func (l *link) readLine(timeout time.Duration) (string, time.Time, bool) {
+	deadline := time.Now().Add(timeout)
+	for {
+		for i, c := range l.buf {
+			if c == '\n' {
+				line := strings.TrimRight(string(l.buf[:i]), "\r")
+				l.buf = l.buf[i+1:]
+				return line, time.Now(), true
+			}
+		}
+		if time.Now().After(deadline) {
+			return "", time.Time{}, false
+		}
+		l.fill()
+	}
+}
+
+// readExact returns n bytes, or what arrived before the timeout.
+func (l *link) readExact(n int, timeout time.Duration) []byte {
+	deadline := time.Now().Add(timeout)
+	for len(l.buf) < n && time.Now().Before(deadline) {
+		l.fill()
+	}
+	if len(l.buf) < n {
+		n = len(l.buf)
+	}
+	out := append([]byte(nil), l.buf[:n]...)
+	l.buf = l.buf[n:]
+	return out
+}
+
+func openPort(name string) (*link, error) {
+	deadline := time.Now().Add(15 * time.Second)
+	var err error
+	for time.Now().Before(deadline) {
+		var p serial.Port
+		p, err = serial.Open(name, &serial.Mode{BaudRate: 115200})
+		if err == nil {
+			p.SetReadTimeout(50 * time.Millisecond)
+			return &link{port: p}, nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return nil, fmt.Errorf("cannot open %s: %v", name, err)
+}
+
+func findPort() string {
+	for _, pattern := range []string{"/dev/cu.usbmodem*", "/dev/ttyACM*", "/dev/cu.usbserial*", "/dev/ttyUSB*"} {
+		if ports, _ := filepath.Glob(pattern); len(ports) > 0 {
+			return ports[0]
+		}
+	}
+	return ""
+}
+
+type options struct {
+	tinygo string
+	target string
+	// port is the serial port the results are read from.
+	port string
+	// flashPort is passed to tinygo flash. It is empty unless the user chose
+	// a port, so that tinygo finds the board itself.
+	flashPort   string
+	pathPrepend string
+}
+
+// flash returns skip with a reason when the program does not fit on the target.
+// It waits up to 90 seconds for the drive of a UF2 bootloader to be mounted.
+func flash(o options, dir string) (skip string, err error) {
+	args := []string{"flash", "-target", o.target, "-timeout", "90s"}
+	if o.flashPort != "" {
+		args = append(args, "-port", o.flashPort)
+	}
+	cmd := exec.Command(o.tinygo, append(args, dir)...)
+	cmd.Dir = dir
+	if o.pathPrepend != "" {
+		cmd.Env = append(os.Environ(), "PATH="+o.pathPrepend+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
+	out, runErr := cmd.CombinedOutput()
+	if runErr == nil {
+		return "", nil
+	}
+	text := string(out)
+	for _, marker := range []string{"overflowed", "will not fit", "out of range", "region `"} {
+		if strings.Contains(text, marker) {
+			return "program does not fit on this target", nil
+		}
+	}
+	if len(text) > 1500 {
+		text = text[len(text)-1500:]
+	}
+	return "", fmt.Errorf("flash failed: %v\n%s", runErr, text)
+}
+
+// collect runs the handshake and reads results until the device reports the end.
+func collect(l *link, class string, drivers map[string]driver) *classResult {
+	r := &classResult{class: class}
+	defer func() { r.raw = l.log }()
+
+	ready := false
+	deadline := time.Now().Add(25 * time.Second)
+	for time.Now().Before(deadline) {
+		line, _, ok := l.readLine(time.Second)
+		if ok && strings.HasPrefix(line, "@@READY qbs "+class) {
+			ready = true
+			break
+		}
+	}
+	if !ready {
+		r.err = "no READY banner, flash worked but no serial output"
+		return r
+	}
+	l.port.Write([]byte("G"))
+
+	var cur *testResult
+	for {
+		line, at, ok := l.readLine(60 * time.Second)
+		if !ok {
+			where := "before the first test"
+			if cur != nil {
+				where = "in test " + cur.name
+			}
+			r.err = "no output for 60s " + where
+			return r
+		}
+		f := strings.Fields(line)
+		if len(f) == 0 || !strings.HasPrefix(f[0], "@@") {
+			if cur != nil {
+				cur.stray = append(cur.stray, line)
+			}
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(line, f[0]))
+		switch f[0] {
+		case "@@GO":
+		case "@@BEGIN":
+			cur = &testResult{name: rest, raw: map[string][]byte{}}
+			r.tests = append(r.tests, cur)
+			if d := drivers[cur.name]; d != nil {
+				d(l, cur)
+			}
+		case "@@LOG":
+			if cur != nil {
+				cur.logs = append(cur.logs, rest)
+			}
+		case "@@VAL":
+			if cur != nil && len(f) >= 2 {
+				cur.vals = append(cur.vals, [2]string{f[1], strings.TrimSpace(strings.TrimPrefix(rest, f[1]))})
+			}
+		case "@@RAW":
+			if cur != nil && len(f) == 3 {
+				n, err := strconv.Atoi(f[2])
+				if err == nil {
+					cur.raw[f[1]] = l.readExact(n, 10*time.Second)
+				}
+			}
+		case "@@TICK":
+			if cur != nil && len(f) == 3 {
+				if us, err := strconv.ParseFloat(f[2], 64); err == nil {
+					cur.ticks = append(cur.ticks, tick{device: us / 1e6, host: at})
+				}
+			}
+		case "@@RESULT":
+			if cur != nil && len(f) >= 4 && f[1] == cur.name {
+				cur.status = f[2]
+				us, _ := strconv.ParseInt(f[3], 10, 64)
+				cur.elapsed = time.Duration(us) * time.Microsecond
+				cur.detail = strings.TrimSpace(strings.Join(f[4:], " "))
+			}
+		case "@@END":
+			r.done = true
+			return r
+		}
+	}
+}
+
+func (t *testResult) val(key string) (string, bool) {
+	for _, kv := range t.vals {
+		if kv[0] == key {
+			return kv[1], true
+		}
+	}
+	return "", false
+}
+
+func (t *testResult) fail(format string, args ...interface{}) {
+	t.status = "FAIL"
+	t.detail = fmt.Sprintf(format, args...)
+}
+
+// evalTiming compares the device clock with the host clock.
+func evalTiming(r *classResult) {
+	for _, t := range r.tests {
+		if t.name != "clock-rate" || t.status != "PASS" {
+			continue
+		}
+		if len(t.ticks) < 20 {
+			t.fail("only %d of 30 ticks arrived", len(t.ticks))
+			continue
+		}
+		var mx, my float64
+		t0 := t.ticks[0].host
+		for _, k := range t.ticks {
+			mx += k.host.Sub(t0).Seconds()
+			my += k.device
+		}
+		n := float64(len(t.ticks))
+		mx /= n
+		my /= n
+		var sxy, sxx float64
+		for _, k := range t.ticks {
+			x := k.host.Sub(t0).Seconds() - mx
+			sxy += x * (k.device - my)
+			sxx += x * x
+		}
+		slope := sxy / sxx
+		t.detail = fmt.Sprintf("device clock runs at %.4f of the host clock", slope)
+		if math.Abs(slope-1) > 0.02 {
+			t.fail("device clock runs at %.4f of the host clock", slope)
+		}
+	}
+}
+
+// compareCase compares a device result with the host result.
+func compareCase(c cases.Case, got, want string) (bool, string) {
+	if got == want {
+		return true, ""
+	}
+	if c.ULP == 0 {
+		return false, "device " + shorten(got) + " host " + shorten(want)
+	}
+	g, w := strings.Fields(got), strings.Fields(want)
+	if len(g) != len(w) {
+		return false, fmt.Sprintf("device returned %d values, host %d", len(g), len(w))
+	}
+	var worst uint64
+	for i := range g {
+		a, errA := strconv.ParseUint(g[i], 16, 64)
+		b, errB := strconv.ParseUint(w[i], 16, 64)
+		if errA != nil || errB != nil {
+			return false, "device " + shorten(got) + " host " + shorten(want)
+		}
+		d := a - b
+		if b > a {
+			d = b - a
+		}
+		if d > worst {
+			worst = d
+		}
+		if d > c.ULP {
+			return false, fmt.Sprintf("value %d differs by %d ULP (limit %d)", i, d, c.ULP)
+		}
+	}
+	return true, fmt.Sprintf("within %d ULP", worst)
+}
+
+func shorten(s string) string {
+	if len(s) > 60 {
+		return s[:57] + "..."
+	}
+	return s
+}
+
+// evalCompute runs the same cases on the host and compares.
+func evalCompute(r *classResult) {
+	byName := map[string]cases.Case{}
+	for _, c := range cases.All() {
+		byName[c.Name] = c
+	}
+	for _, t := range r.tests {
+		c, ok := byName[t.name]
+		if !ok || t.status != "PASS" {
+			continue
+		}
+		got, ok := t.val("result")
+		if !ok {
+			t.fail("device sent no result")
+			continue
+		}
+		match, why := compareCase(c, got, c.Fn())
+		if !match {
+			t.fail("%s", why)
+		} else {
+			t.detail = why
+		}
+	}
+}
+
+var classes = []struct {
+	name    string
+	drivers map[string]driver
+	eval    func(*classResult)
+}{
+	{"timing", nil, evalTiming},
+	{"compute", nil, evalCompute},
+	{"gc", nil, nil},
+	{"serial", serialDrivers, evalSerial},
+}
+
+func main() {
+	target := flag.String("target", "", "tinygo target (required)")
+	tinygo := flag.String("tinygo", "tinygo", "tinygo binary to use")
+	port := flag.String("port", "", "serial port (default: first USB serial port found)")
+	pathPrepend := flag.String("path-prepend", "", "directory to put first on PATH when flashing")
+	verbose := flag.Bool("v", false, "print the values and messages each test sent")
+	dump := flag.Bool("dump", false, "print raw serial data when a class fails to finish")
+	flag.Parse()
+
+	if *target == "" {
+		fmt.Fprintln(os.Stderr, "missing -target")
+		os.Exit(2)
+	}
+	flashPort := *port
+	if *port == "" {
+		*port = findPort()
+	}
+	if *port == "" {
+		fmt.Fprintln(os.Stderr, "no serial port found, use -port")
+		os.Exit(2)
+	}
+	want := map[string]bool{}
+	for _, name := range flag.Args() {
+		want[name] = true
+	}
+	for name := range want {
+		known := false
+		for _, c := range classes {
+			known = known || c.name == name
+		}
+		if !known {
+			fmt.Fprintf(os.Stderr, "unknown class %q\n", name)
+			os.Exit(2)
+		}
+	}
+
+	_, file, _, _ := runtime.Caller(0)
+	here := filepath.Dir(file)
+	o := options{tinygo: *tinygo, target: *target, port: *port, flashPort: flashPort, pathPrepend: *pathPrepend}
+
+	fmt.Printf("port %s, target %s\n", *port, *target)
+	counts := map[string]int{}
+	report := func(status, class, name, detail string) {
+		counts[status]++
+		fmt.Printf("%-5s %-8s %-16s %s\n", status, class, name, detail)
+	}
+
+	for _, c := range classes {
+		if len(want) > 0 && !want[c.name] {
+			continue
+		}
+		fmt.Printf("\n== %s\n", c.name)
+		flashStart := time.Now()
+		skip, err := flash(o, filepath.Join(here, c.name))
+		if took := time.Since(flashStart); took > 15*time.Second {
+			fmt.Printf("note: flashing took %s\n", took.Round(time.Second))
+		}
+		if err != nil {
+			report("FAIL", c.name, "(flash)", err.Error())
+			continue
+		}
+		if skip != "" {
+			report("SKIP", c.name, "(class)", skip)
+			continue
+		}
+		time.Sleep(time.Second)
+		l, err := openPort(*port)
+		if err != nil {
+			report("FAIL", c.name, "(port)", err.Error())
+			continue
+		}
+		r := collect(l, c.name, c.drivers)
+		l.port.Close()
+
+		if c.eval != nil {
+			c.eval(r)
+		}
+		for _, t := range r.tests {
+			status := t.status
+			detail := t.detail
+			if status == "" {
+				status = "FAIL"
+				detail = "no result, the device stopped in this test"
+				if len(t.stray) > 0 {
+					detail += ": " + shorten(strings.Join(t.stray, " | "))
+				}
+			} else if status == "PASS" && detail == "" {
+				detail = t.elapsed.Round(time.Millisecond).String()
+			}
+			report(status, c.name, t.name, detail)
+			if *verbose {
+				for _, kv := range t.vals {
+					fmt.Printf("        %s = %s\n", kv[0], shorten(kv[1]))
+				}
+				for _, m := range t.logs {
+					fmt.Printf("        log: %s\n", m)
+				}
+			}
+		}
+		if r.err != "" {
+			report("FAIL", c.name, "(class)", r.err)
+			if *dump {
+				raw := r.raw
+				if len(raw) > 400 {
+					raw = raw[len(raw)-400:]
+				}
+				fmt.Printf("raw serial data: %q\n", raw)
+			}
+		}
+	}
+
+	fmt.Printf("\n%d pass, %d fail, %d skip\n", counts["PASS"], counts["FAIL"], counts["SKIP"])
+	if counts["FAIL"] > 0 {
+		os.Exit(1)
+	}
+}
