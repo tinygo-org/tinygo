@@ -1,0 +1,7 @@
+{
+	"inherits": ["atsam3x8e"],
+	"build-tags": ["arduino_due"],
+	"serial-port": ["2341:003d"],
+	"flash-command": "bossac -i -e -w -v -b -R --port={port} {bin}",
+	"flash-1200-bps-reset": "true"
+}

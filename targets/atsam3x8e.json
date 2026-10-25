@@ -1,0 +1,11 @@
+{
+	"inherits": ["cortex-m3"],
+	"build-tags": ["atsam3x8e", "atsam3x", "sam"],
+	"serial": "uart",
+	"linkerscript": "targets/atsam3x8e.ld",
+	"extra-files": [
+		"src/device/sam/atsam3x8e.s"
+	],
+	"openocd-transport": "swd",
+	"openocd-target": "at91sam3ax_8x"
+}
