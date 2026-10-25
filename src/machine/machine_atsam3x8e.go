@@ -204,6 +204,18 @@ func (p Pin) Get() bool {
 	return p.port().PDSR.HasBits(p.mask())
 }
 
+// Return the register and mask to enable a given GPIO pin. This can be used to
+// implement bit-banged drivers.
+func (p Pin) PortMaskSet() (*uint32, uint32) {
+	return &p.port().SODR.Reg, p.mask()
+}
+
+// Return the register and mask to disable a given port. This can be used to
+// implement bit-banged drivers.
+func (p Pin) PortMaskClear() (*uint32, uint32) {
+	return &p.port().CODR.Reg, p.mask()
+}
+
 var pioClocksEnabled bool
 
 // enablePIOClocks turns on the PIO clocks so that PDSR reads the pins.
