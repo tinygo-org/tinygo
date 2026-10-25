@@ -1,0 +1,11 @@
+{
+	"inherits": ["cortex-m4"],
+	"build-tags": ["teensy32", "teensy", "mk20d7", "nxp"],
+	"serial": "uart",
+	"linkerscript": "targets/nxpmk20d7.ld",
+	"extra-files": [
+		"src/device/nxp/mk20d7.s",
+		"targets/teensy36.s"
+	],
+	"flash-command": "teensy_loader_cli -mmcu=mk20dx256 -v -w {hex}"
+}
