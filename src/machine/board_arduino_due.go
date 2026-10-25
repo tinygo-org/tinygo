@@ -84,6 +84,21 @@ const (
 )
 
 const (
+	ADC0  = A0
+	ADC1  = A1
+	ADC2  = A2
+	ADC3  = A3
+	ADC4  = A4
+	ADC5  = A5
+	ADC6  = A6
+	ADC7  = A7
+	ADC8  = A8
+	ADC9  = A9
+	ADC10 = A10
+	ADC11 = A11
+)
+
+const (
 	LED    = D13
 	LED_RX = PC30
 	LED_TX = PA21
