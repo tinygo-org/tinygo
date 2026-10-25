@@ -5,9 +5,17 @@ package machine
 import (
 	"device/sam"
 	"errors"
+	"unsafe"
 )
 
 var errSPILSBFirst = errors.New("SPI: LSB first is not supported")
+
+// SPI0 TX is DMAC hardware interface 1, as in SdFat src/SpiDriver/SdSpiDue.cpp.
+const (
+	spiDMATxInterface = 1
+	spiDMAMinLen      = 16
+	spiDMAMaxLen      = 4095
+)
 
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
@@ -39,6 +47,8 @@ func (spi *SPI) Configure(config SPIConfig) error {
 	PA26.Configure(PinConfig{Mode: PinPeripheralA})
 	PA27.Configure(PinConfig{Mode: PinPeripheralA})
 	sam.PMC.PMC_PCER0.Set(1 << sam.IRQ_SPI0)
+	sam.PMC.PMC_PCER1.Set(1 << (sam.IRQ_DMAC - 32))
+	sam.DMAC.EN.Set(sam.DMAC_EN_ENABLE)
 
 	spi.Bus.CR.Set(sam.SPI_CR_SPIDIS)
 	spi.Bus.CR.Set(sam.SPI_CR_SWRST)
@@ -77,10 +87,14 @@ func (spi *SPI) Transfer(w byte) (byte, error) {
 func (spi *SPI) Tx(w, r []byte) error {
 	switch {
 	case r == nil:
-		for _, b := range w {
-			for !spi.Bus.SR.HasBits(sam.SPI_SR_TDRE) {
+		if len(w) >= spiDMAMinLen && inSRAM(&w[0]) {
+			spi.txDMA(w)
+		} else {
+			for _, b := range w {
+				for !spi.Bus.SR.HasBits(sam.SPI_SR_TDRE) {
+				}
+				spi.Bus.TDR.Set(uint32(b))
 			}
-			spi.Bus.TDR.Set(uint32(b))
 		}
 		for !spi.Bus.SR.HasBits(sam.SPI_SR_TXEMPTY) {
 		}
@@ -98,4 +112,35 @@ func (spi *SPI) Tx(w, r []byte) error {
 		}
 	}
 	return nil
+}
+
+// txDMA writes w to the transmit register with DMAC channel 0.
+func (spi *SPI) txDMA(w []byte) {
+	const (
+		ctrlb = sam.DMAC_CTRLB0_SRC_DSCR | sam.DMAC_CTRLB0_DST_DSCR |
+			sam.DMAC_CTRLB0_FC_MEM2PER_DMA_FC<<sam.DMAC_CTRLB0_FC_Pos |
+			sam.DMAC_CTRLB0_SRC_INCR_INCREMENTING<<sam.DMAC_CTRLB0_SRC_INCR_Pos |
+			sam.DMAC_CTRLB0_DST_INCR_FIXED<<sam.DMAC_CTRLB0_DST_INCR_Pos
+		cfg = spiDMATxInterface<<sam.DMAC_CFG0_DST_PER_Pos | sam.DMAC_CFG0_DST_H2SEL | sam.DMAC_CFG0_SOD
+	)
+	dma := sam.DMAC
+	for len(w) > 0 {
+		n := min(len(w), spiDMAMaxLen)
+		dma.CHDR.Set(sam.DMAC_CHDR_DIS0)
+		dma.SADDR0.Set(uint32(uintptr(unsafe.Pointer(&w[0]))))
+		dma.DADDR0.Set(uint32(uintptr(unsafe.Pointer(&spi.Bus.TDR.Reg))))
+		dma.DSCR0.Set(0)
+		dma.CTRLA0.Set(uint32(n))
+		dma.CTRLB0.Set(ctrlb)
+		dma.CFG0.Set(cfg)
+		dma.CHER.Set(sam.DMAC_CHER_ENA0)
+		for dma.CHSR.HasBits(sam.DMAC_CHSR_ENA0) {
+		}
+		w = w[n:]
+	}
+}
+
+func inSRAM(p *byte) bool {
+	addr := uintptr(unsafe.Pointer(p))
+	return addr >= 0x20000000 && addr < 0x20100000
 }
