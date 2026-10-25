@@ -181,7 +181,7 @@ func Get(name string) string {
 	}
 }
 
-// SplitFlags splits a CGO_*FLAGS value the same way as the go command.
+// SplitFlags splits a quoted flag list the same way as the go command.
 // See src/cmd/internal/quoted/quoted.go in the Go source tree.
 func SplitFlags(s string) ([]string, error) {
 	var f []string
