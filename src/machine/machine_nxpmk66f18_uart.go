@@ -131,7 +131,7 @@ func (u *UART) configure(config UARTConfig, canSched bool) {
 		u.Transmitting.Set(0)
 
 		// turn on the clock
-		u.SCGC.Set(u.SCGCMask)
+		u.SCGC.SetBits(u.SCGCMask)
 
 		// configure pins
 		u.DefaultRX.Control().Set(nxp.PORT_PCR0_PE | nxp.PORT_PCR0_PS | nxp.PORT_PCR0_PFE | (3 << nxp.PORT_PCR0_MUX_Pos))
