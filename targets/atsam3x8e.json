@@ -1,6 +1,6 @@
 {
 	"inherits": ["cortex-m3"],
-	"build-tags": ["atsam3x8e", "atsam3x", "sam", "machine.uart", "machine.spi"],
+	"build-tags": ["atsam3x8e", "atsam3x", "sam", "machine.uart", "machine.spi", "machine.i2c"],
 	"serial": "uart",
 	"linkerscript": "targets/atsam3x8e.ld",
 	"extra-files": [
