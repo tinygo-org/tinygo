@@ -33,6 +33,12 @@ Use `-v` to see the values each test sent, `-port` if the board is not found,
 `-tinygo` for a different tinygo binary and `-path-prepend` to put a flashing
 tool first on PATH. Names after the flags select classes.
 
+Use `-emulator` to run the programs in the emulator of the target instead of
+flashing a board, for example `go run ./tools/qbs -target wasip1 -emulator`.
+The runner then starts `tinygo run` for each class and talks to the program
+through its standard input and output. The emulator, such as wasmtime or QEMU,
+must be installed.
+
 A class is skipped when its program does not fit on the target. A test is
 skipped when the target cannot run it, for example when the garbage collector
 does not reclaim memory.

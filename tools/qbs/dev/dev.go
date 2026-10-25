@@ -4,10 +4,7 @@
 // Main, which waits for the host, runs the tests and reports over serial.
 package dev
 
-import (
-	"machine"
-	"time"
-)
+import "time"
 
 // Test is one named check.
 type Test struct {
@@ -50,7 +47,7 @@ func (t *T) Val(key, value string) {
 // bytes after the header line.
 func (t *T) Raw(key string, data []byte) {
 	println("@@RAW", key, len(data))
-	machine.Serial.Write(data)
+	Serial.Write(data)
 	println()
 }
 
@@ -70,11 +67,11 @@ func ReadN(n int, timeout time.Duration) []byte {
 	var got []byte
 	deadline := time.Now().Add(timeout)
 	for len(got) < n && time.Now().Before(deadline) {
-		if machine.Serial.Buffered() == 0 {
+		if Serial.Buffered() == 0 {
 			time.Sleep(time.Millisecond)
 			continue
 		}
-		b, _ := machine.Serial.ReadByte()
+		b, _ := Serial.ReadByte()
 		got = append(got, b)
 	}
 	return got
@@ -82,7 +79,7 @@ func ReadN(n int, timeout time.Duration) []byte {
 
 // Main runs the tests of one class and never returns.
 func Main(class string, tests []Test) {
-	machine.Serial.Configure(machine.UARTConfig{BaudRate: 115200})
+	Serial.Configure(115200)
 	waitGo(class)
 	println("@@GO", class)
 	for i := range tests {
@@ -108,8 +105,8 @@ func Main(class string, tests []Test) {
 
 func waitGo(class string) {
 	for {
-		for machine.Serial.Buffered() > 0 {
-			b, _ := machine.Serial.ReadByte()
+		for Serial.Buffered() > 0 {
+			b, _ := Serial.ReadByte()
 			if b == 'G' {
 				return
 			}

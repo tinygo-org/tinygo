@@ -3,7 +3,6 @@
 package main
 
 import (
-	"machine"
 	"strconv"
 	"time"
 
@@ -31,12 +30,12 @@ func echo(t *dev.T) {
 	n := 0
 	last := time.Now()
 	for n < echoLen && time.Since(last) < 3*time.Second {
-		if machine.Serial.Buffered() == 0 {
+		if dev.Serial.Buffered() == 0 {
 			time.Sleep(time.Millisecond)
 			continue
 		}
-		b, _ := machine.Serial.ReadByte()
-		machine.Serial.WriteByte(b)
+		b, _ := dev.Serial.ReadByte()
+		dev.Serial.WriteByte(b)
 		n++
 		last = time.Now()
 	}
@@ -47,8 +46,8 @@ func echo(t *dev.T) {
 func burst(t *dev.T) {
 	time.Sleep(1500 * time.Millisecond)
 	var got []byte
-	for machine.Serial.Buffered() > 0 {
-		b, _ := machine.Serial.ReadByte()
+	for dev.Serial.Buffered() > 0 {
+		b, _ := dev.Serial.ReadByte()
 		got = append(got, b)
 	}
 	t.Val("buf", strconv.Itoa(len(got)))

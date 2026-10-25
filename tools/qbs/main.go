@@ -11,6 +11,9 @@
 //	compute  results of the same computations on the device and on the host
 //	gc       allocation, collection and fragmentation checks
 //	serial   echo, RX overrun, line and byte transfer on the default serial port
+//
+// With -emulator the programs run in the emulator of the target through
+// tinygo run, for example -target wasip1, and no board is needed.
 package main
 
 import (
@@ -62,7 +65,7 @@ type classResult struct {
 }
 
 type link struct {
-	port serial.Port
+	port conn
 	buf  []byte
 	log  []byte
 }
@@ -171,13 +174,17 @@ func flash(o options, dir string) (skip string, err error) {
 	return "", fmt.Errorf("flash failed: %v\n%s", runErr, text)
 }
 
+// readyTimeout is how long to wait for the first banner of a program. An
+// emulated program is compiled first, which takes longer.
+var readyTimeout = 25 * time.Second
+
 // collect runs the handshake and reads results until the device reports the end.
 func collect(l *link, class string, drivers map[string]driver) *classResult {
 	r := &classResult{class: class}
 	defer func() { r.raw = l.log }()
 
 	ready := false
-	deadline := time.Now().Add(25 * time.Second)
+	deadline := time.Now().Add(readyTimeout)
 	for time.Now().Before(deadline) {
 		line, _, ok := l.readLine(time.Second)
 		if ok && strings.HasPrefix(line, "@@READY qbs "+class) {
@@ -383,6 +390,7 @@ func main() {
 	pathPrepend := flag.String("path-prepend", "", "directory to put first on PATH when flashing")
 	verbose := flag.Bool("v", false, "print the values and messages each test sent")
 	dump := flag.Bool("dump", false, "print raw serial data when a class fails to finish")
+	emulate := flag.Bool("emulator", false, "run the programs in the emulator of the target instead of flashing a board")
 	flag.Parse()
 
 	if *target == "" {
@@ -390,10 +398,10 @@ func main() {
 		os.Exit(2)
 	}
 	flashPort := *port
-	if *port == "" {
+	if *port == "" && !*emulate {
 		*port = findPort()
 	}
-	if *port == "" {
+	if *port == "" && !*emulate {
 		fmt.Fprintln(os.Stderr, "no serial port found, use -port")
 		os.Exit(2)
 	}
@@ -428,27 +436,44 @@ func main() {
 			continue
 		}
 		fmt.Printf("\n== %s\n", c.name)
-		flashStart := time.Now()
-		skip, err := flash(o, filepath.Join(here, c.name))
-		if took := time.Since(flashStart); took > 15*time.Second {
-			fmt.Printf("note: flashing took %s\n", took.Round(time.Second))
-		}
-		if err != nil {
-			report("FAIL", c.name, "(flash)", err.Error())
-			continue
-		}
-		if skip != "" {
-			report("SKIP", c.name, "(class)", skip)
-			continue
-		}
-		time.Sleep(time.Second)
-		l, err := openPort(*port)
-		if err != nil {
-			report("FAIL", c.name, "(port)", err.Error())
-			continue
+		var l *link
+		if *emulate {
+			readyTimeout = 3 * time.Minute
+			var err error
+			l, err = startEmulator(o, filepath.Join(here, c.name))
+			if err != nil {
+				report("FAIL", c.name, "(emulator)", err.Error())
+				continue
+			}
+		} else {
+			flashStart := time.Now()
+			skip, err := flash(o, filepath.Join(here, c.name))
+			if took := time.Since(flashStart); took > 15*time.Second {
+				fmt.Printf("note: flashing took %s\n", took.Round(time.Second))
+			}
+			if err != nil {
+				report("FAIL", c.name, "(flash)", err.Error())
+				continue
+			}
+			if skip != "" {
+				report("SKIP", c.name, "(class)", skip)
+				continue
+			}
+			time.Sleep(time.Second)
+			l, err = openPort(*port)
+			if err != nil {
+				report("FAIL", c.name, "(port)", err.Error())
+				continue
+			}
 		}
 		r := collect(l, c.name, c.drivers)
 		l.port.Close()
+		if *emulate {
+			if reason := emulatorFailure(r.raw); reason != "" {
+				report("SKIP", c.name, "(class)", reason)
+				continue
+			}
+		}
 
 		if c.eval != nil {
 			c.eval(r)

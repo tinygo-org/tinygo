@@ -3,7 +3,6 @@
 package main
 
 import (
-	"machine"
 	"strconv"
 	"sync"
 	"time"
@@ -42,8 +41,8 @@ func conc(t *dev.T) {
 	rx := 0
 	finished := false
 	for !finished {
-		for machine.Serial.Buffered() > 0 {
-			machine.Serial.ReadByte()
+		for dev.Serial.Buffered() > 0 {
+			dev.Serial.ReadByte()
 			rx++
 		}
 		select {
@@ -55,8 +54,8 @@ func conc(t *dev.T) {
 	}
 	// Let the host finish sending, then count what is left.
 	time.Sleep(500 * time.Millisecond)
-	for machine.Serial.Buffered() > 0 {
-		machine.Serial.ReadByte()
+	for dev.Serial.Buffered() > 0 {
+		dev.Serial.ReadByte()
 		rx++
 	}
 	t.Val("rx", strconv.Itoa(rx))
