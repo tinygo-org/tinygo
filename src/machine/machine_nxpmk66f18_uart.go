@@ -214,6 +214,7 @@ func (u *UART) Flush() {
 	}
 }
 
+//go:noheap
 func (u *UART) handleStatusInterrupt(interrupt.Interrupt) {
 	// from: uart0_status_isr
 
@@ -256,21 +257,22 @@ func (u *UART) handleStatusInterrupt(interrupt.Interrupt) {
 
 	// transmit
 	if u.C2.HasBits(nxp.UART_C2_TIE) && u.S1.HasBits(nxp.UART_S1_TDRE) {
-		data := make([]byte, 0, uartTXFIFODepth)
+		var buf [uartTXFIFODepth]byte
 		avail := uartTXFIFODepth - u.TCFIFO.Get()
 
 		// get avail bytes from ring buffer
-		for len(data) < int(avail) {
-			if b, ok := u.TXBuffer.Get(); ok {
-				data = append(data, b)
-			} else {
+		l := 0
+		for l < int(avail) {
+			b, ok := u.TXBuffer.Get()
+			if !ok {
 				break
 			}
+			buf[l] = b
+			l++
 		}
 
 		// write data to FIFO
-		l := len(data)
-		for i, b := range data {
+		for i, b := range buf[:l] {
 			if i == l-1 {
 				// only clear TDRE on last write, per the manual
 				u.S1.Get()
