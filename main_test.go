@@ -52,6 +52,68 @@ var supportedLinuxArches = map[string]string{
 
 var sema = make(chan struct{}, runtime.NumCPU())
 
+func TestParseGoLinkFlag(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want []string
+		err  string
+	}{
+		{name: "empty"},
+		{name: "windows-path", in: `-extldflags=-LC:\x\lib`, want: []string{`-LC:\x\lib`}},
+		{
+			name: "quoted-windows-paths",
+			in:   `-extldflags '-LC:\x\lib "-LC:\Program Files\x"'`,
+			want: []string{`-LC:\x\lib`, `-LC:\Program Files\x`},
+		},
+		{
+			name: "literal-quotes-and-backslashes",
+			in:   `-extldflags '-DNAME="value" a\ b ""'`,
+			want: []string{`-DNAME="value"`, `a\`, "b", ""},
+		},
+		{
+			name: "unterminated-ldflags",
+			in:   `-extldflags 'abc`,
+			err:  "unterminated ' string",
+		},
+		{
+			name: "unterminated-extldflags",
+			in:   `-extldflags "'abc"`,
+			err:  "could not parse -extldflags: unterminated ' string",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, got, err := parseGoLinkFlag(tc.in)
+			if tc.err != "" {
+				if err == nil || err.Error() != tc.err {
+					t.Fatalf("parseGoLinkFlag(%q) error = %v, want %q", tc.in, err, tc.err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("external flags = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("global-values", func(t *testing.T) {
+		got, _, err := parseGoLinkFlag(`-X main.version=1.0 -X 'example.com/app.name=hello world' -X 'main.path=C:\x\lib'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := map[string]map[string]string{
+			"main":            {"version": "1.0", "path": `C:\x\lib`},
+			"example.com/app": {"name": "hello world"},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("global values = %v, want %v", got, want)
+		}
+	})
+}
+
 func TestTrimPath(t *testing.T) {
 	t.Setenv("CGO_CFLAGS", "-iquoteinclude -includestdint.h -imacros relative.h")
 	root := t.TempDir()
