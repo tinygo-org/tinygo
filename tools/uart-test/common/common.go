@@ -12,6 +12,7 @@ const hexDigits = "0123456789abcdef"
 
 // WaitGo announces the test and blocks until the host sends 'G'.
 func WaitGo(name string) {
+	machine.Serial.Configure(machine.UARTConfig{BaudRate: 115200})
 	for {
 		for machine.Serial.Buffered() > 0 {
 			b, _ := machine.Serial.ReadByte()
