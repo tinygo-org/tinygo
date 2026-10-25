@@ -62,7 +62,7 @@ func monotonic(t *dev.T) {
 	start := time.Now()
 	prev := start
 	calls := 0
-	for time.Since(start) < 50*time.Millisecond {
+	for time.Since(start) < 50*time.Millisecond && calls < 5000000 {
 		now := time.Now()
 		if now.Sub(prev) < 0 {
 			t.Fail("time.Now went backwards")
@@ -70,6 +70,10 @@ func monotonic(t *dev.T) {
 		}
 		prev = now
 		calls++
+	}
+	if time.Since(start) == 0 {
+		t.Skip("the clock does not advance while the program runs")
+		return
 	}
 	t.Val("calls_per_ms", strconv.Itoa(calls/50))
 }

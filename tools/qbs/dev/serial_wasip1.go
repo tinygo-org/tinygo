@@ -1,4 +1,4 @@
-//go:build tinygo && wasip1
+//go:build tinygo && wasip1 && !qbs_noinput
 
 package dev
 

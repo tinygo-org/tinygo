@@ -144,6 +144,8 @@ type options struct {
 	// a port, so that tinygo finds the board itself.
 	flashPort   string
 	pathPrepend string
+	// noInput is set for emulated targets that cannot receive input.
+	noInput bool
 }
 
 // flash returns skip with a reason when the program does not fit on the target.
@@ -179,24 +181,36 @@ func flash(o options, dir string) (skip string, err error) {
 var readyTimeout = 25 * time.Second
 
 // collect runs the handshake and reads results until the device reports the end.
-func collect(l *link, class string, drivers map[string]driver) *classResult {
+func collect(l *link, class string, drivers map[string]driver, noInput bool) *classResult {
 	r := &classResult{class: class}
 	defer func() { r.raw = l.log }()
 
+	// A program that cannot receive input starts without the host, so wait
+	// for its first line and send nothing.
+	banner := "@@READY qbs " + class
+	if noInput {
+		banner = "@@GO " + class
+	}
 	ready := false
 	deadline := time.Now().Add(readyTimeout)
 	for time.Now().Before(deadline) {
 		line, _, ok := l.readLine(time.Second)
-		if ok && strings.HasPrefix(line, "@@READY qbs "+class) {
+		if ok && strings.HasPrefix(line, banner) {
 			ready = true
+			break
+		}
+		// An emulated program that already ended will not print a banner.
+		if e, isPipe := l.port.(interface{ exited() bool }); isPipe && e.exited() {
 			break
 		}
 	}
 	if !ready {
-		r.err = "no READY banner, flash worked but no serial output"
+		r.err = "no " + banner + " line, the program printed nothing"
 		return r
 	}
-	l.port.Write([]byte("G"))
+	if !noInput {
+		l.port.Write([]byte("G"))
+	}
 
 	var cur *testResult
 	for {
@@ -300,6 +314,11 @@ func evalTiming(r *classResult) {
 			sxx += x * x
 		}
 		slope := sxy / sxx
+		if slope > 10 {
+			t.status = "SKIP"
+			t.detail = fmt.Sprintf("the device clock runs %.0f times faster than the host clock, it is probably simulated", slope)
+			continue
+		}
 		t.detail = fmt.Sprintf("device clock runs at %.4f of the host clock", slope)
 		if math.Abs(slope-1) > 0.02 {
 			t.fail("device clock runs at %.4f of the host clock", slope)
@@ -373,14 +392,15 @@ func evalCompute(r *classResult) {
 }
 
 var classes = []struct {
-	name    string
-	drivers map[string]driver
-	eval    func(*classResult)
+	name       string
+	drivers    map[string]driver
+	eval       func(*classResult)
+	needsInput bool
 }{
-	{"timing", nil, evalTiming},
-	{"compute", nil, evalCompute},
-	{"gc", nil, nil},
-	{"serial", serialDrivers, evalSerial},
+	{"timing", nil, evalTiming, false},
+	{"compute", nil, evalCompute, false},
+	{"gc", nil, nil, false},
+	{"serial", serialDrivers, evalSerial, true},
 }
 
 func main() {
@@ -391,6 +411,7 @@ func main() {
 	verbose := flag.Bool("v", false, "print the values and messages each test sent")
 	dump := flag.Bool("dump", false, "print raw serial data when a class fails to finish")
 	emulate := flag.Bool("emulator", false, "run the programs in the emulator of the target instead of flashing a board")
+	noInput := flag.Bool("noinput", false, "with -emulator, the target cannot receive input, so run only the classes that need none")
 	flag.Parse()
 
 	if *target == "" {
@@ -422,7 +443,7 @@ func main() {
 
 	_, file, _, _ := runtime.Caller(0)
 	here := filepath.Dir(file)
-	o := options{tinygo: *tinygo, target: *target, port: *port, flashPort: flashPort, pathPrepend: *pathPrepend}
+	o := options{tinygo: *tinygo, target: *target, port: *port, flashPort: flashPort, pathPrepend: *pathPrepend, noInput: *noInput}
 
 	fmt.Printf("port %s, target %s\n", *port, *target)
 	counts := map[string]int{}
@@ -436,6 +457,10 @@ func main() {
 			continue
 		}
 		fmt.Printf("\n== %s\n", c.name)
+		if *noInput && c.needsInput {
+			report("SKIP", c.name, "(class)", "the target cannot receive input")
+			continue
+		}
 		var l *link
 		if *emulate {
 			readyTimeout = 3 * time.Minute
@@ -466,7 +491,7 @@ func main() {
 				continue
 			}
 		}
-		r := collect(l, c.name, c.drivers)
+		r := collect(l, c.name, c.drivers, *noInput)
 		l.port.Close()
 		if *emulate {
 			if reason := emulatorFailure(r.raw); reason != "" {

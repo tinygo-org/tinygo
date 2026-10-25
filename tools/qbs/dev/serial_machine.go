@@ -1,4 +1,4 @@
-//go:build tinygo && baremetal
+//go:build tinygo && baremetal && !qbs_noinput
 
 package dev
 

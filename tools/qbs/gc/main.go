@@ -71,9 +71,17 @@ func collect() {
 	runtime.GC()
 }
 
+// maxHeap limits the heap the tests use. A target with a very large heap, such
+// as an emulator, would otherwise make them slow, and a conservative collector
+// retains more of a large heap by mistaking data for pointers.
+const maxHeap = 4 << 20
+
 func freeHeap() int {
 	collect()
 	m := stats()
+	if m.HeapIdle > maxHeap {
+		return maxHeap
+	}
 	return int(m.HeapIdle)
 }
 
@@ -303,6 +311,11 @@ func gcCycles(t *dev.T) {
 	t.Val("collections", strconv.Itoa(int(end.NumGC-start.NumGC)))
 	t.Val("allocated_bytes", strconv.Itoa(int(end.TotalAlloc-start.TotalAlloc)))
 	if end.NumGC == start.NumGC {
-		t.Fail("no collection ran while allocating " + strconv.Itoa(int(end.TotalAlloc-start.TotalAlloc)) + " bytes")
+		allocated := end.TotalAlloc - start.TotalAlloc
+		if end.HeapSys > 8*allocated {
+			t.Skip("the heap is too large to reach a collection in a few seconds")
+			return
+		}
+		t.Fail("no collection ran while allocating " + strconv.Itoa(int(allocated)) + " bytes")
 	}
 }

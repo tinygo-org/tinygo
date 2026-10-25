@@ -102,16 +102,3 @@ func Main(class string, tests []Test) {
 		time.Sleep(time.Second)
 	}
 }
-
-func waitGo(class string) {
-	for {
-		for Serial.Buffered() > 0 {
-			b, _ := Serial.ReadByte()
-			if b == 'G' {
-				return
-			}
-		}
-		println("@@READY qbs", class)
-		time.Sleep(300 * time.Millisecond)
-	}
-}

@@ -39,6 +39,10 @@ The runner then starts `tinygo run` for each class and talks to the program
 through its standard input and output. The emulator, such as wasmtime or QEMU,
 must be installed.
 
+Some emulated targets cannot receive input, for example riscv-qemu and
+cortex-m-qemu. Add `-noinput` for them. The programs then start without the
+host and the serial class is skipped.
+
 A class is skipped when its program does not fit on the target. A test is
 skipped when the target cannot run it, for example when the garbage collector
 does not reclaim memory.

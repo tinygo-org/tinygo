@@ -22,6 +22,12 @@ type pipePort struct {
 	in      io.WriteCloser
 	out     chan []byte
 	pending []byte
+	closed  bool
+}
+
+// exited reports whether the program ended and all its output was read.
+func (p *pipePort) exited() bool {
+	return p.closed && len(p.pending) == 0
 }
 
 func (p *pipePort) Read(b []byte) (int, error) {
@@ -29,6 +35,7 @@ func (p *pipePort) Read(b []byte) (int, error) {
 		select {
 		case data, ok := <-p.out:
 			if !ok {
+				p.closed = true
 				time.Sleep(50 * time.Millisecond)
 				return 0, nil
 			}
@@ -56,7 +63,11 @@ func (p *pipePort) Close() error {
 // startEmulator runs the program of a class with tinygo run, which uses the
 // emulator of the target. Output and input go through the returned link.
 func startEmulator(o options, dir string) (*link, error) {
-	cmd := exec.Command(o.tinygo, "run", "-target", o.target, dir)
+	args := []string{"run", "-target", o.target}
+	if o.noInput {
+		args = append(args, "-tags", "qbs_noinput")
+	}
+	cmd := exec.Command(o.tinygo, append(args, dir)...)
 	cmd.Dir = dir
 	if o.pathPrepend != "" {
 		cmd.Env = append(os.Environ(), "PATH="+o.pathPrepend+string(os.PathListSeparator)+os.Getenv("PATH"))
