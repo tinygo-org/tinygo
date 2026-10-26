@@ -393,6 +393,7 @@ func TestBuild(t *testing.T) {
 		"finalizerlarge.go",
 		"float.go",
 		"gc.go",
+		"gcstacks.go",
 		"generics.go",
 		"go1.21.go",
 		"go1.22/",
@@ -607,6 +608,10 @@ func TestBuild(t *testing.T) {
 
 			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasm", sema), t)
+			t.Run("gcstacks-stale.go", func(t *testing.T) {
+				t.Parallel()
+				runTest("gcstacks-stale.go", optionsFromTarget("wasm", sema), t, nil, nil)
+			})
 			// Test with -gc=boehm.
 			t.Run("gc.go-boehm", func(t *testing.T) {
 				t.Parallel()
@@ -621,6 +626,10 @@ func TestBuild(t *testing.T) {
 			options := optionsFromTarget("wasip1", sema)
 			runPlatTests(options, tests, t)
 			runGCLivenessTest(options, t)
+			t.Run("gcstacks-stale.go", func(t *testing.T) {
+				t.Parallel()
+				runTest("gcstacks-stale.go", options, t, nil, nil)
+			})
 			t.Run("cgo-realloc", func(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
 			})
@@ -638,6 +647,10 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasip2", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasip2", sema), t)
+			t.Run("gcstacks-stale.go", func(t *testing.T) {
+				t.Parallel()
+				runTest("gcstacks-stale.go", optionsFromTarget("wasip2", sema), t, nil, nil)
+			})
 		})
 	}
 
@@ -762,6 +775,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// is still covered by larger targets such as riscv-qemu.
 			continue
 		}
+		if options.Target == "cortex-m-qemu" && name == "gcstacks.go" {
+			// Too many goroutines for the LM3S6965's RAM.
+			continue
+		}
 		if options.Target == "simavr" {
 			// Not all tests are currently supported on AVR.
 			// Skip the ones that aren't.
@@ -778,6 +795,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 
 			case "gc.go":
 				// Does not pass due to high mark false positive rate.
+				continue
+
+			case "gcstacks.go":
+				// Too many goroutines for the available RAM.
 				continue
 
 			case "buildinfo.go", "json.go", "stdlib.go", "testing.go":
@@ -1359,6 +1380,61 @@ func TestWasmExport(t *testing.T) {
 				checkOutput(t, "testdata/wasmexport.txt", output.Bytes())
 			}
 		})
+	}
+}
+
+// Test that calling a //go:wasmexport function does not leak its goroutine
+// stack.
+func TestWasmExportHeapInuse(t *testing.T) {
+	t.Parallel()
+
+	tmpdir := t.TempDir()
+	options := optionsFromTarget("wasip1", sema)
+	options.BuildMode = "c-shared"
+	buildConfig, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build("testdata/wasmexport-heap.go", ".wasm", tmpdir, buildConfig)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+	data, err := os.ReadFile(result.Binary)
+	if err != nil {
+		t.Fatal("could not read wasm binary: ", err)
+	}
+
+	ctx := context.Background()
+	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	defer r.Close(ctx)
+	wasi_snapshot_preview1.MustInstantiate(ctx, r)
+	mod, err := r.InstantiateWithConfig(ctx, data, wazero.NewModuleConfig().WithStartFunctions())
+	if err != nil {
+		t.Fatal("could not instantiate wasm module:", err)
+	}
+	call := func(name string) uint64 {
+		results, err := mod.ExportedFunction(name).Call(ctx)
+		if err != nil {
+			t.Fatalf("failed to call %s: %v", name, err)
+		}
+		if len(results) > 0 {
+			return results[0]
+		}
+		return 0
+	}
+	call("_initialize")
+
+	before := call("heapInuse")
+	const calls = 1000
+	for i := 0; i < calls; i++ {
+		call("noop")
+	}
+	after := call("heapInuse")
+
+	// A leaked stack is at least a few KiB per call, so this allows for
+	// ordinary heap growth but not for 1000 leaked stacks.
+	if after > before+1<<20 {
+		t.Errorf("HeapInuse grew from %d to %d bytes after %d exports", before, after, calls)
 	}
 }
 
