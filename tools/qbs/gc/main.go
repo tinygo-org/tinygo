@@ -20,16 +20,17 @@ var noReclaim bool
 var extraTests []dev.Test
 
 func main() {
-	// The tests that build objects with pointers come last. If the collector
-	// does not free those, they use up the heap and the tests after them could
-	// not run.
+	// The tests that keep the most memory alive come last, and gc-cycles is the
+	// last of the tests that run everywhere. If the collector does not free
+	// memory, they use up the heap, and a program that runs out of memory may
+	// not report anything after that.
 	tests := []dev.Test{
 		{Name: "reclaims", Run: reclaims},
 		{Name: "large-block", Run: largeBlock},
-		{Name: "slice-grow", Run: sliceGrow},
 		{Name: "strings", Run: stringsTest},
-		{Name: "gc-cycles", Run: gcCycles},
+		{Name: "slice-grow", Run: sliceGrow},
 		{Name: "linked-list", Run: linkedList},
+		{Name: "gc-cycles", Run: gcCycles},
 	}
 	dev.Main("gc", append(tests, extraTests...))
 }
@@ -120,12 +121,14 @@ func checkLeak(t *dev.T, before, allocated, largest int) {
 	}
 }
 
-// noGrowth runs f five times and fails if memory use grows on each of the last
-// three runs. A stale pointer can keep a whole structure alive, and which
-// pointers are stale differs from run to run, so memory use may jump once or
-// twice. A real leak adds a structure on every run.
+// noGrowth runs f eight times and fails if memory use grows on each of the last
+// three runs and has grown by more than one and a half structures since the
+// second run. A stale pointer can keep a whole structure alive, and which
+// pointers are stale differs from run to run, so memory use may jump or wobble.
+// A real leak adds a structure on every run, so it keeps going up.
 func noGrowth(t *dev.T, what string, size int, f func() bool) {
-	var used [5]int
+	const runs = 8
+	var used [runs]int
 	for i := range used {
 		if !f() {
 			t.Fail(what + " was corrupted")
@@ -135,8 +138,10 @@ func noGrowth(t *dev.T, what string, size int, f func() bool) {
 		t.Val("in_use_after_run_"+strconv.Itoa(i+1), strconv.Itoa(used[i]))
 	}
 	step := size / 4
-	if used[2]-used[1] > step && used[3]-used[2] > step && used[4]-used[3] > step {
-		t.Fail("memory use grew on every run, from " + strconv.Itoa(used[1]) + " to " + strconv.Itoa(used[4]) + " bytes")
+	last := runs - 1
+	rising := used[last]-used[last-1] > step && used[last-1]-used[last-2] > step && used[last-2]-used[last-3] > step
+	if rising && used[last]-used[1] > size+size/2 {
+		t.Fail("memory use grew on every run, from " + strconv.Itoa(used[1]) + " to " + strconv.Itoa(used[last]) + " bytes")
 	}
 }
 

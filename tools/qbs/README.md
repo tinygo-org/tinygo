@@ -50,7 +50,9 @@ explicit `runtime.GC()`, so build without a scheduler:
     go run ./tools/qbs -target simavr -emulator -noinput -pty -scheduler none
 
 `-gc` builds the programs with another garbage collector, for example
-`-gc precise`. `-class-timeout` limits how long one class may take, 10 minutes
+`-gc precise`. Use it for simavr. The default conservative collector takes
+many values on a 16 bit AVR for addresses of the heap, and the gc tests then run
+out of memory. `-class-timeout` limits how long one class may take, 10 minutes
 by default. A program that prints garbage after it runs out of memory would
 otherwise never end.
 
