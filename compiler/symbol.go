@@ -391,7 +391,7 @@ func methodPackageQualifier(f *ssa.Function) string {
 		t = ptr.Elem()
 	}
 	named, ok := types.Unalias(t).(*types.Named)
-	if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg() == obj.Pkg() {
+	if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() == obj.Pkg().Path() {
 		return ""
 	}
 	return "$" + obj.Pkg().Path()
