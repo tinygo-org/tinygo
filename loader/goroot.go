@@ -231,6 +231,9 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 	paths := map[string]bool{
 		"":                            true,
 		"crypto/":                     true,
+		"crypto/internal/":            true,
+		"crypto/internal/boring/":     true,
+		"crypto/internal/boring/sig/": false,
 		"crypto/rand/":                false,
 		"crypto/tls/":                 false,
 		"crypto/x509/":                true,
@@ -261,12 +264,6 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"testing/":                    true,
 		"tinygo/":                     false,
 		"unique/":                     false,
-	}
-
-	if goMinor >= 19 {
-		paths["crypto/internal/"] = true
-		paths["crypto/internal/boring/"] = true
-		paths["crypto/internal/boring/sig/"] = false
 	}
 
 	if goMinor >= 26 {
