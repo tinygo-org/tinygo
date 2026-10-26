@@ -41,9 +41,29 @@ const (
 	paramIsIndirect
 )
 
+// noheapHelpers lists the runtime functions that can allocate on the heap, by
+// the operation that the compiler uses them for.
+var noheapHelpers = map[string]string{
+	"sliceAppend":        "append",
+	"stringConcat":       "string concatenation",
+	"stringToBytes":      "conversion from string to []byte",
+	"stringFromBytes":    "conversion from []byte to string",
+	"stringToRunes":      "conversion from string to []rune",
+	"stringFromRunes":    "conversion from []rune to string",
+	"stringFromUnicode":  "conversion from rune to string",
+	"hashmapMakeGeneric": "map creation",
+	"hashmapStringSet":   "map assignment",
+	"hashmapBinarySet":   "map assignment",
+	"hashmapGenericSet":  "map assignment",
+	"chanMake":           "channel creation",
+}
+
 // createRuntimeCallCommon creates a runtime call. Use createRuntimeCall or
 // createRuntimeInvoke instead.
 func (b *builder) createRuntimeCallCommon(fnName string, args []llvm.Value, name string, isInvoke bool) llvm.Value {
+	if op, ok := noheapHelpers[fnName]; ok && b.info.noheap {
+		b.addError(b.instrPos, op+" may allocate on the heap in //go:noheap function")
+	}
 	fnType, llvmFn := b.getRuntimeFunction(fnName)
 	args = append(args, llvm.Undef(b.dataPtrType)) // unused context parameter
 	if isInvoke {
