@@ -43,6 +43,17 @@ Some emulated targets cannot receive input, for example riscv-qemu and
 cortex-m-qemu. Add `-noinput` for them. The programs then start without the
 host and the serial class is skipped.
 
+simavr holds back its output when it is not a terminal and wraps each line in
+colour codes, so add `-pty`. The tasks scheduler of the simavr target breaks an
+explicit `runtime.GC()`, so build without a scheduler:
+
+    go run ./tools/qbs -target simavr -emulator -noinput -pty -scheduler none
+
+`-gc` builds the programs with another garbage collector, for example
+`-gc precise`. `-class-timeout` limits how long one class may take, 10 minutes
+by default. A program that prints garbage after it runs out of memory would
+otherwise never end.
+
 A class is skipped when its program does not fit on the target. A test is
 skipped when the target cannot run it, for example when the garbage collector
 does not reclaim memory.

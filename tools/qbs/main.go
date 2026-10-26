@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -87,7 +88,7 @@ func (l *link) readLine(timeout time.Duration) (string, time.Time, bool) {
 			if c == '\n' {
 				line := strings.TrimRight(string(l.buf[:i]), "\r")
 				l.buf = l.buf[i+1:]
-				return line, time.Now(), true
+				return cleanConsole(line), time.Now(), true
 			}
 		}
 		if time.Now().After(deadline) {
@@ -109,6 +110,18 @@ func (l *link) readExact(n int, timeout time.Duration) []byte {
 	out := append([]byte(nil), l.buf[:n]...)
 	l.buf = l.buf[n:]
 	return out
+}
+
+var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// cleanConsole removes what the simavr console adds to a line. It colours the
+// line and shows the end of line characters as two dots.
+func cleanConsole(line string) string {
+	if !strings.Contains(line, "\x1b[") {
+		return line
+	}
+	line = ansiEscape.ReplaceAllString(line, "")
+	return strings.TrimSuffix(line, "..")
 }
 
 func openPort(name string) (*link, error) {
@@ -146,6 +159,13 @@ type options struct {
 	pathPrepend string
 	// noInput is set for emulated targets that cannot receive input.
 	noInput bool
+	// pty runs the emulator under a pseudo terminal, so that emulators that
+	// buffer their output when it is a pipe print each line at once.
+	pty bool
+	// scheduler overrides the scheduler the programs are built with.
+	scheduler string
+	// gc overrides the garbage collector the programs are built with.
+	gc string
 }
 
 // flash returns skip with a reason when the program does not fit on the target.
@@ -165,16 +185,19 @@ func flash(o options, dir string) (skip string, err error) {
 		return "", nil
 	}
 	text := string(out)
-	for _, marker := range []string{"overflowed", "will not fit", "out of range", "region `"} {
-		if strings.Contains(text, marker) {
-			return "program does not fit on this target", nil
-		}
+	if reason := fitFailure(text); reason != "" {
+		return reason, nil
 	}
 	if len(text) > 1500 {
 		text = text[len(text)-1500:]
 	}
 	return "", fmt.Errorf("flash failed: %v\n%s", runErr, text)
 }
+
+// classTimeout limits how long a class may take in all. A program can keep
+// printing, for example garbage after it runs out of memory, so the silence
+// timeout alone does not end it.
+var classTimeout = 10 * time.Minute
 
 // readyTimeout is how long to wait for the first banner of a program. An
 // emulated program is compiled first, which takes longer.
@@ -212,8 +235,19 @@ func collect(l *link, class string, drivers map[string]driver, noInput bool) *cl
 		l.port.Write([]byte("G"))
 	}
 
+	// The first @@GO is the banner when the program does not wait for the host.
+	started := noInput
 	var cur *testResult
+	classDeadline := time.Now().Add(classTimeout)
 	for {
+		if time.Now().After(classDeadline) {
+			where := "before the first test"
+			if cur != nil {
+				where = "in test " + cur.name
+			}
+			r.err = "the class did not finish within " + classTimeout.String() + ", it was " + where
+			return r
+		}
 		line, at, ok := l.readLine(60 * time.Second)
 		if !ok {
 			where := "before the first test"
@@ -233,6 +267,16 @@ func collect(l *link, class string, drivers map[string]driver, noInput bool) *cl
 		rest := strings.TrimSpace(strings.TrimPrefix(line, f[0]))
 		switch f[0] {
 		case "@@GO":
+			// A second one means the program restarted, for example after a crash.
+			if started {
+				where := "before the first test"
+				if cur != nil {
+					where = "in test " + cur.name
+				}
+				r.err = "the program restarted " + where
+				return r
+			}
+			started = true
 		case "@@BEGIN":
 			cur = &testResult{name: rest, raw: map[string][]byte{}}
 			r.tests = append(r.tests, cur)
@@ -288,6 +332,9 @@ func (t *testResult) fail(format string, args ...interface{}) {
 	t.detail = fmt.Sprintf(format, args...)
 }
 
+// emulated is set with -emulator. An emulator does not keep wall clock time.
+var emulated bool
+
 // evalTiming compares the device clock with the host clock.
 func evalTiming(r *classResult) {
 	for _, t := range r.tests {
@@ -314,13 +361,18 @@ func evalTiming(r *classResult) {
 			sxx += x * x
 		}
 		slope := sxy / sxx
-		if slope > 10 {
+		if emulated && slope > 10 {
 			t.status = "SKIP"
 			t.detail = fmt.Sprintf("the device clock runs %.0f times faster than the host clock, it is probably simulated", slope)
 			continue
 		}
 		t.detail = fmt.Sprintf("device clock runs at %.4f of the host clock", slope)
 		if math.Abs(slope-1) > 0.02 {
+			if emulated {
+				t.status = "SKIP"
+				t.detail = fmt.Sprintf("the emulated clock runs at %.4f of the host clock", slope)
+				continue
+			}
 			t.fail("device clock runs at %.4f of the host clock", slope)
 		}
 	}
@@ -411,6 +463,10 @@ func main() {
 	verbose := flag.Bool("v", false, "print the values and messages each test sent")
 	dump := flag.Bool("dump", false, "print raw serial data when a class fails to finish")
 	emulate := flag.Bool("emulator", false, "run the programs in the emulator of the target instead of flashing a board")
+	usePTY := flag.Bool("pty", false, "with -emulator, run the emulator under a pseudo terminal, which simavr needs to print lines as they happen")
+	scheduler := flag.String("scheduler", "", "with -emulator, build the programs with this scheduler, for example none")
+	flag.DurationVar(&classTimeout, "class-timeout", classTimeout, "longest time one class may take")
+	gcFlag := flag.String("gc", "", "with -emulator, build the programs with this garbage collector, for example precise")
 	noInput := flag.Bool("noinput", false, "with -emulator, the target cannot receive input, so run only the classes that need none")
 	flag.Parse()
 
@@ -419,6 +475,7 @@ func main() {
 		os.Exit(2)
 	}
 	flashPort := *port
+	emulated = *emulate
 	if *port == "" && !*emulate {
 		*port = findPort()
 	}
@@ -443,7 +500,7 @@ func main() {
 
 	_, file, _, _ := runtime.Caller(0)
 	here := filepath.Dir(file)
-	o := options{tinygo: *tinygo, target: *target, port: *port, flashPort: flashPort, pathPrepend: *pathPrepend, noInput: *noInput}
+	o := options{tinygo: *tinygo, target: *target, port: *port, flashPort: flashPort, pathPrepend: *pathPrepend, noInput: *noInput, pty: *usePTY, scheduler: *scheduler, gc: *gcFlag}
 
 	fmt.Printf("port %s, target %s\n", *port, *target)
 	counts := map[string]int{}
@@ -467,7 +524,11 @@ func main() {
 			var err error
 			l, err = startEmulator(o, filepath.Join(here, c.name))
 			if err != nil {
-				report("FAIL", c.name, "(emulator)", err.Error())
+				if reason := emulatorFailure([]byte(err.Error())); reason != "" {
+					report("SKIP", c.name, "(class)", reason)
+				} else {
+					report("FAIL", c.name, "(emulator)", err.Error())
+				}
 				continue
 			}
 		} else {

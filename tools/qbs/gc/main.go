@@ -20,13 +20,16 @@ var noReclaim bool
 var extraTests []dev.Test
 
 func main() {
+	// The tests that build objects with pointers come last. If the collector
+	// does not free those, they use up the heap and the tests after them could
+	// not run.
 	tests := []dev.Test{
 		{Name: "reclaims", Run: reclaims},
 		{Name: "large-block", Run: largeBlock},
-		{Name: "linked-list", Run: linkedList},
 		{Name: "slice-grow", Run: sliceGrow},
 		{Name: "strings", Run: stringsTest},
 		{Name: "gc-cycles", Run: gcCycles},
+		{Name: "linked-list", Run: linkedList},
 	}
 	dev.Main("gc", append(tests, extraTests...))
 }
@@ -147,6 +150,19 @@ func allocAndDrop(n int) {
 	sink = nil
 }
 
+// numGC returns the number of collections that have run.
+//
+//go:noinline
+func numGC() uint32 {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return uint32(m.NumGC)
+}
+
+// reclaims checks that runtime.GC runs a collection. A leaking collector or none
+// at all would make the other tests run out of memory. How much of a dropped
+// block stays is only reported, because stale values in registers and the
+// stack can keep the last few blocks alive.
 func reclaims(t *dev.T) {
 	free := freeHeap()
 	t.Val("heap_free_bytes", strconv.Itoa(free))
@@ -157,17 +173,18 @@ func reclaims(t *dev.T) {
 		t.Skip("heap too small")
 		return
 	}
-	// A collector that frees memory holds at most the last block afterwards.
+	start := numGC()
+	runtime.GC()
+	if numGC() == start {
+		noReclaim = true
+		t.Skip("runtime.GC does not run a collection")
+		return
+	}
 	before := inUse()
 	for i := 0; i < 3; i++ {
 		allocAndDrop(n + i*16)
 	}
-	retained := inUse() - before
-	t.Val("retained_bytes", strconv.Itoa(retained))
-	if retained > 2*n {
-		noReclaim = true
-		t.Skip("the collector does not reclaim memory")
-	}
+	t.Val("retained_bytes", strconv.Itoa(inUse()-before))
 }
 
 //go:noinline
