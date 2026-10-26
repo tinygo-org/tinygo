@@ -394,6 +394,9 @@ func TestBuild(t *testing.T) {
 		"float.go",
 		"gc.go",
 		"generics.go",
+		"go1.21.go",
+		"go1.22/",
+		"go1.23/",
 		"goroutines.go",
 		"init.go",
 		"init_multi.go",
@@ -417,26 +420,8 @@ func TestBuild(t *testing.T) {
 		"structs.go",
 		"testing.go",
 		"timers.go",
+		"typealias.go",
 		"zeroalloc.go",
-	}
-
-	// Go 1.21 made some changes to the language, which we can only test when
-	// we're actually on Go 1.21.
-	_, minor, err := goenv.GetGorootVersion()
-	if err != nil {
-		t.Fatal("could not get version:", minor)
-	}
-	if minor >= 21 {
-		tests = append(tests, "go1.21.go")
-	}
-	if minor >= 22 {
-		tests = append(tests, "go1.22/")
-	}
-	if minor >= 23 {
-		tests = append(tests, "go1.23/")
-	}
-	if minor >= 24 {
-		tests = append(tests, "typealias.go")
 	}
 
 	if *testTarget != "" {
