@@ -5,9 +5,14 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 func TestCompileCXXFile(t *testing.T) {
+	if err := os.MkdirAll(goenv.Get("GOCACHE"), 0o777); err != nil {
+		t.Fatal(err)
+	}
 	dir := t.TempDir()
 	source := filepath.Join(dir, "flags.cpp")
 	code := `#if defined(C_ONLY) || !defined(SHARED)
