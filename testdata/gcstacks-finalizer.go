@@ -6,8 +6,7 @@ import (
 )
 
 // A goroutine blocks on a channel that only a finalizable object references.
-// The GC resurrects that object to run its finalizer, which must keep the
-// blocked goroutine and its locals alive too.
+// Resurrecting that object must keep the goroutine and its locals alive.
 
 type object struct {
 	id   int

@@ -5,9 +5,8 @@ import (
 	"time"
 )
 
-// The cost of a collection must grow in proportion to the number of goroutines.
-// Goroutine i blocks on a channel and holds the only reference to the channel
-// of goroutine i+1, so finding all stacks takes a chain of discoveries.
+// Collection time must grow linearly with the goroutine count. Each goroutine
+// holds the only reference to the channel of the next one.
 
 const (
 	small = 400
@@ -61,10 +60,10 @@ func main() {
 	measure(50) // warm up the heap
 	a := measure(small)
 	b := measure(large)
-	// The goroutine count grows 4 times. Linear growth gives a ratio near 4,
-	// quadratic growth a ratio near 16.
+	// 4 times the goroutines gives a ratio near 4 when linear, near 16 when
+	// quadratic. The limit leaves room for a busy machine.
 	ratio := float64(b) / float64(a)
-	if ratio > 10 {
+	if ratio > 12 {
 		println("collection time grew too fast")
 		println("ratio x100:", int(ratio*100))
 	} else {

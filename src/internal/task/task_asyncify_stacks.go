@@ -4,10 +4,8 @@ package task
 
 import "unsafe"
 
-// The last word of a stack holds the address of the owning task as an integer,
-// so the stack does not keep the task alive. It sits right before the object
-// header, which lets the GC find it without searching for the start of the
-// object. The C stack ends before it, at an aligned address.
+// The last word of a stack holds the owning task as an integer, right before
+// the object header, so the GC finds it without keeping the task alive.
 const ownerSize = unsafe.Sizeof(uintptr(0))
 
 func setStackOwner(t *Task) {
@@ -29,11 +27,13 @@ func stackOwner(header uintptr) *Task {
 	return t
 }
 
-// scanStack calls mark with the parts of a stack that hold data: the save area
-// at the bottom and the C stack frames at the top. The gap between them keeps
-// stale words from deeper calls, which must not be treated as roots.
+// scanStack marks the save area at the bottom and the C stack frames at the
+// top. The gap between them holds stale words that must not be roots.
 func scanStack(t *Task, mark func(start, end uintptr)) {
 	s := &t.state
+	if s.canaryPtr == nil {
+		return
+	}
 	base := uintptr(unsafe.Pointer(s.canaryPtr))
 	top := uintptr(s.top)
 	saved := uintptr(s.asyncifysp)

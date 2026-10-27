@@ -20,9 +20,8 @@ func markRoot(addr, root uintptr)
 //go:linkname stackBodySize runtime.stackBodySize
 func stackBodySize(size uintptr) uintptr
 
-// StackReached is called by the GC when it marks a stack. The stack ends right
-// before the object header at header. It marks the owning task and the live
-// part of the stack.
+// StackReached is called by the GC when it marks the stack that ends at header.
+// It marks the owning task and the live part of the stack.
 func StackReached(header uintptr) {
 	t := stackOwner(header)
 	if t == nil {

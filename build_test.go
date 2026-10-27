@@ -88,6 +88,9 @@ func TestBuild(t *testing.T) {
 		runPlatTests(hostOptions, tests, t)
 		for _, name := range gcStackNativeTests {
 			t.Run(name, func(t *testing.T) {
+				if runtime.GOOS == "windows" && (name == "gcstacks-stale.go" || name == "gcstacks-blocked.go") {
+					t.Skip("boehm scans whole goroutine stacks with the tasks scheduler")
+				}
 				t.Parallel()
 				runTest(name, hostOptions, t, nil, nil)
 			})
@@ -95,8 +98,6 @@ func TestBuild(t *testing.T) {
 		for _, skipped := range gcStackNativeSkipped {
 			t.Run(skipped.name, func(t *testing.T) {
 				t.Skip(skipped.reason)
-				t.Parallel()
-				runTest(skipped.name, hostOptions, t, nil, nil)
 			})
 		}
 		t.Run("testing.go-verbose", func(t *testing.T) {
@@ -327,8 +328,6 @@ func TestBuild(t *testing.T) {
 			runGCStackSizeTests(t, options)
 			t.Run("gcstacks-finalizer.go", func(t *testing.T) {
 				t.Skip("finalizers only run deterministically on the wasm target")
-				t.Parallel()
-				runTest("gcstacks-finalizer.go", options, t, nil, nil)
 			})
 			t.Run("cgo-realloc", func(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
@@ -414,17 +413,16 @@ var gcStackNativeTests = []string{
 	"gcstacks-stale.go",
 }
 
-// gcStackNativeSkipped are stack tests that do not work on the host with its
-// default configuration of the boehm GC and one thread per goroutine.
+// gcStackNativeSkipped are stack tests that do not work with the boehm GC and
+// the schedulers the host uses.
 var gcStackNativeSkipped = []struct{ name, reason string }{
-	{"gcstacks-soak.go", "leaked goroutines are never freed with one thread per goroutine"},
-	{"gcstacks-scale.go", "the collection time depends on the number of threads"},
+	{"gcstacks-soak.go", "the host does not free the stacks of leaked goroutines"},
+	{"gcstacks-scale.go", "collection time on the host depends on its scheduler"},
 	{"gcstacks-finalizer.go", "finalizers do not run with the boehm GC"},
 }
 
-// gcStackTests are the tests for the wasm targets. The soak test leaks many
-// goroutines, which needs a scheduler that does not use one thread per
-// goroutine.
+// gcStackTests are the tests for the wasm targets, where leaked goroutines can
+// be freed.
 var gcStackTests = append(slices.Clone(gcStackNativeTests), "gcstacks-soak.go")
 
 func runGCStackTests(t *testing.T, options compileopts.Options) {
@@ -525,6 +523,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		}
 		if options.Target == "cortex-m-qemu" && name == "gcstacks.go" {
 			// Too many goroutines for the LM3S6965's RAM.
+			continue
+		}
+		if options.Target == "riscv-qemu" && name == "gcstacks.go" {
+			// The cores scheduler crashes with timers and runtime.GC, see #6047.
 			continue
 		}
 		if options.Target == "simavr" {

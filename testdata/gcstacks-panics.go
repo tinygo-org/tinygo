@@ -7,9 +7,8 @@ import (
 	"time"
 )
 
-// Sequences of panics that are recovered at different depths, re-panicked, and
-// replaced by a panic in a deferred function. Each level holds its own object
-// and the deferred functions park the goroutine and collect.
+// Panics are recovered at different depths, re-panicked and replaced, while
+// every level holds an object and the deferred functions park and collect.
 
 type object struct {
 	id   int
@@ -146,7 +145,7 @@ func deepAfterRecover(depth, id int) int {
 
 func worker(id int, wg *sync.WaitGroup, results *[4]int, mu *sync.Mutex) {
 	defer wg.Done()
-	keep := newObject(id * 100 + 99)
+	keep := newObject(id*100 + 99)
 	recovered, repanics, replaced, loops := 0, 0, 0, 0
 
 	for depth := 1; depth <= 6; depth++ {

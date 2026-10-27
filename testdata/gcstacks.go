@@ -6,9 +6,8 @@ import (
 	"time"
 )
 
-// Each goroutine below keeps the only reference to its heap objects in locals
-// while it is parked. If the GC misses a goroutine stack root, the object is
-// freed and then overwritten by churn, and check fails.
+// Goroutines keep the only reference to heap objects in locals while parked. A
+// missed stack root lets churn overwrite the object, and check fails.
 
 type object struct {
 	id   int
