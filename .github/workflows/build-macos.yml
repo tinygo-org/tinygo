@@ -228,9 +228,3 @@ jobs:
           tinygo build -o "$RUNNER_TEMP/alias" testdata/alias.go
           "$RUNNER_TEMP/alias" | diff - testdata/alias.txt
           tinygo build -target=wasm-unknown -o "$RUNNER_TEMP/alias.wasm" testdata/alias.go
-      - name: Build TinyGo (default LLVM)
-        if: matrix.version == 20
-        run: go install
-      - name: Check binary
-        if: matrix.version == 20
-        run: tinygo version
