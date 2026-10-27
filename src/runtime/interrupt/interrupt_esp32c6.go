@@ -36,7 +36,6 @@ func (i Interrupt) Enable() error {
 		return errors.New("interrupt must be in range of 1 through 31")
 	}
 	mask := riscv.DisableInterrupts()
-	defer riscv.EnableInterrupts(mask)
 
 	// Enable CPU interrupt number i.num via the PLIC.
 	plic.MXINT_ENABLE.SetBits(1 << i.num)
@@ -52,6 +51,7 @@ func (i Interrupt) Enable() error {
 	plic.MXINT_CLEAR.ClearBits(1 << i.num)
 
 	riscv.Asm("fence")
+	riscv.EnableInterrupts(mask)
 	return nil
 }
 
