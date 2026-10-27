@@ -102,6 +102,16 @@ func TestBinarySize(t *testing.T) {
 		{target: "cortex-m-qemu", path: "./testdata/size-init-recover", opt: "2"},
 		{target: "pico2", path: "./testdata/size-init-regexp", opt: "z"},
 		{target: "pico2", path: "./testdata/size-init-regexp", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-crc", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-crc", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-map", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-map", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-errors", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-errors", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-config", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-config", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-strings", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-strings", opt: "2"},
 
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the
