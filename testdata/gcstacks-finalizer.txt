@@ -1,0 +1,1 @@
+finalizer ran, worker result: 10

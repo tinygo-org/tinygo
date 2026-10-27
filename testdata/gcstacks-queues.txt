@@ -1,0 +1,6 @@
+sleepers ok
+mutex waiters ok
+cond waiters ok
+wait group waiters ok
+select waiters ok
+timer waiters ok

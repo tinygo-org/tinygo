@@ -608,9 +608,10 @@ func TestBuild(t *testing.T) {
 
 			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasm", sema), t)
-			t.Run("gcstacks-stale.go", func(t *testing.T) {
+			runGCStackTests(t, optionsFromTarget("wasm", sema))
+			t.Run("gcstacks-finalizer.go", func(t *testing.T) {
 				t.Parallel()
-				runTest("gcstacks-stale.go", optionsFromTarget("wasm", sema), t, nil, nil)
+				runTest("gcstacks-finalizer.go", optionsFromTarget("wasm", sema), t, nil, nil)
 			})
 			// Test with -gc=boehm.
 			t.Run("gc.go-boehm", func(t *testing.T) {
@@ -626,14 +627,8 @@ func TestBuild(t *testing.T) {
 			options := optionsFromTarget("wasip1", sema)
 			runPlatTests(options, tests, t)
 			runGCLivenessTest(options, t)
-			t.Run("gcstacks-stale.go", func(t *testing.T) {
-				t.Parallel()
-				runTest("gcstacks-stale.go", options, t, nil, nil)
-			})
-			t.Run("gcstacks-blocked.go", func(t *testing.T) {
-				t.Parallel()
-				runTest("gcstacks-blocked.go", options, t, nil, nil)
-			})
+			runGCStackTests(t, options)
+			runGCStackSizeTests(t, options)
 			t.Run("cgo-realloc", func(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
 			})
@@ -651,10 +646,7 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasip2", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasip2", sema), t)
-			t.Run("gcstacks-stale.go", func(t *testing.T) {
-				t.Parallel()
-				runTest("gcstacks-stale.go", optionsFromTarget("wasip2", sema), t, nil, nil)
-			})
+			runGCStackTests(t, optionsFromTarget("wasip2", sema))
 		})
 	}
 
@@ -721,6 +713,55 @@ func TestESP32QEMU(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			runTest(name, options, t, nil, nil)
+		})
+	}
+}
+
+// gcStackTests stress the scanning of asyncify goroutine stacks. They only run
+// on targets that use heap allocated goroutine stacks.
+var gcStackTests = []string{
+	"gcdiff.go",
+	"gcstacks-blocked.go",
+	"gcstacks-exit.go",
+	"gcstacks-panics.go",
+	"gcstacks-queues.go",
+	"gcstacks-soak.go",
+	"gcstacks-stale.go",
+}
+
+func runGCStackTests(t *testing.T, options compileopts.Options) {
+	t.Helper()
+	for _, name := range gcStackTests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			runTest(name, options, t, nil, nil)
+		})
+	}
+
+	// The collector must find the same live objects as one that never frees.
+	t.Run("gcdiff.go-leaking", func(t *testing.T) {
+		t.Parallel()
+		leaking := options
+		leaking.GC = "leaking"
+		runTest("gcdiff.go", leaking, t, nil, nil)
+	})
+
+	// This one measures time, so it does not run in parallel with the others.
+	t.Run("gcstacks-scale.go", func(t *testing.T) {
+		runTest("gcstacks-scale.go", options, t, nil, nil)
+	})
+}
+
+// runGCStackSizeTests runs the stack scanning test with goroutine stack sizes
+// that are not multiples of the block size.
+func runGCStackSizeTests(t *testing.T, options compileopts.Options) {
+	t.Helper()
+	for _, size := range []uint64{9001, 16393, 33333, 65545, 100003} {
+		t.Run(fmt.Sprintf("gcstacks.go-stack-size-%d", size), func(t *testing.T) {
+			t.Parallel()
+			sized := options
+			sized.StackSize = size
+			runTest("gcstacks.go", sized, t, nil, nil)
 		})
 	}
 }
