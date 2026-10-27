@@ -117,6 +117,13 @@ func signalInterrupt() {
 	interruptPending.Set(1)
 }
 
+var timerAlarmInterrupt interrupt.Interrupt
+
+// timerAlarmHandler clears the timer interrupt at the peripheral level.
+func timerAlarmHandler(interrupt.Interrupt) {
+	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+}
+
 // initTimerInterrupt routes the TIMG0 timer 0 alarm interrupt to a CPU
 // interrupt and registers a handler that signals timerWakeup.
 func initTimerInterrupt() {
@@ -127,10 +134,8 @@ func initTimerInterrupt() {
 	esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
 
 	// Register the interrupt handler (compile-time wiring).
-	interrupt.New(timerAlarmCPUInterrupt, func(interrupt.Interrupt) {
-		// Clear the timer interrupt at the peripheral level.
-		esp.TIMG0.INT_CLR_TIMERS.Set(1)
-	})
+	timerAlarmInterrupt = interrupt.New(timerAlarmCPUInterrupt, timerAlarmHandler)
+	timerAlarmInterrupt.Enable()
 
 	// Manually enable the CPU interrupt with correct ordering:
 	// 1) clear any stale pending bit first
