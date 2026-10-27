@@ -6,10 +6,8 @@ import (
 	"time"
 )
 
-// A randomized mix of goroutines that park in many ways while holding heap
-// objects in locals. Each goroutine is driven by its own seed and the printed
-// totals do not depend on scheduling, so any GC must print the same output.
-// Compare with -gc=leaking, which never frees anything.
+// Randomized goroutines park in many ways while holding heap objects. The output
+// does not depend on scheduling, so it must match the output with -gc=leaking.
 
 type node struct {
 	id      int

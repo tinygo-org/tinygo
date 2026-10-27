@@ -6,9 +6,8 @@ import (
 	"time"
 )
 
-// Goroutines that finish in different ways while the GC runs, with a finalizer
-// registered so the scheduler also collects when it is idle and clears the
-// stacks of finished goroutines.
+// Goroutines finish in different ways while the GC runs. A finalizer is set so
+// the scheduler also collects when idle and clears finished stacks.
 
 type object struct {
 	id   int

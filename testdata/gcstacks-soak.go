@@ -2,9 +2,8 @@ package main
 
 import "runtime"
 
-// Many rounds of leaked goroutines, interleaved with live goroutines that hold
-// objects while parked. Freed stacks and tasks get reused, and the heap must
-// not grow.
+// Rounds of leaked goroutines next to live ones that hold objects while parked.
+// Freed stacks get reused, and the heap must not grow.
 
 const (
 	rounds  = 60
