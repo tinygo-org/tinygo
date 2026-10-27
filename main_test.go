@@ -443,6 +443,19 @@ func TestBuild(t *testing.T) {
 		t.Parallel()
 		hostOptions := optionsFromTarget("", sema)
 		runPlatTests(hostOptions, tests, t)
+		for _, name := range gcStackNativeTests {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				runTest(name, hostOptions, t, nil, nil)
+			})
+		}
+		for _, skipped := range gcStackNativeSkipped {
+			t.Run(skipped.name, func(t *testing.T) {
+				t.Skip(skipped.reason)
+				t.Parallel()
+				runTest(skipped.name, hostOptions, t, nil, nil)
+			})
+		}
 		t.Run("testing.go-verbose", func(t *testing.T) {
 			t.Parallel()
 			runTest("testing-verbose.go", hostOptions, t, nil, nil)
@@ -629,6 +642,11 @@ func TestBuild(t *testing.T) {
 			runGCLivenessTest(options, t)
 			runGCStackTests(t, options)
 			runGCStackSizeTests(t, options)
+			t.Run("gcstacks-finalizer.go", func(t *testing.T) {
+				t.Skip("finalizers only run deterministically on the wasm target")
+				t.Parallel()
+				runTest("gcstacks-finalizer.go", options, t, nil, nil)
+			})
 			t.Run("cgo-realloc", func(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
 			})
@@ -717,17 +735,29 @@ func TestESP32QEMU(t *testing.T) {
 	}
 }
 
-// gcStackTests stress the scanning of asyncify goroutine stacks. They only run
-// on targets that use heap allocated goroutine stacks.
-var gcStackTests = []string{
+// gcStackNativeTests stress goroutine stacks and the GC. They run on the host
+// and on the wasm targets. gcstacks.go is part of the main list of tests.
+var gcStackNativeTests = []string{
 	"gcdiff.go",
 	"gcstacks-blocked.go",
 	"gcstacks-exit.go",
 	"gcstacks-panics.go",
 	"gcstacks-queues.go",
-	"gcstacks-soak.go",
 	"gcstacks-stale.go",
 }
+
+// gcStackNativeSkipped are stack tests that do not work on the host with its
+// default configuration of the boehm GC and one thread per goroutine.
+var gcStackNativeSkipped = []struct{ name, reason string }{
+	{"gcstacks-soak.go", "leaked goroutines are never freed with one thread per goroutine"},
+	{"gcstacks-scale.go", "the collection time depends on the number of threads"},
+	{"gcstacks-finalizer.go", "finalizers do not run with the boehm GC"},
+}
+
+// gcStackTests are the tests for the wasm targets. The soak test leaks many
+// goroutines, which needs a scheduler that does not use one thread per
+// goroutine.
+var gcStackTests = append(slices.Clone(gcStackNativeTests), "gcstacks-soak.go")
 
 func runGCStackTests(t *testing.T, options compileopts.Options) {
 	t.Helper()
