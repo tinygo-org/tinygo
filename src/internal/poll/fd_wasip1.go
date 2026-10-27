@@ -519,6 +519,10 @@ const (
 // package syscall (intentionally duplicated rather than linknamed
 // across the package boundary — see project memory on shim avoidance).
 func wait(fd int, mode uint8) {
+	if task.OnSystemStack() {
+		task.Pause()
+		return
+	}
 	pd := runtime_netpoll_addwait(uint32(fd), mode)
 	task.Pause()
 	runtime_netpoll_done(pd)
@@ -538,6 +542,10 @@ func (fd *FD) parkUntil(mode uint8, deadline time.Time) error {
 	if d <= 0 {
 		return ErrDeadlineExceeded
 	}
+	if task.OnSystemStack() {
+		task.Pause()
+		return nil
+	}
 	pd := runtime_netpoll_addwait(uint32(fd.Sysfd), mode)
 	timer := time.AfterFunc(d, func() {
 		runtime_netpoll_wake(pd)
@@ -546,6 +554,15 @@ func (fd *FD) parkUntil(mode uint8, deadline time.Time) error {
 	timer.Stop()
 	runtime_netpoll_done(pd)
 	return nil
+}
+
+// WaitWrite waits until data can be written to fd.
+func (fd *FD) WaitWrite() error {
+	if fd.wDeadline.IsZero() {
+		wait(fd.Sysfd, pollModeWrite)
+		return nil
+	}
+	return fd.parkUntil(pollModeWrite, fd.wDeadline)
 }
 
 // byteCount turns the -1 a failed read or write returns into 0, as Go's

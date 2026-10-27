@@ -176,7 +176,7 @@ func hashmapMake(keySize, valueSize uintptr, sizeHint uintptr, typeInfo unsafe.P
 // it. This is used for the clear builtin, and can be used to reuse a map (to
 // avoid extra heap allocations).
 func hashmapClear(m *hashmap) {
-	if m == nil {
+	if m == nil || m.count == 0 {
 		// Nothing to do. According to the spec:
 		// > If the map or slice is nil, clear is a no-op.
 		return
@@ -415,15 +415,19 @@ func hashmapCopy(m *hashmap, sizeBits uint8) hashmap {
 	bucketBufSize := hashmapBucketSize(m)
 	n.buckets = alloc(bucketBufSize*numBuckets, hashmapType(m).bucketLayout)
 
-	// use a hashmap iterator to go through the old map
-	var it hashmapIterator
-
-	var key = alloc(m.keySize, hashmapType(m).keyLayout)
-	var value = alloc(m.valueSize, hashmapType(m).valueLayout)
-
-	for hashmapNext(m, &it, key, value) {
-		h := n.keyHash(key, uintptr(n.keySize), n.seed)
-		hashmapSet(&n, key, value, h)
+	oldNumBuckets := uintptr(1) << m.bucketBits
+	for i := uintptr(0); i < oldNumBuckets; i++ {
+		for b := hashmapBucketAddr(m, m.buckets, i); b != nil; b = b.next {
+			for j := uint8(0); j < 8; j++ {
+				if b.tophash[j] == 0 {
+					continue
+				}
+				key := hashmapSlotKeyData(m, hashmapSlotKey(m, b, j))
+				value := hashmapSlotValueData(m, hashmapSlotValue(m, b, j))
+				h := n.keyHash(key, uintptr(n.keySize), n.seed)
+				hashmapSet(&n, key, value, h)
+			}
+		}
 	}
 
 	return n

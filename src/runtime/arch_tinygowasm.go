@@ -91,16 +91,17 @@ func saveStackPointer() {
 // growHeap tries to grow the heap size. It returns true if it succeeds, false
 // otherwise.
 func growHeap() bool {
-	// Grow memory by the available size, which means the heap size is doubled.
+	// Grow memory by up to 64 MiB at a time and back off if the host caps memory.
+	// Cap total pages at 65535 so uintptr(pages) * wasmPageSize does not wrap to 0.
+	const maxPages = 65535
 	memorySize := wasm_memory_size(wasmMemoryIndex)
-	result := wasm_memory_grow(wasmMemoryIndex, memorySize)
-	if result == -1 {
-		// Grow failed.
-		return false
+	growPages := min(memorySize, 1024, maxPages-memorySize)
+	for growPages > 0 {
+		if wasm_memory_grow(wasmMemoryIndex, growPages) != -1 {
+			setHeapEnd(uintptr(wasm_memory_size(wasmMemoryIndex)) * wasmPageSize)
+			return true
+		}
+		growPages /= 2
 	}
-
-	setHeapEnd(uintptr(wasm_memory_size(wasmMemoryIndex) * wasmPageSize))
-
-	// Heap has grown successfully.
-	return true
+	return false
 }

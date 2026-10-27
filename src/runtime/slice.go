@@ -29,12 +29,20 @@ func sliceGrow(oldBuf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr, 
 		// No need to grow, return the input slice.
 		return oldBuf, oldLen, oldCap
 	}
-
-	// This can be made more memory-efficient by multiplying by some other constant, such as 1.5,
-	// which seems to be allowed by the Go language specification (but this can be observed by
-	// programs); however, due to memory fragmentation and the current state of the TinyGo
-	// memory allocators, this causes some difficult to debug issues.
-	newCap = 1 << bits.Len(uint(newCap))
+	if elemSize == 0 {
+		return oldBuf, oldLen, newCap
+	}
+	if oldCap < 256 {
+		newCap = 1 << bits.Len(uint(newCap))
+	} else {
+		growCap := oldCap
+		for 0 < growCap && growCap < newCap {
+			growCap += (growCap + 3*256) / 4
+		}
+		if growCap > 0 {
+			newCap = growCap
+		}
+	}
 
 	buf := alloc(newCap*elemSize, layout)
 	if oldLen > 0 {
