@@ -85,7 +85,7 @@ func (fs unixFilesystem) Remove(path string) error {
 }
 
 func (fs unixFilesystem) OpenFile(path string, flag int, perm FileMode) (uintptr, error) {
-	fp, err := syscall.Open(path, flag, uint32(perm))
+	fp, err := syscall.Open(path, flag|syscall.O_CLOEXEC, uint32(perm))
 	return uintptr(fp), handleSyscallError(err)
 }
 
