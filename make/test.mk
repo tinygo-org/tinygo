@@ -165,6 +165,7 @@ TEST_PACKAGES_NONBAREMETAL = \
 	$(TEST_PACKAGES_NONWASM) \
 	$(TEST_PACKAGES_NOBOUNDARYSLICES) \
 	crypto/des \
+	encoding/gob \
 	regexp/syntax \
 	$(nil)
 
@@ -226,6 +227,7 @@ TEST_OPTIONS_bytes := -skip='^(TestNewBufferShallow|TestEqual|TestIndex|TestLast
 TEST_OPTIONS_slices := -skip='^(TestGrow|TestInsert|TestConcat)$$'
 TEST_OPTIONS_strings := -skip='^(TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace)$$'
 TEST_OPTIONS_crypto/mldsa := -short -stack-size=1MB -skip='^TestAllocations$$'
+TEST_OPTIONS_encoding/gob := -skip='^(TestIgnoreDepthLimit|TestCountEncodeMallocs|TestCountDecodeMallocs)$$'
 
 tinygo-test tinygo-test-fast: TEST_OPTIONS_go/printer := -stack-size=1MB
 tinygo-test tinygo-test-fast: TEST_OPTIONS_go/build/constraint = $(HOST_TEST_STACK_SKIP_FLAG) -stack-size=1MB
