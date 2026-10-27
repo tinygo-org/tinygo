@@ -21,3 +21,8 @@ func main() {
 func getResult() int32 {
 	return result
 }
+
+//export sleep
+func sleep() {
+	time.Sleep(time.Millisecond)
+}

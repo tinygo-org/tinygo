@@ -21,7 +21,7 @@ func (f *Futex) Wait(cmp uint32) (awoken bool) {
 	}
 
 	// Push the current goroutine onto the waiter stack.
-	f.waiters.Push(Current())
+	f.waiters.Push(CurrentToBlock())
 
 	// Pause until the waiters are awoken by Wake/WakeAll.
 	Pause()

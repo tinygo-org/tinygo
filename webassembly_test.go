@@ -322,6 +322,15 @@ func TestWasmLegacyExport(t *testing.T) {
 		t.Errorf("getResult() = %v, want [42]", results)
 	}
 	checkOutput(t, "testdata/wasi-legacy.txt", output.Bytes())
+
+	// An //export function runs outside any goroutine, so it cannot block.
+	output.Reset()
+	if _, err := mod.ExportedFunction("sleep").Call(ctx); err == nil {
+		t.Error("sleep() after _start did not fail")
+	}
+	if !strings.Contains(output.String(), "blocking operation in exported function") {
+		t.Errorf("sleep() after _start: unexpected output %q", output.String())
+	}
 }
 
 // Test js.FuncOf (for syscall/js).

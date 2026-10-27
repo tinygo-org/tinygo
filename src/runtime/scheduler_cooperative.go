@@ -100,7 +100,7 @@ func scheduleTaskNoWake(t *task.Task) {
 }
 
 func Gosched() {
-	runqueue.Push(task.Current())
+	runqueue.Push(task.CurrentToBlock())
 	task.Pause()
 }
 
@@ -303,7 +303,7 @@ func sleep(duration int64) {
 	if synctestSleep(duration) {
 		return
 	}
-	addSleepTask(task.Current(), nanosecondsToTicks(duration))
+	addSleepTask(task.CurrentToBlock(), nanosecondsToTicks(duration))
 	task.Pause()
 }
 

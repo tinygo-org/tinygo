@@ -61,7 +61,7 @@ func (c *Cond) Broadcast() {
 
 func (c *Cond) Wait() {
 	// Mark us as not yet signalled or sleeping.
-	t := task.Current()
+	t := task.CurrentToBlock()
 	dataPtr := (*task.Uint32)(unsafe.Pointer(&t.Data))
 	dataPtr.Store(condWaiting)
 

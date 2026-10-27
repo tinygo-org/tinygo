@@ -10,7 +10,7 @@ type Mutex struct {
 func (m *Mutex) Lock() {
 	if m.locked {
 		// Push self onto stack of blocked tasks, and wait to be resumed.
-		m.blocked.Push(Current())
+		m.blocked.Push(CurrentToBlock())
 		Pause()
 		return
 	}
