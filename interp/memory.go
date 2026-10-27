@@ -1103,6 +1103,17 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 			for i := range ptrSize {
 				v.buf[i] = ptrValue.pointer
 			}
+		case llvm.Add, llvm.Sub, llvm.Mul, llvm.Shl, llvm.LShr, llvm.AShr, llvm.And, llvm.Or, llvm.Xor:
+			// The IR builder folds these into constant expressions when both
+			// operands are constant. LLVM 17 can emit all of them, LLVM 19 only
+			// add, sub, mul and xor, and LLVM 22 and 23 only add, sub and xor.
+			// LLVM is removing all but add and sub, so fewer of them reach this
+			// point in newer versions.
+			// https://discourse.llvm.org/t/rfc-remove-most-constant-expressions/63179
+			// rawValue does not evaluate integer arithmetic on pointer data, so
+			// return false to leave them for runtime.
+			// See https://github.com/tinygo-org/tinygo/issues/2616.
+			return false
 		case llvm.ICmp:
 			// Note: constant icmp isn't supported anymore in LLVM 19.
 			// Once we drop support for LLVM 18, this can be removed.
