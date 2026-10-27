@@ -549,6 +549,9 @@ func (c *Config) LDFlags() []string {
 	if c.Target.LinkerScript != "" {
 		ldflags = append(ldflags, "-T", c.Target.LinkerScript)
 	}
+	if c.Target.Linker == "wasm-ld" && c.Scheduler() == "none" && c.Options.StackSize != 0 {
+		ldflags = append(ldflags, "-z", fmt.Sprintf("stack-size=%d", c.Options.StackSize))
+	}
 	ldflags = append(ldflags, c.Options.ExtLDFlags...)
 
 	return ldflags
