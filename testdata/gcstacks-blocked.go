@@ -5,7 +5,10 @@ import "runtime"
 // Goroutines blocked on channels that nothing else references can never run
 // again. The GC should be able to free their stacks.
 
-const goroutines = 200
+// Baremetal targets report GOARCH arm and have little RAM.
+var small = runtime.GOARCH == "arm"
+
+var goroutines = 200
 
 func heapInuse() uint64 {
 	runtime.GC()
@@ -24,6 +27,9 @@ func spawn() {
 }
 
 func main() {
+	if small {
+		goroutines = 40
+	}
 	before := heapInuse()
 	spawn()
 	runtime.Gosched()
