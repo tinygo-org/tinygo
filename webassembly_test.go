@@ -354,7 +354,11 @@ func TestWasmExportHeapInuse(t *testing.T) {
 		t.Fatal("could not instantiate wasm module:", err)
 	}
 	call := func(name string) uint64 {
-		results, err := mod.ExportedFunction(name).Call(ctx)
+		fn := mod.ExportedFunction(name)
+		if fn == nil {
+			t.Fatalf("missing export %s", name)
+		}
+		results, err := fn.Call(ctx)
 		if err != nil {
 			t.Fatalf("failed to call %s: %v", name, err)
 		}

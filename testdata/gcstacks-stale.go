@@ -8,7 +8,10 @@ import (
 // Deep calls leave pointers to large buffers in the unused part of a goroutine
 // stack. The GC must not treat those stale words as roots.
 
-const (
+// Baremetal targets report GOARCH arm and have little RAM.
+var small = runtime.GOARCH == "arm"
+
+var (
 	goroutines = 100
 	depth      = 20
 	bufSize    = 16 << 10
@@ -34,6 +37,9 @@ func heapInuse() uint64 {
 }
 
 func main() {
+	if small {
+		goroutines, depth, bufSize = 8, 16, 4<<10
+	}
 	release := make(chan struct{})
 	var parked, done sync.WaitGroup
 	for i := 0; i < goroutines; i++ {
