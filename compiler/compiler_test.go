@@ -44,6 +44,7 @@ func TestCompiler(t *testing.T) {
 		{"basic.go", "", ""},
 		{"pointer.go", "", ""},
 		{"slice.go", "", ""},
+		{"rangeloop.go", "", ""},
 		{"string.go", "", ""},
 		{"float.go", "", ""},
 		{"interface.go", "", ""},
@@ -57,12 +58,8 @@ func TestCompiler(t *testing.T) {
 		{"zeromap.go", "", ""},
 		{"generics.go", "", ""},
 		{"large.go", "", ""},
-	}
-	if goMinor >= 20 {
-		tests = append(tests, testCase{"go1.20.go", "", ""})
-	}
-	if goMinor >= 21 {
-		tests = append(tests, testCase{"go1.21.go", "", ""})
+		{"go1.20.go", "", ""},
+		{"go1.21.go", "", ""},
 	}
 	if goMinor >= 27 {
 		tests = append(tests, testCase{"go1.27.go", "", ""})
@@ -291,6 +288,18 @@ func TestLargeSliceElement(t *testing.T) {
 	if ir := fn.String(); !strings.Contains(ir, "icmp ugt i64 %len, 8388608") {
 		t.Errorf("large element slice does not use the 48-bit allocation limit:\n%s", ir)
 	}
+}
+
+func TestLargeSliceElement32Bit(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	mod, errs := testCompilePackage(t, options, "slice-large-element.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	mod.Dispose()
 }
 
 func TestNonBlockingSelectLargeSend(t *testing.T) {

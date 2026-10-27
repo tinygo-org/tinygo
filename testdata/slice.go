@@ -166,6 +166,106 @@ func main() {
 	// Test recursive slices.
 	rs := []RecursiveSlice(nil)
 	println("len:", len(rs))
+
+	testRangeLoops()
+	testSliceBounds()
+}
+
+// Range loops evaluate the slice once and keep their own copy of the index.
+func testRangeLoops() {
+	var nilSlice []int
+	empty := make([]int, 0, 8)
+	data := []int{10, 20, 30, 40, 50}
+
+	count := func(s []int) (n int) {
+		for range s {
+			n++
+		}
+		return
+	}
+	println("range count:", count(nilSlice), count(empty), count(data), count(data[:0]), count(data[1:]), count(data[:3:3]))
+
+	// Changing the slice or the index inside the loop does not change the
+	// number of iterations.
+	n := 0
+	for i := range data {
+		data = append(data, i)
+		i += 100
+		n++
+	}
+	println("range append:", n, len(data))
+
+	s := []int{1, 2, 3, 4}
+	sum := 0
+	for i, v := range s {
+		s = nil
+		sum += i*10 + v
+	}
+	println("range reassign:", sum, len(s))
+
+	s = []int{1, 2, 3, 4, 5, 6}
+	sum = 0
+	for i := range s {
+		if i == 1 {
+			continue
+		}
+		if i == 4 {
+			break
+		}
+		sum += s[i]
+	}
+	println("range continue break:", sum)
+
+	// A range loop over a slice that is changed by the loop body sees the
+	// original length but the new elements.
+	s = []int{1, 2, 3}
+	sum = 0
+	for i := range s {
+		if i == 0 {
+			s[1] = 20
+			s[2] = 30
+		}
+		sum += s[i]
+	}
+	println("range write:", sum)
+
+	var nested [][]int
+	for i := 0; i < 4; i++ {
+		nested = append(nested, make([]int, i))
+	}
+	sum = 0
+	for _, row := range nested[1:] {
+		for j := range row {
+			sum += j + 1
+		}
+	}
+	println("range nested:", sum)
+}
+
+var sliceSink []byte
+
+func slicePanics(name string, f func()) {
+	defer func() {
+		println(name, recover() != nil)
+	}()
+	f()
+}
+
+// Test that slicing a slice still panics for every out of range case.
+func testSliceBounds() {
+	b := make([]byte, 10, 20)
+	low, high, max := makeInt(5), makeInt(15), makeInt(20)
+	slicePanics("b[len:]", func() { sliceSink = b[makeInt(10):] })
+	slicePanics("b[len+1:]", func() { sliceSink = b[makeInt(11):] })
+	slicePanics("b[:cap]", func() { sliceSink = b[:makeInt(20)] })
+	slicePanics("b[:cap+1]", func() { sliceSink = b[:makeInt(21)] })
+	slicePanics("b[low:high]", func() { sliceSink = b[low:high] })
+	slicePanics("b[high:low]", func() { sliceSink = b[high:low] })
+	slicePanics("b[low:high:max]", func() { sliceSink = b[low:high:max] })
+	slicePanics("b[low:high:cap+1]", func() { sliceSink = b[low:high:makeInt(21)] })
+	slicePanics("b[low:max:high]", func() { sliceSink = b[low:max:high] })
+	slicePanics("b[-1:]", func() { sliceSink = b[makeInt(-1):] })
+	slicePanics("b[:-1]", func() { sliceSink = b[:makeInt(-1)] })
 }
 
 func printslice(name string, s []int) {

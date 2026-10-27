@@ -15,6 +15,7 @@ SMOKETEST_SUBTARGETS = \
 	smoketest-wasm-sim \
 	smoketest-nrf \
 	smoketest-samd \
+	smoketest-renesas \
 	smoketest-nxp \
 	smoketest-rp2xxx \
 	smoketest-pwm-usb \
@@ -133,6 +134,8 @@ ifneq ($(WASM), 0)
 	@$(MD5SUM) $(SMOKE_OUT).wasm
 	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o $(SMOKE_OUT).wasm -tags=m5stamp_fly          examples/machinetest
 	@$(MD5SUM) $(SMOKE_OUT).wasm
+	GOOS=js GOARCH=wasm $(TINYGO) build -size short -o $(SMOKE_OUT).wasm -tags=esp32c3_supermini    examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).wasm
 endif
 
 smoketest-nrf: SMOKE_OUT = build/smoke/nrf
@@ -246,6 +249,13 @@ smoketest-samd: | build/smoke
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=itsybitsy-nrf52840  examples/i2s-tone
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=qtpy                examples/machinetest
+	@$(MD5SUM) $(SMOKE_OUT).hex
+
+smoketest-renesas: SMOKE_OUT = build/smoke/renesas
+smoketest-renesas: | build/smoke
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=arduino-uno-r4-minima examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=arduino-uno-r4-wifi examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 
 smoketest-nxp: SMOKE_OUT = build/smoke/nxp
@@ -380,6 +390,8 @@ ifneq ($(STM32), 0)
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-f103rb       examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-f401re       examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-f722ze       examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-h753zi       examples/blinky1
@@ -401,6 +413,8 @@ ifneq ($(STM32), 0)
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=stm32f4disco-1      examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=stm32f4disco-1      examples/pwm
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=nucleo-f401re       examples/pwm
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=stm32f469disco      examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
@@ -553,6 +567,14 @@ ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32s3   		examples/adc
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32s3   		examples/i2s-tone
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32s3 -tags=usbotg examples/echo
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32s3 -tags=usbotg examples/usb-storage
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32s3 -tags=usbotg examples/hid-joystick
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32s3 -tags=usbotg -scheduler=cores examples/usb-storage
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	# esp32s3-supermini
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32s3-supermini	    examples/blinky1

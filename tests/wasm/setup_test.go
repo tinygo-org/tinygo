@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -32,7 +33,9 @@ func runargs(t *testing.T, args ...string) error {
 	return nil
 }
 
-func chromectx(t *testing.T) context.Context {
+var browserCtx context.Context
+
+func TestMain(m *testing.M) {
 	// see https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.NoSandbox,
@@ -47,17 +50,26 @@ func chromectx(t *testing.T) context.Context {
 	)
 
 	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	t.Cleanup(cancel)
 
 	// looks for locally installed Chrome
-	ctx, ccancel := chromedp.NewContext(allocCtx, chromedp.WithErrorf(t.Errorf), chromedp.WithDebugf(t.Logf), chromedp.WithLogf(t.Logf))
-	t.Cleanup(ccancel)
+	ctx, ccancel := chromedp.NewContext(allocCtx)
+	browserCtx = ctx
 
-	// Wait for browser to be ready.
-	err := chromedp.Run(ctx)
-	if err != nil {
-		t.Fatalf("failed to start browser: %s", err.Error())
+	code := 1
+	if err := chromedp.Run(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "headless browser did not start, no wasm tests were run: %s\n", err)
+	} else {
+		code = m.Run()
 	}
+	ccancel()
+	cancel()
+	os.Exit(code)
+}
+
+// chromectx returns a new tab in the shared browser.
+func chromectx(t *testing.T) context.Context {
+	ctx, ccancel := chromedp.NewContext(browserCtx)
+	t.Cleanup(ccancel)
 
 	ctx, tcancel := context.WithTimeout(ctx, 30*time.Second)
 	t.Cleanup(tcancel)

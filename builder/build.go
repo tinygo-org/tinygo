@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -582,6 +583,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		packageJobs = append(packageJobs, job)
 	}
 
+	// The link job needs only these names, so go/ssa can be freed before it.
+	var initFuncs []string
+	for _, pkg := range lprogram.Sorted() {
+		initFuncs = append(initFuncs, pkg.Pkg.Path()+".init")
+	}
+	debugInitAll := config.Debug() && !config.Options.SkipDWARF
+	var initAllPos token.Position
+	if debugInitAll {
+		initAllPos = program.Fset.Position(program.ImportedPackage("runtime").Members["initAll"].Pos())
+		initAllPos.Filename = lprogram.Packages["runtime"].RecordedPath(initAllPos.Filename)
+	}
+
 	// Add job that links and optimizes all packages together.
 	var mod llvm.Module
 	defer func() {
@@ -598,8 +611,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		run: func(*compileJob) error {
 			// Load and link all the bitcode files. This does not yet optimize
 			// anything, it only links the bitcode files together.
+			debug.FreeOSMemory()
 			ctx := llvm.NewContext()
 			mod = ctx.NewModule("main")
+			// Use one Linker for all packages. LinkModules rescans the whole
+			// module on every call.
+			linker := llvm.NewLinker(mod)
+			defer linker.Dispose()
 			for _, pkgJob := range packageJobs {
 				pkgMod, err := ctx.ParseBitcodeFile(pkgJob.result)
 				if err != nil {
@@ -622,7 +640,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					}
 					fn.SetLinkage(llvm.LinkOnceODRLinkage)
 				}
-				err = llvm.LinkModules(mod, pkgMod)
+				err = linker.LinkModule(pkgMod)
 				if err != nil {
 					return fmt.Errorf("failed to link module: %w", err)
 				}
@@ -635,7 +653,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			// works fine. See:
 			// https://github.com/tinygo-org/tinygo/issues/4810
 			globalsMod := makeGlobalsModule(ctx, globalValues, machine)
-			llvm.LinkModules(mod, globalsMod)
+			if err := linker.LinkModule(globalsMod); err != nil {
+				return fmt.Errorf("failed to link globals module: %w", err)
+			}
 
 			// Create runtime.initAll function that calls the runtime
 			// initializer of each package.
@@ -648,16 +668,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			irbuilder := mod.Context().NewBuilder()
 			defer irbuilder.Dispose()
 			irbuilder.SetInsertPointAtEnd(block)
-			if config.Debug() && !config.Options.SkipDWARF {
-				pos := program.Fset.Position(program.ImportedPackage("runtime").Members["initAll"].Pos())
-				pos.Filename = lprogram.Packages["runtime"].RecordedPath(pos.Filename)
-				addInitAllDebugInfo(mod, llvmInitFn, irbuilder, pos, config.TrimPath())
+			if debugInitAll {
+				addInitAllDebugInfo(mod, llvmInitFn, irbuilder, initAllPos, config.TrimPath())
 			}
 			ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-			for _, pkg := range lprogram.Sorted() {
-				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
+			for _, name := range initFuncs {
+				pkgInit := mod.NamedFunction(name)
 				if pkgInit.IsNil() {
-					panic("init not found for " + pkg.Pkg.Path())
+					panic("init not found for " + name)
 				}
 				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(ptrType)}, "")
 			}
@@ -707,7 +725,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			// Make sure stack sizes are loaded from a separate section so they can be
 			// modified after linking.
 			if config.AutomaticStackSize() {
-				stackSizeLoads = transform.CreateStackSizeLoads(mod, config)
+				stackSizeLoads, err = transform.CreateStackSizeLoads(mod, config)
+				if err != nil {
+					return err
+				}
 			}
 			return nil
 		},
@@ -760,8 +781,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		result:       objfile,
 		run: func(*compileJob) error {
 			llvmBuf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
-			defer llvmBuf.Dispose()
-			return os.WriteFile(objfile, llvmBuf.Bytes(), 0666)
+			err := os.WriteFile(objfile, llvmBuf.Bytes(), 0666)
+			llvmBuf.Dispose()
+			// Only the stack size analysis in the link job reads the module
+			// after this point, so free it when that analysis will not run.
+			if !config.Options.PrintStacks && !config.AutomaticStackSize() {
+				ctx := mod.Context()
+				mod.Dispose()
+				ctx.Dispose()
+				mod = llvm.Module{}
+				releaseCHeap()
+			}
+			return err
 		},
 	}
 

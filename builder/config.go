@@ -25,10 +25,6 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		spec.OpenOCDCommands = options.OpenOCDCommands
 	}
 
-	// Version range supported by TinyGo.
-	const minorMin = 25 // when updating the min version, also update .github/workflows/compat.yml
-	const minorMax = 27
-
 	// Check that we support this Go toolchain version.
 	gorootMajor, gorootMinor, err := goenv.GetGorootVersion()
 	if err != nil {
@@ -36,10 +32,10 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	}
 
 	if options.GoCompatibility {
-		if gorootMajor != 1 || gorootMinor < minorMin || gorootMinor > minorMax {
+		if gorootMajor != 1 || gorootMinor < compileopts.MinimumGoMinorVersion || gorootMinor > compileopts.MaximumGoMinorVersion {
 			// Note: when this gets updated, also update the Go compatibility matrix:
 			// https://github.com/tinygo-org/tinygo-site/blob/dev/content/docs/reference/go-compat-matrix.md
-			return nil, fmt.Errorf("requires go version 1.%d through 1.%d, got go%d.%d", minorMin, minorMax, gorootMajor, gorootMinor)
+			return nil, fmt.Errorf("requires go version 1.%d through 1.%d, got go%d.%d", compileopts.MinimumGoMinorVersion, compileopts.MaximumGoMinorVersion, gorootMajor, gorootMinor)
 		}
 	}
 

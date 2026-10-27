@@ -27,3 +27,5 @@ called: Foo.Wait
   ...waited
 done with 'go on interface'
 paddedStruct: 5 7
+go in branch A
+go in branch B

@@ -1733,6 +1733,30 @@ func isMemequalArrayComparison(expr *ssa.BinOp) bool {
 		(expr.Op == token.EQL || expr.Op == token.NEQ)
 }
 
+// isRangeLoopCompare returns whether expr is the (index + 1) < len(slice) test
+// of rangeIndexed in golang.org/x/tools/go/ssa. Neither side is ever negative.
+func isRangeLoopCompare(expr *ssa.BinOp) bool {
+	if expr.Op != token.LSS || expr.Block().Comment != "rangeindex.loop" {
+		return false
+	}
+	call, ok := expr.Y.(*ssa.Call)
+	if !ok {
+		return false
+	}
+	if builtin, ok := call.Call.Value.(*ssa.Builtin); !ok || builtin.Name() != "len" {
+		return false
+	}
+	next, ok := expr.X.(*ssa.BinOp)
+	if !ok || next.Op != token.ADD {
+		return false
+	}
+	if _, ok := next.X.(*ssa.Phi); !ok {
+		return false
+	}
+	one, ok := next.Y.(*ssa.Const)
+	return ok && one.Int64() == 1
+}
+
 func canUseDereferencePointer(unop *ssa.UnOp) bool {
 	if !isDereference(unop) {
 		return false
@@ -2599,6 +2623,11 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 		x := b.getValue(expr.X, getPos(expr))
 		y := b.getValue(expr.Y, getPos(expr))
+		if isRangeLoopCompare(expr) {
+			// An unsigned compare gives the same result here. It matches the
+			// unsigned bounds check of the element, which LLVM then removes.
+			return b.CreateICmp(llvm.IntULT, x, y, ""), nil
+		}
 		return b.createBinOp(expr.Op, expr.X.Type(), expr.Y.Type(), x, y, expr.Pos())
 	case *ssa.Call:
 		return b.createFunctionCall(expr.Common())
@@ -2820,7 +2849,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		elemSizeValue := llvm.ConstInt(b.uintptrType, elemSize, false)
 
 		maxSize := b.maxSliceSize(llvmElemType)
-		if elemSize > maxSize {
+		if maxSize == 0 {
 			// This seems to be checked by the typechecker already, but let's
 			// check it again just to be sure.
 			return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("slice element type is too big (%v bytes)", elemSize))
@@ -2831,7 +2860,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		capType := expr.Cap.Type().Underlying().(*types.Basic)
 		maxAllocationSize := b.maxSliceAllocationSize(llvmElemType)
 		maxSizeValue := llvm.ConstInt(b.uintptrType, maxAllocationSize, false)
-		b.createSliceBoundsCheck(maxSizeValue, sliceLen, sliceCap, sliceCap, lenType, capType, capType)
+		b.createSliceBoundsCheck(maxSizeValue, sliceLen, sliceCap, sliceCap, lenType, capType, capType, false)
 
 		// Allocate the backing array.
 		sliceCapCast, err := b.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
@@ -2941,7 +2970,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			}
 
 			b.createNilCheck(expr.X, value, "slice")
-			b.createSliceBoundsCheck(llvmLen, low, high, max, lowType, highType, maxType)
+			b.createSliceBoundsCheck(llvmLen, low, high, max, lowType, highType, maxType, false)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
@@ -2981,7 +3010,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				max = oldCap
 			}
 
-			b.createSliceBoundsCheck(oldCap, low, high, max, lowType, highType, maxType)
+			b.createSliceBoundsCheck(oldCap, low, high, max, lowType, highType, maxType, expr.High == nil && expr.Max == nil)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
@@ -3025,7 +3054,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				high = oldLen
 			}
 
-			b.createSliceBoundsCheck(oldLen, low, high, high, lowType, highType, maxType)
+			b.createSliceBoundsCheck(oldLen, low, high, high, lowType, highType, maxType, false)
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.

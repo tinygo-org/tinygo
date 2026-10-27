@@ -37,10 +37,15 @@ var (
 	ErrLSBNotSupported = errors.New("SPI LSB unsupported on PL022")
 	ErrSPITimeout      = errors.New("SPI timeout")
 	ErrSPIBaud         = errors.New("SPI baud too low or above 66.5Mhz")
+	ErrSPIDMA          = errors.New("SPI DMA bus error")
 	errSPIInvalidSDI   = errors.New("invalid SPI SDI pin")
 	errSPIInvalidSDO   = errors.New("invalid SPI SDO pin")
 	errSPIInvalidSCK   = errors.New("invalid SPI SCK pin")
 )
+
+const dmaErrorBits = rp.DMA_CH0_CTRL_TRIG_AHB_ERROR |
+	rp.DMA_CH0_CTRL_TRIG_READ_ERROR |
+	rp.DMA_CH0_CTRL_TRIG_WRITE_ERROR
 
 type SPI struct {
 	Bus *rp.SPI0_Type
@@ -274,21 +279,23 @@ func (spi *SPI) tx(tx []byte) error {
 	}
 
 	// Pick the DMA channel reserved for this SPI peripheral.
-	var ch *dmaChannel
+	var channel uint32
 	var dreq uint32
 	if spi.Bus == rp.SPI0 {
-		ch = &dmaChannels[spi0DMAChannel]
+		channel = spi0DMAChannel
 		dreq = rp.DREQ_SPI0_TX
 	} else { // SPI1
-		ch = &dmaChannels[spi1DMAChannel]
+		channel = spi1DMAChannel
 		dreq = rp.DREQ_SPI1_TX
 	}
+	ch := &dmaChannels[channel]
 
 	// Configure the DMA peripheral as follows:
 	//   - set read address, write address, and number of transfer units (bytes)
 	//   - increment read address (in memory), don't increment write address (SSPDR)
 	//   - set data size to single bytes
 	//   - set the DREQ so that the DMA will fill the SPI FIFO as needed
+	//   - chain to itself, which disables chaining
 	//   - start the transfer
 	ch.READ_ADDR.Set(uint32(unsafeNoEscape(unsafe.Pointer(unsafe.SliceData(tx)))))
 	ch.WRITE_ADDR.Set(uint32(uintptr(unsafe.Pointer(&spi.Bus.SSPDR))))
@@ -296,6 +303,7 @@ func (spi *SPI) tx(tx []byte) error {
 	ch.CTRL_TRIG.Set(rp.DMA_CH0_CTRL_TRIG_INCR_READ |
 		rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_SIZE_BYTE<<rp.DMA_CH0_CTRL_TRIG_DATA_SIZE_Pos |
 		dreq<<rp.DMA_CH0_CTRL_TRIG_TREQ_SEL_Pos |
+		channel<<rp.DMA_CH0_CTRL_TRIG_CHAIN_TO_Pos |
 		rp.DMA_CH0_CTRL_TRIG_EN)
 
 	// Wait until the transfer is complete.
@@ -306,7 +314,17 @@ func (spi *SPI) tx(tx []byte) error {
 	//   - If we have to wait, do so by waiting for an interrupt and blocking
 	//     this goroutine until finished (so that other goroutines can run or
 	//     the CPU can go to sleep).
-	for ch.CTRL_TRIG.Get()&rp.DMA_CH0_CTRL_TRIG_BUSY != 0 {
+	var ctrl uint32
+	for {
+		ctrl = ch.CTRL_TRIG.Get()
+		if ctrl&rp.DMA_CH0_CTRL_TRIG_BUSY == 0 || ctrl&dmaErrorBits != 0 {
+			break
+		}
+	}
+
+	dmaErr := ctrl&dmaErrorBits != 0
+	if dmaErr {
+		abortSPITransfer(ch, channel)
 	}
 
 	// Make sure the read buffer stays alive until this point (in the unlikely
@@ -329,7 +347,26 @@ func (spi *SPI) tx(tx []byte) error {
 	}
 	// Don't leave overrun flag set
 	spi.Bus.SSPICR.Set(rp.SPI0_SSPICR_RORIC)
+	if dmaErr {
+		return ErrSPIDMA
+	}
 	return nil
+}
+
+func abortSPITransfer(ch *dmaChannel, channel uint32) {
+	mask := uint32(1) << channel
+	chainTo := channel << rp.DMA_CH0_CTRL_TRIG_CHAIN_TO_Pos
+
+	// Disable chaining before aborting. RP2350-E5 requires this ordering.
+	ch.AL1_CTRL.Set(chainTo)
+	rp.DMA.CHAN_ABORT.Set(mask)
+	for rp.DMA.CHAN_ABORT.Get()&mask != 0 {
+	}
+	for ch.CTRL_TRIG.Get()&rp.DMA_CH0_CTRL_TRIG_BUSY != 0 {
+	}
+
+	ch.AL1_CTRL.Set(dmaErrorBits | chainTo)
+	rp.DMA.INTR.Set(mask)
 }
 
 // rx reads buffer to SPI ignoring x.

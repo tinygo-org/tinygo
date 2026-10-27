@@ -213,6 +213,7 @@ func runJob(job *compileJob, doneChan chan *compileJob) {
 		if err != nil {
 			job.err = err
 		}
+		job.run = nil
 	}
 	job.duration = time.Since(start)
 	doneChan <- job

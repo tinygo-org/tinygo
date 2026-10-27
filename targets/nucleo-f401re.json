@@ -1,0 +1,13 @@
+{
+  "inherits": ["cortex-m4"],
+  "build-tags": ["nucleof401re", "stm32f401", "stm32f4", "stm32"],
+  "serial": "uart",
+  "linkerscript": "targets/stm32f401.ld",
+  "extra-files": [
+    "src/device/stm32/stm32f401.s"
+  ],
+  "flash-method": "openocd",
+  "openocd-interface": "stlink",
+  "openocd-target": "stm32f4x",
+  "openocd-commands": ["reset_config srst_only connect_assert_srst"]
+}

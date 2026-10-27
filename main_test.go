@@ -41,8 +41,6 @@ const TESTDATA = "testdata"
 
 var testTarget = flag.String("target", "", "override test target")
 
-var testOnlyCurrentOS = flag.Bool("only-current-os", false, "")
-
 var supportedLinuxArches = map[string]string{
 	"AMD64Linux": "linux/amd64",
 	"X86Linux":   "linux/386",
@@ -53,6 +51,68 @@ var supportedLinuxArches = map[string]string{
 }
 
 var sema = make(chan struct{}, runtime.NumCPU())
+
+func TestParseGoLinkFlag(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want []string
+		err  string
+	}{
+		{name: "empty"},
+		{name: "windows-path", in: `-extldflags=-LC:\x\lib`, want: []string{`-LC:\x\lib`}},
+		{
+			name: "quoted-windows-paths",
+			in:   `-extldflags '-LC:\x\lib "-LC:\Program Files\x"'`,
+			want: []string{`-LC:\x\lib`, `-LC:\Program Files\x`},
+		},
+		{
+			name: "literal-quotes-and-backslashes",
+			in:   `-extldflags '-DNAME="value" a\ b ""'`,
+			want: []string{`-DNAME="value"`, `a\`, "b", ""},
+		},
+		{
+			name: "unterminated-ldflags",
+			in:   `-extldflags 'abc`,
+			err:  "unterminated ' string",
+		},
+		{
+			name: "unterminated-extldflags",
+			in:   `-extldflags "'abc"`,
+			err:  "could not parse -extldflags: unterminated ' string",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, got, err := parseGoLinkFlag(tc.in)
+			if tc.err != "" {
+				if err == nil || err.Error() != tc.err {
+					t.Fatalf("parseGoLinkFlag(%q) error = %v, want %q", tc.in, err, tc.err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("external flags = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("global-values", func(t *testing.T) {
+		got, _, err := parseGoLinkFlag(`-X main.version=1.0 -X 'example.com/app.name=hello world' -X 'main.path=C:\x\lib'`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := map[string]map[string]string{
+			"main":            {"version": "1.0", "path": `C:\x\lib`},
+			"example.com/app": {"name": "hello world"},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("global values = %v, want %v", got, want)
+		}
+	})
+}
 
 func TestTrimPath(t *testing.T) {
 	t.Setenv("CGO_CFLAGS", "-iquoteinclude -includestdint.h -imacros relative.h")
@@ -334,6 +394,9 @@ func TestBuild(t *testing.T) {
 		"float.go",
 		"gc.go",
 		"generics.go",
+		"go1.21.go",
+		"go1.22/",
+		"go1.23/",
 		"goroutines.go",
 		"init.go",
 		"init_multi.go",
@@ -357,26 +420,8 @@ func TestBuild(t *testing.T) {
 		"structs.go",
 		"testing.go",
 		"timers.go",
+		"typealias.go",
 		"zeroalloc.go",
-	}
-
-	// Go 1.21 made some changes to the language, which we can only test when
-	// we're actually on Go 1.21.
-	_, minor, err := goenv.GetGorootVersion()
-	if err != nil {
-		t.Fatal("could not get version:", minor)
-	}
-	if minor >= 21 {
-		tests = append(tests, "go1.21.go")
-	}
-	if minor >= 22 {
-		tests = append(tests, "go1.22/")
-	}
-	if minor >= 23 {
-		tests = append(tests, "go1.23/")
-	}
-	if minor >= 24 {
-		tests = append(tests, "typealias.go")
 	}
 
 	if *testTarget != "" {
@@ -539,13 +584,9 @@ func TestBuild(t *testing.T) {
 		})
 	})
 
-	if testing.Short() {
-		// Don't test other targets when the -short flag is used. Only test the
-		// host system.
-		return
-	}
-
-	if !*testOnlyCurrentOS {
+	// Short mode skips the targets that every host can test. Linux CI tests
+	// them without -short.
+	if !testing.Short() {
 		t.Run("EmulatedCortexM3", func(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("cortex-m-qemu", sema), tests, t)
@@ -600,7 +641,10 @@ func TestBuild(t *testing.T) {
 		})
 	}
 
-	if runtime.GOOS == "linux" {
+	// Linux CI also tests the other Linux architectures without -short, so
+	// short mode skips them. Windows CI runs only in short mode, so
+	// Windows386 continues to run.
+	if runtime.GOOS == "linux" && !testing.Short() {
 		for name, osArch := range supportedLinuxArches {
 			options := optionsFromOSARCH(osArch, sema)
 			if options.GOARCH != runtime.GOARCH { // Native architecture already run above.
