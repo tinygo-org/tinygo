@@ -137,26 +137,9 @@ func initTimerInterrupt() {
 	timerAlarmInterrupt = interrupt.New(timerAlarmCPUInterrupt, timerAlarmHandler)
 	timerAlarmInterrupt.Enable()
 
-	// Manually enable the CPU interrupt with correct ordering:
-	// 1) clear any stale pending bit first
-	// 2) set edge-triggered
-	// 3) set priority above threshold
-	// 4) enable the interrupt last
-	mie := riscv.DisableInterrupts()
-
-	esp.INTERRUPT_CORE0.CPU_INT_CLEAR.SetBits(1 << timerAlarmCPUInterrupt)
-	esp.INTERRUPT_CORE0.CPU_INT_CLEAR.ClearBits(1 << timerAlarmCPUInterrupt)
-
-	esp.INTERRUPT_CORE0.CPU_INT_TYPE.SetBits(1 << timerAlarmCPUInterrupt)
-
+	// Raise the priority above the default that Enable sets for peripherals.
 	priReg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI_0), timerAlarmCPUInterrupt*4))
 	priReg.Set(10)
-
-	riscv.Asm("fence")
-
-	esp.INTERRUPT_CORE0.CPU_INT_ENABLE.SetBits(1 << timerAlarmCPUInterrupt)
-
-	riscv.EnableInterrupts(mie)
 }
 
 // sleepTicks spins until the given number of ticks have elapsed, using the
