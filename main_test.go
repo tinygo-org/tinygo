@@ -630,6 +630,11 @@ func TestBuild(t *testing.T) {
 				t.Parallel()
 				runTest("gcstacks-stale.go", options, t, nil, nil)
 			})
+			t.Run("gcstacks-blocked.go", func(t *testing.T) {
+				t.Skip("asyncify stacks of blocked goroutines are retained since #5930")
+				t.Parallel()
+				runTest("gcstacks-blocked.go", options, t, nil, nil)
+			})
 			t.Run("cgo-realloc", func(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
 			})
