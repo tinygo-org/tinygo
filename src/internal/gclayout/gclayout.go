@@ -23,6 +23,10 @@ const (
 	String      = Layout((1 << sizeShift) | ((unsafe.Sizeof("") / ptrAlign) << 1) | 1)
 	Slice       = Layout((1 << sizeShift) | ((unsafe.Sizeof([]byte{}) / ptrAlign) << 1) | 1)
 
+	// Stack marks the storage of a goroutine stack. The GC treats it like
+	// NoPtrs but reports the object to the scheduler, which scans the live part.
+	Stack = Layout((0 << sizeShift) | (2 << 1) | 1)
+
 	// Conservative is reserved for stack storage, which does not have an
 	// ordinary Go object layout.
 	Conservative = Layout(2)

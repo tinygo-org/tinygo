@@ -704,6 +704,13 @@ func markCurrentGoroutineStack(sp uintptr) {
 	markRoot(0, sp)
 }
 
+// stackBodySize rounds size up to the size that alloc really provides. The last
+// word of such an object sits right before its header.
+func stackBodySize(size uintptr) uintptr {
+	header := unsafe.Sizeof(objHeader{})
+	return (size+header+bytesPerBlock-1)&^(bytesPerBlock-1) - header
+}
+
 // finishMark finishes the marking process by scanning all heap objects on scanList.
 func finishMark() {
 	for {
@@ -719,6 +726,10 @@ func finishMark() {
 			// This object doesn't contain any pointers.
 			// This is a fast path for objects like make([]int, 4096).
 			// It skips the length calculation.
+			if obj.layout.isStack() {
+				// A goroutine stack, of which only parts are roots.
+				stackReached(uintptr(unsafe.Pointer(obj)))
+			}
 			continue
 		}
 
