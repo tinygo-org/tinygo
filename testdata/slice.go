@@ -169,6 +169,67 @@ func main() {
 
 	testRangeLoops()
 	testSliceBounds()
+	testSlicePointers()
+}
+
+func testSlicePointers() {
+	b := make([]byte, 5)
+	assert(unsafe.SliceData(b[5:]) == unsafe.SliceData(b))
+	assert(unsafe.SliceData(b[makeInt(5):]) == unsafe.SliceData(b))
+	assert(unsafe.SliceData(b[len(b):]) == unsafe.SliceData(b))
+	assert(unsafe.SliceData(b[cap(b):]) == unsafe.SliceData(b))
+	assert(len(b[5:]) == 0 && cap(b[5:]) == 0)
+	assert(unsafe.SliceData(b[2:2:2]) == unsafe.SliceData(b))
+	i := makeInt(2)
+	assert(unsafe.SliceData(b[i:i:i]) == unsafe.SliceData(b))
+	assert(len(b[i:i:i]) == 0 && cap(b[i:i:i]) == 0)
+	wide := makeUint64(5)
+	assert(unsafe.SliceData(b[wide:wide:wide]) == unsafe.SliceData(b))
+
+	s := b[2:]
+	assert(unsafe.SliceData(s[3:]) == unsafe.SliceData(s))
+	for len(s) != 0 {
+		p := unsafe.SliceData(s)
+		s = s[1:]
+		if cap(s) == 0 {
+			assert(unsafe.SliceData(s) == p)
+		}
+	}
+
+	short := b[:2]
+	assert(unsafe.SliceData(short[len(short):]) == &b[2])
+	assert(unsafe.SliceData(short[cap(short):cap(short)]) == unsafe.SliceData(short))
+	assert(unsafe.SliceData(b[2:2]) == &b[2])
+	assert(unsafe.SliceData(b[1:3:4]) == &b[1])
+	assert(len(b[1:3:4]) == 2 && cap(b[1:3:4]) == 3)
+
+	a := [5]byte{}
+	assert(unsafe.SliceData(a[5:]) == &a[0])
+	assert(len(a[5:]) == 0 && cap(a[5:]) == 0)
+	assert(unsafe.SliceData(a[makeInt(5):]) == &a[0])
+	assert(unsafe.SliceData(a[2:2:2]) == &a[0])
+	assert(unsafe.SliceData(a[i:i:i]) == &a[0])
+	assert(unsafe.SliceData(a[wide:wide:wide]) == &a[0])
+	assert(unsafe.SliceData(a[2:2]) == &a[2])
+	assert(unsafe.SliceData(a[1:3:4]) == &a[1])
+	p := &a
+	assert(unsafe.SliceData(p[makeInt(5):]) == &a[0])
+	assert(unsafe.SliceData(p[i:i:i]) == &a[0])
+
+	var nilSlice []byte
+	assert(nilSlice[:] == nil)
+	assert(nilSlice[0:0:0] == nil)
+	empty := b[:0:0]
+	assert(empty[:] != nil)
+	assert(unsafe.SliceData(empty[:]) == unsafe.SliceData(b))
+	assert(b[5:] != nil)
+	zero := [0]byte{}
+	assert(unsafe.SliceData(zero[:]) == unsafe.SliceData(zero[0:0:0]))
+
+	ints := []int{1, 2, 3}
+	assert(unsafe.SliceData(ints[3:]) == unsafe.SliceData(ints))
+	assert(unsafe.SliceData(ints[1:1:1]) == unsafe.SliceData(ints))
+	assert(unsafe.SliceData(ints[1:]) == &ints[1])
 }
 
 // Range loops evaluate the slice once and keep their own copy of the index.

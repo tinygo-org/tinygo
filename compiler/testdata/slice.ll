@@ -161,6 +161,172 @@ unwind.return:                                    ; preds = %slice.throw
 }
 
 ; Function Attrs: nounwind
+define hidden { ptr, i32, i32 } @main.sliceResult(ptr %ints.data, i32 %ints.len, i32 %ints.cap, i32 %low, ptr %context) unnamed_addr #1 {
+entry:
+  %slice.lowhigh = icmp ugt i32 %low, %ints.len
+  br i1 %slice.lowhigh, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  %0 = sub nuw i32 %ints.len, %low
+  %1 = sub i32 %ints.cap, %low
+  %.not = icmp eq i32 %ints.cap, %low
+  %.idx = select i1 %.not, i32 0, i32 %low
+  %2 = getelementptr inbounds i32, ptr %ints.data, i32 %.idx
+  %3 = insertvalue { ptr, i32, i32 } undef, ptr %2, 0
+  %4 = insertvalue { ptr, i32, i32 } %3, i32 %0, 1
+  %5 = insertvalue { ptr, i32, i32 } %4, i32 %1, 2
+  ret { ptr, i32, i32 } %5
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(ptr undef) #5
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret { ptr, i32, i32 } undef
+}
+
+; Function Attrs: nounwind
+define hidden { ptr, i32, i32 } @main.sliceResultMax(ptr %ints.data, i32 %ints.len, i32 %ints.cap, i32 %low, i32 %high, i32 %max, ptr %context) unnamed_addr #1 {
+entry:
+  %slice.lowhigh = icmp ugt i32 %low, %high
+  %slice.highmax = icmp ugt i32 %high, %max
+  %slice.lowmax = or i1 %slice.lowhigh, %slice.highmax
+  %slice.maxcap = icmp ugt i32 %max, %ints.cap
+  %slice.lowcap = or i1 %slice.lowmax, %slice.maxcap
+  br i1 %slice.lowcap, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  %0 = sub nuw i32 %high, %low
+  %1 = sub i32 %max, %low
+  %.not = icmp eq i32 %max, %low
+  %.idx = select i1 %.not, i32 0, i32 %low
+  %2 = getelementptr inbounds i32, ptr %ints.data, i32 %.idx
+  %3 = insertvalue { ptr, i32, i32 } undef, ptr %2, 0
+  %4 = insertvalue { ptr, i32, i32 } %3, i32 %0, 1
+  %5 = insertvalue { ptr, i32, i32 } %4, i32 %1, 2
+  ret { ptr, i32, i32 } %5
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(ptr undef) #5
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret { ptr, i32, i32 } undef
+}
+
+; Function Attrs: nounwind
+define hidden { ptr, i32, i32 } @main.sliceResultEmpty(ptr %ints.data, i32 %ints.len, i32 %ints.cap, ptr %context) unnamed_addr #1 {
+entry:
+  %slice.maxcap = icmp ult i32 %ints.cap, 2
+  br i1 %slice.maxcap, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  %0 = insertvalue { ptr, i32, i32 } undef, ptr %ints.data, 0
+  %1 = insertvalue { ptr, i32, i32 } %0, i32 0, 1
+  %2 = insertvalue { ptr, i32, i32 } %1, i32 0, 2
+  ret { ptr, i32, i32 } %2
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(ptr undef) #5
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret { ptr, i32, i32 } undef
+}
+
+; Function Attrs: nounwind
+define hidden { ptr, i32, i32 } @main.sliceArrayResult(ptr dereferenceable_or_null(20) %ints, i32 %low, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %ints, null
+  br i1 %0, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  %slice.lowhigh = icmp ugt i32 %low, 5
+  br i1 %slice.lowhigh, label %slice.throw1, label %slice.next2
+
+slice.next2:                                      ; preds = %slice.next
+  %slice.len = sub nuw nsw i32 5, %low
+  %slice.cap = sub nuw nsw i32 5, %low
+  %.not = icmp eq i32 %low, 5
+  %.idx = select i1 %.not, i32 0, i32 %low
+  %1 = getelementptr inbounds nuw i32, ptr %ints, i32 %.idx
+  %2 = insertvalue { ptr, i32, i32 } undef, ptr %1, 0
+  %3 = insertvalue { ptr, i32, i32 } %2, i32 %slice.len, 1
+  %4 = insertvalue { ptr, i32, i32 } %3, i32 %slice.cap, 2
+  ret { ptr, i32, i32 } %4
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.nilPanic(ptr undef) #5
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw1, %slice.throw
+  ret { ptr, i32, i32 } undef
+
+slice.throw1:                                     ; preds = %slice.next
+  call void @runtime.slicePanic(ptr undef) #5
+  br label %unwind.return
+}
+
+declare void @runtime.nilPanic(ptr) #0
+
+; Function Attrs: nounwind
+define hidden { ptr, i32, i32 } @main.sliceArrayResultMax(ptr dereferenceable_or_null(20) %ints, i32 %low, i32 %high, i32 %max, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %ints, null
+  br i1 %0, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  %slice.lowhigh = icmp ugt i32 %low, %high
+  %slice.highmax = icmp ugt i32 %high, %max
+  %slice.lowmax = or i1 %slice.lowhigh, %slice.highmax
+  %slice.maxcap = icmp ugt i32 %max, 5
+  %slice.lowcap = or i1 %slice.lowmax, %slice.maxcap
+  br i1 %slice.lowcap, label %slice.throw1, label %slice.next2
+
+slice.next2:                                      ; preds = %slice.next
+  %slice.len = sub nuw i32 %high, %low
+  %slice.cap = sub i32 %max, %low
+  %.not = icmp eq i32 %max, %low
+  %.idx = select i1 %.not, i32 0, i32 %low
+  %1 = getelementptr inbounds i32, ptr %ints, i32 %.idx
+  %2 = insertvalue { ptr, i32, i32 } undef, ptr %1, 0
+  %3 = insertvalue { ptr, i32, i32 } %2, i32 %slice.len, 1
+  %4 = insertvalue { ptr, i32, i32 } %3, i32 %slice.cap, 2
+  ret { ptr, i32, i32 } %4
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.nilPanic(ptr undef) #5
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw1, %slice.throw
+  ret { ptr, i32, i32 } undef
+
+slice.throw1:                                     ; preds = %slice.next
+  call void @runtime.slicePanic(ptr undef) #5
+  br label %unwind.return
+}
+
+; Function Attrs: nounwind
+define hidden { ptr, i32, i32 } @main.sliceArrayResultEmpty(ptr dereferenceable_or_null(20) %ints, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %ints, null
+  br i1 %0, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  %1 = insertvalue { ptr, i32, i32 } undef, ptr %ints, 0
+  %2 = insertvalue { ptr, i32, i32 } %1, i32 0, 1
+  %3 = insertvalue { ptr, i32, i32 } %2, i32 0, 2
+  ret { ptr, i32, i32 } %3
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.nilPanic(ptr undef) #5
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret { ptr, i32, i32 } undef
+}
+
+; Function Attrs: nounwind
 define hidden { ptr, i32, i32 } @main.makeByteSlice(i32 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
