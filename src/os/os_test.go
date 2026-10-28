@@ -90,10 +90,6 @@ func checkMode(t *testing.T, path string, mode FileMode) {
 }
 
 func TestSeek(t *testing.T) {
-	if runtime.GOARCH == "386" || runtime.GOARCH == "arm" {
-		t.Log("TODO: implement seek for 386 and arm")
-		return
-	}
 	f := newFile("TestSeek", t)
 	if f == nil {
 		t.Fatalf("f is nil")
@@ -137,6 +133,16 @@ func TestSeek(t *testing.T) {
 				}
 			}
 			t.Errorf("#%d: Seek(%v, %v) = %v, %v want %v, nil", i, tt.in, tt.whence, off, err, tt.out)
+		}
+	}
+	if runtime.GOOS == "linux" {
+		for _, tt := range []test{
+			{in: -1, whence: io.SeekStart},
+			{in: 0, whence: -1},
+		} {
+			if _, err := f.Seek(tt.in, tt.whence); err == nil {
+				t.Errorf("Seek(%v, %v) succeeded, want error", tt.in, tt.whence)
+			}
 		}
 	}
 }
