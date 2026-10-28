@@ -228,30 +228,32 @@ func TestCheckFlagAllowDisallow(t *testing.T) {
 	if err := checkCompilerFlags("TEST", []string{"-disallow"}); err == nil {
 		t.Fatalf("missing error for -disallow")
 	}
-	os.Setenv("CGO_TEST_ALLOW", "-disallo")
+	t.Setenv("CGO_TEST_ALLOW", "-disallo")
 	if err := checkCompilerFlags("TEST", []string{"-disallow"}); err == nil {
 		t.Fatalf("missing error for -disallow with CGO_TEST_ALLOW=-disallo")
 	}
-	os.Setenv("CGO_TEST_ALLOW", "-disallow")
+	t.Setenv("CGO_TEST_ALLOW", "-disallow")
 	if err := checkCompilerFlags("TEST", []string{"-disallow"}); err != nil {
 		t.Fatalf("unexpected error for -disallow with CGO_TEST_ALLOW=-disallow: %v", err)
 	}
-	os.Unsetenv("CGO_TEST_ALLOW")
+	if err := os.Unsetenv("CGO_TEST_ALLOW"); err != nil {
+		t.Fatalf("unable to unset CGO_TEST_ALLOW: %v", err)
+	}
 
 	if err := checkCompilerFlags("TEST", []string{"-Wall"}); err != nil {
 		t.Fatalf("unexpected error for -Wall: %v", err)
 	}
-	os.Setenv("CGO_TEST_DISALLOW", "-Wall")
+	t.Setenv("CGO_TEST_DISALLOW", "-Wall")
 	if err := checkCompilerFlags("TEST", []string{"-Wall"}); err == nil {
 		t.Fatalf("missing error for -Wall with CGO_TEST_DISALLOW=-Wall")
 	}
-	os.Setenv("CGO_TEST_ALLOW", "-Wall") // disallow wins
+	t.Setenv("CGO_TEST_ALLOW", "-Wall") // disallow wins
 	if err := checkCompilerFlags("TEST", []string{"-Wall"}); err == nil {
 		t.Fatalf("missing error for -Wall with CGO_TEST_DISALLOW=-Wall and CGO_TEST_ALLOW=-Wall")
 	}
 
-	os.Setenv("CGO_TEST_ALLOW", "-fplugin.*")
-	os.Setenv("CGO_TEST_DISALLOW", "-fplugin=lint.so")
+	t.Setenv("CGO_TEST_ALLOW", "-fplugin.*")
+	t.Setenv("CGO_TEST_DISALLOW", "-fplugin=lint.so")
 	if err := checkCompilerFlags("TEST", []string{"-fplugin=faster.so"}); err != nil {
 		t.Fatalf("unexpected error for -fplugin=faster.so: %v", err)
 	}

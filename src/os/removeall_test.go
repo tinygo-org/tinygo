@@ -10,7 +10,6 @@ package os_test
 
 import (
 	"fmt"
-	"os"
 	. "os"
 	"path/filepath"
 	"runtime"
@@ -18,7 +17,7 @@ import (
 )
 
 func TestRemoveAll(t *testing.T) {
-	tmpDir, _ := os.MkdirTemp("", "TestRemoveAll")
+	tmpDir := t.TempDir()
 	if err := RemoveAll(""); err != nil {
 		t.Errorf("RemoveAll(\"\"): %v; want nil", err)
 	}
@@ -126,7 +125,7 @@ func TestRemoveAllLarge(t *testing.T) {
 		t.Skip("skipping in short mode")
 	}
 
-	tmpDir, _ := os.MkdirTemp("", "TestRemoveAllLarge")
+	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "_TestRemoveAllLarge_")
 
 	// Make directory with 1000 files and remove.
@@ -154,14 +153,14 @@ func TestRemoveAllDot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not get wd: %s", err)
 	}
-	tempDir, err := os.MkdirTemp("", "TestRemoveAllDot-")
-	if err != nil {
-		t.Fatalf("Could not create TempDir: %s", err)
-	}
-	defer RemoveAll(tempDir)
+	tempDir := t.TempDir()
+	t.Cleanup(func() {
+		if err := Chdir(prevDir); err != nil {
+			t.Errorf("Could not chdir %s: %s", prevDir, err)
+		}
+	})
 
-	err = Chdir(tempDir)
-	if err != nil {
+	if err := Chdir(tempDir); err != nil {
 		t.Fatalf("Could not chdir to tempdir: %s", err)
 	}
 
@@ -169,17 +168,12 @@ func TestRemoveAllDot(t *testing.T) {
 	if err == nil {
 		t.Errorf("RemoveAll succeed to remove .")
 	}
-
-	err = Chdir(prevDir)
-	if err != nil {
-		t.Fatalf("Could not chdir %s: %s", prevDir, err)
-	}
 }
 
 func TestRemoveAllDotDot(t *testing.T) {
 	t.Parallel()
 
-	tempDir, _ := os.MkdirTemp("", "TestRemoveAllDotDot")
+	tempDir := t.TempDir()
 	subdir := filepath.Join(tempDir, "x")
 	subsubdir := filepath.Join(subdir, "y")
 	if err := MkdirAll(subsubdir, 0777); err != nil {
@@ -199,7 +193,7 @@ func TestRemoveAllDotDot(t *testing.T) {
 func TestRemoveReadOnlyDir(t *testing.T) {
 	t.Parallel()
 
-	tempDir, _ := os.MkdirTemp("", "TestRemoveReadOnlyDir")
+	tempDir := t.TempDir()
 	subdir := filepath.Join(tempDir, "x")
 	if err := Mkdir(subdir, 0); err != nil {
 		t.Fatal(err)
@@ -231,7 +225,7 @@ func TestRemoveAllButReadOnlyAndPathError(t *testing.T) {
 
 	t.Parallel()
 
-	tempDir, _ := os.MkdirTemp("", "TestRemoveAllButReadOnlyAndPathError")
+	tempDir := t.TempDir()
 	dirs := []string{
 		"a",
 		"a/x",
@@ -317,7 +311,7 @@ func TestRemoveUnreadableDir(t *testing.T) {
 
 	t.Parallel()
 
-	tempDir, _ := os.MkdirTemp("", "TestRemoveUnreadableDir")
+	tempDir := t.TempDir()
 	target := filepath.Join(tempDir, "d0", "d1", "d2")
 	if err := MkdirAll(target, 0755); err != nil {
 		t.Fatal(err)
@@ -336,7 +330,7 @@ func TestRemoveAllWithMoreErrorThanReqSize(t *testing.T) {
 		t.Skip("skipping in short mode")
 	}
 
-	tmpDir, _ := os.MkdirTemp("", "TestRemoveAllWithMoreErrorThanReqSize")
+	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "_TestRemoveAllWithMoreErrorThanReqSize_")
 
 	// Make directory with 1025 read-only files.
