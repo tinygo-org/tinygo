@@ -90,6 +90,8 @@ func TestBinarySize(t *testing.T) {
 		{target: "pico2", path: "./testdata/size-contains", opt: "z"},
 		{target: "pico2", path: "./testdata/size-os", opt: "z"},
 		{target: "pico2", path: "./testdata/size-os", opt: "2"},
+		{target: "pico2", path: "./testdata/size-timer", opt: "z"},
+		{target: "pico2", path: "./testdata/size-timer", opt: "2"},
 
 		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "z"},
 		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "2"},
@@ -319,6 +321,8 @@ func buildBinaryInDir(targetString, pkgName, opt, tmpdir string, trimPath bool) 
 		Debug:                   true,
 		VerifyIR:                true,
 		TrimPath:                trimPath,
+		// The GOROOT string is stored in data, so its length must not depend on the host.
+		GlobalValues: map[string]map[string]string{"runtime": {"goroot": "/usr/local/go"}},
 	}
 	target, err := compileopts.LoadTarget(&options)
 	if err != nil {
