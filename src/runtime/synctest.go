@@ -152,7 +152,7 @@ func (bubble *synctestBubble) addTimerLocked(tn *timerNode) {
 
 func (bubble *synctestBubble) timerDueLocked() bool {
 	next := bubble.timers.peek()
-	return next != nil && next.when <= bubble.now
+	return next != nil && next.timer.when <= bubble.now
 }
 
 func (bubble *synctestBubble) removeTimer(tim *timer) *timerNode {

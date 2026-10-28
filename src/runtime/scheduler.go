@@ -25,8 +25,8 @@ func scheduleLogChan(msg string, ch *channel, t *task.Task) {
 	}
 }
 
-// timerHeap is a binary min-heap of timer nodes, ordered by when and then by
-// seq so that timers with the same deadline keep their insertion order.
+// timerHeap is a binary min-heap of timer nodes, ordered by timer.when and then
+// by seq so that timers with the same deadline keep their insertion order.
 type timerHeap struct {
 	nodes []*timerNode
 	seq   int64
@@ -43,7 +43,6 @@ func (h *timerHeap) peek() *timerNode {
 // deadline instead of after them.
 func (h *timerHeap) push(tn *timerNode, front bool) {
 	h.seq++
-	tn.when = tn.timer.when
 	tn.seq = h.seq
 	if front {
 		tn.seq = -h.seq
@@ -87,7 +86,7 @@ func (h *timerHeap) fix(i int, tn *timerNode) {
 	nodes := h.nodes
 	for i > 0 {
 		p := nodes[(i-1)/2]
-		if tn.when > p.when || tn.when == p.when && tn.seq > p.seq {
+		if tn.timer.when > p.timer.when || tn.timer.when == p.timer.when && tn.seq > p.seq {
 			break
 		}
 		nodes[i] = p
@@ -95,10 +94,10 @@ func (h *timerHeap) fix(i int, tn *timerNode) {
 		i = (i - 1) / 2
 	}
 	for c := 2*i + 1; c < len(nodes); c = 2*i + 1 {
-		if c+1 < len(nodes) && (nodes[c+1].when < nodes[c].when || nodes[c+1].when == nodes[c].when && nodes[c+1].seq < nodes[c].seq) {
+		if c+1 < len(nodes) && (nodes[c+1].timer.when < nodes[c].timer.when || nodes[c+1].timer.when == nodes[c].timer.when && nodes[c+1].seq < nodes[c].seq) {
 			c++
 		}
-		if nodes[c].when > tn.when || nodes[c].when == tn.when && nodes[c].seq > tn.seq {
+		if nodes[c].timer.when > tn.timer.when || nodes[c].timer.when == tn.timer.when && nodes[c].seq > tn.seq {
 			break
 		}
 		nodes[i] = nodes[c]

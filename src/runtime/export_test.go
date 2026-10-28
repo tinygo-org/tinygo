@@ -56,7 +56,7 @@ func (h *TimerHeap) Check() string {
 		}
 		if i > 0 {
 			p := h.h.nodes[(i-1)/2]
-			if n.when < p.when || n.when == p.when && n.seq < p.seq {
+			if n.timer.when < p.timer.when || n.timer.when == p.timer.when && n.seq < p.seq {
 				return "heap property broken"
 			}
 		}
