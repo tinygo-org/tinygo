@@ -1,4 +1,4 @@
-//go:build !js && !wasip1 && !wasip2
+//go:build !js && !wasip1 && !wasip2 && !windows
 
 package syscall
 
