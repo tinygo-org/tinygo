@@ -365,14 +365,37 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 
 func (c *compilerContext) canonicalFunctionName(f *ssa.Function) string {
 	typeArgs := f.TypeArgs()
-	if len(typeArgs) == 0 {
-		return f.RelString(nil)
+	name := f.RelString(nil)
+	if len(typeArgs) != 0 {
+		parts := make([]string, len(typeArgs))
+		for i, ta := range typeArgs {
+			parts[i], _ = c.getTypeCodeName(ta)
+		}
+		name = f.Origin().RelString(nil) + "[" + strings.Join(parts, ",") + "]"
 	}
-	parts := make([]string, len(typeArgs))
-	for i, ta := range typeArgs {
-		parts[i], _ = c.getTypeCodeName(ta)
+	return name + methodPackageQualifier(f)
+}
+
+// methodPackageQualifier adds the declaring package to an unexported method
+// promoted from another package, since RelString names it like the type's own.
+func methodPackageQualifier(f *ssa.Function) string {
+	recv := f.Signature.Recv()
+	if recv == nil {
+		return ""
 	}
-	return f.Origin().RelString(nil) + "[" + strings.Join(parts, ",") + "]"
+	obj, ok := f.Object().(*types.Func)
+	if !ok || obj == nil || obj.Exported() || obj.Pkg() == nil {
+		return ""
+	}
+	t := recv.Type()
+	if ptr, ok := t.(*types.Pointer); ok {
+		t = ptr.Elem()
+	}
+	named, ok := types.Unalias(t).(*types.Named)
+	if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() == obj.Pkg().Path() {
+		return ""
+	}
+	return "$" + obj.Pkg().Path()
 }
 
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as

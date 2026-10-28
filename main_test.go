@@ -492,6 +492,7 @@ func TestBuild(t *testing.T) {
 		"math.go",
 		"oldgo/",
 		"print.go",
+		"promoted.go",
 		"reflect.go",
 		"signal.go",
 		"signalnotify.go",
