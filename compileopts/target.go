@@ -193,6 +193,23 @@ func (spec *TargetSpec) resolveInherits() error {
 
 // Load a target specification.
 func LoadTarget(options *Options) (*TargetSpec, error) {
+	spec, err := loadTarget(options)
+	if err != nil {
+		return nil, err
+	}
+	// -libc only selects between musl and glibc on the default linux
+	// target. Reject it where it would otherwise be ignored.
+	if options.Libc != "" && spec.Libc != options.Libc {
+		target := options.Target
+		if target == "" {
+			target = options.GOOS + "/" + options.GOARCH
+		}
+		return nil, fmt.Errorf("-libc=%s is not supported for %s", options.Libc, target)
+	}
+	return spec, nil
+}
+
+func loadTarget(options *Options) (*TargetSpec, error) {
 	if options.Target == "" && options.GOARCH == "wasm" {
 		// Set a specific target if we're building from a known GOOS/GOARCH
 		// combination that is defined in a target JSON file.
@@ -280,6 +297,50 @@ func GetTargetSpecs() (map[string]*TargetSpec, error) {
 		maps[name] = spec
 	}
 	return maps, nil
+}
+
+// glibcMultiarchDirs are the Debian and Ubuntu multiarch directories that
+// hold libc.so and the crt objects for each GOARCH.
+var glibcMultiarchDirs = map[string]string{
+	"amd64": "/usr/lib/x86_64-linux-gnu",
+	"arm64": "/usr/lib/aarch64-linux-gnu",
+}
+
+// glibcLibDirs returns the directories to search for the glibc of goarch.
+// Most other distributions use a flat lib64 or lib. Those hold the host
+// libraries, so they are only searched for a native build. lib64 comes first
+// because on Fedora lib holds the i686 libraries.
+func glibcLibDirs(goarch, hostGOARCH string) []string {
+	dirs := []string{glibcMultiarchDirs[goarch]}
+	if goarch == hostGOARCH {
+		dirs = append(dirs, "/usr/lib64", "/usr/lib")
+	}
+	return dirs
+}
+
+// GlibcLibDir returns the directory holding the glibc startup objects and
+// libc.so for goarch, for -libc=glibc. crt1.o is what it looks for, because
+// that is the object that must be linked; libc.so and the other crt files sit
+// beside it.
+func GlibcLibDir(goarch string) (string, error) {
+	dirs := glibcLibDirs(goarch, runtime.GOARCH)
+	for _, dir := range dirs {
+		if _, err := os.Stat(filepath.Join(dir, "crt1.o")); err == nil {
+			return dir, nil
+		}
+	}
+	return "", fmt.Errorf("could not find glibc crt1.o for %s in any of %v", goarch, dirs)
+}
+
+// glibcDynamicLinkers is the path to ld.so per GOARCH, used by -libc=glibc.
+// These are fixed by each architecture's ABI rather than by the distribution,
+// which is why they can be a table rather than something to go looking for.
+// Only 64-bit architectures are listed: on 32-bit glibc off_t is 32 bits
+// unless _FILE_OFFSET_BITS=64 is set, but the runtime passes a 64-bit offset
+// to mmap.
+var glibcDynamicLinkers = map[string]string{
+	"amd64": "/lib64/ld-linux-x86-64.so.2",
+	"arm64": "/lib/ld-linux-aarch64.so.1",
 }
 
 // Load a target from environment variables (which default to
@@ -436,6 +497,22 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		spec.Linker = "ld.lld"
 		spec.RTLib = "compiler-rt"
 		spec.Libc = "musl"
+		if options.Libc == "glibc" {
+			linker, ok := glibcDynamicLinkers[options.GOARCH]
+			if !ok {
+				return nil, fmt.Errorf("-libc=glibc is not supported on GOARCH=%s: supported values are amd64, arm64", options.GOARCH)
+			}
+			spec.Libc = "glibc"
+			libDir, err := GlibcLibDir(options.GOARCH)
+			if err != nil {
+				return nil, err
+			}
+			// -L because ld.lld does not search the system library
+			// directories by itself, the way a compiler driver would.
+			// Without --dynamic-linker lld emits no PT_INTERP, and the
+			// shared libraries are never resolved.
+			spec.LDFlags = append(spec.LDFlags, "-L"+libDir, "-lc", "--dynamic-linker="+linker)
+		}
 		spec.LDFlags = append(spec.LDFlags, "--gc-sections")
 		if options.GOARCH == "arm64" {
 			// Disable outline atomics. For details, see:
@@ -509,12 +586,19 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 	if options.GOOS == "windows" {
 		spec.Triple += "-gnu"
 	} else if options.GOOS == "linux" {
-		// We use musl on Linux (not glibc) so we should use -musleabi* instead
-		// of -gnueabi*.
+		// We use musl on Linux by default (not glibc) so we should use
+		// -musleabi* instead of -gnueabi*. Under -libc=glibc it is the
+		// other way around: the triple has to say gnu, both so that clang
+		// lays out ABI-visible types the way glibc does and so that the
+		// cached compiler-rt and libc builds are keyed separately from the
+		// musl ones.
 		// The *hf suffix selects between soft/hard floating point ABI.
-		if spec.SoftFloat {
+		switch {
+		case spec.Libc == "glibc":
+			spec.Triple += "-gnu"
+		case spec.SoftFloat:
 			spec.Triple += "-musleabi"
-		} else {
+		default:
 			spec.Triple += "-musleabihf"
 		}
 	}
