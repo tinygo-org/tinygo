@@ -147,8 +147,7 @@ type timerNode struct {
 	timer    *timer
 	callback func(node *timerNode, delta int64)
 
-	// when and seq are the heap key, and index is the position in the heap.
-	when  int64
+	// seq breaks ties between equal deadlines, and index is the position in the heap.
 	seq   int64
 	index int
 
@@ -168,7 +167,7 @@ type timerNode struct {
 
 // whenTicks returns the (absolute) time when this timer should trigger next.
 func (t *timerNode) whenTicks() timeUnit {
-	return nanosecondsToTicks(t.when)
+	return nanosecondsToTicks(t.timer.when)
 }
 
 // timerCallback is called when a timer expires. It makes sure to call the
