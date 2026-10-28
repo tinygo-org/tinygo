@@ -483,6 +483,12 @@ func (c *Config) LibcCFlags() []string {
 			"-isystem", filepath.Join(picolibcDir, "stdio"),
 			"-D__PICOLIBC_ERRNO_FUNCTION=__errno_location",
 		}
+	case "glibc":
+		// Use the system headers that belong to the installed glibc. The
+		// gnu triple makes clang look for a GCC install, and cgo treats the
+		// warning it prints with more than one GCC version as an error.
+		// Older clang does not know this warning, so silence that too.
+		return []string{"-Wno-unknown-warning-option", "-Wno-gcc-install-dir-libstdcxx"}
 	case "musl":
 		root := goenv.Get("TINYGOROOT")
 		path := c.LibraryPath("musl")
