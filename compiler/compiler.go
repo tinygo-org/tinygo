@@ -2999,6 +2999,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			sliceLen := b.CreateSub(high, low, "slice.len")
 			slicePtr := b.CreateInBoundsGEP(b.getLLVMType(arrayType), value, indices, "slice.ptr")
 			sliceCap := b.CreateSub(max, low, "slice.cap")
+			hasCapacity := b.CreateICmp(llvm.IntNE, sliceCap, llvm.ConstInt(b.uintptrType, 0, false), "")
+			slicePtr = b.CreateSelect(hasCapacity, slicePtr, value, "")
 
 			slice := llvm.Undef(b.getLLVMType(expr.Type()))
 			slice = b.CreateInsertValue(slice, slicePtr, 0, "")
@@ -3036,6 +3038,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			newPtr := b.CreateInBoundsGEP(ptrElemType, oldPtr, []llvm.Value{low}, "")
 			newLen := b.CreateSub(high, low, "")
 			newCap := b.CreateSub(max, low, "")
+			hasCapacity := b.CreateICmp(llvm.IntNE, newCap, llvm.ConstInt(b.uintptrType, 0, false), "")
+			newPtr = b.CreateSelect(hasCapacity, newPtr, oldPtr, "")
 			slice := llvm.Undef(b.getLLVMType(expr.Type()))
 			slice = b.CreateInsertValue(slice, newPtr, 0, "")
 			slice = b.CreateInsertValue(slice, newLen, 1, "")
