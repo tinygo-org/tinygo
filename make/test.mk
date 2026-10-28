@@ -62,6 +62,7 @@ TEST_PACKAGES_FAST = \
 	path \
 	reflect \
 	regexp/syntax \
+	runtime \
 	strconv \
 	sync \
 	testing \
