@@ -490,6 +490,7 @@ func TestBuild(t *testing.T) {
 		"map.go",
 		"map_bigkey.go",
 		"math.go",
+		"memstats.go",
 		"oldgo/",
 		"print.go",
 		"reflect.go",
