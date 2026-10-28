@@ -380,11 +380,31 @@ func buffered() int {
 
 // Define the various spinlocks needed by the runtime.
 var (
-	schedulerLock spinLock
+	schedulerLock schedulerSpinLock
 	futexLock     spinLock
 	atomicsLock   spinLock
 	printLock     spinLock
 )
+
+// schedulerSpinLock keeps interrupts off while held. Otherwise the GC IPI can
+// park this hart with the lock held while another hart spins on it.
+type schedulerSpinLock struct {
+	spinLock
+	mstatus [numCPU]uintptr
+}
+
+func (l *schedulerSpinLock) Lock() {
+	hart := currentCPU()
+	state := riscv.DisableInterrupts()
+	l.spinLock.Lock()
+	l.mstatus[hart] = state
+}
+
+func (l *schedulerSpinLock) Unlock() {
+	state := l.mstatus[currentCPU()]
+	l.spinLock.Unlock()
+	riscv.EnableInterrupts(state)
+}
 
 type spinLock struct {
 	atomic.Uint32
