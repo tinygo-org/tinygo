@@ -81,13 +81,13 @@ TEST_PACKAGES_FAST = \
 # crypto/aes needs reflect.Type.Method(), not yet implemented
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # encoding/xml takes a minute on linux and gives a stack overflow on wasi
-# io/ioutil requires os.ReadDir, which is not yet supported on windows or wasi
+# io/ioutil requires os.ReadDir, which is not yet supported on wasi
 # mime fails on wasi: bufio.Scanner reports an impossible read count
 # mime/multipart: needs wasip1 syscall.FDFLAG_NONBLOCK
 # mime/quotedprintable requires syscall.Faccessat
 # net/mail: needs wasip1  syscall.FDFLAG_NONBLOCK
 # net/ntextproto: needs wasip1 syscall.FDFLAG_NONBLOCK
-# testing/fstest requires os.ReadDir, which is not yet supported on windows or wasi
+# testing/fstest requires os.ReadDir, which is not yet supported on wasi
 
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
@@ -128,7 +128,9 @@ TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 # os/user requires t.Skip() support
 TEST_PACKAGES_WINDOWS := \
 	compress/flate \
+	io/ioutil \
 	mime \
+	testing/fstest \
 	$(nil)
 
 
@@ -208,6 +210,7 @@ TEST_PACKAGES_HOST_FULL_ONLY += io/fs
 endif
 ifeq ($(OS),Windows_NT)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_WINDOWS)
+TEST_PACKAGES_HOST_FULL_ONLY += io/fs
 endif
 
 TEST_SKIP_FLAG := -skip='TestExtraMethods|TestAsValidation|TestUnmarshalNestingLimitSlice|TestUnmarshalNestingLimitStruct'
@@ -237,6 +240,10 @@ tinygo-test: TEST_OPTIONS_archive/zip = $(TEST_SKIP_FLAG) -short
 tinygo-test: TEST_OPTIONS_index/suffixarray = $(TEST_SKIP_FLAG) -short
 tinygo-test: TEST_OPTIONS_net/netip := -skip='^TestAddrStringAllocs$$|^TestNoAllocs$$/^(Addr.IsGlobalUnicast|Addr.IsInterfaceLocalMulticast|Addr.IsLinkLocalMulticast|Addr.IsLinkLocalUnicast|Addr.IsPrivate)$$'
 tinygo-test: TEST_OPTIONS_io/fs := -stack-size=6MB
+ifeq ($(OS),Windows_NT)
+# TestWalkDir needs File.Chdir, which is a stub in src/os/file_windows.go.
+tinygo-test: TEST_OPTIONS_io/fs := -stack-size=8MB -skip='^TestWalkDir$$'
+endif
 tinygo-test: TEST_OPTIONS_internal/synctest = -skip='^(TestReflectFuncOf|TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount$(TEST_SYNCTEST_THREAD_LIMIT_SKIP))$$'
 tinygo-test: TEST_OPTIONS_testing/synctest := -skip='^(TestFatal|TestError|TestVerboseError|TestSkip|TestVerboseSkip|TestHelper|TestHTTPTransport100Continue)$$'
 tinygo-test-fast: HOST_TEST_STACK_SKIP_FLAG = $(TEST_SKIP_FLAG)
