@@ -30,7 +30,7 @@ func scheduleLogChan(msg string, ch *channel, t *task.Task) {
 func timerQueueAdd(tn *timerNode) {
 	q := &timerQueue
 	for ; *q != nil; q = &(*q).next {
-		if tn.whenTicks() < (*q).whenTicks() {
+		if tn.timer.when < (*q).timer.when {
 			// this will finish earlier than the next - insert here
 			break
 		}
