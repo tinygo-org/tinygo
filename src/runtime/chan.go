@@ -59,7 +59,7 @@ type channel struct {
 	bufTail      uintptr
 	senders      chanQueue
 	receivers    chanQueue
-	lock         task.PMutex
+	lock         channelLock
 	buf          unsafe.Pointer
 	synctest     unsafe.Pointer
 }
@@ -502,7 +502,7 @@ func chanClose(ch *channel) {
 // If this becomes a performance issue, we can see how the Go runtime does this.
 // I think it does this by sorting all states by channel address and then
 // locking them in that order to avoid this deadlock.
-var chanSelectLock task.PMutex
+var chanSelectLock channelLock
 
 // Lock all channels (taking care to skip duplicate channels).
 func lockAllStates(states []chanSelectState) {
@@ -641,6 +641,7 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 
 	// Make sure all channel ops are removed from the senders/receivers
 	// queue before we return and the memory of them becomes invalid.
+	mask = interrupt.Disable()
 	chanSelectLock.Lock()
 	lockAllStates(states)
 	for i, state := range states {
@@ -648,16 +649,15 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 			continue
 		}
 		op := &ops[i]
-		mask := interrupt.Disable()
 		if state.value == nil {
 			state.ch.receivers.remove(op)
 		} else {
 			state.ch.senders.remove(op)
 		}
-		interrupt.Restore(mask)
 	}
 	unlockAllStates(states)
 	chanSelectLock.Unlock()
+	interrupt.Restore(mask)
 
 	// Pull the return values out of t.Data (which contains two bitfields).
 	selectIndex = t.DataUint32() >> 2
