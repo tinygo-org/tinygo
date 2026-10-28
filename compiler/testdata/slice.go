@@ -40,6 +40,30 @@ func sliceRangeMax(ints []int, low, high, max int) {
 	_ = ints[low:high:max]
 }
 
+func sliceResult(ints []int, low int) []int {
+	return ints[low:]
+}
+
+func sliceResultMax(ints []int, low, high, max int) []int {
+	return ints[low:high:max]
+}
+
+func sliceResultEmpty(ints []int) []int {
+	return ints[2:2:2]
+}
+
+func sliceArrayResult(ints *[5]int, low int) []int {
+	return ints[low:]
+}
+
+func sliceArrayResultMax(ints *[5]int, low, high, max int) []int {
+	return ints[low:high:max]
+}
+
+func sliceArrayResultEmpty(ints *[5]int) []int {
+	return ints[5:]
+}
+
 // Test bounds checking in *ssa.MakeSlice instruction.
 
 func makeByteSlice(len int) []byte {
