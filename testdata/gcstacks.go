@@ -9,6 +9,17 @@ import (
 // Goroutines keep the only reference to heap objects in locals while parked. A
 // missed stack root lets churn overwrite the object, and check fails.
 
+// Baremetal targets report GOARCH arm and have little RAM.
+var small = runtime.GOARCH == "arm"
+
+// size picks the count for the full run or for small targets.
+func size(full, little int) int {
+	if small {
+		return little
+	}
+	return full
+}
+
 type object struct {
 	id   int
 	data [14]int
@@ -37,7 +48,7 @@ func (o *object) check(what string) {
 // churn allocates objects that reuse freed memory, then drops them.
 func churn() {
 	var all [][]*object
-	for i := 0; i < 64; i++ {
+	for i := 0; i < size(64, 8); i++ {
 		var batch []*object
 		for j := 0; j < 16; j++ {
 			batch = append(batch, newObject(-1-j))
@@ -68,7 +79,7 @@ func main() {
 
 // Goroutines that only hold objects in locals across Gosched.
 func testGosched() {
-	const n = 40
+	n := size(40, 12)
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		wg.Add(1)
@@ -92,7 +103,7 @@ func testGosched() {
 
 // Goroutines that only hold objects in locals across a sleep.
 func testSleep() {
-	const n = 20
+	n := size(20, 8)
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		wg.Add(1)
@@ -250,7 +261,7 @@ func testPanicRecoverDeep() {
 
 // Many goroutines at different states while a collection runs.
 func testMixed() {
-	const n = 100
+	n := size(100, 16)
 	var wg sync.WaitGroup
 	for i := 0; i < n; i++ {
 		wg.Add(1)

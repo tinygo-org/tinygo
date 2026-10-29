@@ -9,6 +9,16 @@ import (
 // Randomized goroutines park in many ways while holding heap objects. The output
 // does not depend on scheduling, so it must match the output with -gc=leaking.
 
+// Baremetal targets report GOARCH arm and have little RAM.
+var small = runtime.GOARCH == "arm"
+
+func size(full, little int) int {
+	if small {
+		return little
+	}
+	return full
+}
+
 type node struct {
 	id      int
 	next    *node
@@ -50,7 +60,7 @@ func (r *rng) next() int {
 
 func churn() {
 	var all [][]*node
-	for i := 0; i < 48; i++ {
+	for i := 0; i < size(48, 6); i++ {
 		var batch []*node
 		for j := 0; j < 8; j++ {
 			batch = append(batch, newNode(-1-j, nil))
@@ -170,7 +180,7 @@ func worker(seed int, wg *sync.WaitGroup, total *int, tmu *sync.Mutex) {
 }
 
 func main() {
-	const workers = 60
+	workers := size(60, 12)
 	var wg sync.WaitGroup
 	var tmu sync.Mutex
 	total := 0

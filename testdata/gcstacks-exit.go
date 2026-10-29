@@ -34,9 +34,16 @@ func (o *object) check(what string) {
 	}
 }
 
+// Baremetal targets report GOARCH arm and have little RAM.
+var small = runtime.GOARCH == "arm"
+
 func churn() {
+	batches := 48
+	if small {
+		batches = 6
+	}
 	var all [][]*object
-	for i := 0; i < 48; i++ {
+	for i := 0; i < batches; i++ {
 		var batch []*object
 		for j := 0; j < 8; j++ {
 			batch = append(batch, newObject(-1-j))
@@ -135,10 +142,14 @@ func main() {
 	m := &marker{1}
 	runtime.SetFinalizer(m, func(*marker) {})
 
-	const waves = 25
+	// Small targets run more waves of fewer goroutines for the same totals.
+	waves, perWave := 25, 4
+	if small {
+		waves, perWave = 100, 1
+	}
 	var wg sync.WaitGroup
 	for w := 0; w < waves; w++ {
-		for i := 0; i < 4; i++ {
+		for i := 0; i < perWave; i++ {
 			id := w*1000 + i*100
 			wg.Add(5)
 			go returns(id, &wg)
