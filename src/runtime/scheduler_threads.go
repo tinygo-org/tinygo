@@ -145,10 +145,12 @@ func reAddTimer(tn *timerNode) {
 		// The timer was stopped or reset while its callback was running. Don't
 		// re-add it: a stopped ticker must stay stopped, and a reset ticker has
 		// already been re-added by resetTimer.
+		freeTimerNode(tn)
 		timerQueueLock.Unlock()
 		return
 	}
 	if tn.timer.period == 0 {
+		freeTimerNode(tn)
 		timerQueueLock.Unlock()
 		return
 	}
@@ -210,4 +212,45 @@ func lockAtomics() interrupt.State {
 
 func unlockAtomics(mask interrupt.State) {
 	atomicsLock.Unlock()
+}
+
+// timerNodeFree holds nodes whose one-shot timer finished firing, linked
+// through firingNext, so Reset can reuse them. Guarded by timerQueueLock.
+var (
+	timerNodeFree  *timerNode
+	timerNodeFreeN int
+)
+
+// freeTimerNode keeps tn for reuse. The caller holds timerQueueLock and
+// nothing else refers to tn.
+func freeTimerNode(tn *timerNode) {
+	if timerNodeFreeN >= 256 {
+		return
+	}
+	*tn = timerNode{firingNext: timerNodeFree}
+	timerNodeFree = tn
+	timerNodeFreeN++
+}
+
+// releaseTimerNode keeps a node that Stop took off the queue.
+func releaseTimerNode(tn *timerNode) {
+	timerQueueLock.Lock()
+	freeTimerNode(tn)
+	timerQueueLock.Unlock()
+}
+
+// newTimerNode returns a zeroed node, reusing a freed one when it can.
+func newTimerNode() *timerNode {
+	timerQueueLock.Lock()
+	tn := timerNodeFree
+	if tn != nil {
+		timerNodeFree = tn.firingNext
+		timerNodeFreeN--
+		tn.firingNext = nil
+	}
+	timerQueueLock.Unlock()
+	if tn == nil {
+		tn = new(timerNode)
+	}
+	return tn
 }
