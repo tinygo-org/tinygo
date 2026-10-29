@@ -156,8 +156,15 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 		defer os.RemoveAll(tmpdir)
 	}
 
+	// A directory output uses the default executable format, regardless of the
+	// directory name's extension.
+	buildOutpath := outpath
+	if fi, statErr := os.Stat(outpath); statErr == nil && fi.IsDir() {
+		buildOutpath = ""
+	}
+
 	// Do the build.
-	result, err := builder.Build(pkgName, outpath, tmpdir, config)
+	result, err := builder.Build(pkgName, buildOutpath, tmpdir, config)
 	if err != nil {
 		return err
 	}
@@ -430,6 +437,9 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 	}
 	// Validate output format before building
 	if outpath != "" {
+		if err := config.ValidateOutputExtension(filepath.Ext(outpath)); err != nil {
+			return err
+		}
 		if err := validateOutputFormat(outpath, fileExt); err != nil {
 			return err
 		}
@@ -1463,8 +1473,11 @@ extension:
 	.hex:
 			Create an Intel HEX file to flash it to a microcontroller.
 
+	.uf2:
+			Create a UF2 firmware file to flash it to a microcontroller.
+
 	.bin:
-			Similar, but create a binary file.
+			Create a raw binary file when supported by the target.
 
 	.wasm:
 			Compile and link a WebAssembly file.
@@ -1837,7 +1850,7 @@ func main() {
 	}
 	var outpath string
 	if command == "help" || command == "build" || command == "test" || command == "flash" {
-		flag.StringVar(&outpath, "o", "", "output filename")
+		flag.StringVar(&outpath, "o", "", "output filename (firmware extensions depend on target)")
 	}
 
 	var witPackage, witWorld string
