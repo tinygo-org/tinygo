@@ -393,7 +393,13 @@ func wakeFinalizer() {
 	} else {
 		// scheduler.none: no goroutines, so drain inline. Finalizers must not
 		// block here; this is safe because gcLock has already been released.
+		// Hide the caller's defer frames so a finalizer panic is fatal, as it
+		// is when finalizers run on their own goroutine.
+		t := task.Current()
+		deferFrame := t.DeferFrame
+		t.DeferFrame = nil
 		drainFinalizers()
+		t.DeferFrame = deferFrame
 	}
 }
 
