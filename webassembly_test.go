@@ -389,7 +389,7 @@ func TestWasmExit(t *testing.T) {
 			}
 			buildConfig.Target.Emulator = "node testdata/wasmexit.js {}"
 			output := &bytes.Buffer{}
-			_, err = buildAndRun("testdata/wasmexit.go", buildConfig, output, []string{tc.name}, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+			_, err = buildAndRun("testdata/wasmexit.go", buildConfig, output, []string{tc.name}, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 				return cmd.Run()
 			})
 			if err != nil {

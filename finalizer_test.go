@@ -53,7 +53,7 @@ func TestBoehmFinalizerInteriorInvalid(t *testing.T) {
 	for _, name := range []string{"interior-pointer", "interior-large"} {
 		t.Run(name, func(t *testing.T) {
 			output := &bytes.Buffer{}
-			_, err := buildAndRun("testdata/finalizer.go", config, output, []string{name}, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+			_, err := buildAndRun("testdata/finalizer.go", config, output, []string{name}, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 				cmd.Stdout = nil
 				cmd.Stderr = nil
 				data, err := cmd.CombinedOutput()

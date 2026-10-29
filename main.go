@@ -278,7 +278,9 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 
 	passed := false
 	var duration time.Duration
-	result, err := buildAndRun(pkgName, config, output, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	var importPath string
+	_, err = buildAndRun(pkgName, config, output, flags, nil, 0, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+		importPath = strings.TrimSuffix(result.ImportPath, ".test")
 		if testConfig.CompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
@@ -322,8 +324,6 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 		// Return the compiler error, if there is one.
 		return true, err
 	}
-
-	importPath := strings.TrimSuffix(result.ImportPath, ".test")
 
 	var w io.Writer = stdout
 	if logToStdout {
@@ -883,7 +883,7 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 		return errInheritableOnly
 	}
 
-	_, err = buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 		// Give the program our stdin, as `go run` does.
 		// See https://github.com/tinygo-org/tinygo/issues/1287
 		cmd.Stdin = os.Stdin
@@ -896,7 +896,7 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 // errors to os.Stderr. It takes care of emulators (qemu, wasmtime, etc) and
 // passes command line arguments and environment variables in a way appropriate
 // for the given emulator.
-func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) (builder.BuildResult, error) {
+func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result *builder.BuildResult) error) (*builder.BuildResult, error) {
 	// Determine whether we're on a system that supports environment variables
 	// and command line parameters (operating systems, WASI) or not (baremetal,
 	// WebAssembly in the browser). If we're on a system without an environment,
@@ -939,7 +939,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	// Create a temporary directory for intermediary files.
 	tmpdir, err := os.MkdirTemp("", "tinygo")
 	if err != nil {
-		return builder.BuildResult{}, err
+		return nil, err
 	}
 	if !config.Options.Work {
 		defer os.RemoveAll(tmpdir)
@@ -949,7 +949,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	format, fileExt := config.EmulatorFormat()
 	result, err := builder.Build(pkgName, fileExt, tmpdir, config)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	// If needed, set a timeout on the command. This is done in tests so
