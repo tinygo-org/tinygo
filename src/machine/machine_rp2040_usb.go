@@ -131,7 +131,11 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 	// Bus is reset
 	if (status & rp.USBCTRL_REGS_INTS_BUS_RESET) > 0 {
 		rp.USBCTRL_REGS.SIE_STATUS.Set(rp.USBCTRL_REGS_SIE_STATUS_BUS_RESET)
-		fixRP2040UsbDeviceEnumeration()
+		// While detached the bus stays in SE0, so the workaround would wait forever.
+		// https://github.com/hathach/tinyusb/pull/700
+		if rp.USBCTRL_REGS.SIE_CTRL.Get()&rp.USBCTRL_REGS_SIE_CTRL_PULLUP_EN != 0 {
+			fixRP2040UsbDeviceEnumeration()
+		}
 
 		rp.USBCTRL_REGS.ADDR_ENDP.Set(0)
 		initEndpoint(0, usb.ENDPOINT_TYPE_CONTROL)
