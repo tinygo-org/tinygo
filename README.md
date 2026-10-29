@@ -78,6 +78,8 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 ### Embedded
 
 You can compile TinyGo programs for over 150 different microcontroller boards.
+Firmware output extensions depend on the target. For example, RP2040 and
+RP2350 targets support `.elf`, `.hex`, and `.uf2` firmware outputs.
 
 For more information, please see https://tinygo.org/docs/reference/microcontrollers/
 

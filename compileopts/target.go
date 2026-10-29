@@ -58,6 +58,7 @@ type TargetSpec struct {
 	FlashMethod      string   `json:"flash-method,omitempty"`
 	FlashVolume      []string `json:"msd-volume-name,omitempty"`
 	FlashFilename    string   `json:"msd-firmware-name,omitempty"`
+	FirmwareExts     []string `json:"firmware-extensions,omitempty"`
 	UF2FamilyID      string   `json:"uf2-family-id,omitempty"`
 	BinaryFormat     string   `json:"binary-format,omitempty"`
 	OpenOCDInterface string   `json:"openocd-interface,omitempty"`

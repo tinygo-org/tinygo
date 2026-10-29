@@ -12,6 +12,27 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+func TestBuildRejectsUnsupportedFirmwareExtension(t *testing.T) {
+	for _, targetName := range []string{"pico", "pico2"} {
+		t.Run(targetName, func(t *testing.T) {
+			options := &compileopts.Options{Target: targetName}
+			target, err := compileopts.LoadTarget(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config := &compileopts.Config{
+				Options: options,
+				Target:  target,
+			}
+			_, err = Build("does/not/exist", "firmware.bin", t.TempDir(), config)
+			want := "target " + targetName + " does not support firmware output extension .bin; use .elf, .hex, or .uf2"
+			if err == nil || err.Error() != want {
+				t.Fatalf("Build() error = %v, want %q", err, want)
+			}
+		})
+	}
+}
+
 // Test whether the Clang generated "target-cpu" and "target-features"
 // attributes match the CPU and Features property in TinyGo target files.
 func TestClangAttributes(t *testing.T) {

@@ -36,6 +36,39 @@ const TESTDATA = "testdata"
 
 var testTarget = flag.String("target", "", "override test target")
 
+func TestFlashRejectsUnsupportedFirmwareExtension(t *testing.T) {
+	err := Flash("testdata/print.go", "", "firmware.bin", &compileopts.Options{Target: "pico"})
+	want := "target pico does not support firmware output extension .bin; use .elf, .hex, or .uf2"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Flash() error = %v, want %q", err, want)
+	}
+}
+
+func TestFlashAcceptsSupportedFirmwareExtension(t *testing.T) {
+	err := Flash("github.com/tinygo-org/tinygo/testdata/does-not-exist-output-format", "", "firmware.uf2", &compileopts.Options{Target: "pico", Opt: "z"})
+	if err == nil {
+		t.Fatal("Flash() succeeded for a missing package")
+	}
+	if strings.Contains(err.Error(), "does not support firmware output extension") || strings.Contains(err.Error(), "output format") {
+		t.Fatalf("Flash() rejected supported UF2 output: %v", err)
+	}
+}
+
+func TestBuildOutputDirectoryWithFirmwareSuffix(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "output.bin")
+	if err := os.Mkdir(outputDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	config, err := builder.NewConfig(&compileopts.Options{Target: "pico", Opt: "z"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = Build("does/not/exist", outputDir, config)
+	if err == nil || strings.Contains(err.Error(), "does not support firmware output extension") {
+		t.Fatalf("Build() error = %v, want a package-loading error rather than an extension error", err)
+	}
+}
+
 var supportedLinuxArches = map[string]string{
 	"AMD64Linux": "linux/amd64",
 	"X86Linux":   "linux/386",
