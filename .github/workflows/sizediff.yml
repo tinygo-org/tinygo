@@ -20,7 +20,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '~1.25'
+          go-version: '~1.26'
       - name: Checkout
         uses: actions/checkout@v6
         with:
