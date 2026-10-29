@@ -33,6 +33,20 @@ func TestBuildRejectsUnsupportedFirmwareExtension(t *testing.T) {
 	}
 }
 
+func TestBuildErrorReturnsNil(t *testing.T) {
+	config := &compileopts.Config{
+		Options: &compileopts.Options{},
+		Target:  &compileopts.TargetSpec{Libc: "unknown"},
+	}
+	result, err := Build("", "", t.TempDir(), config)
+	if err == nil || err.Error() != "unknown libc: unknown" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result on error, got %+v", result)
+	}
+}
+
 // Test whether the Clang generated "target-cpu" and "target-features"
 // attributes match the CPU and Features property in TinyGo target files.
 func TestClangAttributes(t *testing.T) {
