@@ -131,12 +131,12 @@ static void signal_handler(int sig, siginfo_t *info, void *context) {
 	tinygo_handle_fatal_signal(sig, addr);
 }
 
+void tinygo_sigpipe_init(void);
+
 void tinygo_register_fatal_signals(void) {
 	// As in Go, a write to a closed pipe or socket returns EPIPE rather than
 	// killing the process. os/signal can still ask for SIGPIPE.
-	struct sigaction ign = { 0 };
-	ign.sa_handler = SIG_IGN;
-	sigaction(SIGPIPE, &ign, NULL);
+	tinygo_sigpipe_init();
 
 	struct sigaction act = { 0 };
 	// SA_SIGINFO:   we want the 2 extra parameters
