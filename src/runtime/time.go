@@ -160,6 +160,7 @@ type timerNode struct {
 	// firingNext links nodes whose callback is currently running into the
 	// firingTimers list. stopped is set when the timer was stopped or reset
 	// while its callback was running, so that timerCallback does not re-add it.
+	// All schedulers also use firingNext to link the timerNodeFree list.
 	firingNext *timerNode
 	stopped    bool
 }
