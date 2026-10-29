@@ -107,6 +107,10 @@ type packageAction struct {
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
 func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildResult, error) {
+	if err := config.ValidateOutputExtension(filepath.Ext(outpath)); err != nil {
+		return BuildResult{}, err
+	}
+
 	// Read the build ID of the tinygo binary.
 	// Used as a cache key for package builds.
 	compilerBuildID, err := ReadBuildID()

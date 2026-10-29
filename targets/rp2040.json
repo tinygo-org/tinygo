@@ -8,6 +8,7 @@
     "serial": "usb",
     "msd-volume-name": ["RPI-RP2"],
     "msd-firmware-name": "firmware.uf2",
+    "firmware-extensions": [".elf", ".hex", ".uf2"],
     "binary-format": "uf2",
     "uf2-family-id": "0xe48bff56",
     "rp2040-boot-patch": true,
