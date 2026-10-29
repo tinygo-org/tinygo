@@ -1795,8 +1795,13 @@ func TestSigpipe(t *testing.T) {
 		{"stdout", "signal: broken pipe", ""},
 		{"notify", "exit status 0", "EPIPE\nstill running\n"},
 		{"reset", "exit status 0", "EPIPE\nstill running\n"},
+		// SIGPIPE is caught, not ignored, even when inherited as ignored.
+		{"mask", "exit status 0", "SigIgn false\nSigCgt true\nstill running\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "mask" && runtime.GOOS != "linux" {
+				t.Skip("reads /proc/self/status")
+			}
 			stderr := &bytes.Buffer{}
 			var state *os.ProcessState
 			_, err := buildAndRun("testdata/sigpipe.go", config, io.Discard, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {

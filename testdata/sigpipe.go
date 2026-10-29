@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -26,6 +28,10 @@ func main() {
 		r.Close()
 		_, err = w.Write([]byte("x"))
 		report(err)
+	case "mask":
+		// Linux only. A caught SIGPIPE resets to the default across exec, an
+		// ignored one stays ignored in children.
+		reportMask()
 	}
 	os.Stderr.WriteString("still running\n")
 }
@@ -35,5 +41,24 @@ func report(err error) {
 		os.Stderr.WriteString("EPIPE\n")
 	} else {
 		os.Stderr.WriteString("unexpected error\n")
+	}
+}
+
+func reportMask() {
+	status, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		panic(err)
+	}
+	for _, line := range strings.Split(string(status), "\n") {
+		name, value, _ := strings.Cut(line, ":")
+		if name != "SigIgn" && name != "SigCgt" {
+			continue
+		}
+		mask, err := strconv.ParseUint(strings.TrimSpace(value), 16, 64)
+		if err != nil {
+			panic(err)
+		}
+		set := mask&(1<<(syscall.SIGPIPE-1)) != 0
+		os.Stderr.WriteString(name + " " + strconv.FormatBool(set) + "\n")
 	}
 }
