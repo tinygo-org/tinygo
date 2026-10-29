@@ -35,9 +35,16 @@ func (o *object) check(what string) {
 	}
 }
 
+// Baremetal targets report GOARCH arm and have little RAM.
+var small = runtime.GOARCH == "arm"
+
 func churn() {
+	batches := 48
+	if small {
+		batches = 6
+	}
 	var all [][]*object
-	for i := 0; i < 48; i++ {
+	for i := 0; i < batches; i++ {
 		var batch []*object
 		for j := 0; j < 8; j++ {
 			batch = append(batch, newObject(-1-j))
