@@ -30,6 +30,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -298,6 +299,9 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
   MCOptions.ImplicitMapSyms = Opts.ImplicitMapsyms;
   MCOptions.X86RelaxRelocations = Opts.X86RelaxRelocations;
   MCOptions.X86Sse2Avx = Opts.X86Sse2Avx;
+#if LLVM_VERSION_MAJOR >= 23
+  MCOptions.MCNoExecStack = Opts.NoExecStack;
+#endif
   MCOptions.CompressDebugSections = Opts.CompressDebugSections;
   MCOptions.AsSecureLogFile = Opts.AsSecureLogFile;
 
@@ -327,8 +331,12 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
       TheTarget->createMCSubtargetInfo(Opts.Triple, Opts.CPU, FS));
   assert(STI && "Unable to create subtarget info!");
 
+#if LLVM_VERSION_MAJOR >= 23
+  MCContext Ctx(Opts.Triple, *MAI, *MRI, *STI, &SrcMgr);
+#else
   MCContext Ctx(Opts.Triple, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
                 &MCOptions);
+#endif
 
   bool PIC = false;
   if (Opts.RelocationModel == "static") {
@@ -425,7 +433,11 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
     Triple T = Opts.Triple;
     Str.reset(TheTarget->createMCObjectStreamer(
         T, Ctx, std::move(MAB), std::move(OW), std::move(CE), *STI));
+#if LLVM_VERSION_MAJOR >= 23
+    Str.get()->initSections(*STI);
+#else
     Str.get()->initSections(Opts.NoExecStack, *STI);
+#endif
     if (T.isOSBinFormatMachO() && T.isOSDarwin()) {
       Triple *TVT = Opts.DarwinTargetVariantTriple
                         ? &*Opts.DarwinTargetVariantTriple
@@ -451,7 +463,11 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
 
   // FIXME: init MCTargetOptions from sanitizer flags here.
   std::unique_ptr<MCTargetAsmParser> TAP(
+#if LLVM_VERSION_MAJOR >= 23
+      TheTarget->createMCAsmParser(*STI, *Parser, *MCII));
+#else
       TheTarget->createMCAsmParser(*STI, *Parser, *MCII, MCOptions));
+#endif
   if (!TAP)
     Failed = Diags.Report(diag::err_target_unknown_triple) << Opts.Triple.str();
 
