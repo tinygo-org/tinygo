@@ -1,0 +1,5 @@
+glibc version 2.x: true
+strdup: hello from glibc
+errno is ERANGE: true
+errno is ERANGE on goroutine: true
+done

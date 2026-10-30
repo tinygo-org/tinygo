@@ -258,3 +258,45 @@ func TestConfigPanicUnwind(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadTargetLibc(t *testing.T) {
+	tests := []struct {
+		name    string
+		options Options
+	}{
+		{"glibc with a target", Options{Target: "arduino", Libc: "glibc"}},
+		{"musl with a target", Options{Target: "wasip1", Libc: "musl"}},
+		{"glibc on windows", Options{GOOS: "windows", GOARCH: "amd64", Libc: "glibc"}},
+		{"glibc on 386", Options{GOOS: "linux", GOARCH: "386", Libc: "glibc"}},
+		{"glibc on arm", Options{GOOS: "linux", GOARCH: "arm", GOARM: "6", Libc: "glibc"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := LoadTarget(&tc.options); err == nil {
+				t.Errorf("LoadTarget should reject -libc=%s", tc.options.Libc)
+			}
+		})
+	}
+
+	if _, err := LoadTarget(&Options{GOOS: "linux", GOARCH: "amd64", Libc: "musl"}); err != nil {
+		t.Errorf("LoadTarget should accept -libc=musl on linux/amd64: %v", err)
+	}
+}
+
+func TestGlibcLibDirs(t *testing.T) {
+	tests := []struct {
+		goarch, hostGOARCH string
+		want               []string
+	}{
+		{"amd64", "amd64", []string{"/usr/lib/x86_64-linux-gnu", "/usr/lib64", "/usr/lib"}},
+		{"arm64", "arm64", []string{"/usr/lib/aarch64-linux-gnu", "/usr/lib64", "/usr/lib"}},
+		{"arm64", "amd64", []string{"/usr/lib/aarch64-linux-gnu"}},
+		{"amd64", "arm64", []string{"/usr/lib/x86_64-linux-gnu"}},
+	}
+	for _, tc := range tests {
+		got := glibcLibDirs(tc.goarch, tc.hostGOARCH)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("glibcLibDirs(%q, %q) = %v, want %v", tc.goarch, tc.hostGOARCH, got, tc.want)
+		}
+	}
+}

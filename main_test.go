@@ -773,6 +773,18 @@ func TestBuild(t *testing.T) {
 			emuCheck(t, options)
 			runTest("cgo/", options, t, nil, nil)
 		})
+		t.Run("glibc", func(t *testing.T) {
+			// Link against the system glibc, dynamically, instead of the
+			// musl that TinyGo builds. This needs the glibc development
+			// files (crt1.o, libc.so and the headers).
+			t.Parallel()
+			if _, err := compileopts.GlibcLibDir(runtime.GOARCH); err != nil {
+				t.Skip(err)
+			}
+			options := optionsFromTarget("", sema)
+			options.Libc = "glibc"
+			runTest("glibc/", options, t, nil, nil)
+		})
 	} else if runtime.GOOS == "windows" {
 		if runtime.GOARCH != "386" {
 			t.Run("Windows386", func(t *testing.T) {
