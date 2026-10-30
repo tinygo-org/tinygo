@@ -17,6 +17,9 @@ type timer struct {
 	arg any
 
 	synctest *synctestBubble
+
+	// node is the node of this timer that is waiting in a timer heap, if any.
+	node *timerNode
 }
 
 func (tim *timer) callCallback(delta int64) {
@@ -139,11 +142,14 @@ func time_runtimeNow() (sec int64, nsec int32, mono int64) {
 	return now()
 }
 
-// timerNode is an element in a linked list of timers.
+// timerNode is an element in a timer heap.
 type timerNode struct {
-	next     *timerNode
 	timer    *timer
 	callback func(node *timerNode, delta int64)
+
+	// seq breaks ties between equal deadlines, and index is the position in the heap.
+	seq   int64
+	index int
 
 	// The following fields are only used by schedulers that run timer
 	// callbacks concurrently with user goroutines (the threads and cores
