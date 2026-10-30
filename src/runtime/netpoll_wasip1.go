@@ -54,7 +54,7 @@ func netpollAddWait(fd uint32, mode pollMode) *pollDesc {
 	pd := &pollDesc{
 		fd:   fd,
 		mode: mode,
-		task: task.Current(),
+		task: task.CurrentToBlock(),
 		bnxt: activePolls,
 	}
 	activePolls = pd

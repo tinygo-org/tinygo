@@ -267,7 +267,7 @@ func chanSend(ch *channel, value unsafe.Pointer, op *channelOp) {
 	}
 
 	// Can't proceed. Add us to the list of senders and wait until we're awoken.
-	t := task.Current()
+	t := task.CurrentToBlock()
 	t.SetDataUint32(chanOperationWaiting)
 	op.task = t
 	op.index = 0
@@ -351,7 +351,7 @@ func chanRecv(ch *channel, value unsafe.Pointer, op *channelOp) bool {
 
 	// We can't proceed, so we add ourselves to the list of receivers and wait
 	// until we're awoken.
-	t := task.Current()
+	t := task.CurrentToBlock()
 	t.Ptr = value
 	t.SetDataUint32(chanOperationWaiting)
 	op.task = t
@@ -602,7 +602,7 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 	// first one to complete. Only one will successfully complete, because
 	// senders and receivers use a compare-and-exchange atomic operation on
 	// t.Data so that only one will be able to "take" this select operation.
-	t := task.Current()
+	t := task.CurrentToBlock()
 	t.Ptr = recvbuf
 	t.SetDataUint32(chanOperationWaiting)
 	for i, state := range states {

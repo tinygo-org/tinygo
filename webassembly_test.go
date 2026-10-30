@@ -137,6 +137,13 @@ func TestWasmExport(t *testing.T) {
 			file:      "wasmexport-noscheduler.go",
 			command:   true,
 		},
+		// Test buildmode=wasi-legacy with the default scheduler.
+		{
+			name:      "WASIp1-legacy-scheduler",
+			target:    "wasip1",
+			buildMode: "wasi-legacy",
+			command:   true,
+		},
 	}
 
 	for _, tc := range tests {
@@ -254,6 +261,10 @@ func TestWasmExport(t *testing.T) {
 						t.Error("failed to run _start:", err)
 					}
 				}
+				if tc.buildMode == "wasi-legacy" && mod.IsClosed() {
+					// A legacy command returns from _start without exiting.
+					t.Error("module exited in _start")
+				}
 			} else {
 				// Run the _initialize call, because this is reactor mode wasm.
 				mustCall(mod.ExportedFunction("_initialize").Call(ctx))
@@ -266,6 +277,59 @@ func TestWasmExport(t *testing.T) {
 				checkOutput(t, "testdata/wasmexport.txt", output.Bytes())
 			}
 		})
+	}
+}
+
+// Test that with -buildmode=wasi-legacy and the default scheduler, _start
+// returns and the host can call an //export function afterwards.
+func TestWasmLegacyExport(t *testing.T) {
+	t.Parallel()
+
+	// Build the wasm binary.
+	options := optionsFromTarget("wasip1", sema)
+	options.BuildMode = "wasi-legacy"
+	buildConfig, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build("testdata/wasi-legacy.go", ".wasm", t.TempDir(), buildConfig)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+	data, err := os.ReadFile(result.Binary)
+	if err != nil {
+		t.Fatal("could not read wasm binary:", err)
+	}
+
+	// Run _start, which waits for a goroutine to set the result.
+	output := &bytes.Buffer{}
+	ctx := context.Background()
+	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	defer r.Close(ctx)
+	wasi_snapshot_preview1.MustInstantiate(ctx, r)
+	config := wazero.NewModuleConfig().WithStdout(output).WithStderr(output)
+	mod, err := r.InstantiateWithConfig(ctx, data, config)
+	if err != nil {
+		t.Fatal("failed to run _start:", err)
+	}
+
+	// Call the //export function after _start has returned.
+	results, err := mod.ExportedFunction("getResult").Call(ctx)
+	if err != nil {
+		t.Fatal("failed to call getResult after _start:", err)
+	}
+	if len(results) != 1 || results[0] != 42 {
+		t.Errorf("getResult() = %v, want [42]", results)
+	}
+	checkOutput(t, "testdata/wasi-legacy.txt", output.Bytes())
+
+	// An //export function runs outside any goroutine, so it cannot block.
+	output.Reset()
+	if _, err := mod.ExportedFunction("sleep").Call(ctx); err == nil {
+		t.Error("sleep() after _start did not fail")
+	}
+	if !strings.Contains(output.String(), "blocking operation in exported function") {
+		t.Errorf("sleep() after _start: unexpected output %q", output.String())
 	}
 }
 

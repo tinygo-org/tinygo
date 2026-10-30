@@ -130,6 +130,18 @@ func Current() *Task {
 	return currentTask
 }
 
+//go:linkname blockingPanic runtime.blockingPanic
+func blockingPanic()
+
+// CurrentToBlock returns the goroutine that the caller is about to block. It
+// panics when there is none, as in an //export function.
+func CurrentToBlock() *Task {
+	if currentTask == nil {
+		blockingPanic()
+	}
+	return currentTask
+}
+
 // Pause suspends the current task and returns to the scheduler.
 // This function may only be called when running on a goroutine stack, not when running on the system stack.
 func Pause() {
