@@ -3062,8 +3062,9 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			}
 
 			sliceLen := b.CreateSub(high, low, "slice.len")
-			slicePtr := b.CreateInBoundsGEP(b.getLLVMType(arrayType), value, indices, "slice.ptr")
 			sliceCap := b.CreateSub(max, low, "slice.cap")
+			indices[1] = b.sliceOffset(low, sliceCap)
+			slicePtr := b.CreateInBoundsGEP(b.getLLVMType(arrayType), value, indices, "slice.ptr")
 
 			slice := llvm.Undef(b.getLLVMType(expr.Type()))
 			slice = b.CreateInsertValue(slice, slicePtr, 0, "")
@@ -3098,9 +3099,9 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			}
 
 			ptrElemType := b.getLLVMType(typ.Elem())
-			newPtr := b.CreateInBoundsGEP(ptrElemType, oldPtr, []llvm.Value{low}, "")
-			newLen := b.CreateSub(high, low, "")
 			newCap := b.CreateSub(max, low, "")
+			newPtr := b.CreateInBoundsGEP(ptrElemType, oldPtr, []llvm.Value{b.sliceOffset(low, newCap)}, "")
+			newLen := b.CreateSub(high, low, "")
 			slice := llvm.Undef(b.getLLVMType(expr.Type()))
 			slice = b.CreateInsertValue(slice, newPtr, 0, "")
 			slice = b.CreateInsertValue(slice, newLen, 1, "")
@@ -3134,8 +3135,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				high = b.CreateTrunc(high, b.uintptrType, "")
 			}
 
-			newPtr := b.CreateInBoundsGEP(b.i8, oldPtr, []llvm.Value{low}, "")
 			newLen := b.CreateSub(high, low, "")
+			newPtr := b.CreateInBoundsGEP(b.i8, oldPtr, []llvm.Value{b.sliceOffset(low, newLen)}, "")
 			str := llvm.Undef(b.getLLVMRuntimeType("_string"))
 			str = b.CreateInsertValue(str, newPtr, 0, "")
 			str = b.CreateInsertValue(str, newLen, 1, "")
@@ -3161,6 +3162,13 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 	default:
 		return llvm.Value{}, b.makeError(expr.Pos(), "todo: unknown expression: "+expr.String())
 	}
+}
+
+// sliceOffset is low, or zero for a result without capacity, so s[len(s):] does
+// not point at the next object. Go does the same, see cmd/compile ssagen slice.
+func (b *builder) sliceOffset(low, capacity llvm.Value) llvm.Value {
+	isEmpty := b.CreateICmp(llvm.IntEQ, capacity, llvm.ConstInt(capacity.Type(), 0, false), "")
+	return b.CreateSelect(isEmpty, llvm.ConstInt(low.Type(), 0, false), low, "")
 }
 
 func isByteSliceToStringComparison(expr *ssa.Convert) bool {
