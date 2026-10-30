@@ -68,7 +68,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		if err != nil {
 			return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
 		}
-
 		// Run TinyGo-specific optimization passes.
 		OptimizeStringToBytes(mod)
 		maxStackSize := config.MaxStackAlloc()
@@ -208,6 +207,96 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	}
 
 	return nil
+}
+
+func pruneRuntimeStartup(mod llvm.Module) error {
+	options := llvm.NewPassBuilderOptions()
+	defer options.Dispose()
+	if pruneUnusedRuntimeStartup(mod) {
+		if err := mod.RunPasses("globaldce", llvm.TargetMachine{}, options); err != nil {
+			return fmt.Errorf("could not run post-startup-pruning globaldce pass: %w", err)
+		}
+	}
+	return nil
+}
+
+// PrepareRuntimeStartup resolves startup checks before interpreting initializers.
+func PrepareRuntimeStartup(mod llvm.Module) error {
+	linkages := make(map[llvm.Value]llvm.Linkage, len(functionsUsedInTransforms))
+	for _, name := range functionsUsedInTransforms {
+		fn := mod.NamedFunction(name)
+		if !fn.IsNil() {
+			linkages[fn] = fn.Linkage()
+			fn.SetLinkage(llvm.ExternalLinkage)
+		}
+	}
+	defer func() {
+		for fn, linkage := range linkages {
+			fn.SetLinkage(linkage)
+		}
+	}()
+	options := llvm.NewPassBuilderOptions()
+	defer options.Dispose()
+	err := mod.RunPasses("globaldce,function-attrs,adce,globaldce", llvm.TargetMachine{}, options)
+	if err != nil {
+		return fmt.Errorf("could not prepare runtime startup: %w", err)
+	}
+	return pruneRuntimeStartup(mod)
+}
+
+func pruneUnusedRuntimeStartup(mod llvm.Module) bool {
+	changed := lowerRuntimeStartupCheck(mod,
+		"runtime.gorootEnvEnabled",
+		"tinygo.runtime.feature.goroot",
+		"runtime.GOROOT")
+	return lowerRuntimeStartupCheck(mod,
+		"runtime.godebugEnvEnabled",
+		"tinygo.runtime.feature.godebug",
+		"(*internal/godebug.Setting).Value") || changed
+}
+
+func lowerRuntimeStartupCheck(mod llvm.Module, checkName, markerName, featureName string) bool {
+	marker := mod.NamedFunction(markerName)
+	enabled := !marker.IsNil() && hasUses(marker)
+	feature := mod.NamedFunction(featureName)
+	enabled = enabled || (!feature.IsNil() && hasUses(feature))
+
+	check := mod.NamedFunction(checkName)
+	if check.IsNil() {
+		return false
+	}
+
+	for _, use := range getUses(check) {
+		if use.IsACallInst().IsNil() || use.CalledValue() != check {
+			panic("unexpected use of runtime startup check")
+		}
+		use.ReplaceAllUsesWith(llvm.ConstInt(use.Type(), boolToUint64(enabled), false))
+		use.EraseFromParentAsInstruction()
+	}
+	if hasUses(check) {
+		panic("runtime startup check still has uses")
+	}
+	check.EraseFromParentAsFunction()
+	if !marker.IsNil() {
+		for _, use := range getUses(marker) {
+			if use.IsACallInst().IsNil() || use.CalledValue() != marker {
+				panic("unexpected use of runtime feature marker")
+			}
+			use.EraseFromParentAsInstruction()
+		}
+		if hasUses(marker) {
+			panic("runtime feature marker still has uses")
+		}
+		marker.EraseFromParentAsFunction()
+	}
+	return true
+}
+
+func boolToUint64(value bool) uint64 {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func blockGlobalAllocPromotion(mod llvm.Module) {

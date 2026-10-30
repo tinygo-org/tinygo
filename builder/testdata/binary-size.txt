@@ -17,5 +17,5 @@ pico2           ./testdata/size-os       z    6199   1209  128  5592
 pico2           ./testdata/size-os       2   15290   1014  128  5592
 cortex-m-qemu   ./testdata/size-corpus   z    9891   1301   80  4188
 cortex-m-qemu   ./testdata/size-corpus   2   17466    862   72  4188
-riscv-qemu      ./testdata/size-corpus   z   17508   1028   88 16660
-riscv-qemu      ./testdata/size-corpus   2   25160    744   80 16644
+riscv-qemu      ./testdata/size-corpus   z   17556   1028   88 16660
+riscv-qemu      ./testdata/size-corpus   2   23225    935   80 16644

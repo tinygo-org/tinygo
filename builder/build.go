@@ -248,6 +248,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if err != nil {
 		return BuildResult{}, err
 	}
+	if _, ok := globalValues["runtime"]["godebugDefault"]; !ok {
+		globalValues["runtime"]["godebugDefault"] = lprogram.MainPkg().DefaultGODEBUG
+	}
 	result := BuildResult{
 		ModuleRoot: lprogram.MainPkg().Module.Dir,
 		MainDir:    lprogram.MainPkg().Dir,
@@ -1365,6 +1368,9 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
+	if err := transform.PrepareRuntimeStartup(mod); err != nil {
+		return err
+	}
 	err := interp.Run(mod, config.Options.InterpTimeout, config.Options.InterpMaxLoopIterations, config.DumpSSA())
 	if err != nil {
 		return err
