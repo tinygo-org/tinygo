@@ -207,7 +207,8 @@ func newWasiLibc(preview, name string) Library {
 			// wasip3_tls.c needs libcall thread context support, which stores
 			// the stack pointer in a component context slot. Only the wasip3
 			// target uses it.
-			bottomHalfSrcExclude := []string{}
+			// The webp2 sources are for the webp2 target, and their headers need __webp2__.
+			bottomHalfSrcExclude := []string{"webp2.c", "webp2_stdio.c"}
 			if preview != "3" {
 				bottomHalfSrcExclude = append(bottomHalfSrcExclude, "wasip3_tls.c")
 			}
