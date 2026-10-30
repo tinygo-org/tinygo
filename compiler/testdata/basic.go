@@ -18,6 +18,19 @@ func notEqualByteArray(x, y *[4096]byte) bool {
 	return *x != *y
 }
 
+type plainStruct struct {
+	a [16]uint32
+	b *byte
+}
+
+func equalPlainStruct(x, y *plainStruct) bool {
+	return *x == *y
+}
+
+func isZeroPlainStruct(x *plainStruct) bool {
+	return *x == plainStruct{}
+}
+
 func equalMutatedByteArray(x *[5]byte) bool {
 	value := *x
 	x[0] = 1

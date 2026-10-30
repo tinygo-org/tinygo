@@ -74,3 +74,10 @@ constant number
 interface equality
 a==b false
 b==b2 true
+large struct equality
+p1==p2 true
+p1==p2 false p1!=p2 true
+p2==zero false
+q1==q2 false
+q1==q2 true
+n1==n2 true

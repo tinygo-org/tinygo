@@ -1725,12 +1725,21 @@ func (b *builder) getValuePointer(value ssa.Value) llvm.Value {
 	return ptr
 }
 
-func isMemequalArrayComparison(expr *ssa.BinOp) bool {
-	typ, ok := expr.X.Type().Underlying().(*types.Array)
-	return ok &&
-		typ.Len() > hashArrayUnrollLimit &&
-		isBinaryComparable(typ.Elem()) &&
-		(expr.Op == token.EQL || expr.Op == token.NEQ)
+// structCompareUnrollSize is the size in bytes above which a struct of plain
+// memory is compared with memequal instead of field by field.
+const structCompareUnrollSize = 64
+
+func (c *compilerContext) isMemequalComparison(expr *ssa.BinOp) bool {
+	if expr.Op != token.EQL && expr.Op != token.NEQ {
+		return false
+	}
+	switch typ := expr.X.Type().Underlying().(type) {
+	case *types.Array:
+		return typ.Len() > hashArrayUnrollLimit && isBinaryComparable(typ.Elem())
+	case *types.Struct:
+		return c.targetData.TypeAllocSize(c.getLLVMType(typ)) > structCompareUnrollSize && c.isPlainComparable(typ)
+	}
+	return false
 }
 
 // isRangeLoopCompare returns whether expr is the (index + 1) < len(slice) test
@@ -1757,12 +1766,49 @@ func isRangeLoopCompare(expr *ssa.BinOp) bool {
 	return ok && one.Int64() == 1
 }
 
-func canUseDereferencePointer(unop *ssa.UnOp) bool {
+// isPlainComparable reports whether two values of typ are equal exactly when
+// their memory is, meaning no blank fields, no padding and only binary comparable fields.
+func (c *compilerContext) isPlainComparable(typ types.Type) bool {
+	switch typ := typ.Underlying().(type) {
+	case *types.Struct:
+		size := uint64(0)
+		for i := 0; i < typ.NumFields(); i++ {
+			field := typ.Field(i)
+			if field.Name() == "_" || !c.isPlainComparable(field.Type()) {
+				return false
+			}
+			size += c.targetData.TypeAllocSize(c.getLLVMType(field.Type()))
+		}
+		return size == c.targetData.TypeAllocSize(c.getLLVMType(typ))
+	case *types.Array:
+		return c.isPlainComparable(typ.Elem())
+	default:
+		return isBinaryComparable(typ)
+	}
+}
+
+// getComparisonPointer returns a pointer to the value of a memequal
+// comparison operand. A constant is read from a global rather than copied.
+func (b *builder) getComparisonPointer(value ssa.Value) llvm.Value {
+	if constant, ok := value.(*ssa.Const); ok {
+		initializer := b.createConst(constant, getPos(constant))
+		global := llvm.AddGlobal(b.mod, initializer.Type(), "cmpconst")
+		global.SetInitializer(initializer)
+		global.SetGlobalConstant(true)
+		global.SetLinkage(llvm.InternalLinkage)
+		global.SetUnnamedAddr(true)
+		global.SetAlignment(b.targetData.ABITypeAlignment(initializer.Type()))
+		return global
+	}
+	return b.getValuePointer(value)
+}
+
+func (b *builder) canUseDereferencePointer(unop *ssa.UnOp) bool {
 	if !isDereference(unop) {
 		return false
 	}
 	comparison := adjacentComparison(unop, isDereference)
-	return comparison != nil && isMemequalArrayComparison(comparison)
+	return comparison != nil && b.isMemequalComparison(comparison)
 }
 
 func isDereference(value ssa.Value) bool {
@@ -2610,11 +2656,10 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return buf, nil
 		}
 	case *ssa.BinOp:
-		if isMemequalArrayComparison(expr) {
-			typ := expr.X.Type().Underlying().(*types.Array)
-			x := b.getValuePointer(expr.X)
-			y := b.getValuePointer(expr.Y)
-			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(b.getLLVMType(typ)), false)
+		if b.isMemequalComparison(expr) {
+			x := b.getComparisonPointer(expr.X)
+			y := b.getComparisonPointer(expr.Y)
+			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(b.getLLVMType(expr.X.Type())), false)
 			result := b.createRuntimeCall("memequal", []llvm.Value{x, y, size}, "arraycmp")
 			if expr.Op == token.NEQ {
 				result = b.CreateNot(result, "")
@@ -3969,7 +4014,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			return fn, nil
 		} else {
 			b.createNilCheck(unop.X, x, "deref")
-			if canUseDereferencePointer(unop) {
+			if b.canUseDereferencePointer(unop) {
 				return x, nil
 			}
 			return b.loadFromStorage(x, unop.Type(), ""), nil
