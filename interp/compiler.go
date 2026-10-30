@@ -22,6 +22,7 @@ type function struct {
 	locals     map[llvm.Value]int
 	deferFrame llvm.Value
 	deferStack llvm.Value
+	noruntime  bool // marked //go:noruntime, so it must be evaluated completely
 }
 
 // basicBlock represents a LLVM basic block and contains a slice of
@@ -73,10 +74,11 @@ func (inst *instruction) opcodeName() string {
 // that the interpreter doesn't have to call into LLVM.
 func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 	fn := &function{
-		llvmFn: llvmFn,
-		name:   llvmFn.Name(),
-		params: llvmFn.Params(),
-		locals: make(map[llvm.Value]int),
+		llvmFn:    llvmFn,
+		name:      llvmFn.Name(),
+		params:    llvmFn.Params(),
+		locals:    make(map[llvm.Value]int),
+		noruntime: !llvmFn.GetStringAttributeAtIndex(-1, "tinygo-noruntime").IsNil(),
 	}
 	if llvmFn.IsDeclaration() {
 		// Nothing to do.
