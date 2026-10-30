@@ -248,6 +248,7 @@ func pathsToOverride(goMinor int, needsSyscallPackage bool) map[string]bool {
 		"internal/cm/":                false,
 		"internal/futex/":             false,
 		"internal/fuzz/":              false,
+		"internal/godebug/":           false,
 		"internal/itoa/":              false,
 		"internal/poll/":              false,
 		"internal/reflectlite/":       false,
