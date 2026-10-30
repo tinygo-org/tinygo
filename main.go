@@ -322,7 +322,7 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 	if logToStdout {
 		w = os.Stdout
 	}
-	if err, ok := err.(loader.NoTestFilesError); ok {
+	if err, ok := err.(*loader.NoTestFilesError); ok {
 		fmt.Fprintf(w, "?   \t%s\t[no test files]\n", err.ImportPath)
 		// Pretend the test passed - it at least didn't fail.
 		return true, nil
