@@ -193,6 +193,17 @@ func TestPackageWorkingDirectory(t *testing.T) {
 			if program.workingDir != dir {
 				t.Errorf("working directory = %q, want %q", program.workingDir, dir)
 			}
+			if cap(program.typecheckConcurrency) != runtime.GOMAXPROCS(0) {
+				t.Fatal("Load did not initialize the default semaphore")
+			}
+			config.Options.Semaphore = make(chan struct{}, 2)
+			withSemaphore, err := Load(config, ".", types.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if withSemaphore.typecheckConcurrency != config.Options.Semaphore {
+				t.Fatal("Load did not preserve the configured semaphore")
+			}
 			pkg := program.Packages["example.com/workdir"]
 			if pkg == nil {
 				t.Fatal("Load did not find the workspace package")
