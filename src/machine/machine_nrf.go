@@ -174,7 +174,7 @@ var (
 )
 
 // Configure the UART.
-func (uart *UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) error {
 	// Default baud rate to 115200.
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
@@ -199,6 +199,17 @@ func (uart *UART) Configure(config UARTConfig) {
 	intr := interrupt.New(nrf.IRQ_UART0, _UART0.handleInterrupt)
 	intr.SetPriority(0xc0) // low priority
 	intr.Enable()
+	return nil
+}
+
+// DTR is not available on the UART.
+func (uart *UART) DTR() bool {
+	return false
+}
+
+// RTS is not configured on the UART.
+func (uart *UART) RTS() bool {
+	return false
 }
 
 // SetBaudRate sets the communication speed for the UART.
