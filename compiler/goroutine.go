@@ -47,6 +47,11 @@ func (b *builder) createGo(instr *ssa.Go) {
 		return
 	}
 
+	if b.info.noheap {
+		// Starting a goroutine allocates its stack and state.
+		b.addError(instr.Pos(), "go statement may allocate on the heap in //go:noheap function")
+	}
+
 	var params []llvm.Value
 	var prefix string
 	var funcPtr llvm.Value

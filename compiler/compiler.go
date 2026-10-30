@@ -180,6 +180,7 @@ type builder struct {
 	blockInfo          []blockInfo
 	currentBlock       *ssa.BasicBlock
 	currentBlockInfo   *blockInfo
+	instrPos           token.Pos // position of the instruction being compiled
 	tarjanStack        []uint
 	tarjanIndex        uint
 	phis               []phiNode
@@ -1577,6 +1578,7 @@ func getPos(val posser) token.Pos {
 // createInstruction builds the LLVM IR equivalent instructions for the
 // particular Go SSA instruction.
 func (b *builder) createInstruction(instr ssa.Instruction) {
+	b.instrPos = getPos(instr)
 	if b.Debug {
 		b.setDebugLocation(getPos(instr))
 	}
