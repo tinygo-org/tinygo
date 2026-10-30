@@ -9,10 +9,8 @@ import (
 
 func fork() (pid int32, err error) {
 	pid = libc_fork()
-	if pid != 0 {
-		if errno := *libc_errno(); errno != 0 {
-			err = syscall.Errno(*libc_errno())
-		}
+	if pid < 0 {
+		err = syscall.Errno(*libc_errno())
 	}
 	return
 }
