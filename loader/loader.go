@@ -23,6 +23,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/tinygo-org/tinygo/cgo"
@@ -32,14 +33,15 @@ import (
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
-	config      *compileopts.Config
-	typeChecker types.Config
-	goroot      string // synthetic GOROOT
-	workingDir  string
-	analysis    bool
-	overlay     map[string][]byte
-	sources     map[string][]byte
-	rewritten   map[string]bool
+	config               *compileopts.Config
+	typeChecker          types.Config
+	goroot               string // synthetic GOROOT
+	workingDir           string
+	analysis             bool
+	overlay              map[string][]byte
+	sources              map[string][]byte
+	rewritten            map[string]bool
+	typecheckConcurrency chan struct{}
 
 	Packages map[string]*Package
 	sorted   []*Package
@@ -139,16 +141,20 @@ func load(config *compileopts.Config, inputs []string, typeChecker types.Config,
 		wd = filepath.Join(goroot, "src")
 	}
 	p := &Program{
-		config:      config,
-		typeChecker: typeChecker,
-		goroot:      goroot,
-		workingDir:  wd,
-		Packages:    make(map[string]*Package),
-		fset:        token.NewFileSet(),
-		analysis:    analysis,
-		overlay:     overlay,
-		sources:     make(map[string][]byte),
-		rewritten:   make(map[string]bool),
+		config:               config,
+		typeChecker:          typeChecker,
+		goroot:               goroot,
+		workingDir:           wd,
+		Packages:             make(map[string]*Package),
+		fset:                 token.NewFileSet(),
+		analysis:             analysis,
+		overlay:              overlay,
+		sources:              make(map[string][]byte),
+		rewritten:            make(map[string]bool),
+		typecheckConcurrency: config.Options.Semaphore,
+	}
+	if p.typecheckConcurrency == nil {
+		p.typecheckConcurrency = make(chan struct{}, runtime.GOMAXPROCS(0))
 	}
 
 	// List the dependencies of this package, in raw JSON format.
@@ -371,11 +377,14 @@ func (p *Program) MainPkg() *Package {
 // Parse parses all packages and typechecks them.
 //
 // The returned error may be an Errors error, which contains a list of errors.
+// Independent packages are checked concurrently, but errors are returned in
+// Sorted order.
 //
 // Idempotent.
 func (p *Program) Parse() error {
 	// Parse all packages.
-	// TODO: do this in parallel.
+	// Keep this sequential because parsing CGo packages appends linker flags
+	// to Program.LDFlags in dependency order.
 	for _, pkg := range p.sorted {
 		err := pkg.Parse()
 		if err != nil {
@@ -383,15 +392,104 @@ func (p *Program) Parse() error {
 		}
 	}
 
-	// Typecheck all packages.
-	for _, pkg := range p.sorted {
-		err := pkg.Check()
-		if err != nil {
-			return err
+	return p.check()
+}
+
+func (p *Program) check() error {
+	if cap(p.typecheckConcurrency) == 0 {
+		return errors.New("cannot run 0 jobs at a time")
+	}
+	if cap(p.typecheckConcurrency) == 1 || len(p.sorted) < 2 {
+		for _, pkg := range p.sorted {
+			p.typecheckConcurrency <- struct{}{}
+			err := pkg.Check()
+			<-p.typecheckConcurrency
+			if err != nil {
+				return err
+			}
 		}
+		return nil
+	}
+	checker := p.typeChecker
+	if checker.Sizes != nil {
+		checker.Sizes = &lockedSizes{Sizes: checker.Sizes}
 	}
 
-	return nil
+	type checkJob struct {
+		pkg    *Package
+		deps   []*checkJob
+		done   chan struct{}
+		err    error
+		failed bool
+	}
+	jobs := make(map[*Package]*checkJob, len(p.sorted))
+	for _, pkg := range p.sorted {
+		jobs[pkg] = &checkJob{pkg: pkg, done: make(chan struct{})}
+	}
+	for _, pkg := range p.sorted {
+		job := jobs[pkg]
+		for _, file := range pkg.Files {
+			for _, spec := range file.Imports {
+				importPath, err := strconv.Unquote(spec.Path.Value)
+				if err != nil || importPath == "unsafe" {
+					continue
+				}
+				dep := jobs[p.Packages[pkg.resolveImportPath(importPath)]]
+				if dep != nil && !slices.Contains(job.deps, dep) {
+					job.deps = append(job.deps, dep)
+				}
+			}
+		}
+	}
+	for _, pkg := range p.sorted {
+		job := jobs[pkg]
+		go func() {
+			defer close(job.done)
+			for _, dep := range job.deps {
+				<-dep.done
+				if dep.failed {
+					job.failed = true
+					return
+				}
+			}
+			p.typecheckConcurrency <- struct{}{}
+			job.err = job.pkg.check(checker)
+			job.failed = job.err != nil
+			<-p.typecheckConcurrency
+		}()
+	}
+	var firstError error
+	for _, pkg := range p.sorted {
+		job := jobs[pkg]
+		<-job.done
+		if firstError == nil && job.err != nil {
+			firstError = job.err
+		}
+	}
+	return firstError
+}
+
+type lockedSizes struct {
+	types.Sizes
+	mu sync.Mutex
+}
+
+func (s *lockedSizes) Alignof(typ types.Type) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Sizes.Alignof(typ)
+}
+
+func (s *lockedSizes) Offsetsof(fields []*types.Var) []int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.Sizes.Offsetsof(fields))
+}
+
+func (s *lockedSizes) Sizeof(typ types.Type) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Sizes.Sizeof(typ)
 }
 
 // OriginalDir returns the real directory name. It is the same as p.Dir except
@@ -656,13 +754,16 @@ func (p *Package) Parse() error {
 //
 // Idempotent.
 func (p *Package) Check() error {
+	return p.check(p.program.typeChecker)
+}
+
+func (p *Package) check(checker types.Config) error {
 	if p.Pkg != nil {
 		return nil // already typechecked
 	}
 
 	// Prepare some state used during type checking.
 	var typeErrors []error
-	checker := p.program.typeChecker // make a copy, because it will be modified
 	checker.Error = func(err error) {
 		typeErrors = append(typeErrors, err)
 	}
@@ -1096,12 +1197,17 @@ func (p *Package) Import(to string) (*types.Package, error) {
 	if to == "unsafe" {
 		return types.Unsafe, nil
 	}
-	if newTo, ok := p.ImportMap[to]; ok && (p.program.analysis || !strings.HasSuffix(newTo, ".test]")) {
-		to = newTo
-	}
+	to = p.resolveImportPath(to)
 	if imported, ok := p.program.Packages[to]; ok {
 		return imported.Pkg, nil
 	} else {
 		return nil, errors.New("package not imported: " + to)
 	}
+}
+
+func (p *Package) resolveImportPath(to string) string {
+	if newTo, ok := p.ImportMap[to]; ok && (p.program.analysis || !strings.HasSuffix(newTo, ".test]")) {
+		return newTo
+	}
+	return to
 }
