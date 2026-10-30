@@ -297,53 +297,6 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			callFn := r.getFunction(fnPtr.llvmValue(&mem))
 			switch {
-			case callFn.name == "sync/atomic.SwapInt32" || callFn.name == "sync/atomic.SwapInt64" ||
-				callFn.name == "sync/atomic.SwapUint32" || callFn.name == "sync/atomic.SwapUint64" ||
-				callFn.name == "sync/atomic.SwapUintptr" || callFn.name == "sync/atomic.SwapPointer" ||
-				callFn.name == "sync/atomic.CompareAndSwapInt32" || callFn.name == "sync/atomic.CompareAndSwapInt64" ||
-				callFn.name == "sync/atomic.CompareAndSwapUint32" || callFn.name == "sync/atomic.CompareAndSwapUint64" ||
-				callFn.name == "sync/atomic.CompareAndSwapUintptr" || callFn.name == "sync/atomic.CompareAndSwapPointer":
-				ptr, err := operands[1].asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				if mem.hasExternalLoadOrStore(ptr) {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
-						return nil, mem, err
-					}
-					continue
-				}
-				old := mem.load(ptr, operands[2].len(r))
-				if old == nil {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
-						return nil, mem, err
-					}
-					continue
-				}
-				newValue := operands[2]
-				compare := strings.HasPrefix(callFn.name, "sync/atomic.CompareAndSwap")
-				if compare {
-					equal, err := r.interpretICmp(old, operands[2], llvm.IntEQ)
-					if err != nil {
-						return nil, mem, r.errorAt(inst, err)
-					}
-					if !equal {
-						locals[inst.localIndex] = literalValue{uint8(0)}
-						continue
-					}
-					newValue = operands[3]
-				}
-				if !mem.store(newValue, ptr) {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
-						return nil, mem, err
-					}
-					continue
-				}
-				if compare {
-					locals[inst.localIndex] = literalValue{uint8(1)}
-				} else {
-					locals[inst.localIndex] = old
-				}
 			case callFn.name == "runtime.trackPointer":
 				// Allocas and such are created as globals, so don't need a
 				// runtime.trackPointer.
@@ -766,6 +719,76 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					return nil, mem, err
 				}
 			}
+		case atomicRMW:
+			if len(operands) != 3 {
+				return nil, mem, r.errorAt(inst, errUnsupportedInst)
+			}
+			ptr, err := operands[0].asPointer(r)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
+			val := operands[1]
+			size := val.len(r)
+			var old value
+			if !inst.llvmInst.IsVolatile() && !mem.hasExternalLoadOrStore(ptr) && (size == 1 || size == 2 || size == 4 || size == 8) {
+				old = mem.load(ptr, size)
+			}
+			if old == nil {
+				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				if err != nil {
+					return nil, mem, err
+				}
+				continue
+			}
+			result, ok := r.interpretAtomicRMW(llvm.AtomicRMWBinOp(operands[2].(literalValue).value.(uint8)), old, val)
+			if !ok || !mem.store(result, ptr) {
+				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				if err != nil {
+					return nil, mem, err
+				}
+				continue
+			}
+			if r.debug {
+				fmt.Fprintln(os.Stderr, indent+"atomicrmw:", operands, "->", old)
+			}
+			locals[inst.localIndex] = old
+		case atomicCmpXchg:
+			ptr, err := operands[0].asPointer(r)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
+			var old value
+			if !inst.llvmInst.IsVolatile() && !mem.hasExternalLoadOrStore(ptr) {
+				old = mem.load(ptr, operands[1].len(r))
+			}
+			if old == nil {
+				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				if err != nil {
+					return nil, mem, err
+				}
+				continue
+			}
+			equal, err := r.interpretICmp(old, operands[1], llvm.IntEQ)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
+			if equal && !mem.store(operands[2], ptr) {
+				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				if err != nil {
+					return nil, mem, err
+				}
+				continue
+			}
+			// The result is {old, success}.
+			result := newRawValue(uint32(operands[3].(literalValue).value.(uint64)))
+			copy(result.buf, old.asRawValue(r).buf)
+			if equal {
+				result.buf[operands[4].(literalValue).value.(uint64)] = 1
+			}
+			if r.debug {
+				fmt.Fprintln(os.Stderr, indent+"cmpxchg:", operands, "->", result)
+			}
+			locals[inst.localIndex] = result
 		case llvm.Alloca:
 			// Alloca normally allocates some stack memory. In the interpreter,
 			// it allocates a global instead.
@@ -1161,6 +1184,45 @@ func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) (boo
 	}
 }
 
+// interpretAtomicRMW returns the value an atomicrmw stores. It returns false
+// if the operation must be done at runtime.
+func (r *runner) interpretAtomicRMW(op llvm.AtomicRMWBinOp, old, val value) (value, bool) {
+	if op == llvm.AtomicRMWBinOpXchg {
+		return val, true
+	}
+	oldUint, valUint, err := uintOperands(r, old, val)
+	if err != nil {
+		return nil, false
+	}
+	oldInt, valInt, _ := intOperands(r, old, val)
+	var result uint64
+	switch op {
+	case llvm.AtomicRMWBinOpAdd:
+		result = oldUint + valUint
+	case llvm.AtomicRMWBinOpSub:
+		result = oldUint - valUint
+	case llvm.AtomicRMWBinOpAnd:
+		result = oldUint & valUint
+	case llvm.AtomicRMWBinOpNand:
+		result = ^(oldUint & valUint)
+	case llvm.AtomicRMWBinOpOr:
+		result = oldUint | valUint
+	case llvm.AtomicRMWBinOpXor:
+		result = oldUint ^ valUint
+	case llvm.AtomicRMWBinOpMax:
+		result = uint64(max(oldInt, valInt))
+	case llvm.AtomicRMWBinOpMin:
+		result = uint64(min(oldInt, valInt))
+	case llvm.AtomicRMWBinOpUMax:
+		result = max(oldUint, valUint)
+	case llvm.AtomicRMWBinOpUMin:
+		result = min(oldUint, valUint)
+	default:
+		return nil, false
+	}
+	return makeLiteralInt(result, int(val.len(r)*8)), true
+}
+
 func uintOperands(r *runner, lhs, rhs value) (uint64, uint64, error) {
 	lhsUint, err := lhs.Uint(r)
 	if err != nil {
@@ -1236,6 +1298,21 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		if ordering := inst.llvmInst.Ordering(); ordering != llvm.AtomicOrderingNotAtomic {
 			result.SetOrdering(ordering)
 		}
+	case atomicRMW, atomicCmpXchg:
+		for _, op := range operands {
+			err := mem.markExternalStore(op)
+			if err != nil {
+				return r.errorAt(inst, err)
+			}
+		}
+		if inst.opcode == atomicRMW {
+			op := llvm.AtomicRMWBinOp(inst.operands[2].(literalValue).value.(uint8))
+			result = r.builder.CreateAtomicRMW(op, operands[0], operands[1], inst.llvmInst.Ordering(), inst.llvmInst.IsAtomicSingleThread())
+		} else {
+			result = r.builder.CreateAtomicCmpXchg(operands[0], operands[1], operands[2], inst.llvmInst.CmpXchgSuccessOrdering(), inst.llvmInst.CmpXchgFailureOrdering(), inst.llvmInst.IsAtomicSingleThread())
+		}
+		result.SetVolatile(inst.llvmInst.IsVolatile())
+		result.SetAlignment(inst.llvmInst.Alignment())
 	case llvm.BitCast:
 		result = r.builder.CreateBitCast(operands[0], inst.llvmInst.Type(), inst.name)
 	case llvm.PtrToInt:
