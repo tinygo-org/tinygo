@@ -308,7 +308,7 @@ func TestUserConfigDir(t *testing.T) {
 
 func TestDirFS(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Log("TODO: implement Readdir for Windows")
+		t.Log("TODO: implement ReadAt for Windows")
 		return
 	}
 	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
