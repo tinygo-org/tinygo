@@ -1,6 +1,7 @@
 package testing_test
 
 import (
+	"maps"
 	"runtime"
 	"testing"
 )
@@ -11,6 +12,8 @@ var (
 
 	memStatsAllocations [101]*byte
 	memStatsAllocation  int
+
+	clonedMap map[int]int
 )
 
 func TestMemStatsMallocs(t *testing.T) {
@@ -43,5 +46,15 @@ func TestAllocsPerRun(t *testing.T) {
 		if allocations[i] == allocations[i-1] {
 			t.Fatalf("allocations %d and %d have the same address", i-1, i)
 		}
+	}
+}
+
+func TestMapCloneAllocs(t *testing.T) {
+	m := map[int]int{1: 1, 2: 2, 3: 3, 4: 4}
+	allocs := testing.AllocsPerRun(100, func() {
+		clonedMap = maps.Clone(m)
+	})
+	if allocs != 2 {
+		t.Errorf("got %v allocations for maps.Clone, want 2", allocs)
 	}
 }
