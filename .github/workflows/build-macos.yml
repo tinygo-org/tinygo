@@ -42,7 +42,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: stable
           cache: true
       - uses: ./.github/actions/setup-llvm-macos
         with:
@@ -78,7 +78,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: stable
           cache: true
       - uses: ./.github/actions/setup-llvm-macos
         with:
@@ -103,7 +103,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: stable
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
@@ -151,7 +151,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: stable
           cache: true
       - name: Download TinyGo build
         uses: actions/download-artifact@v8
@@ -217,7 +217,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: stable
           cache: true
       - name: Build TinyGo (LLVM ${{ matrix.version }})
         run: go install -tags=llvm${{ matrix.version }}
