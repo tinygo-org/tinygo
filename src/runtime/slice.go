@@ -3,7 +3,6 @@ package runtime
 // This file implements compiler builtins for slices: append() and copy().
 
 import (
-	"math/bits"
 	"unsafe"
 )
 
@@ -30,13 +29,10 @@ func sliceGrow(oldBuf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr, 
 		return oldBuf, oldLen, oldCap
 	}
 
-	// This can be made more memory-efficient by multiplying by some other constant, such as 1.5,
-	// which seems to be allowed by the Go language specification (but this can be observed by
-	// programs); however, due to memory fragmentation and the current state of the TinyGo
-	// memory allocators, this causes some difficult to debug issues.
-	newCap = 1 << bits.Len(uint(newCap))
+	newCap = sliceGrowCap(oldCap, newCap, elemSize, layout)
 
 	buf := alloc(newCap*elemSize, layout)
+	newCap = sliceGrowFill(buf, newCap, elemSize, layout)
 	if oldLen > 0 {
 		// copy any data to new slice
 		memmove(buf, oldBuf, oldLen*elemSize)

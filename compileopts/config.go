@@ -31,7 +31,7 @@ const (
 // library path in advance in several places).
 var libVersions = map[string]int{
 	"musl":         3,
-	"bdwgc":        4,
+	"bdwgc":        5,
 	"picolibc":     2,
 	"wasmbuiltins": 1,
 	"compiler-rt":  1,

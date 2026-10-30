@@ -114,21 +114,21 @@ func main() {
 	// append
 	var grow []int
 	println("slice is nil?", grow == nil, nil == grow)
-	printslice("grow", grow)
+	printgrown("grow", grow)
 	grow = append(grow, 42)
-	printslice("grow", grow)
+	printgrown("grow", grow)
 	grow = append(grow, -1, -2)
-	printslice("grow", grow)
+	printgrown("grow", grow)
 	grow = append(grow, foo...)
-	printslice("grow", grow)
+	printgrown("grow", grow)
 	grow = append(grow)
-	printslice("grow", grow)
+	printgrown("grow", grow)
 	grow = append(grow, grow...)
-	printslice("grow", grow)
+	printgrown("grow", grow)
 
 	// append string to []bytes
 	bytes := append([]byte{1, 2, 3}, "foo"...)
-	print("bytes: len=", len(bytes), " cap=", cap(bytes), " data:")
+	print("bytes: len=", len(bytes), " cap>=len=", cap(bytes) >= len(bytes), " data:")
 	for _, n := range bytes {
 		print(" ", n)
 	}
@@ -308,4 +308,14 @@ func makeMyUint8(x myUint8) myUint8 { return x }
 
 func addInt(ptr *int, index uintptr) *int {
 	return (*int)(unsafe.Add(unsafe.Pointer(ptr), unsafe.Sizeof(int(1))*index))
+}
+
+// printgrown prints a slice that append grew. Its capacity depends on the
+// allocator, and Go only promises that it holds the slice.
+func printgrown(name string, s []int) {
+	print(name, ": len=", len(s), " cap>=len=", cap(s) >= len(s), " data:")
+	for _, n := range s {
+		print(" ", n)
+	}
+	println()
 }
