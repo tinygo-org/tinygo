@@ -334,33 +334,6 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 	return passed, err
 }
 
-func dirsToModuleRootRel(maindir, modroot string) []string {
-	var dirs []string
-	last := ".."
-	// strip off path elements until we hit the module root
-	// adding `..`, `../..`, `../../..` until we're done
-	for maindir != modroot {
-		dirs = append(dirs, last)
-		last = filepath.Join(last, "..")
-		maindir = filepath.Dir(maindir)
-	}
-	dirs = append(dirs, ".")
-	return dirs
-}
-
-func dirsToModuleRootAbs(maindir, modroot string) []string {
-	var dirs = []string{maindir}
-	last := filepath.Join(maindir, "..")
-	// strip off path elements until we hit the module root
-	// adding `..`, `../..`, `../../..` until we're done
-	for maindir != modroot {
-		dirs = append(dirs, last)
-		last = filepath.Join(last, "..")
-		maindir = filepath.Dir(maindir)
-	}
-	return dirs
-}
-
 // validateOutputFormat checks if the output file extension matches the expected format
 func validateOutputFormat(outpath, expectedExt string) error {
 	actualExt := filepath.Ext(outpath)
@@ -978,31 +951,22 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 				emulator = emulator[1:]
 			}
 
-			wd, _ := os.Getwd()
-
-			// Below adds additional wasmtime flags in case a test reads files
-			// outside its directory, like "../testdata/e.txt". This allows any
-			// relative directory up to the module root, even if the test never
-			// reads any files.
-			if config.TestConfig.CompileTestBinary {
-				// Set working directory to package dir
-				wd = result.MainDir
-
-				// Add relative dirs (../, ../..) up to module root (for wasip1)
-				dirs := dirsToModuleRootRel(result.MainDir, result.ModuleRoot)
-
-				// Add absolute dirs up to module root (for wasip2)
-				dirs = append(dirs, dirsToModuleRootAbs(result.MainDir, result.ModuleRoot)...)
-
-				for _, d := range dirs {
-					emuArgs = append(emuArgs, "--dir="+d)
-				}
-			} else {
-				emuArgs = append(emuArgs, "--dir=.")
+			wd, err := os.Getwd()
+			if err != nil {
+				return result, err
 			}
 
-			emuArgs = append(emuArgs, "--dir="+wd)
-			emuArgs = append(emuArgs, "--env=PWD="+wd)
+			if config.TestConfig.CompileTestBinary {
+				// Resolve virtual GOROOT links created by loader/goroot.go.
+				wd, err = resolveDirectory(result.MainDir)
+				if err != nil {
+					return result, fmt.Errorf("could not resolve WASI test directory %q: %w", result.MainDir, err)
+				}
+			}
+
+			dirs, guestWD := wasmtimePreopens(wd, os.TempDir(), config.TestConfig.CompileTestBinary, emulator)
+			emuArgs = append(emuArgs, dirs...)
+			emuArgs = append(emuArgs, "--env=PWD="+guestWD)
 			for _, v := range environmentVars {
 				emuArgs = append(emuArgs, "--env", v)
 			}
@@ -1058,6 +1022,54 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		return result, &commandError{"failed to run compiled binary", result.Binary, err}
 	}
 	return result, nil
+}
+
+func wasmtimePreopens(wd, tmpDir string, test bool, emulator []string) ([]string, string) {
+	volume := filepath.VolumeName(wd)
+	guestWD := filepath.ToSlash(wd[len(volume):])
+	if guestWD == "" {
+		guestWD = "/"
+	}
+	var dirs []string
+	if test {
+		// Match Go's root mount in lib/wasm/go_wasip1_wasm_exec.
+		root := "/"
+		if volume != "" {
+			root = volume + string(filepath.Separator) + "::/"
+		}
+		dirs = append(dirs, "--dir="+root)
+	} else {
+		mount := wd
+		if volume != "" {
+			mount += "::" + guestWD
+		}
+		dirs = append(dirs, "--dir=.", "--dir="+mount)
+	}
+	if (!test || runtime.GOOS == "windows") && !hasWasmtimePreopen(emulator, "/tmp") {
+		dirs = append(dirs, "--dir="+tmpDir+"::/tmp")
+	}
+	return dirs, guestWD
+}
+
+func hasWasmtimePreopen(args []string, guestPath string) bool {
+	for i := 0; i < len(args); i++ {
+		dir, ok := strings.CutPrefix(args[i], "--dir=")
+		if args[i] == "--dir" && i+1 < len(args) {
+			i++
+			dir, ok = args[i], true
+		}
+		if !ok {
+			continue
+		}
+		_, guest, aliased := strings.Cut(dir, "::")
+		if !aliased {
+			guest = dir
+		}
+		if guest == guestPath || guest == guestPath+"/" {
+			return true
+		}
+	}
+	return false
 }
 
 func touchSerialPortAt1200bps(port string) (err error) {
