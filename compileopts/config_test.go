@@ -33,3 +33,24 @@ func TestExtraFilesBoehm(t *testing.T) {
 		t.Fatalf("unexpected Boehm GC files: got %v, want %v", got, want)
 	}
 }
+
+func TestLDFlagsWasmStackSize(t *testing.T) {
+	config := &Config{
+		Options: &Options{
+			Scheduler: "none",
+			StackSize: 16 << 20,
+		},
+		Target: &TargetSpec{
+			Linker:    "wasm-ld",
+			Scheduler: "asyncify",
+		},
+	}
+	if got := config.LDFlags(); !slices.Contains(got, "stack-size=16777216") {
+		t.Fatalf("expected stack-size=16777216 in LDFlags for scheduler=none, got %v", got)
+	}
+
+	config.Options.Scheduler = "asyncify"
+	if got := config.LDFlags(); slices.Contains(got, "stack-size=16777216") {
+		t.Fatalf("unexpected stack-size in LDFlags for scheduler=asyncify, got %v", got)
+	}
+}
