@@ -955,15 +955,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// The lhs is a pointer. This sometimes happens for particular
 				// pointer tricks.
 				rhsUint, rhsErr := rhs.Uint(r)
-				if inst.opcode == llvm.Add && rhsErr == nil {
-					// This likely means this is part of a
-					// unsafe.Pointer(uintptr(ptr) + offset) pattern.
-					lhsPtr, err = lhsPtr.addOffset(int64(rhsUint))
-					if err != nil {
-						return nil, mem, r.errorAt(inst, err)
-					}
-					locals[inst.localIndex] = lhsPtr
-				} else if inst.opcode == llvm.Xor && rhsErr == nil && rhsUint == 0 {
+				if inst.opcode == llvm.Xor && rhsErr == nil && rhsUint == 0 {
 					// Special workaround for strings.noescape, see
 					// src/strings/builder.go in the Go source tree. This is
 					// the identity operator, so we can return the input.
