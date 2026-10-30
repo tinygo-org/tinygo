@@ -168,12 +168,21 @@ func (uart *UART) RTS() bool {
 	return false
 }
 
-// GetRNG returns 32 bits of cryptographically secure random data
-func GetRNG() (uint32, error) {
+// RandomUint32 returns 32 bits of cryptographically secure random data.
+func RandomUint32() (uint32, error) {
 	for tkey.TRNG.STATUS.Get() == 0 {
 	}
 
 	return uint32(tkey.TRNG.ENTROPY.Get()), nil
+}
+
+// GetRNG returns a random uint32. See RandomUint32 for details.
+//
+// Deprecated: use RandomUint32 instead.
+//
+//go:fix inline
+func GetRNG() (uint32, error) {
+	return RandomUint32()
 }
 
 // DesignName returns the FPGA design name.

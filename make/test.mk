@@ -53,6 +53,7 @@ TEST_PACKAGES_FAST = \
 	internal/itoa \
 	internal/profile \
 	internal/reflectlite \
+	machine \
 	math \
 	math/cmplx \
 	net/http/internal/ascii \

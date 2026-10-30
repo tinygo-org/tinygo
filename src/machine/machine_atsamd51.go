@@ -2125,8 +2125,8 @@ func (dac DAC) syncDAC() {
 	}
 }
 
-// GetRNG returns 32 bits of cryptographically secure random data
-func GetRNG() (uint32, error) {
+// RandomUint32 returns 32 bits of cryptographically secure random data.
+func RandomUint32() (uint32, error) {
 	if !sam.MCLK.APBCMASK.HasBits(sam.MCLK_APBCMASK_TRNG_) {
 		// Turn on clock for TRNG
 		sam.MCLK.APBCMASK.SetBits(sam.MCLK_APBCMASK_TRNG_)
@@ -2138,6 +2138,15 @@ func GetRNG() (uint32, error) {
 	}
 	ret := sam.TRNG.DATA.Get()
 	return ret, nil
+}
+
+// GetRNG returns a random uint32. See RandomUint32 for details.
+//
+// Deprecated: use RandomUint32 instead.
+//
+//go:fix inline
+func GetRNG() (uint32, error) {
+	return RandomUint32()
 }
 
 // Flash related code

@@ -547,12 +547,12 @@ func (uart *UART) writeByte(b byte) error {
 
 func (uart *UART) flush() {}
 
-// GetRNG returns 32-bit random numbers using the ESP32-C3 true random number generator,
+// RandomUint32 returns 32-bit random numbers using the ESP32-C3 true random number generator,
 // Random numbers are generated based on the thermal noise in the system and the
 // asynchronous clock mismatch.
 // For maximum entropy also make sure that the SAR_ADC is enabled.
 // See esp32-c3_technical_reference_manual_en.pdf p.524
-func GetRNG() (ret uint32, err error) {
+func RandomUint32() (ret uint32, err error) {
 	// ensure ADC clock is initialized
 	initADCClock()
 
@@ -562,6 +562,15 @@ func GetRNG() (ret uint32, err error) {
 	}
 
 	return esp.APB_CTRL.GetRND_DATA(), nil
+}
+
+// GetRNG returns a random uint32. See RandomUint32 for details.
+//
+// Deprecated: use RandomUint32 instead.
+//
+//go:fix inline
+func GetRNG() (uint32, error) {
+	return RandomUint32()
 }
 
 func initADCClock() {
