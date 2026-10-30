@@ -89,6 +89,10 @@ func (fs unixFilesystem) OpenFile(path string, flag int, perm FileMode) (uintptr
 	return uintptr(fp), handleSyscallError(err)
 }
 
+func openFileNoMount(name string, flag int) (*File, error) {
+	return nil, &PathError{Op: "open", Path: name, Err: ErrNotExist}
+}
+
 // unixFileHandle is a Unix file pointer with associated methods that implement
 // the FileHandle interface.
 type unixFileHandle uintptr
