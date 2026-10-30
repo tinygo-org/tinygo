@@ -5,7 +5,7 @@ const GOARCH = "amd64"
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 64
 
-const deferExtraRegs = 0
+const deferExtraRegs = 1 // the frame pointer
 
 const callInstSize = 5 // "call someFunction" is 5 bytes
 

@@ -787,6 +787,19 @@ func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 		// For details, see: https://llvm.org/docs/LangRef.html#function-attributes
 		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 1))
 	}
+	if c.hasFramePointers() {
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("frame-pointer", "all"))
+	}
+}
+
+// hasFramePointers reports whether functions keep a frame pointer, so that
+// perf and other frame pointer unwinders can walk native Linux stacks.
+func (c *compilerContext) hasFramePointers() bool {
+	parts := strings.Split(c.Triple, "-")
+	if len(parts) < 3 || parts[2] != "linux" {
+		return false
+	}
+	return parts[0] == "x86_64" || parts[0] == "aarch64"
 }
 
 // addStandardAttributes adds all attributes added to defined functions.
