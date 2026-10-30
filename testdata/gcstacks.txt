@@ -1,0 +1,9 @@
+gosched ok
+sleep ok
+deep ok
+channel sum: 64120
+pending args ok
+panic ok
+panic park ok
+mixed ok
+done

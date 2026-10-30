@@ -39,7 +39,6 @@ func exit(goexit bool, next *Task) {
 	t := Current()
 	if hasReleasableStack {
 		t.Exited = true
-		unlinkStack(t)
 	}
 	if next != nil {
 		synctestTaskWake(next)

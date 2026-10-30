@@ -475,6 +475,7 @@ func TestBuild(t *testing.T) {
 		"finalizerlarge.go",
 		"float.go",
 		"gc.go",
+		"gcstacks.go",
 		"generics.go",
 		"go1.21.go",
 		"go1.22/",
@@ -524,6 +525,20 @@ func TestBuild(t *testing.T) {
 		t.Parallel()
 		hostOptions := optionsFromTarget("", sema)
 		runPlatTests(hostOptions, tests, t)
+		for _, name := range gcStackNativeTests {
+			t.Run(name, func(t *testing.T) {
+				if runtime.GOOS == "windows" && (name == "gcstacks-stale.go" || name == "gcstacks-blocked.go") {
+					t.Skip("boehm scans whole goroutine stacks with the tasks scheduler")
+				}
+				t.Parallel()
+				runTest(name, hostOptions, t, nil, nil)
+			})
+		}
+		for _, skipped := range gcStackNativeSkipped {
+			t.Run(skipped.name, func(t *testing.T) {
+				t.Skip(skipped.reason)
+			})
+		}
 		t.Run("testing.go-verbose", func(t *testing.T) {
 			t.Parallel()
 			runTest("testing-verbose.go", hostOptions, t, nil, nil)
@@ -722,6 +737,11 @@ func TestBuild(t *testing.T) {
 
 			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasm", sema), t)
+			runGCStackTests(t, optionsFromTarget("wasm", sema))
+			t.Run("gcstacks-finalizer.go", func(t *testing.T) {
+				t.Parallel()
+				runTest("gcstacks-finalizer.go", optionsFromTarget("wasm", sema), t, nil, nil)
+			})
 			// Test with -gc=boehm.
 			t.Run("gc.go-boehm", func(t *testing.T) {
 				t.Parallel()
@@ -736,6 +756,11 @@ func TestBuild(t *testing.T) {
 			options := optionsFromTarget("wasip1", sema)
 			runPlatTests(options, tests, t)
 			runGCLivenessTest(options, t)
+			runGCStackTests(t, options)
+			runGCStackSizeTests(t, options)
+			t.Run("gcstacks-finalizer.go", func(t *testing.T) {
+				t.Skip("finalizers only run deterministically on the wasm target")
+			})
 			t.Run("cgo-realloc", func(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
 			})
@@ -753,6 +778,7 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasip2", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasip2", sema), t)
+			runGCStackTests(t, optionsFromTarget("wasip2", sema))
 		})
 	}
 
@@ -823,6 +849,66 @@ func TestESP32QEMU(t *testing.T) {
 	}
 }
 
+// gcStackNativeTests stress goroutine stacks and the GC. They run on the host
+// and on the wasm targets. gcstacks.go is part of the main list of tests.
+var gcStackNativeTests = []string{
+	"gcdiff.go",
+	"gcstacks-blocked.go",
+	"gcstacks-exit.go",
+	"gcstacks-panics.go",
+	"gcstacks-queues.go",
+	"gcstacks-stale.go",
+}
+
+// gcStackNativeSkipped are stack tests that do not work with the boehm GC and
+// the schedulers the host uses.
+var gcStackNativeSkipped = []struct{ name, reason string }{
+	{"gcstacks-soak.go", "the host does not free the stacks of leaked goroutines"},
+	{"gcstacks-scale.go", "collection time on the host depends on its scheduler"},
+	{"gcstacks-finalizer.go", "finalizers do not run with the boehm GC"},
+}
+
+// gcStackTests are the tests for the wasm targets, where leaked goroutines can
+// be freed.
+var gcStackTests = append(slices.Clone(gcStackNativeTests), "gcstacks-soak.go")
+
+func runGCStackTests(t *testing.T, options compileopts.Options) {
+	t.Helper()
+	for _, name := range gcStackTests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			runTest(name, options, t, nil, nil)
+		})
+	}
+
+	// The collector must find the same live objects as one that never frees.
+	t.Run("gcdiff.go-leaking", func(t *testing.T) {
+		t.Parallel()
+		leaking := options
+		leaking.GC = "leaking"
+		runTest("gcdiff.go", leaking, t, nil, nil)
+	})
+
+	// This one measures time, so it does not run in parallel with the others.
+	t.Run("gcstacks-scale.go", func(t *testing.T) {
+		runTest("gcstacks-scale.go", options, t, nil, nil)
+	})
+}
+
+// runGCStackSizeTests runs the stack scanning test with goroutine stack sizes
+// that are not multiples of the block size.
+func runGCStackSizeTests(t *testing.T, options compileopts.Options) {
+	t.Helper()
+	for _, size := range []uint64{9001, 16393, 33333, 65545, 100003} {
+		t.Run(fmt.Sprintf("gcstacks.go-stack-size-%d", size), func(t *testing.T) {
+			t.Parallel()
+			sized := options
+			sized.StackSize = size
+			runTest("gcstacks.go", sized, t, nil, nil)
+		})
+	}
+}
+
 func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	emuCheck(t, options)
 
@@ -877,6 +963,14 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// is still covered by larger targets such as riscv-qemu.
 			continue
 		}
+		if options.Target == "cortex-m-qemu" && name == "gcstacks.go" {
+			// Too many goroutines for the LM3S6965's RAM.
+			continue
+		}
+		if options.Target == "riscv-qemu" && name == "gcstacks.go" {
+			// The cores scheduler crashes with timers and runtime.GC, see #6047.
+			continue
+		}
 		if options.Target == "simavr" {
 			// Not all tests are currently supported on AVR.
 			// Skip the ones that aren't.
@@ -893,6 +987,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 
 			case "gc.go":
 				// Does not pass due to high mark false positive rate.
+				continue
+
+			case "gcstacks.go":
+				// Too many goroutines for the available RAM.
 				continue
 
 			case "buildinfo.go", "json.go", "stdlib.go", "testing.go":
@@ -1466,6 +1564,65 @@ func TestWasmExport(t *testing.T) {
 				checkOutput(t, "testdata/wasmexport.txt", output.Bytes())
 			}
 		})
+	}
+}
+
+// Test that calling a //go:wasmexport function does not leak its goroutine
+// stack.
+func TestWasmExportHeapInuse(t *testing.T) {
+	t.Parallel()
+
+	tmpdir := t.TempDir()
+	options := optionsFromTarget("wasip1", sema)
+	options.BuildMode = "c-shared"
+	buildConfig, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build("testdata/wasmexport-heap.go", ".wasm", tmpdir, buildConfig)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+	data, err := os.ReadFile(result.Binary)
+	if err != nil {
+		t.Fatal("could not read wasm binary: ", err)
+	}
+
+	ctx := context.Background()
+	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	defer r.Close(ctx)
+	wasi_snapshot_preview1.MustInstantiate(ctx, r)
+	mod, err := r.InstantiateWithConfig(ctx, data, wazero.NewModuleConfig().WithStartFunctions())
+	if err != nil {
+		t.Fatal("could not instantiate wasm module:", err)
+	}
+	call := func(name string) uint64 {
+		fn := mod.ExportedFunction(name)
+		if fn == nil {
+			t.Fatalf("missing export %s", name)
+		}
+		results, err := fn.Call(ctx)
+		if err != nil {
+			t.Fatalf("failed to call %s: %v", name, err)
+		}
+		if len(results) > 0 {
+			return results[0]
+		}
+		return 0
+	}
+	call("_initialize")
+
+	before := call("heapInuse")
+	const calls = 1000
+	for i := 0; i < calls; i++ {
+		call("noop")
+	}
+	after := call("heapInuse")
+
+	// A leaked stack is at least a few KiB per call, so this allows for
+	// ordinary heap growth but not for 1000 leaked stacks.
+	if after > before+1<<20 {
+		t.Errorf("HeapInuse grew from %d to %d bytes after %d exports", before, after, calls)
 	}
 }
 
