@@ -35,5 +35,5 @@
 	],
 	"emulator": "wasmtime run --wasm component-model -Sp3 -Wcomponent-model-async -Wcomponent-model-threading -Sinherit-network -Sallow-ip-name-lookup --dir={tmpDir}::/tmp {}",
 	"wit-package": "{root}/lib/wasi-libc/wasi/p3/wit/",
-	"wit-world": "wasi:cli/command@0.3.0"
+	"wit-world": "wasi:cli/command@0.3.2"
 }

@@ -29,7 +29,7 @@ func wasip3_list_string_free(ptr *wasip3ListString)
 
 // Entry point for the wasi:cli/run export. The result is true for an error.
 //
-//go:wasmexport wasi:cli/run@0.3.0#run
+//go:wasmexport wasi:cli/run@0.3.2#run
 func wasiCliRun() bool {
 	initAllOnce()
 	callMain()
