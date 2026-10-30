@@ -21,7 +21,7 @@ const crossCoreCPUInterrupt = 3
 
 var (
 	printLock     spinLock
-	schedulerLock spinLock
+	schedulerLock schedulerSpinLock
 	atomicsLock   spinLock
 	futexLock     spinLock
 	ticksLock     spinLock
@@ -46,6 +46,42 @@ func (l *spinLock) Unlock() {
 
 func spinLoopWait() {
 	device.Asm("nop")
+}
+
+// schedulerSpinLock keeps interrupts off while held. An interrupt handler on
+// this core that wakes a goroutine would otherwise spin on a lock that the
+// code it interrupted holds.
+type schedulerSpinLock struct {
+	spinLock
+	ps [numCPU]interrupt.State
+}
+
+func (l *schedulerSpinLock) Lock() {
+	core := currentCPU()
+	state := interrupt.Disable()
+	l.spinLock.Lock()
+	l.ps[core] = state
+}
+
+func (l *schedulerSpinLock) Unlock() {
+	state := l.ps[currentCPU()]
+	l.spinLock.Unlock()
+	interrupt.Restore(state)
+}
+
+// unlockMasked releases the lock and leaves interrupts off. Pass the returned
+// state to lockMasked.
+func (l *schedulerSpinLock) unlockMasked() interrupt.State {
+	state := l.ps[currentCPU()]
+	l.spinLock.Unlock()
+	return state
+}
+
+// lockMasked takes the lock with interrupts already off and records the state
+// that Unlock will restore.
+func (l *schedulerSpinLock) lockMasked(state interrupt.State) {
+	l.spinLock.Lock()
+	l.ps[currentCPU()] = state
 }
 
 // Return the current core number: 0 or 1. PRID bit 13 is the core ID, see
@@ -230,14 +266,13 @@ func schedulerUnlockAndWait() {
 
 	// waiti lowers PS.INTLEVEL and waits in one step, so a wake sent after the
 	// unlock is not lost. See the Xtensa ISA Reference Manual, WAITI.
-	state := interrupt.Disable()
-	schedulerLock.Unlock()
+	// Interrupts stay off from the unlock until the lock is taken again.
+	state := schedulerLock.unlockMasked()
 	for schedulerWakePending[core].Swap(0) == 0 {
 		device.Asm("waiti 0")
 		interrupt.Disable()
 	}
-	interrupt.Restore(state)
-	schedulerLock.Lock()
+	schedulerLock.lockMasked(state)
 }
 
 // Wake another core, if one is waiting or sleeping. Must be called with the
