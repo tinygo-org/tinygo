@@ -1352,6 +1352,44 @@ func TestTest(t *testing.T) {
 					t.Error("test passed")
 				}
 			})
+
+			t.Run("NoTestsInvalid", func(t *testing.T) {
+				t.Parallel()
+
+				for _, test := range []struct {
+					name   string
+					source string
+					want   string
+				}{
+					{"undefined", "package probe\nfunc check() { undefinedName() }\n", "undefinedName"},
+					{"syntax", "package probe\nfunc check() {\n", "expected"},
+				} {
+					t.Run(test.name, func(t *testing.T) {
+						dir := t.TempDir()
+						for name, content := range map[string]string{
+							"go.mod":   "module example.com/notests\n\ngo 1.25.0\n",
+							"probe.go": test.source,
+						} {
+							if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+								t.Fatal(err)
+							}
+						}
+						opts := targ.opts
+						opts.Directory = dir
+						var output bytes.Buffer
+						passed, err := Test(".", false, &output, &output, &opts, "")
+						if err == nil || !strings.Contains(err.Error(), test.want) {
+							t.Fatalf("error = %v, want diagnostic containing %q", err, test.want)
+						}
+						if passed {
+							t.Error("invalid package passed")
+						}
+						if strings.Contains(output.String(), "[no test files]") {
+							t.Error("invalid package reported as having no test files")
+						}
+					})
+				}
+			})
 		})
 	}
 }

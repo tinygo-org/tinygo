@@ -290,12 +290,6 @@ func load(config *compileopts.Config, inputs []string, typeChecker types.Config,
 		}
 	}
 
-	if !analysis && config.TestConfig.CompileTestBinary && !strings.HasSuffix(p.sorted[len(p.sorted)-1].ImportPath, ".test") {
-		// Trying to compile a test binary but there are no test files in this
-		// package.
-		return p, NoTestFilesError{p.sorted[len(p.sorted)-1].ImportPath}
-	}
-
 	p.initRecordedPaths()
 	return p, nil
 }
@@ -690,7 +684,7 @@ func (p *Package) Check() error {
 	packageName := p.ImportPath
 	if p.program.analysis {
 		packageName = analysisImportPath(packageName)
-	} else if p == p.program.MainPkg() {
+	} else if p == p.program.MainPkg() && (!p.program.config.TestConfig.CompileTestBinary || strings.HasSuffix(p.ImportPath, ".test")) {
 		if p.Name != "main" {
 			return Errors{p, []error{
 				scanner.Error{
