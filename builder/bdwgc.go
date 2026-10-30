@@ -26,8 +26,8 @@ var BoehmGC = Library{
 			"-DIGNORE_DYNAMIC_LOADING", // we don't support dynamic loading at the moment
 			"-DNO_GETCONTEXT",          // musl doesn't support getcontext()
 			"-DGC_DISABLE_INCREMENTAL", // don't mess with SIGSEGV and such
-			// No padding byte per object: the compiler never makes a pointer just
-			// past the end of an object, as for s[len(s):], see sliceOffset.
+			// No padding byte per object. Go forbids a pointer just past the end of
+			// an allocation, see https://pkg.go.dev/unsafe#Pointer rule (3).
 			"-DDONT_ADD_BYTE_AT_END",
 
 			// Use a minimal environment.
