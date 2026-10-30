@@ -1810,6 +1810,9 @@ func generate(indir, outdir, sourceURL, interruptSystem string) error {
 	os.MkdirAll(outdir, 0777)
 
 	infiles, err := filepath.Glob(filepath.Join(indir, "*.svd"))
+	if strings.HasSuffix(indir, ".svd") {
+		infiles = []string{indir}
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "could not read .svd files:", err)
 		os.Exit(1)
