@@ -427,19 +427,258 @@ type UART struct {
 	Buffer *RingBuffer
 }
 
-func (uart *UART) Configure(config UARTConfig) {
+var (
+	onceUart     = sync.Once{}
+	errSamePins  = errors.New("UART: invalid pin combination")
+	errWrongUART = errors.New("UART: unsupported UARTn")
+)
+
+const (
+	uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
+		esp.UART_INT_ENA_RXFIFO_TOUT_INT_ENA |
+		esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA
+
+	// CPU interrupt line shared by all UART peripherals. Line 8 is used by the
+	// USB Serial/JTAG peripheral and line 10 by the GPIO matrix, so use 13.
+	cpuInterruptFromUART = 13
+)
+
+type registerSet struct {
+	interruptMapReg   *volatile.Register32
+	uartClockReg      *volatile.Register32
+	uartClockResetReg *volatile.Register32
+	uartClockBitMask  uint32
+	// gpioMatrixSignal is the GPIO matrix signal index for this UART's
+	// TX/RX lines. Taken from ESP-IDF soc/esp32s3/gpio_sig_map.h, where
+	// UnRXD_IN_IDX and UnTXD_OUT_IDX share the same value.
+	gpioMatrixSignal uint32
+}
+
+func (uart *UART) Configure(config UARTConfig) error {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
-	// Crystal clock source is selected by default
-	uart.Bus.CLKDIV.Set(xtalClock / config.BaudRate)
+	// Pick default pins for a zero-value config, as the runtime passes when
+	// it configures the console. UART0 keeps the pins the ROM bootloader
+	// already wired through the IO MUX; UART2 has none there, so its pins
+	// stay caller-supplied.
+	if config.TX == 0 && config.RX == 0 {
+		switch {
+		case uart.Bus == esp.UART0:
+			config.TX = NoPin
+			config.RX = NoPin
+		case uart.Bus == esp.UART1:
+			config.TX = GPIO17
+			config.RX = GPIO18
+		}
+	}
+	if config.TX == config.RX && config.TX != NoPin {
+		return errSamePins
+	}
+	switch {
+	case uart.Bus == esp.UART0:
+		return uart.configure(config, registerSet{
+			interruptMapReg:   &esp.INTERRUPT_CORE0.UART_INTR_MAP,
+			uartClockReg:      &esp.SYSTEM.PERIP_CLK_EN0,
+			uartClockResetReg: &esp.SYSTEM.PERIP_RST_EN0,
+			uartClockBitMask:  esp.SYSTEM_PERIP_CLK_EN0_UART_CLK_EN,
+			gpioMatrixSignal:  12,
+		})
+	case uart.Bus == esp.UART1:
+		return uart.configure(config, registerSet{
+			interruptMapReg:   &esp.INTERRUPT_CORE0.UART1_INTR_MAP,
+			uartClockReg:      &esp.SYSTEM.PERIP_CLK_EN0,
+			uartClockResetReg: &esp.SYSTEM.PERIP_RST_EN0,
+			uartClockBitMask:  esp.SYSTEM_PERIP_CLK_EN0_UART1_CLK_EN,
+			gpioMatrixSignal:  15,
+		})
+	case uart.Bus == esp.UART2:
+		// Unlike UART0/UART1, UART2 is clocked from PERIP_CLK_EN1.
+		return uart.configure(config, registerSet{
+			interruptMapReg:   &esp.INTERRUPT_CORE0.UART2_INTR_MAP,
+			uartClockReg:      &esp.SYSTEM.PERIP_CLK_EN1,
+			uartClockResetReg: &esp.SYSTEM.PERIP_RST_EN1,
+			uartClockBitMask:  esp.SYSTEM_PERIP_CLK_EN1_UART2_CLK_EN,
+			gpioMatrixSignal:  18,
+		})
+	}
+	return errWrongUART
+}
+
+func (uart *UART) configure(config UARTConfig, regs registerSet) error {
+	initUARTClock(uart.Bus, regs)
+
+	// Disable TX/RX clock to make sure the transmitter and receiver are idle
+	// while we reconfigure them.
+	uart.Bus.SetCLK_CONF_TX_SCLK_EN(0)
+	uart.Bus.SetCLK_CONF_RX_SCLK_EN(0)
+
+	// Clock source: 1=APB_CLK, 2=FOSC_CLK, 3=XTAL_CLK
+	uart.Bus.SetCLK_CONF_SCLK_SEL(1)
+	// Reset the divider; SetBaudRate sets SCLK_DIV_NUM below.
+	uart.Bus.SetCLK_CONF_SCLK_DIV_NUM(0)
+	uart.Bus.SetCLK_CONF_SCLK_DIV_A(0)
+	uart.Bus.SetCLK_CONF_SCLK_DIV_B(0)
+
+	uart.SetBaudRate(config.BaudRate)
+
+	// The data format is left at its reset value of 8 data bits, 1 stop bit
+	// and no parity, which is what CONF0 comes up with after the reset
+	// sequence in initUARTClock.
+
+	// Plain UART mode: no RS485, no IrDA, no hardware flow control.
+	uart.Bus.SetRS485_CONF_RS485_EN(0)
+	uart.Bus.SetRS485_CONF_RS485TX_RX_EN(0)
+	uart.Bus.SetRS485_CONF_RS485RXBY_TX_EN(0)
+	uart.Bus.SetCONF0_IRDA_EN(0)
+	uart.Bus.SetCONF0_TX_FLOW_EN(0)
+	uart.Bus.SetCONF1_RX_FLOW_EN(0)
+
+	// Synchronize the values into the core clock domain.
+	uart.Bus.SetID_REG_UPDATE(1)
+
+	uart.setupPins(config, regs)
+	uart.configureInterrupt(regs.interruptMapReg)
+	uart.enableTransmitter()
+	uart.enableReceiver()
+
+	// Start TX/RX.
+	uart.Bus.SetCLK_CONF_TX_SCLK_EN(1)
+	uart.Bus.SetCLK_CONF_RX_SCLK_EN(1)
+	return nil
+}
+
+func initUARTClock(bus *esp.UART_Type, regs registerSet) {
+	// Enable the clock for the shared UART FIFO memory.
+	esp.SYSTEM.PERIP_CLK_EN0.SetBits(esp.SYSTEM_PERIP_CLK_EN0_UART_MEM_CLK_EN)
+	// Enable APB_CLK for this UART.
+	regs.uartClockReg.SetBits(regs.uartClockBitMask)
+	// Reset sequence.
+	regs.uartClockResetReg.ClearBits(regs.uartClockBitMask)
+	bus.SetCLK_CONF_RST_CORE(1)
+	regs.uartClockResetReg.SetBits(regs.uartClockBitMask)
+	regs.uartClockResetReg.ClearBits(regs.uartClockBitMask)
+	bus.SetCLK_CONF_RST_CORE(0)
+	// Synchronize the core register.
+	bus.SetID_REG_UPDATE(0)
+	// Enable the RTC clock.
+	esp.RTC_CNTL.SetCLK_CONF_DIG_CLK8M_EN(1)
+	// Wait for the core clock to be ready for configuration.
+	for bus.GetID_REG_UPDATE() > 0 {
+	}
+}
+
+// SetBaudRate configures the baud rate divider from the 80MHz APB clock.
+func (uart *UART) SetBaudRate(baudRate uint32) {
+	// Based on esp-idf: pick the smallest SCLK pre-divider that keeps the
+	// 12-bit integral divider in range, then compute the 4.4 fixed-point
+	// clock divider from it.
+	maxDiv := uint32((1 << 12) - 1)
+	sclkDiv := (apbClock + (maxDiv * baudRate) - 1) / (maxDiv * baudRate)
+	clkDiv := (apbClock << 4) / (baudRate * sclkDiv)
+	uart.Bus.SetCLKDIV(clkDiv >> 4)
+	uart.Bus.SetCLKDIV_FRAG(clkDiv & 0xf)
+	uart.Bus.SetCLK_CONF_SCLK_DIV_NUM(sclkDiv - 1)
+}
+
+func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
+	// Route RX through the GPIO matrix. Note that outFunc and inFunc work in
+	// opposite directions: outFunc selects which signal drives a pin, while
+	// inFunc selects which pin a signal is read from.
+	if config.RX != NoPin {
+		config.RX.Configure(PinConfig{Mode: PinInputPullup})
+		if config.InvertRX {
+			inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos | esp.GPIO_FUNC_IN_SEL_CFG_IN_INV_SEL)
+		} else {
+			inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
+		}
+	}
+
+	if config.TX != NoPin {
+		config.TX.configure(PinConfig{Mode: PinOutput}, regs.gpioMatrixSignal)
+		if config.InvertTX {
+			config.TX.outFunc().Set(regs.gpioMatrixSignal | esp.GPIO_FUNC_OUT_SEL_CFG_INV_SEL)
+		} else {
+			config.TX.outFunc().Set(regs.gpioMatrixSignal)
+		}
+	}
+}
+
+func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) {
+	// Disable all UART interrupts while configuring.
+	uart.Bus.INT_ENA.ClearBits(0x0ffff)
+
+	// Map this UART's peripheral interrupt to the shared CPU interrupt line.
+	intrMapReg.Set(cpuInterruptFromUART)
+
+	// Register the ISR only once; it is shared by all three UARTs.
+	onceUart.Do(func() {
+		_ = interrupt.New(cpuInterruptFromUART, handleUARTInterrupt).Enable()
+	})
+}
+
+func handleUARTInterrupt(interrupt.Interrupt) {
+	UART0.serveInterrupt()
+	UART1.serveInterrupt()
+	UART2.serveInterrupt()
+}
+
+func (uart *UART) serveInterrupt() {
+	// Check masked interrupt status.
+	interruptFlag := uart.Bus.INT_ST.Get()
+	if (interruptFlag & uartInterrupts) == 0 {
+		return
+	}
+
+	// Block UART interrupts while processing.
+	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
+
+	if interruptFlag&(esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA|esp.UART_INT_ENA_RXFIFO_TOUT_INT_ENA) != 0 {
+		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
+			b := uart.Bus.GetFIFO_RXFIFO_RD_BYTE()
+			uart.Buffer.Put(byte(b & 0xff))
+		}
+	}
+
+	// Clear the interrupt status bits.
+	uart.Bus.INT_CLR.SetBits(interruptFlag)
+	uart.Bus.INT_CLR.ClearBits(interruptFlag)
+	// Re-enable UART interrupts.
+	uart.Bus.INT_ENA.Set(uartInterrupts)
+}
+
+const uartEmptyThreshDefault = 10
+
+func (uart *UART) enableTransmitter() {
+	uart.Bus.SetCONF0_TXFIFO_RST(1)
+	uart.Bus.SetCONF0_TXFIFO_RST(0)
+	// Threshold below which txfifo_empty_int fires.
+	uart.Bus.SetCONF1_TXFIFO_EMPTY_THRHD(uartEmptyThreshDefault)
+	// Set the TX idle gap between transfers to zero.
+	uart.Bus.SetIDLE_CONF_TX_IDLE_NUM(0)
+}
+
+func (uart *UART) enableReceiver() {
+	uart.Bus.SetCONF0_RXFIFO_RST(1)
+	uart.Bus.SetCONF0_RXFIFO_RST(0)
+	// Trigger an interrupt as soon as a single byte is available.
+	uart.Bus.SetCONF1_RXFIFO_FULL_THRHD(1)
+	// Also interrupt once the line has been idle for a few bit periods, so a
+	// short burst that never reaches the FIFO threshold is still delivered.
+	// Note that unlike the ESP32, the S3 keeps this threshold in MEM_CONF.
+	uart.Bus.SetMEM_CONF_RX_TOUT_THRHD(10)
+	uart.Bus.SetCONF1_RX_TOUT_EN(1)
+	// Enable RX-related interrupts.
+	uart.Bus.INT_ENA.Set(uartInterrupts)
 }
 
 func (uart *UART) writeByte(b byte) error {
-	for (uart.Bus.STATUS.Get()>>16)&0xff >= 128 {
+	for uart.Bus.GetSTATUS_TXFIFO_CNT() >= 128 {
 		// Read UART_TXFIFO_CNT from the status register, which indicates how
 		// many bytes there are in the transmit buffer. Wait until there are
 		// less than 128 bytes in this buffer (the default buffer size).
+		// Yield so that other goroutines can run while the FIFO drains.
+		gosched()
 	}
 	uart.Bus.FIFO.Set(uint32(b))
 	return nil
