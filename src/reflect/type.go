@@ -569,8 +569,24 @@ func ArrayOf(n int, t Type) Type {
 	return toType(reflectlite.ArrayOf(n, toRawType(t)))
 }
 
-func StructOf([]StructField) Type {
-	return toType(reflectlite.StructOf([]reflectlite.StructField{}))
+func StructOf(fields []StructField) Type {
+	rawFields := make([]reflectlite.StructField, len(fields))
+	for i, field := range fields {
+		var typ reflectlite.Type
+		if field.Type != nil {
+			typ = toRawType(field.Type)
+		}
+		rawFields[i] = reflectlite.StructField{
+			Name:      field.Name,
+			PkgPath:   field.PkgPath,
+			Type:      typ,
+			Tag:       field.Tag,
+			Offset:    field.Offset,
+			Index:     field.Index,
+			Anonymous: field.Anonymous,
+		}
+	}
+	return toType(reflectlite.StructOf(rawFields))
 }
 
 func MapOf(key, value Type) Type {
@@ -592,5 +608,5 @@ func FuncOf(in, out []Type, variadic bool) Type {
 }
 
 func ChanOf(dir ChanDir, t Type) Type {
-	panic("unimplemented: reflect.ChanOf")
+	return toType(reflectlite.ChanOf(dir, toRawType(t)))
 }

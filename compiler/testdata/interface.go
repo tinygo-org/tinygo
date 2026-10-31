@@ -35,6 +35,18 @@ func isInt(itf interface{}) bool {
 	return ok
 }
 
+type assertionElem uint32
+
+func assertionOnlyTypes(itf interface{}) bool {
+	switch itf.(type) {
+	case []assertionElem, [3]assertionElem, *[3]assertionElem,
+		map[assertionElem]assertionElem, chan assertionElem, struct{ Value assertionElem }:
+		return true
+	default:
+		return false
+	}
+}
+
 func isError(itf interface{}) bool {
 	// Interface assert on (builtin) named interface type.
 	_, ok := itf.(error)

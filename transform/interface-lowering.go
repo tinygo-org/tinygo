@@ -341,9 +341,6 @@ func (p *lowerInterfacesPass) run() error {
 		} else {
 			// The type does not exist in the program, so lower to a constant
 			// false. This is trivially further optimized.
-			// TODO: eventually it'll be necessary to handle reflect.PtrTo and
-			// reflect.New calls which create new types not present in the
-			// original program.
 			use.ReplaceAllUsesWith(llvmFalse)
 		}
 		use.EraseFromParentAsInstruction()
@@ -470,7 +467,63 @@ func (p *lowerInterfacesPass) run() error {
 		}
 	}
 
+	p.createReflectTypeLinks(typeNames)
+
 	return nil
+}
+
+func (p *lowerInterfacesPass) createReflectTypeLinks(typeNames []string) {
+	for _, spec := range []struct {
+		prefix string
+		data   string
+		length string
+	}{
+		{"slice:", "internal/reflectlite.sliceTypeLinks", "internal/reflectlite.sliceTypeLinksLen"},
+		{"map:", "internal/reflectlite.mapTypeLinks", "internal/reflectlite.mapTypeLinksLen"},
+		{"array:", "internal/reflectlite.arrayTypeLinks", "internal/reflectlite.arrayTypeLinksLen"},
+		{"chan:", "internal/reflectlite.chanTypeLinks", "internal/reflectlite.chanTypeLinksLen"},
+		{"struct:", "internal/reflectlite.structTypeLinks", "internal/reflectlite.structTypeLinksLen"},
+	} {
+		dataGlobal := p.mod.NamedGlobal(spec.data)
+		lengthGlobal := p.mod.NamedGlobal(spec.length)
+		if dataGlobal.IsNil() && lengthGlobal.IsNil() {
+			continue
+		}
+		if dataGlobal.IsNil() || lengthGlobal.IsNil() {
+			panic("reflect type link globals must be defined together")
+		}
+
+		var typeCodes []llvm.Value
+		for _, name := range typeNames {
+			if !strings.HasPrefix(name, spec.prefix) {
+				continue
+			}
+			typ := p.types[name]
+			typeCodes = append(typeCodes, llvm.ConstGEP(typ.typecode.GlobalValueType(), typ.typecode, []llvm.Value{
+				llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+			}))
+		}
+
+		lengthGlobal.SetInitializer(llvm.ConstInt(p.uintptrType, uint64(len(typeCodes)), false))
+		lengthGlobal.SetGlobalConstant(true)
+		if len(typeCodes) == 0 {
+			dataGlobal.SetInitializer(llvm.ConstPointerNull(p.ptrType))
+			dataGlobal.SetGlobalConstant(true)
+			continue
+		}
+
+		arrayType := llvm.ArrayType(p.ptrType, len(typeCodes))
+		array := llvm.AddGlobal(p.mod, arrayType, spec.data+".data")
+		array.SetInitializer(llvm.ConstArray(p.ptrType, typeCodes))
+		array.SetGlobalConstant(true)
+		array.SetLinkage(llvm.InternalLinkage)
+		dataGlobal.SetInitializer(llvm.ConstGEP(arrayType, array, []llvm.Value{
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+		}))
+		dataGlobal.SetGlobalConstant(true)
+	}
 }
 
 // addTypeMethods reads the method set of the given type info struct. It
