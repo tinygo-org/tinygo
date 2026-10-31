@@ -70,7 +70,7 @@ func createPackageDiagnostic(err error) PackageDiagnostic {
 			diags := createDiagnostics(err)
 			pkgDiag.Diagnostics = append(pkgDiag.Diagnostics, diags...)
 		}
-	case loader.Errors:
+	case *loader.Errors:
 		if err.Pkg != nil {
 			pkgDiag.ImportPath = err.Pkg.ImportPath
 		}
@@ -149,7 +149,7 @@ func createDiagnostics(err error) []Diagnostic {
 			diags = append(diags, createDiagnostics(*err)...)
 		}
 		return diags
-	case loader.Error:
+	case *loader.Error:
 		if err.Err.Pos.Filename != "" {
 			// Probably a syntax error in a dependency.
 			return createDiagnostics(err.Err)

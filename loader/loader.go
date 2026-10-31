@@ -236,7 +236,7 @@ func load(config *compileopts.Config, inputs []string, typeChecker types.Config,
 				Msg: pkg.Error.Err,
 			}
 			if len(pkg.Error.ImportStack) != 0 {
-				pkgErrors = append(pkgErrors, Error{
+				pkgErrors = append(pkgErrors, &Error{
 					ImportStack: pkg.Error.ImportStack,
 					Err:         err,
 				})
@@ -284,8 +284,7 @@ func load(config *compileopts.Config, inputs []string, typeChecker types.Config,
 	}
 
 	if len(pkgErrors) != 0 {
-		// TODO: use errors.Join in Go 1.20.
-		return nil, Errors{
+		return nil, &Errors{
 			Errs: pkgErrors,
 		}
 	}
@@ -293,7 +292,7 @@ func load(config *compileopts.Config, inputs []string, typeChecker types.Config,
 	if !analysis && config.TestConfig.CompileTestBinary && !strings.HasSuffix(p.sorted[len(p.sorted)-1].ImportPath, ".test") {
 		// Trying to compile a test binary but there are no test files in this
 		// package.
-		return p, NoTestFilesError{p.sorted[len(p.sorted)-1].ImportPath}
+		return p, &NoTestFilesError{p.sorted[len(p.sorted)-1].ImportPath}
 	}
 
 	p.initRecordedPaths()
@@ -375,7 +374,8 @@ func (p *Program) MainPkg() *Package {
 // Idempotent.
 func (p *Program) Parse() error {
 	// Parse all packages.
-	// TODO: do this in parallel.
+	// Keep this sequential because parsing CGo packages appends linker flags
+	// to Program.LDFlags in dependency order.
 	for _, pkg := range p.sorted {
 		err := pkg.Parse()
 		if err != nil {
@@ -383,7 +383,7 @@ func (p *Program) Parse() error {
 		}
 	}
 
-	// Typecheck all packages.
+	// TODO: typecheck packages in parallel while respecting dependency order.
 	for _, pkg := range p.sorted {
 		err := pkg.Check()
 		if err != nil {
@@ -692,7 +692,7 @@ func (p *Package) Check() error {
 		packageName = analysisImportPath(packageName)
 	} else if p == p.program.MainPkg() {
 		if p.Name != "main" {
-			return Errors{p, []error{
+			return &Errors{p, []error{
 				scanner.Error{
 					Pos: p.program.fset.Position(p.Files[0].Name.Pos()),
 					Msg: fmt.Sprintf("expected main package to have name \"main\", not %#v", p.Name),
@@ -703,24 +703,22 @@ func (p *Package) Check() error {
 	}
 	typesPkg, err := checker.Check(packageName, p.program.fset, p.Files, &p.info)
 	if err != nil {
-		if err, ok := err.(Errors); ok {
-			return err
+		var loaderErrors *Errors
+		if errors.As(err, &loaderErrors) {
+			return loaderErrors
 		}
 		if len(typeErrors) != 0 {
 			// Got type errors, so return them.
-			return Errors{p, typeErrors}
+			return &Errors{p, typeErrors}
 		}
-		// This can happen in some weird cases.
-		// The only case I know is when compiling a Go 1.23 program, with a
-		// TinyGo version that supports Go 1.23 but is compiled using Go 1.22.
-		// So this should be pretty rare.
-		return Errors{p, []error{err}}
+		// Unexpected error, give up.
+		return err
 	}
 	p.Pkg = typesPkg
 
 	p.extractEmbedLines(checker.Error)
 	if len(typeErrors) != 0 {
-		return Errors{p, typeErrors}
+		return &Errors{p, typeErrors}
 	}
 
 	return nil
@@ -827,7 +825,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 	// Only return an error after CGo processing, so that errors in parsing and
 	// CGo can be reported together.
 	if len(fileErrs) != 0 {
-		return nil, Errors{p, fileErrs}
+		return nil, &Errors{p, fileErrs}
 	}
 
 	return files, nil
