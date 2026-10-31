@@ -1,4 +1,4 @@
-//go:build sam
+//go:build sam && !atsam3x
 
 package machine
 
