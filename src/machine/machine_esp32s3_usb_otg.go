@@ -538,8 +538,11 @@ func AckUsbOutTransfer(ep uint32) {
 // back to back SETUP packets.
 func armEP0Out() {
 	state := lockUSBRegs()
-	otgOutEP(0).TSIZ.Set(3<<29 | 1<<19 | usb.EndpointPacketSize)
-	otgOutEP(0).CTL.SetBits(depctlEPENA | depctlCNAK)
+	// DOEPTSIZ0 must not change while EP0 OUT is enabled, see USB_EP0_OutStart in the STM32 HAL.
+	if !otgOutEP(0).CTL.HasBits(depctlEPENA) {
+		otgOutEP(0).TSIZ.Set(3<<29 | 1<<19 | usb.EndpointPacketSize)
+		otgOutEP(0).CTL.SetBits(depctlEPENA | depctlCNAK)
+	}
 	unlockUSBRegs(state)
 }
 
