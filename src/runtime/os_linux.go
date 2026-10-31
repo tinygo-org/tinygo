@@ -19,6 +19,7 @@ const (
 	flag_PROT_WRITE    = 0x2
 	flag_MAP_PRIVATE   = 0x2
 	flag_MAP_ANONYMOUS = linux_MAP_ANONYMOUS // different on alpha, hppa, mips, xtensa
+	flag_MAP_NORESERVE = 0x4000
 )
 
 // Source: https://github.com/torvalds/linux/blob/master/include/uapi/linux/time.h
