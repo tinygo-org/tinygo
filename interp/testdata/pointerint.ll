@@ -6,11 +6,20 @@ declare void @externalCall(ptr)
 @gep.global = global i8 0
 @udiv.global = global i8 0
 @udiv.result = global i64 0
+@add.global = global i8 0
+@add.result = global i64 0
+@sub.global = global i8 0
+@sub.result = global i64 0
+@xor.global = global i8 0
+@xor.result = global i64 0
 
 define void @runtime.initAll() unnamed_addr {
 entry:
   call void @gep.init(ptr undef)
   call void @udiv.init(ptr undef)
+  call void @add.init(ptr undef)
+  call void @sub.init(ptr undef)
+  call void @xor.init(ptr undef)
   ret void
 }
 
@@ -29,5 +38,23 @@ define internal void @udiv.init(ptr %context) unnamed_addr {
   %n = ptrtoint ptr @udiv.global to i64
   %q = udiv i64 4096, %n
   store i64 %q, ptr @udiv.result
+  ret void
+}
+
+define internal void @add.init(ptr %context) unnamed_addr {
+  ; Constant add on a pointer-derived integer is left for runtime.
+  store i64 add (i64 ptrtoint (ptr @add.global to i64), i64 2), ptr @add.result
+  ret void
+}
+
+define internal void @sub.init(ptr %context) unnamed_addr {
+  ; Constant sub on a pointer-derived integer is left for runtime.
+  store i64 sub (i64 ptrtoint (ptr @sub.global to i64), i64 2), ptr @sub.result
+  ret void
+}
+
+define internal void @xor.init(ptr %context) unnamed_addr {
+  ; Constant xor on a pointer-derived integer is left for runtime.
+  store i64 xor (i64 ptrtoint (ptr @xor.global to i64), i64 2), ptr @xor.result
   ret void
 }

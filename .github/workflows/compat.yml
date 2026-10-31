@@ -20,16 +20,17 @@ jobs:
     env:
       # Oldest versions currently supported by TinyGo
       LLVM: "15"
-      Go: "1.25" # when updating this, also update MinimumGoMinorVersion in compileopts/config.go
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install Go
+        id: setup-go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.Go }}
+          # Keep the go.mod go version in sync with MinimumGoMinorVersion in compileopts/config.go
+          go-version-file: go.mod
           cache: true
       - name: Install LLVM
         run: |
@@ -63,7 +64,7 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: go-build-${{ env.Go }}-llvm${{ env.LLVM }}-${{ hashFiles('go.sum') }}
+          key: go-build-${{ steps.setup-go.outputs.go-version }}-llvm${{ env.LLVM }}-${{ hashFiles('go.sum') }}
       - name: Build TinyGo
         run: go install -tags=llvm${{ env.LLVM }}
       - run: tinygo version

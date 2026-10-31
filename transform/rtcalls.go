@@ -73,7 +73,7 @@ func OptimizeStringToBytes(mod llvm.Module) {
 
 // OptimizeStringEqual transforms runtime.stringEqual(...) calls into simple
 // integer comparisons if at least one of the sides of the comparison is zero.
-// Ths converts str == "" into len(str) == 0 and "" == "" into false.
+// This converts str == "" into len(str) == 0 and "" == "" into true.
 func OptimizeStringEqual(mod llvm.Module) {
 	stringEqual := mod.NamedFunction("runtime.stringEqual")
 	if stringEqual.IsNil() {
