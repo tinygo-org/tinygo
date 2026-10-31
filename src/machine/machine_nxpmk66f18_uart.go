@@ -210,8 +210,20 @@ func (u *UART) Disable() {
 
 func (u *UART) Flush() {
 	for u.Transmitting.Get() != 0 {
-		gosched()
+		u.wait()
 	}
+}
+
+// wait yields while the UART interrupt drains TXBuffer. An interrupt handler
+// cannot yield and may block the UART interrupt, so it polls instead.
+func (u *UART) wait() {
+	if !interrupt.In() {
+		gosched()
+		return
+	}
+	state := arm.DisableInterrupts()
+	u.pollTX()
+	arm.EnableInterrupts(state)
 }
 
 //go:noheap
@@ -255,6 +267,13 @@ func (u *UART) handleStatusInterrupt(interrupt.Interrupt) {
 		}
 	}
 
+	u.pollTX()
+}
+
+// pollTX moves bytes from TXBuffer to the FIFO and handles transmit complete.
+//
+//go:noheap
+func (u *UART) pollTX() {
 	// transmit
 	if u.C2.HasBits(nxp.UART_C2_TIE) && u.S1.HasBits(nxp.UART_S1_TDRE) {
 		var buf [uartTXFIFODepth]byte
@@ -300,7 +319,7 @@ func (u *UART) writeByte(c byte) error {
 	}
 
 	for !u.TXBuffer.Put(c) {
-		gosched()
+		u.wait()
 	}
 
 	u.Transmitting.Set(1)
