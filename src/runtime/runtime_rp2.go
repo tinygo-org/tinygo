@@ -9,6 +9,7 @@ import (
 	"machine"
 	_ "machine/usb/cdc"
 	"math/bits"
+	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -313,7 +314,7 @@ func coreStackTop(core uint32) uintptr {
 // These spinlocks are needed by the runtime.
 var (
 	printLock     = spinLock{id: 20}
-	schedulerLock = spinLock{id: 21}
+	schedulerLock = schedulerSpinLock{spinLock: spinLock{id: 21}}
 	atomicsLock   = spinLock{id: 22}
 	futexLock     = spinLock{id: 23}
 
@@ -349,6 +350,27 @@ func (l *spinLock) Lock() {
 func (l *spinLock) Unlock() {
 	l.spinlock().Set(0)
 	arm.Asm("sev")
+}
+
+// schedulerSpinLock keeps interrupts off while held. An interrupt handler on
+// this core that wakes a goroutine would otherwise spin on a lock that the
+// code it interrupted holds.
+type schedulerSpinLock struct {
+	spinLock
+	state [numCPU]interrupt.State
+}
+
+func (l *schedulerSpinLock) Lock() {
+	core := currentCPU()
+	state := interrupt.Disable()
+	l.spinLock.Lock()
+	l.state[core] = state
+}
+
+func (l *schedulerSpinLock) Unlock() {
+	state := l.state[currentCPU()]
+	l.spinLock.Unlock()
+	interrupt.Restore(state)
 }
 
 // Wait until a signal is received, indicating that it can resume from the
