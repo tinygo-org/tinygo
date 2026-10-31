@@ -96,6 +96,17 @@ func TestBinarySize(t *testing.T) {
 		{target: "riscv-qemu", path: "./testdata/size-corpus", opt: "z"},
 		{target: "riscv-qemu", path: "./testdata/size-corpus", opt: "2"},
 
+		{target: "cortex-m-qemu", path: "./testdata/size-init-crc", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-crc", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-map", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-map", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-errors", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-errors", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-config", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-config", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-strings", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-strings", opt: "2"},
+
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the
 		// output varies by binaryen version.
