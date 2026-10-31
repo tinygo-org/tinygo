@@ -458,7 +458,21 @@ func (uart *UART) Configure(config UARTConfig) error {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
-	if config.TX == config.RX {
+	// Pick default pins for a zero-value config, as the runtime passes when
+	// it configures the console. UART0 keeps the pins the ROM bootloader
+	// already wired through the IO MUX; UART2 has none there, so its pins
+	// stay caller-supplied.
+	if config.TX == 0 && config.RX == 0 {
+		switch {
+		case uart.Bus == esp.UART0:
+			config.TX = NoPin
+			config.RX = NoPin
+		case uart.Bus == esp.UART1:
+			config.TX = GPIO17
+			config.RX = GPIO18
+		}
+	}
+	if config.TX == config.RX && config.TX != NoPin {
 		return errSamePins
 	}
 	switch {
@@ -603,9 +617,6 @@ func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) {
 	})
 }
 
-// handleUARTInterrupt is the shared UART interrupt handler. It must be a plain
-// function (not a closure) because interrupt.New is a compiler intrinsic that
-// does not support closures.
 func handleUARTInterrupt(interrupt.Interrupt) {
 	UART0.serveInterrupt()
 	UART1.serveInterrupt()
