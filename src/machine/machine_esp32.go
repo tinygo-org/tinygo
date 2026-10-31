@@ -674,7 +674,9 @@ func (uart *UART) writeByte(b byte) error {
 		// Read UART_TXFIFO_CNT from the status register, which indicates how
 		// many bytes there are in the transmit buffer. Wait until there are
 		// less than 128 bytes in this buffer (the default buffer size).
-		gosched()
+		if !interrupt.In() {
+			gosched()
+		}
 	}
 	// Write to the TX_FIFO register.
 	(*volatile.Register8)(unsafe.Add(unsafe.Pointer(uart.Bus), 0x200C0000)).Set(b)
