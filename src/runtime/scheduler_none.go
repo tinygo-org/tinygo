@@ -96,6 +96,14 @@ func unlockAtomics(mask interrupt.State) {
 	interrupt.Restore(mask)
 }
 
+func lockTimers() interrupt.State {
+	return interrupt.Disable()
+}
+
+func unlockTimers(mask interrupt.State) {
+	interrupt.Restore(mask)
+}
+
 func printlock() {
 	// nothing to do
 }

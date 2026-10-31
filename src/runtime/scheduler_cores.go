@@ -165,10 +165,12 @@ func reAddTimer(tn *timerNode) {
 		// The timer was stopped or reset while its callback was running. Don't
 		// re-add it: a stopped ticker must stay stopped, and a reset ticker has
 		// already been re-added by resetTimer.
+		freeTimerNode(tn)
 		schedulerLock.Unlock()
 		return
 	}
 	if tn.timer.period == 0 {
+		freeTimerNode(tn)
 		schedulerLock.Unlock()
 		return
 	}
@@ -394,6 +396,17 @@ func lockAtomics() interrupt.State {
 func unlockAtomics(mask interrupt.State) {
 	atomicsLock.Unlock()
 	interrupt.Restore(mask)
+}
+
+// lockTimers takes the scheduler lock, which guards the timer queue and the
+// timer node free list.
+func lockTimers() interrupt.State {
+	schedulerLock.Lock()
+	return 0
+}
+
+func unlockTimers(mask interrupt.State) {
+	schedulerLock.Unlock()
 }
 
 var systemStack [numCPU]uintptr
