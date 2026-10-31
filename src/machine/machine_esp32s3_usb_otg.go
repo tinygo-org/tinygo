@@ -321,11 +321,13 @@ func handleUSBIRQ(interrupt.Interrupt) {
 }
 
 func handleUSBReset() {
+	state := lockUSBRegs()
 	for ep := uint32(0); ep < otgNumEndpoints; ep++ {
 		otgOutEP(ep).CTL.SetBits(depctlSNAK)
 		otgInEP(ep).CTL.SetBits(depctlSNAK)
 		usbRxReady[ep] = false
 	}
+	unlockUSBRegs(state)
 	esp.USB0.DCFG.ClearBits(dcfgDAD_Msk)
 	flushRxFIFO()
 	flushTxFIFO(0x10)
@@ -470,11 +472,15 @@ func initEndpoint(ep, config uint32) {
 	ctl := uint32(usb.EndpointPacketSize) | depctlUSBAEP | depctlSD0PID | epType<<depctlETYP_Pos
 
 	if config&usb.EndpointIn != 0 {
+		state := lockUSBRegs()
 		otgInEP(ep).CTL.Set(ctl | ep<<depctlTXFNUM_Pos | depctlSNAK)
+		unlockUSBRegs(state)
 		esp.USB0.DAINTMSK.SetBits(1 << ep)
 		return
 	}
+	state := lockUSBRegs()
 	otgOutEP(ep).CTL.Set(ctl)
+	unlockUSBRegs(state)
 	esp.USB0.DAINTMSK.SetBits(1 << (ep + 16))
 	AckUsbOutTransfer(ep)
 }
