@@ -6,3 +6,4 @@ import "internal/task"
 
 type timerLock = task.PMutex
 type synctestLock = task.PMutex
+type channelLock = task.PMutex
