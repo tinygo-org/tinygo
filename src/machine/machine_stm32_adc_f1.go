@@ -36,9 +36,9 @@ func (a ADC) Configure(ADCConfig) {
 	// set sample time
 	ch := a.getChannel()
 	if ch > 9 {
-		stm32.ADC1.SMPR1.SetBits(Cycles_28_5 << (ch - 10) * stm32.ADC_SMPR1_SMP11_Pos)
+		stm32.ADC1.SMPR1.ReplaceBits(Cycles_28_5, 0x7, (ch-10)*3)
 	} else {
-		stm32.ADC1.SMPR2.SetBits(Cycles_28_5 << (ch * stm32.ADC_SMPR2_SMP1_Pos))
+		stm32.ADC1.SMPR2.ReplaceBits(Cycles_28_5, 0x7, ch*3)
 	}
 
 	return
