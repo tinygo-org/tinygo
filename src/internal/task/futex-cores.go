@@ -26,8 +26,16 @@ func (f *Futex) Wait(cmp uint32) (awoken bool) {
 		return false
 	}
 
+	t := Current()
+	if t == nil {
+		// Timer callbacks run in the scheduler with no current task, so they
+		// cannot sleep. Return so the caller spins and retries instead.
+		unlockFutex(mask)
+		return false
+	}
+
 	// Push the current goroutine onto the waiter stack.
-	f.waiters.Push(Current())
+	f.waiters.Push(t)
 
 	unlockFutex(mask)
 
