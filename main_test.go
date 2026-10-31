@@ -36,6 +36,56 @@ const TESTDATA = "testdata"
 
 var testTarget = flag.String("target", "", "override test target")
 
+func TestBuildAndRunBuildErrorReturnsNil(t *testing.T) {
+	config := &compileopts.Config{
+		Options: &compileopts.Options{},
+		Target:  &compileopts.TargetSpec{Libc: "unknown"},
+	}
+	result, err := buildAndRun("", config, io.Discard, nil, nil, 0, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+		t.Fatal("run callback called after a build error")
+		return nil
+	})
+	if err == nil || err.Error() != "unknown libc: unknown" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result on build error, got %+v", result)
+	}
+}
+
+func TestFlashRejectsUnsupportedFirmwareExtension(t *testing.T) {
+	err := Flash("testdata/print.go", "", "firmware.bin", &compileopts.Options{Target: "pico"})
+	want := "target pico does not support firmware output extension .bin; use .elf, .hex, or .uf2"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Flash() error = %v, want %q", err, want)
+	}
+}
+
+func TestFlashAcceptsSupportedFirmwareExtension(t *testing.T) {
+	err := Flash("github.com/tinygo-org/tinygo/testdata/does-not-exist-output-format", "", "firmware.uf2", &compileopts.Options{Target: "pico", Opt: "z"})
+	if err == nil {
+		t.Fatal("Flash() succeeded for a missing package")
+	}
+	if strings.Contains(err.Error(), "does not support firmware output extension") || strings.Contains(err.Error(), "output format") {
+		t.Fatalf("Flash() rejected supported UF2 output: %v", err)
+	}
+}
+
+func TestBuildOutputDirectoryWithFirmwareSuffix(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "output.bin")
+	if err := os.Mkdir(outputDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	config, err := builder.NewConfig(&compileopts.Options{Target: "pico", Opt: "z"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = Build("does/not/exist", outputDir, config)
+	if err == nil || strings.Contains(err.Error(), "does not support firmware output extension") {
+		t.Fatalf("Build() error = %v, want a package-loading error rather than an extension error", err)
+	}
+}
+
 var supportedLinuxArches = map[string]string{
 	"AMD64Linux": "linux/amd64",
 	"X86Linux":   "linux/386",
@@ -463,7 +513,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 
 	// Build the test binary.
 	stdout := &bytes.Buffer{}
-	_, err = buildAndRun(pkgName, config, stdout, cmdArgs, environmentVars, 2*time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun(pkgName, config, stdout, cmdArgs, environmentVars, 2*time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 		if config.EmulatorName() == "simavr" {
 			// simavr before v1.8 wrote firmware output to stderr and loader logs
 			// to stdout, but PR #490 swapped these streams:

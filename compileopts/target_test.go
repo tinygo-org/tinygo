@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -53,6 +54,30 @@ func TestLoadTarget_InheritableOnlyTargetStillLoadable(t *testing.T) {
 	_, err := LoadTarget(&Options{Target: "esp32"})
 	if err != nil {
 		t.Errorf("LoadTarget should still load inheritable-only target esp32: %v", err)
+	}
+}
+
+func TestLoadTarget_FirmwareExtensionsInherited(t *testing.T) {
+	for _, target := range []string{"pico", "pico2"} {
+		t.Run(target, func(t *testing.T) {
+			spec, err := LoadTarget(&Options{Target: target})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []string{".elf", ".hex", ".uf2"}
+			if !slices.Equal(spec.FirmwareExts, want) {
+				t.Errorf("firmware extensions = %v, want %v", spec.FirmwareExts, want)
+			}
+			config := &Config{
+				Options: &Options{Target: target},
+				Target:  spec,
+			}
+			err = config.ValidateOutputExtension(".bin")
+			wantErr := "target " + target + " does not support firmware output extension .bin; use .elf, .hex, or .uf2"
+			if err == nil || err.Error() != wantErr {
+				t.Errorf("ValidateOutputExtension(.bin) error = %v, want %q", err, wantErr)
+			}
+		})
 	}
 }
 
@@ -145,6 +170,19 @@ func TestOverrideProperties(t *testing.T) {
 		t.Errorf("Overriding failed : got %v", base.DefaultStackSize)
 	}
 
+}
+
+func TestOverridePropertiesFirmwareExtensions(t *testing.T) {
+	base := &TargetSpec{FirmwareExts: []string{".uf2"}}
+	child := &TargetSpec{FirmwareExts: []string{".hex"}}
+
+	if err := base.overrideProperties(child); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{".uf2", ".hex"}
+	if !slices.Equal(base.FirmwareExts, want) {
+		t.Errorf("firmware extensions = %v, want %v", base.FirmwareExts, want)
+	}
 }
 
 func TestConfigLinkerFlavor(t *testing.T) {

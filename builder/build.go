@@ -106,12 +106,16 @@ type packageAction struct {
 //
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
-func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildResult, error) {
+func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildResult, error) {
+	if err := config.ValidateOutputExtension(filepath.Ext(outpath)); err != nil {
+		return nil, err
+	}
+
 	// Read the build ID of the tinygo binary.
 	// Used as a cache key for package builds.
 	compilerBuildID, err := ReadBuildID()
 	if err != nil {
-		return BuildResult{}, err
+		return nil, err
 	}
 
 	if config.Options.Work {
@@ -166,7 +170,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		var unlock func()
 		libcJob, unlock, err := libMusl.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(libcJob.result), "crt1.o")))
@@ -174,28 +178,28 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	case "picolibc":
 		libcJob, unlock, err := libPicolibc.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
 		libcJob, unlock, err := libWasiLibc.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasmbuiltins":
 		libcJob, unlock, err := libWasmBuiltins.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "mingw-w64":
 		libcJob, unlock, err := libMinGW.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
@@ -203,7 +207,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	case "":
 		// no library specified, so nothing to do
 	default:
-		return BuildResult{}, fmt.Errorf("unknown libc: %s", config.Target.Libc)
+		return nil, fmt.Errorf("unknown libc: %s", config.Target.Libc)
 	}
 
 	optLevel, speedLevel, sizeLevel := config.OptLevel()
@@ -237,7 +241,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// address spaces, etc).
 	machine, err := compiler.NewTargetMachine(compilerConfig)
 	if err != nil {
-		return BuildResult{}, err
+		return nil, err
 	}
 	defer machine.Dispose()
 
@@ -246,9 +250,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		Sizes: compiler.Sizes(machine),
 	})
 	if err != nil {
-		return BuildResult{}, err
+		return nil, err
 	}
-	result := BuildResult{
+	result := &BuildResult{
 		ModuleRoot: lprogram.MainPkg().Module.Dir,
 		MainDir:    lprogram.MainPkg().Dir,
 		ImportPath: lprogram.MainPkg().ImportPath,
@@ -259,7 +263,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	}
 	err = lprogram.Parse()
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	// Embed module build information so runtime/debug.ReadBuildInfo() works,
@@ -272,7 +276,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if _, overridden := globalValues["runtime/debug"]["modinfo"]; !overridden {
 		mi, err := moduleBuildInfo(lprogram, config.Options.BuildVCS)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		if mi != "" {
 			if globalValues["runtime/debug"] == nil {
@@ -373,7 +377,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		for _, imported := range pkg.Pkg.Imports() {
 			job, ok := packageActionIDJobs[imported.Path()]
 			if !ok {
-				return result, fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
+				return nil, fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
 			}
 			importedPackages = append(importedPackages, job)
 			actionIDDependencies = append(actionIDDependencies, job)
@@ -736,7 +740,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	// Create the output directory, if needed
 	if err := os.MkdirAll(filepath.Dir(outpath), 0777); err != nil {
-		return result, err
+		return nil, err
 	}
 
 	// Check whether we only need to create an object file.
@@ -746,27 +750,35 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		// Run jobs to produce the LLVM module.
 		err := runJobs(programJob, config.Options.Semaphore)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		// Generate output.
 		switch outext {
 		case ".o":
 			llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
 			if err != nil {
-				return result, err
+				return nil, err
 			}
 			defer llvmBuf.Dispose()
-			return result, os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
+			err = os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
+			if err != nil {
+				return nil, err
+			}
 		case ".bc":
 			buf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
 			defer buf.Dispose()
-			return result, os.WriteFile(outpath, buf.Bytes(), 0666)
+			if err := os.WriteFile(outpath, buf.Bytes(), 0666); err != nil {
+				return nil, err
+			}
 		case ".ll":
 			data := []byte(mod.String())
-			return result, os.WriteFile(outpath, data, 0666)
+			if err := os.WriteFile(outpath, data, 0666); err != nil {
+				return nil, err
+			}
 		default:
 			panic("unreachable")
 		}
+		return result, nil
 	}
 
 	// Act as a compiler driver, as we need to produce a complete executable.
@@ -807,18 +819,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	if config.Options.BuildMode == "c-shared" {
 		if !strings.HasPrefix(config.Triple(), "wasm32-") {
-			return result, fmt.Errorf("buildmode c-shared is only supported on wasm at the moment")
+			return nil, fmt.Errorf("buildmode c-shared is only supported on wasm at the moment")
 		}
 		ldflags = append(ldflags, "--no-entry")
 	}
 
 	if config.Options.BuildMode == "wasi-legacy" {
 		if !strings.HasPrefix(config.Triple(), "wasm32-") {
-			return result, fmt.Errorf("buildmode wasi-legacy is only supported on wasm")
+			return nil, fmt.Errorf("buildmode wasi-legacy is only supported on wasm")
 		}
 
 		if config.Options.Scheduler != "none" {
-			return result, fmt.Errorf("buildmode wasi-legacy only supports scheduler=none")
+			return nil, fmt.Errorf("buildmode wasi-legacy only supports scheduler=none")
 		}
 	}
 
@@ -827,7 +839,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if config.Target.RTLib == "compiler-rt" {
 		job, unlock, err := libCompilerRT.load(config, tmpdir)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)
@@ -837,7 +849,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if config.GC() == "boehm" {
 		job, unlock, err := BoehmGC.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)
@@ -932,7 +944,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			ldflags = append(ldflags, "--strip-debug")
 		} else {
 			// Other linkers may have different flags.
-			return result, errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
+			return nil, errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
 		}
 	}
 
@@ -1181,7 +1193,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// is simpler and cannot be parallelized.
 	err = runJobs(linkJob, config.Options.Semaphore)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	// Get an Intel .hex file or .bin file from the .elf file.
@@ -1195,14 +1207,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
 		err := objcopy(result.Executable, result.Binary, outputBinaryFormat)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 	case "uf2":
 		// Get UF2 from the .elf file.
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
 		err := convertELFFileToUF2File(result.Executable, result.Binary, config.Target.UF2FamilyID)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 	case "esp32", "esp32-img", "esp32c3", "esp32s3", "esp32c6", "esp32h2", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
@@ -1210,17 +1222,17 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
 		err := makeESPFirmwareImage(result.Executable, result.Binary, outputBinaryFormat)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 	case "nrf-dfu":
 		// special format for nrfutil for Nordic chips
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
 		err = makeDFUFirmwareImage(config.Options, result.Executable, result.Binary)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 	default:
-		return result, fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
+		return nil, fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 	}
 
 	return result, nil

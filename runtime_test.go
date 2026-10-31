@@ -55,7 +55,7 @@ func TestGoexitCrash(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			output := &bytes.Buffer{}
-			_, err = buildAndRun("testdata/goexit.go", config, output, []string{tc.name}, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+			_, err = buildAndRun("testdata/goexit.go", config, output, []string{tc.name}, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 				cmd.Stdout = nil
 				cmd.Stderr = nil
 				data, err := cmd.CombinedOutput()
@@ -128,7 +128,7 @@ func TestRuntimeFatal(t *testing.T) {
 	}
 
 	output := &bytes.Buffer{}
-	_, err = buildAndRun("testdata/runtimefatal.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun("testdata/runtimefatal.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		data, err := cmd.CombinedOutput()
@@ -157,7 +157,7 @@ func TestStdin(t *testing.T) {
 	}
 
 	output := &bytes.Buffer{}
-	_, err = buildAndRun(TESTDATA+"/stdin.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun(TESTDATA+"/stdin.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 		cmd.Stdin = strings.NewReader("hello\nworld\n")
 		return cmd.Run()
 	})
