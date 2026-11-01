@@ -6123,6 +6123,28 @@ func TestStructOfDifferentPkgPath(t *testing.T) {
 	shouldPanic("different PkgPath", func() {
 		StructOf(fields)
 	})
+
+	for _, name := range []string{"ä", "中"} {
+		for _, first := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/first=%t", name, first), func(t *testing.T) {
+				fields := []StructField{
+					{Name: name, Type: TypeOf(byte(0))},
+					{Name: "x", PkgPath: "example.com/p", Type: TypeOf(byte(0))},
+				}
+				if !first {
+					fields[0], fields[1] = fields[1], fields[0]
+				}
+				typ := StructOf(fields)
+				for i, want := range fields {
+					got := typ.Field(i)
+					if got.PkgPath != want.PkgPath || got.IsExported() != want.IsExported() {
+						t.Errorf("field %q: PkgPath=%q, IsExported=%t; want %q, %t",
+							want.Name, got.PkgPath, got.IsExported(), want.PkgPath, want.IsExported())
+					}
+				}
+			})
+		}
+	}
 }
 
 func TestStructOfTooLarge(t *testing.T) {
