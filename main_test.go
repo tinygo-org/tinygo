@@ -191,6 +191,7 @@ func TestTrimPath(t *testing.T) {
 }
 
 func TestTrimPathStackSizes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	source := `package main
 func main() {
@@ -325,6 +326,7 @@ func trimPathDWARFFiles(t *testing.T, filename, goos string) []string {
 }
 
 func TestTrimPathTestPackages(t *testing.T) {
+	t.Parallel()
 	options := optionsFromTarget(*testTarget, sema)
 	config, err := builder.NewConfig(&options)
 	if err != nil {
