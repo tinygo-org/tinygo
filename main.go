@@ -1363,7 +1363,7 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 						if uint16(vid) == id[0] && uint16(pid) == id[1] {
 							primaryPorts = append(primaryPorts, p.Name)
 							foundPort = true
-							continue
+							break
 						}
 					}
 				}
