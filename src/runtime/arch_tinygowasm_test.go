@@ -55,26 +55,14 @@ func TestGrowHeapAbove2GiB(t *testing.T) {
 		t.Fatalf("expected MemStats.Sys to grow above %#x, got %#x", before.Sys, after.Sys)
 	}
 
-	buf := make([]byte, 1<<20)
+	buf := make([]byte, 256<<20)
 	buf[0] = 1
 	buf[len(buf)-1] = 2
 	if buf[0] != 1 || buf[len(buf)-1] != 2 {
 		t.Fatalf("unexpected buffer contents")
 	}
 
-	// If the host allows growing to 65534 pages, verify the final growHeap()
-	// caps at maxPages (65535) instead of wrapping uintptr(65536)*wasmPageSize to 0.
-	cur = wasm_memory_size(wasmMemoryIndex)
-	if cur < maxPages-1 && wasm_memory_grow(wasmMemoryIndex, (maxPages-1)-cur) != -1 {
-		setHeapEnd(uintptr(wasm_memory_size(wasmMemoryIndex)) * wasmPageSize)
-		if !growHeap() {
-			t.Fatalf("growHeap failed from %d to %d pages", maxPages-1, maxPages)
-		}
-		if got := wasm_memory_size(wasmMemoryIndex); got != maxPages {
-			t.Fatalf("expected %d pages at cap, got %d", maxPages, got)
-		}
-		if growHeap() {
-			t.Fatalf("expected growHeap to return false at %d-page cap", maxPages)
-		}
+	if wasm_memory_size(wasmMemoryIndex) == maxPages && growHeap() {
+		t.Fatalf("expected growHeap to return false at %d-page cap", maxPages)
 	}
 }

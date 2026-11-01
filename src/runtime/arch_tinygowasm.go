@@ -93,13 +93,11 @@ func saveStackPointer() {
 func growHeap() bool {
 	const maxPages = 65535
 	memorySize := wasm_memory_size(wasmMemoryIndex)
-	growPages := min(memorySize, 1024, maxPages-memorySize)
-	for growPages > 0 {
+	for growPages := min(memorySize, maxPages-memorySize); growPages > memorySize/64; growPages /= 2 {
 		if wasm_memory_grow(wasmMemoryIndex, growPages) != -1 {
 			setHeapEnd(uintptr(wasm_memory_size(wasmMemoryIndex)) * wasmPageSize)
 			return true
 		}
-		growPages /= 2
 	}
 	return false
 }
