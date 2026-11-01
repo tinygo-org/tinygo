@@ -13,7 +13,7 @@ lint: ## Lint source tree
 		| grep '.' \
 		| awk '{print}; END {exit NR>0}'
 
-SPELLDIRSCMD=find . -depth 1 -type d  | egrep -wv '.git|lib|llvm|src'; find src -depth 1 | egrep -wv 'device|internal|net|vendor'; find src/internal -depth 1 -type d | egrep -wv src/internal/wasi
+SPELLDIRSCMD=find . -mindepth 1 -maxdepth 1 -type d  | egrep -wv '.git|lib|llvm|src'; find src -mindepth 1 -maxdepth 1 | egrep -wv 'device|internal|net|vendor'; find src/internal -mindepth 1 -maxdepth 1 -type d | egrep -wv src/internal/wasi
 .PHONY: spell
 spell: ## Spellcheck source tree
 	go tool github.com/golangci/misspell/cmd/misspell -error --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.go *.md
