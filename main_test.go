@@ -100,6 +100,76 @@ var supportedLinuxArches = map[string]string{
 
 var sema = make(chan struct{}, runtime.NumCPU())
 
+func TestPrepareFlashCommand(t *testing.T) {
+	const binary = `C:\build dir\firmware.hex`
+	const port = `\\.\COM 3`
+	for _, tc := range []struct {
+		name     string
+		command  string
+		port     string
+		want     []string
+		wantPort string
+		err      string
+	}{
+		{
+			name:     "quoted paths and placeholders",
+			command:  `'C:\Program Files\flasher.exe' --port={port} --file={hex} --label=a\ b # ignored`,
+			port:     port,
+			want:     []string{`C:\Program Files\flasher.exe`, "--port=" + port, "--file=" + binary, "--label=a b"},
+			wantPort: port,
+		},
+		{
+			name:    "no port",
+			command: `flasher "{hex}"`,
+			want:    []string{"flasher", binary},
+		},
+		{
+			name:    "unclosed quote before port lookup",
+			command: `flasher "{port}`,
+			err:     "could not parse flash command",
+		},
+		{
+			name:    "missing arguments",
+			command: `flasher`,
+			err:     "invalid flash command",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := &compileopts.TargetSpec{FlashCommand: tc.command}
+			got, gotPort, err := prepareFlashCommand(target, ".hex", binary, tc.port)
+			if tc.err != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.err) {
+					t.Fatalf("prepareFlashCommand() error = %v, want %q", err, tc.err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, tc.want) || gotPort != tc.wantPort {
+				t.Errorf("prepareFlashCommand() = %q, %q, want %q, %q", got, gotPort, tc.want, tc.wantPort)
+			}
+		})
+	}
+}
+
+func TestPrepareFlashCommandBuiltin(t *testing.T) {
+	target, err := compileopts.LoadTarget(&compileopts.Options{Target: "arduino-uno"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const binary = `C:\build dir\firmware.hex`
+	const port = `\\.\COM 3`
+	got, gotPort, err := prepareFlashCommand(target, ".hex", binary, port)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"avrdude", "-c", "arduino", "-p", "atmega328p", "-P", port, "-U", "flash:w:" + binary + ":i"}
+	if !slices.Equal(got, want) || gotPort != port {
+		t.Errorf("prepareFlashCommand() = %q, %q, want %q, %q", got, gotPort, want, port)
+	}
+}
+
 func TestParseGoLinkFlag(t *testing.T) {
 	for _, tc := range []struct {
 		name string
