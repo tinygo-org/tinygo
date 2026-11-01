@@ -20,9 +20,11 @@ import (
 // the init function to runtime.
 const DefaultMaxInterpBlockEntries = 1000
 
-func (r *runner) run(fn *function, params []value, parentMem *memoryView, depth int) (value, memoryView, *Error) {
+func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames []value, depth int) (value, memoryView, *Error) {
 	mem := memoryView{r: r, parent: parentMem}
-	locals := make([]value, len(fn.locals))
+	frames = slices.Grow(frames, len(fn.locals))[:len(fn.locals)] // make room for this call's slots; a reallocation copies nothing
+	locals, frames := frames, frames[len(fn.locals):]             // take this call's slots from the head, keep the free space after them for children
+	clear(locals)                                                 // these slots may hold values from an earlier sibling
 	r.callsExecuted++
 
 	// Parameters are considered a kind of local values.
@@ -684,7 +686,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, depth 
 					}
 					r.debugf(depth, "call: %s(%s)", callFn.name, strings.Join(argStrings, ", "))
 				}
-				retval, callMem, callErr := r.run(callFn, operands[1:], &mem, depth+1)
+				retval, callMem, callErr := r.run(callFn, operands[1:], &mem, frames, depth+1)
 				if callErr != nil {
 					if isRecoverableError(callErr.Err) {
 						// This error can be recovered by doing the call at
