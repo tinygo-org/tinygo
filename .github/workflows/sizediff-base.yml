@@ -1,0 +1,72 @@
+name: Binary size baseline
+
+# PR caches are scoped to their merge ref.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache
+on:
+  push:
+    branches:
+      - dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Add GOBIN to $PATH
+        run: |
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Download drivers repo
+        run: git clone https://github.com/tinygo-org/drivers.git
+      - name: Restore dev sizes
+        id: base-cache
+        uses: ./.github/actions/sizediff-cache
+        with:
+          base-sha: ${{ github.sha }}
+      - name: Prepare dev build
+        if: steps.base-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "GOCACHE=$RUNNER_TEMP/go-build-base" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$RUNNER_TEMP/cache-base" >> "$GITHUB_ENV"
+      - uses: ./.github/actions/setup-llvm
+        if: steps.base-cache.outputs.cache-hit != 'true'
+        with:
+          save-cache: "false"
+      - name: Cache Go modules
+        if: steps.base-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v5
+        with:
+          key: sizediff-base-go-modules-v1-${{ hashFiles('go.sum', 'drivers/go.sum') }}
+          path: ~/go/pkg/mod
+      - run: make gen-device -j4
+        if: steps.base-cache.outputs.cache-hit != 'true'
+      - name: Build tinygo binary for the dev branch
+        if: steps.base-cache.outputs.cache-hit != 'true'
+        run: make tinygo
+      - name: Determine binary sizes on the dev branch
+        if: steps.base-cache.outputs.cache-hit != 'true'
+        run: |
+          set -o pipefail
+          export PATH="$PWD/build:$PATH"
+          (cd drivers; make smoke-test | tee sizes-dev.txt)
+          test -s drivers/sizes-dev.txt
+      - name: Save dev sizes
+        if: steps.base-cache.outputs.cache-hit != 'true' && steps.base-cache.outputs.cache-key != ''
+        uses: actions/cache/save@v5
+        with:
+          path: drivers/sizes-dev.txt
+          key: ${{ steps.base-cache.outputs.cache-key }}
