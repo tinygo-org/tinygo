@@ -60,6 +60,7 @@ func TestBuild(t *testing.T) {
 		"signal.go",
 		"signalnotify.go",
 		"slice.go",
+		"slicegrow.go",
 		"sort.go",
 		"stdlib.go",
 		"string.go",
@@ -517,6 +518,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		}
 		if name == "coreassign.go" && scheduler != "cores" {
 			// Core assignment needs the cores scheduler.
+			continue
+		}
+		if name == "slicegrow.go" && (isBaremetal || spec.GC == "leaking") {
+			// These targets grow slices to the next power of two.
 			continue
 		}
 		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
