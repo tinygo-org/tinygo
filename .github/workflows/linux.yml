@@ -18,8 +18,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      # go mod tidy needs src/net/http/response.go for golang.org/x/net.
+      # The other submodules do not affect go.mod or go.sum.
+      - name: Checkout net submodule
+        run: git submodule update --init --depth 1 src/net
       - name: Install Go
         uses: actions/setup-go@v6
         with:
