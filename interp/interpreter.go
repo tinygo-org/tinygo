@@ -36,7 +36,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 
 	// Track how many times each basic block has been entered, to detect
 	// loops that are too expensive to evaluate at compile time.
-	var blockCounts map[int]int
+	blockCounts := make([]uint32, len(fn.blocks))
 
 	// Start with the first basic block and the first instruction.
 	// Branch instructions may modify both bb and instIndex when branching.
@@ -52,11 +52,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// Check whether this block has been entered too many times,
 			// which indicates an expensive loop that should be deferred
 			// to runtime.
-			if blockCounts == nil {
-				blockCounts = make(map[int]int)
-			}
 			blockCounts[currentBB]++
-			if r.maxLoopIterations > 0 && blockCounts[currentBB] > r.maxLoopIterations {
+			if r.maxLoopIterations > 0 && int(blockCounts[currentBB]) > r.maxLoopIterations {
 				err := &recoverableError{msg: "interp: loop ran too many iterations", fn: fn.name}
 				return nil, mem, r.errorAt(bb.instructions[0], err)
 			}
