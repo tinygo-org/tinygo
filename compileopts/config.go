@@ -19,7 +19,7 @@ import (
 
 // Go minor version range supported by TinyGo.
 const (
-	MinimumGoMinorVersion = 25
+	MinimumGoMinorVersion = 26
 	MaximumGoMinorVersion = 27
 )
 
