@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   nix-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Uninstall system LLVM
         # Hack to work around issue where we still include system headers for
