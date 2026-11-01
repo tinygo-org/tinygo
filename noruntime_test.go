@@ -11,6 +11,7 @@ import (
 )
 
 func TestNoRuntime(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		source string

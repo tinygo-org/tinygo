@@ -272,6 +272,7 @@ func TestWasmExport(t *testing.T) {
 // Test js.FuncOf (for syscall/js).
 // This test might be extended in the future to cover more cases in syscall/js.
 func TestWasmFuncOf(t *testing.T) {
+	t.Parallel()
 	// Build the wasm binary.
 	tmpdir := t.TempDir()
 	options := optionsFromTarget("wasm", sema)
