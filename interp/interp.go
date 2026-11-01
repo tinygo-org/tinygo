@@ -40,6 +40,9 @@ type runner struct {
 	xorshift64State   uint64 // state for runtime.fastrand64
 }
 
+// localsBufferSize is the initial capacity of the locals passed to run.
+const localsBufferSize = 1 << 12
+
 func newRunner(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bool) *runner {
 	r := runner{
 		mod:               mod,
@@ -73,6 +76,7 @@ func (r *runner) dispose() {
 func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bool) error {
 	r := newRunner(mod, timeout, maxLoopIterations, debug)
 	defer r.dispose()
+	locals := make([]value, 0, localsBufferSize)
 
 	initAll := mod.NamedFunction("runtime.initAll")
 	bb := initAll.EntryBasicBlock()
@@ -127,7 +131,7 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 		if r.debug {
 			fmt.Fprintln(os.Stderr, "call:", fn.Name())
 		}
-		_, mem, callErr := r.run(r.getFunction(fn), nil, nil, 1)
+		_, mem, callErr := r.run(r.getFunction(fn), nil, nil, locals, 1)
 		call.EraseFromParentAsInstruction()
 		if callErr != nil {
 			if isRecoverableError(callErr.Err) {
@@ -218,6 +222,7 @@ func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug 
 	mod := fn.GlobalParent()
 	r := newRunner(mod, timeout, maxLoopIterations, debug)
 	defer r.dispose()
+	locals := make([]value, 0, localsBufferSize)
 	initName := fn.Name()
 	if !strings.HasSuffix(initName, ".init") {
 		return errorAt(fn, "interp: unexpected function name (expected *.init)")
@@ -247,7 +252,7 @@ func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug 
 	if r.debug {
 		fmt.Fprintln(os.Stderr, "interp:", fn.Name())
 	}
-	_, pkgMem, callErr := r.run(r.getFunction(fn), nil, nil, 1)
+	_, pkgMem, callErr := r.run(r.getFunction(fn), nil, nil, locals, 1)
 	if callErr != nil {
 		if isRecoverableError(callErr.Err) {
 			// Could not finish, but could recover from it.
