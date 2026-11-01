@@ -1592,7 +1592,7 @@ func StructOf(fields []StructField) Type {
 			}
 		}
 
-		if field.PkgPath != "" || !isExportedFieldName(field.Name) {
+		if field.PkgPath != "" {
 			hasUnexported = true
 			if !pkgpathSet {
 				pkgpath = field.PkgPath
@@ -1690,13 +1690,6 @@ func StructOf(fields []StructField) Type {
 	dynamic.layout, dynamic.layoutData = makeStructGCLayout(rawFields, size)
 	dynamic.ptrTo = (*RawType)(unsafe.Add(unsafe.Pointer(&dynamic.RawType), 1))
 	return loadOrStoreCachedStructType(rawFields, &dynamic.RawType)
-}
-
-func isExportedFieldName(name string) bool {
-	for _, r := range name {
-		return unicode.IsUpper(r)
-	}
-	return false
 }
 
 func isValidFieldName(name string) bool {
