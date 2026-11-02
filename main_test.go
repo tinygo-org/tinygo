@@ -30,6 +30,7 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/diagnostics"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/internal/diff"
 )
 
 const TESTDATA = "testdata"
@@ -569,7 +570,7 @@ func checkOutputData(t *testing.T, expectedOutput, actual []byte) {
 
 	if !bytes.Equal(actual, expectedOutput) {
 		t.Errorf("output did not match (expected %d bytes, got %d bytes):", len(expectedOutput), len(actual))
-		t.Error(string(Diff("expected", expectedOutput, "actual", actual)))
+		t.Error(string(diff.Diff("expected", expectedOutput, "actual", actual)))
 	}
 }
 
