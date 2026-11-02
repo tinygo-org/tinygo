@@ -10,13 +10,15 @@ import (
 	"github.com/tinygo-org/tinygo/interp"
 )
 
+type noRuntimeTest struct {
+	name   string
+	source string
+	fail   bool
+}
+
 func TestNoRuntime(t *testing.T) {
 	t.Parallel()
-	for _, tc := range []struct {
-		name   string
-		source string
-		fail   bool
-	}{
+	testNoRuntime(t, "wasip1", "none", []noRuntimeTest{
 		{"evaluated", `var result = calc(12)
 //go:noruntime
 func calc(n int) int { return n * 7 }
@@ -120,7 +122,59 @@ var callback observer = number(12)
 func (n number) calc() int { return int(n) * 7 }
 func (n number) other() int { return int(n) }
 func main() { println(callback.other()) }`, true},
-	} {
+	})
+}
+
+// Recover reads the current task, which only folds without a scheduler.
+func TestNoRuntimeRecover(t *testing.T) {
+	t.Parallel()
+	testNoRuntime(t, "", "", []noRuntimeTest{
+		{"recover-outside-defer", `var result = calc()
+//go:noruntime
+func calc() any { return recover() }
+func main() { println(result == nil) }`, false},
+		{"recover-parent-frame", `var result = calc()
+//go:noruntime
+func calc() int {
+	value := 0
+	withDefer(&value)
+	return value
+}
+func withDefer(value *int) {
+	defer func() {
+		defer func() { *value += 1 }()
+		if recover() == nil { *value = 41 }
+	}()
+}
+func main() { println(result) }`, false},
+		{"recover-panic", `var result = calc()
+//go:noruntime
+func calc() (r int) { defer func() { if recover() != nil { r = 1 } }(); panic("x") }
+func main() { println(result) }`, true},
+		{"recover-fault", `var result = calc(5)
+//go:noruntime
+func calc(i int) (r int) { defer func() { if recover() != nil { r = 1 } }(); var a [2]int; return a[i] }
+func main() { println(result) }`, true},
+		{"regexp", `import "regexp"
+var result = calc()
+//go:noruntime
+func calc() *regexp.Regexp { return regexp.MustCompile("asdf") }
+func main() { println(result.MatchString("asdf")) }`, false},
+		{"regexp-invalid", `import "regexp"
+var result = calc()
+//go:noruntime
+func calc() *regexp.Regexp { return regexp.MustCompile("(") }
+func main() { println(result != nil) }`, true},
+		{"regexp-internal-recover", `import ("regexp"; "strings")
+var result = calc()
+//go:noruntime
+func calc() error { _, err := regexp.Compile(strings.Repeat("(", 1001) + strings.Repeat(")", 1001)); return err }
+func main() { println(result != nil) }`, true},
+	})
+}
+
+func testNoRuntime(t *testing.T, target, scheduler string, tests []noRuntimeTest) {
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, opt := range []string{"0", "2"} {
 				t.Run(opt, func(t *testing.T) {
@@ -129,9 +183,9 @@ func main() { println(callback.other()) }`, true},
 					if err := os.WriteFile(path, []byte("package main\n"+tc.source+"\n"), 0o600); err != nil {
 						t.Fatal(err)
 					}
-					options := optionsFromTarget("wasip1", sema)
+					options := optionsFromTarget(target, sema)
 					options.Opt = opt
-					options.Scheduler = "none"
+					options.Scheduler = scheduler
 					options.InterpMaxLoopIterations = interp.DefaultMaxInterpBlockEntries
 					config, err := builder.NewConfig(&options)
 					if err != nil {

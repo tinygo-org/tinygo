@@ -348,6 +348,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, depth 
 				// which case this call won't even get to this point but will
 				// already be emitted in initAll.
 				continue
+			case callFn.name == "runtime._recover":
+				// Panicking calls stay at runtime, so recover returns nil here.
+				// https://go.dev/ref/spec#Handling_panics
+				locals[inst.localIndex] = r.getValue(llvm.ConstNull(inst.llvmInst.Type()))
 			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" ||
 				callFn.name == "os.runtime_args" || callFn.name == "internal/task.start" || callFn.name == "internal/task.Current" ||
 				callFn.name == "time.startTimer" || callFn.name == "time.stopTimer" || callFn.name == "time.resetTimer":
