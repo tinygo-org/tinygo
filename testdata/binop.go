@@ -113,7 +113,10 @@ func main() {
 	q2.b[3] = 0
 	println("q1==q2", q1 == q2)
 	var n1, n2 nestedPaddedStruct
-	(*[72]byte)(unsafe.Pointer(&n2))[71] = 1 // a padding byte
+	if unsafe.Sizeof(n2) > unsafe.Offsetof(n2.b)+unsafe.Offsetof(n2.b.y)+1 {
+		// Set a padding byte. AVR aligns uint32 to 1 byte, so it has none.
+		*(*byte)(unsafe.Add(unsafe.Pointer(&n2), unsafe.Sizeof(n2)-1)) = 1
+	}
 	println("n1==n2", n1 == n2)
 }
 
