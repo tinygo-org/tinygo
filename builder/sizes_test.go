@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -186,33 +185,13 @@ func measureBinarySize(tc sizeTest, tmpdir string) (*programSize, error) {
 }
 
 func formatSizeTable(tests []sizeTest, sizes []*programSize) string {
-	targetWidth := len("target")
-	packageWidth := len("package")
-	optWidth := len("opt")
-	codeWidth := len("code")
-	rodataWidth := len("rodata")
-	dataWidth := len("data")
-	bssWidth := len("bss")
-	for i, tc := range tests {
-		targetWidth = max(targetWidth, len(tc.target))
-		packageWidth = max(packageWidth, len(tc.path))
-		optWidth = max(optWidth, len(tc.opt))
-		codeWidth = max(codeWidth, len(strconv.FormatUint(sizes[i].Code, 10)))
-		rodataWidth = max(rodataWidth, len(strconv.FormatUint(sizes[i].ROData, 10)))
-		dataWidth = max(dataWidth, len(strconv.FormatUint(sizes[i].Data, 10)))
-		bssWidth = max(bssWidth, len(strconv.FormatUint(sizes[i].BSS, 10)))
-	}
-
 	var output strings.Builder
-	fmt.Fprintf(&output, "%-*s %-*s %-*s %*s %*s %*s %*s\n",
-		targetWidth, "target", packageWidth, "package", optWidth, "opt",
-		codeWidth, "code", rodataWidth, "rodata", dataWidth, "data", bssWidth, "bss")
+	fmt.Fprintf(&output, "%-24s %-40s %-3s %8s %8s %8s %8s\n",
+		"target", "package", "opt", "code", "rodata", "data", "bss")
 	for i, tc := range tests {
 		size := sizes[i]
-		fmt.Fprintf(&output, "%-*s %-*s %-*s %*d %*d %*d %*d\n",
-			targetWidth, tc.target, packageWidth, tc.path, optWidth, tc.opt,
-			codeWidth, size.Code, rodataWidth, size.ROData,
-			dataWidth, size.Data, bssWidth, size.BSS)
+		fmt.Fprintf(&output, "%-24s %-40s %-3s %8d %8d %8d %8d\n",
+			tc.target, tc.path, tc.opt, size.Code, size.ROData, size.Data, size.BSS)
 	}
 	return output.String()
 }
