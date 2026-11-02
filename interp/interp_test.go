@@ -272,7 +272,7 @@ exit:
 
 	r := newRunner(mod, time.Minute, 10, false)
 	defer r.dispose()
-	_, _, runErr := r.run(r.getFunction(mod.NamedFunction("fill")), []value{literalValue{uint64(100)}}, nil, "")
+	_, _, runErr := r.run(r.getFunction(mod.NamedFunction("fill")), []value{literalValue{uint64(100)}}, nil, 0)
 	if runErr == nil {
 		t.Fatal("expected the loop limit to stop interpretation")
 	}

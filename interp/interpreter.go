@@ -20,7 +20,7 @@ import (
 // the init function to runtime.
 const DefaultMaxInterpBlockEntries = 1000
 
-func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent string) (value, memoryView, *Error) {
+func (r *runner) run(fn *function, params []value, parentMem *memoryView, depth int) (value, memoryView, *Error) {
 	mem := memoryView{r: r, parent: parentMem}
 	locals := make([]value, len(fn.locals))
 	r.callsExecuted++
@@ -107,7 +107,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					}
 				}
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"phi", inst.operands, "->", result)
+					r.debugf(depth, "phi %v -> %v", inst.operands, result)
 				}
 				if result == nil {
 					panic("could not find PHI input")
@@ -175,7 +175,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 		}
 		if isRuntimeInst {
-			err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+			err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 			if err != nil {
 				return nil, mem, err
 			}
@@ -190,7 +190,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				bb = fn.blocks[currentBB]
 				instIndex = -1 // start at 0 the next cycle
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"br", operands, "->", currentBB)
+					r.debugf(depth, "br %v -> %v", operands, currentBB)
 				}
 			case 3:
 				// Conditional branch: [cond, thenBB, elseBB]
@@ -208,7 +208,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					panic("bool should be 0 or 1")
 				}
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"br", operands, "->", currentBB)
+					r.debugf(depth, "br %v -> %v", operands, currentBB)
 				}
 				bb = fn.blocks[currentBB]
 				instIndex = -1 // start at 0 the next cycle
@@ -231,13 +231,13 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 
 			if len(operands) != 0 {
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"ret", operands[0])
+					r.debugf(depth, "ret %v", operands[0])
 				}
 				// Return instruction has a value to return.
 				return operands[0], mem, nil
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"ret")
+				r.debugf(depth, "ret")
 			}
 			// Return instruction doesn't return anything, it's just 'ret void'.
 			return nil, mem, nil
@@ -264,7 +264,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			bb = fn.blocks[currentBB]
 			instIndex = -1 // start at 0 the next cycle
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"switch", operands, "->", currentBB)
+				r.debugf(depth, "switch %v -> %v", operands, currentBB)
 			}
 		case llvm.Select:
 			// Select is much like a ternary operator: it picks a result from
@@ -284,7 +284,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			locals[inst.localIndex] = result
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"select", operands, "->", result)
+				r.debugf(depth, "select %v -> %v", operands, result)
 			}
 		case llvm.Call:
 			// A call instruction can either be a regular call or a runtime intrinsic.
@@ -305,14 +305,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					return nil, mem, r.errorAt(inst, err)
 				}
 				if mem.hasExternalLoadOrStore(ptr) {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
 						return nil, mem, err
 					}
 					continue
 				}
 				old := mem.load(ptr, operands[2].len(r))
 				if old == nil {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
 						return nil, mem, err
 					}
 					continue
@@ -331,7 +331,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					newValue = operands[3]
 				}
 				if !mem.store(newValue, ptr) {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
 						return nil, mem, err
 					}
 					continue
@@ -362,7 +362,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				//     which is modified elsewhere.
 				//   * Timer functions access runtime internal state which may
 				//     not be initialized.
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
@@ -384,7 +384,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 				locals[inst.localIndex] = makeLiteralInt(result, bits)
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+callFn.name, "->", result)
+					r.debugf(depth, "%s -> %v", callFn.name, result)
 				}
 			case callFn.name == "runtime.nanotime" && r.pkgName == "time":
 				// The time package contains a call to runtime.nanotime.
@@ -436,7 +436,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// that stores to it copy it, etc).
 				ptr := newPointerValue(r, index, 0)
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"runtime.alloc:", size, "->", ptr)
+					r.debugf(depth, "runtime.alloc: %v -> %v", size, ptr)
 				}
 				locals[inst.localIndex] = ptr
 			case strings.HasPrefix(callFn.name, "llvm.ctlz.i"):
@@ -448,7 +448,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// A zero input is poison when the flag is set.
 				// https://llvm.org/docs/LangRef.html#llvm-ctlz-intrinsic
 				if (width != 8 && width != 16 && width != 32 && width != 64) || (x == 0 && isZeroPoison != 0) {
-					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+					err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 					if err != nil {
 						return nil, mem, err
 					}
@@ -486,7 +486,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					return nil, mem, r.errorAt(inst, err)
 				}
 				if volatile != 0 {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
 						return nil, mem, err
 					}
 					continue
@@ -500,7 +500,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 				obj := mem.get(dst.index())
 				if mem.hasExternalLoadOrStore(dst) || obj.buffer == nil || uint64(dst.offset())+nBytes > uint64(obj.size) {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, indent); err != nil {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
 						return nil, mem, err
 					}
 					continue
@@ -518,7 +518,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// Copy a block of memory from one pointer to another.
 				if operands[4].(literalValue).value.(uint8) != 0 {
 					// This is a volatile copy/move.
-					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+					err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 					if err != nil {
 						return nil, mem, err
 					}
@@ -549,7 +549,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 						// same checks here.
 						// This fixes the following bug:
 						// https://github.com/tinygo-org/tinygo/issues/3890
-						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 						if err != nil {
 							return nil, mem, err
 						}
@@ -563,7 +563,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 						// a //go:embed slice, which is not available at interp
 						// time.
 						// See: https://github.com/tinygo-org/tinygo/issues/4895
-						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 						if err != nil {
 							return nil, mem, err
 						}
@@ -579,7 +579,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// This function must be implemented manually as it is normally
 				// implemented by the interface lowering pass.
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"typeassert:", operands[1:])
+					r.debugf(depth, "typeassert: %v", operands[1:])
 				}
 				assertedType, err := operands[2].toLLVMValue(inst.llvmInst.Operand(1).Type(), &mem)
 				if err != nil {
@@ -615,7 +615,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// with all regular parameters and a type code. It will then
 				// call the concrete method for it.
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"invoke method:", operands[1:])
+					r.debugf(depth, "invoke method: %v", operands[1:])
 				}
 
 				// Load the type code and method set of the interface value.
@@ -665,7 +665,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if len(callFn.blocks) == 0 {
 					// Call to a function declaration without a definition
 					// available.
-					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+					err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 					if err != nil {
 						return nil, mem, err
 					}
@@ -678,19 +678,19 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					for i, v := range operands[1:] {
 						argStrings[i] = v.String()
 					}
-					fmt.Fprintln(os.Stderr, indent+"call:", callFn.name+"("+strings.Join(argStrings, ", ")+")")
+					r.debugf(depth, "call: %s(%s)", callFn.name, strings.Join(argStrings, ", "))
 				}
-				retval, callMem, callErr := r.run(callFn, operands[1:], &mem, indent+"    ")
+				retval, callMem, callErr := r.run(callFn, operands[1:], &mem, depth+1)
 				if callErr != nil {
 					if isRecoverableError(callErr.Err) {
 						// This error can be recovered by doing the call at
 						// runtime instead of at compile time. But we need to
 						// revert any changes made by the call first.
 						if r.debug {
-							fmt.Fprintln(os.Stderr, indent+"!! revert because of error:", callErr.Error())
+							r.debugf(depth, "!! revert because of error: %s", callErr.Error())
 						}
 						callMem.revert()
-						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 						if err != nil {
 							return nil, mem, err
 						}
@@ -719,7 +719,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// pointer to the object was passed to a function that could not
 				// be interpreted at compile time) then the load must be done at
 				// runtime.
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
@@ -727,14 +727,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			result := mem.load(ptr, uint32(size))
 			if result == nil {
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
 				continue
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"load:", ptr, "->", result)
+				r.debugf(depth, "load: %v -> %v", ptr, result)
 			}
 			locals[inst.localIndex] = result
 		case llvm.Store:
@@ -745,7 +745,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				return nil, mem, r.errorAt(inst, err)
 			}
 			if inst.llvmInst.IsVolatile() || mem.hasExternalLoadOrStore(ptr) {
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
@@ -753,12 +753,12 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			val := operands[0]
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"store:", val, ptr)
+				r.debugf(depth, "store: %v %v", val, ptr)
 			}
 			ok := mem.store(val, ptr)
 			if !ok {
 				// Could not store the value, do it at runtime.
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
@@ -785,7 +785,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// Create a pointer to this object (an alloca produces a pointer).
 			ptr := newPointerValue(r, index, 0)
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"alloca:", operands, "->", ptr)
+				r.debugf(depth, "alloca: %v -> %v", operands, ptr)
 			}
 			locals[inst.localIndex] = ptr
 		case llvm.GetElementPtr:
@@ -825,7 +825,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			locals[inst.localIndex] = ptr
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"gep:", operands, "->", ptr)
+				r.debugf(depth, "gep: %v -> %v", operands, ptr)
 			}
 		case llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt:
 			// Various bitcast-like instructions that all keep the same bits
@@ -845,7 +845,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 						isPtr = true
 					}
 					if isPtr || (bits != 8 && bits != 16 && bits != 32 && bits != 64) {
-						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 						if err != nil {
 							return nil, mem, err
 						}
@@ -860,7 +860,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", operands[0])
+				r.debugf(depth, "%s: %v", instructionNameMap[inst.opcode], operands[0])
 			}
 			locals[inst.localIndex] = operands[0]
 		case llvm.ExtractValue:
@@ -871,7 +871,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				buf: agg.buf[offset : offset+size],
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"extractvalue:", operands, "->", elt)
+				r.debugf(depth, "extractvalue: %v -> %v", operands, elt)
 			}
 			locals[inst.localIndex] = elt
 		case llvm.InsertValue:
@@ -882,7 +882,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			copy(newagg.buf, agg.buf)
 			copy(newagg.buf[offset:], elt.buf)
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"insertvalue:", operands, "->", newagg)
+				r.debugf(depth, "insertvalue: %v -> %v", operands, newagg)
 			}
 			locals[inst.localIndex] = newagg
 		case llvm.ICmp:
@@ -899,7 +899,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				locals[inst.localIndex] = literalValue{uint8(0)}
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"icmp:", operands[0], intPredicateString(predicate), operands[1], "->", result)
+				r.debugf(depth, "icmp: %v %v %v -> %v", operands[0], intPredicateString(predicate), operands[1], result)
 			}
 		case llvm.FCmp:
 			predicate := llvm.FloatPredicate(operands[2].(literalValue).value.(uint8))
@@ -941,7 +941,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				locals[inst.localIndex] = literalValue{uint8(0)}
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"fcmp:", operands[0], predicate, operands[1], "->", result)
+				r.debugf(depth, "fcmp: %v %v %v -> %v", operands[0], predicate, operands[1], result)
 			}
 		case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.SDiv, llvm.URem, llvm.SRem, llvm.Shl, llvm.LShr, llvm.AShr, llvm.And, llvm.Or, llvm.Xor:
 			// Integer binary operations.
@@ -976,7 +976,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				} else {
 					// Catch-all for weird operations that should just be done
 					// at runtime.
-					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+					err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 					if err != nil {
 						return nil, mem, err
 					}
@@ -1032,7 +1032,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			locals[inst.localIndex] = makeLiteralInt(result, int(lhs.len(r)*8))
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", lhs, rhs, "->", result)
+				r.debugf(depth, "%s: %v %v -> %v", instructionNameMap[inst.opcode], lhs, rhs, result)
 			}
 		case llvm.SExt, llvm.ZExt, llvm.Trunc:
 			// Change the size of an integer to a larger or smaller bit width.
@@ -1058,7 +1058,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			bitwidth := operands[1].(literalValue).value.(uint64)
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", value, bitwidth)
+				r.debugf(depth, "%s: %v %v", instructionNameMap[inst.opcode], value, bitwidth)
 			}
 			locals[inst.localIndex] = makeLiteralInt(value, int(bitwidth))
 		case llvm.SIToFP, llvm.UIToFP:
@@ -1079,7 +1079,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			bitwidth := operands[1].(literalValue).value.(uint64)
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", value, bitwidth)
+				r.debugf(depth, "%s: %v %v", instructionNameMap[inst.opcode], value, bitwidth)
 			}
 			switch bitwidth {
 			case 64:
@@ -1091,7 +1091,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 		default:
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+inst.String())
+				r.debugf(depth, "%s", inst.String())
 			}
 			return nil, mem, r.errorAt(inst, errUnsupportedInst)
 		}
@@ -1176,7 +1176,7 @@ func intOperands(r *runner, lhs, rhs value) (int64, int64, error) {
 	return lhsInt, rhsInt, err
 }
 
-func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
+func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, depth int) *Error {
 	if !fn.deferFrame.IsNil() {
 		err := &recoverableError{msg: "interp: cannot partially evaluate a function with defer", op: inst.opcodeName(), fn: fn.name}
 		return r.errorAt(inst, err)
@@ -1195,7 +1195,7 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		operands[i] = operand
 	}
 	if r.debug {
-		fmt.Fprintln(os.Stderr, indent+inst.String())
+		r.debugf(depth, "%s", inst.String())
 	}
 	var result llvm.Value
 	switch inst.opcode {
@@ -1325,4 +1325,9 @@ func intPredicateString(predicate llvm.IntPredicate) string {
 	default:
 		return "cmp?"
 	}
+}
+
+// debugf prints a debug line indented by the call depth.
+func (r *runner) debugf(depth int, format string, args ...any) {
+	fmt.Fprintf(os.Stderr, strings.Repeat("    ", depth)+format+"\n", args...)
 }
