@@ -47,7 +47,12 @@ entry:
   store i32 %runtimeSeen, ptr @atomic.runtimeSeen, align 4
   store atomic i32 19, ptr @atomic.value seq_cst, align 4
   call fastcc void @y.init(ptr undef)
-  call fastcc void @z.set(ptr @z.bloom, ptr @z.bloom)
+  %hash = call i64 @ptrHash(ptr @z.bloom)
+  %index = lshr i64 %hash, 58
+  %bit = shl i64 1, %index
+  %old = load i64, ptr @z.bloom, align 8
+  %new = or i64 %old, %bit
+  store i64 %new, ptr @z.bloom, align 8
   call fastcc void @z.setArr(ptr @z.arr, i64 32, ptr @z.bloom)
   ret void
 }
