@@ -1252,6 +1252,11 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		noinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
 		b.llvmFn.AddFunctionAttr(noinline)
 	}
+	if b.fn.Pkg != nil && b.fn.Pkg.Pkg.Path() == "runtime/volatile" {
+		// A volatile access must be one load or store. With minsize, LLVM ignores inlinehint.
+		alwaysinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("alwaysinline"), 0)
+		b.llvmFn.AddFunctionAttr(alwaysinline)
+	}
 
 	if b.info.interrupt {
 		// Mark this function as an interrupt.
