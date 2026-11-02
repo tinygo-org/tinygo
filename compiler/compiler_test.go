@@ -100,7 +100,7 @@ func TestCompiler(t *testing.T) {
 			// Optimize IR a little.
 			passOptions := llvm.NewPassBuilderOptions()
 			defer passOptions.Dispose()
-			err = mod.RunPasses("instcombine", llvm.TargetMachine{}, passOptions)
+			err = mod.RunPasses("instcombine<no-verify-fixpoint>", llvm.TargetMachine{}, passOptions)
 			if err != nil {
 				t.Error(err)
 			}

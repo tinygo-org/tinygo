@@ -112,7 +112,6 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 			},
 		)
 		OptimizeStringToBytes(mod)
-		OptimizeStringEqual(mod)
 
 	} else {
 		// Must be run at any optimization level.

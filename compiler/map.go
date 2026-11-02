@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
-	"golang.org/x/tools/go/ssa"
 	"strings"
+
+	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -410,27 +411,36 @@ func (b *builder) getOrGenerateKeyHashFunc(keyType types.Type) llvm.Value {
 // getOrGenerateKeyEqualFunc returns an LLVM function that compares two keys
 // of the given type for equality. The function is generated on first call
 // and cached in the module.
-func (b *builder) getOrGenerateKeyEqualFunc(keyType types.Type) llvm.Value {
+func (c *compilerContext) getOrGenerateKeyEqualFunc(keyType types.Type) llvm.Value {
 	name := hashmapKeyFuncName("hashmapKeyEqual", keyType)
-	if fn := b.mod.NamedFunction(name); !fn.IsNil() {
+	if fn := c.mod.NamedFunction(name); !fn.IsNil() {
 		return fn
 	}
 
 	// Create the LLVM function type:
 	// (x ptr, y ptr, n uintptr, context ptr) -> i1
-	fnType := llvm.FunctionType(b.ctx.Int1Type(), []llvm.Type{
-		b.dataPtrType, b.dataPtrType, b.uintptrType, b.dataPtrType,
+	fnType := llvm.FunctionType(c.ctx.Int1Type(), []llvm.Type{
+		c.dataPtrType, c.dataPtrType, c.uintptrType, c.dataPtrType,
 	}, false)
-	fn := llvm.AddFunction(b.mod, name, fnType)
+	fn := llvm.AddFunction(c.mod, name, fnType)
 	fn.SetLinkage(llvm.LinkOnceODRLinkage)
 	fn.SetUnnamedAddr(true)
-	b.addStandardAttributes(fn)
+	c.addStandardAttributes(fn)
 
 	// Generate the function body.
-	savedBlock := b.GetInsertBlock()
-	defer b.SetInsertPointAtEnd(savedBlock)
-
-	entry := b.ctx.AddBasicBlock(fn, "entry")
+	entry := c.ctx.AddBasicBlock(fn, "entry")
+	irBuilder := c.ctx.NewBuilder()
+	defer irBuilder.Dispose()
+	b := &builder{
+		compilerContext: c,
+		Builder:         irBuilder,
+		llvmFnType:      fnType,
+		llvmFn:          fn,
+		currentBlockInfo: &blockInfo{
+			entry: entry,
+			exit:  entry,
+		},
+	}
 	b.SetInsertPointAtEnd(entry)
 
 	xPtr := fn.Param(0)
@@ -576,7 +586,7 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 			// Compare strings: load both string headers and compare.
 			xStr := b.CreateLoad(llvmKeyType, xPtr, "x.str")
 			yStr := b.CreateLoad(llvmKeyType, yPtr, "y.str")
-			return b.createRuntimeCall("stringEqual", []llvm.Value{xStr, yStr}, "eq")
+			return b.createStringEqual(xStr, yStr)
 		}
 		if keyType.Info()&types.IsFloat != 0 {
 			// Float equality: fcmp oeq handles -0==+0 (true) and NaN==NaN (false).
@@ -608,11 +618,15 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 		}
 		// Integer/boolean: compare raw bytes.
 		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-		return b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "eq")
+		result := b.createMemCmp(xPtr, yPtr, size, "cmp")
+		result = b.CreateICmp(llvm.IntEQ, result, llvm.ConstNull(b.cIntType), "cmp.eq")
+		return result
 	case *types.Pointer, *types.Chan:
 		// Pointers and channels: compare as raw pointer-sized bytes.
 		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-		return b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "eq")
+		result := b.createMemCmp(xPtr, yPtr, size, "cmp")
+		result = b.CreateICmp(llvm.IntEQ, result, llvm.ConstNull(b.cIntType), "cmp.eq")
+		return result
 	case *types.Interface:
 		// Interface: use runtime interface equality.
 		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
@@ -643,7 +657,9 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 		if isBinaryComparable(elemType) {
 			// All elements are binary-comparable; compare the entire array.
 			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-			return b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "eq")
+			result := b.createMemCmp(xPtr, yPtr, size, "cmp")
+			result = b.CreateICmp(llvm.IntEQ, result, llvm.ConstNull(b.cIntType), "cmp.eq")
+			return result
 		}
 		if arrayLen == 0 {
 			return llvm.ConstInt(b.ctx.Int1Type(), 1, false)
@@ -662,12 +678,11 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 		}
 		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
 
-		loopEntry := b.GetInsertBlock()
-		loopBody := b.ctx.AddBasicBlock(loopEntry.Parent(), "eq.array.body")
-		loopDone := b.ctx.AddBasicBlock(loopEntry.Parent(), "eq.array.done")
-
+		loopEntry := b.currentBlockInfo.exit
+		loopBody := b.ctx.AddBasicBlock(b.llvmFn, "eq.array.body")
 		b.CreateBr(loopBody)
 		b.SetInsertPointAtEnd(loopBody)
+		b.currentBlockInfo.exit = loopBody
 
 		phiI := b.CreatePHI(b.uintptrType, "i")
 
@@ -678,13 +693,14 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 		nextI := b.CreateAdd(phiI, llvm.ConstInt(b.uintptrType, 1, false), "")
 		atEnd := b.CreateICmp(llvm.IntUGE, nextI, llvm.ConstInt(b.uintptrType, uint64(arrayLen), false), "")
 		exitLoop := b.CreateOr(atEnd, b.CreateNot(elemEq, ""), "")
+		loopDone := b.ctx.AddBasicBlock(b.llvmFn, "eq.array.done")
 		b.CreateCondBr(exitLoop, loopDone, loopBody)
 
-		bodyEnd := b.GetInsertBlock()
 		phiI.AddIncoming([]llvm.Value{llvm.ConstInt(b.uintptrType, 0, false), nextI},
-			[]llvm.BasicBlock{loopEntry, bodyEnd})
+			[]llvm.BasicBlock{loopEntry, b.currentBlockInfo.exit})
 
 		b.SetInsertPointAtEnd(loopDone)
+		b.currentBlockInfo.exit = loopDone
 		return elemEq
 	default:
 		panic(fmt.Sprintf("unhandled key type for equal generation: %T", keyType))

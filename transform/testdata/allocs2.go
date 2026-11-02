@@ -358,9 +358,9 @@ func nonEscapingPointerFreeArray() [2]int {
 	return a
 }
 
-// The min and max builtins on strings use a select over the string value.
-// runtime.stringLess is only declared in this test, so the call escapes.
+// The min/max builtins use memcmp, which is annotated with nocapture.
+// As a result, this no longer escapes s or b.
 func minStringSelect(s string) byte {
-	b := make([]byte, 4) // OUT: escapes at line 365
+	b := make([]byte, 4)
 	return min(unsafe.String(&b[0], len(b)), s)[0]
 }

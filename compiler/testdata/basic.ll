@@ -43,8 +43,9 @@ deref.next:                                       ; preds = %entry
   br i1 %1, label %deref.throw, label %deref.next1
 
 deref.next1:                                      ; preds = %deref.next
-  %arraycmp = call i1 @runtime.memequal(ptr nonnull %x, ptr nonnull %y, i32 4096, ptr undef) #3
-  ret i1 %arraycmp
+  %arraycmp = call i32 @memcmp(ptr noundef nonnull dereferenceable(4096) %x, ptr noundef nonnull dereferenceable(4096) %y, i32 4096) #3
+  %arraycmp.eq = icmp eq i32 %arraycmp, 0
+  ret i1 %arraycmp.eq
 
 deref.throw:                                      ; preds = %deref.next, %entry
   call void @runtime.nilPanic(ptr undef) #3
@@ -56,7 +57,7 @@ unwind.return:                                    ; preds = %deref.throw
 
 declare void @runtime.nilPanic(ptr) #0
 
-declare i1 @runtime.memequal(ptr, ptr, i32, ptr) #0
+declare i32 @memcmp(ptr nocapture readonly, ptr nocapture readonly, i32)
 
 ; Function Attrs: nounwind
 define hidden i1 @main.notEqualByteArray(ptr dereferenceable_or_null(4096) %x, ptr dereferenceable_or_null(4096) %y, ptr %context) unnamed_addr #1 {
@@ -69,9 +70,9 @@ deref.next:                                       ; preds = %entry
   br i1 %1, label %deref.throw, label %deref.next1
 
 deref.next1:                                      ; preds = %deref.next
-  %arraycmp = call i1 @runtime.memequal(ptr nonnull %x, ptr nonnull %y, i32 4096, ptr undef) #3
-  %2 = xor i1 %arraycmp, true
-  ret i1 %2
+  %arraycmp = call i32 @memcmp(ptr noundef nonnull dereferenceable(4096) %x, ptr noundef nonnull dereferenceable(4096) %y, i32 4096) #3
+  %arraycmp.ne = icmp ne i32 %arraycmp, 0
+  ret i1 %arraycmp.ne
 
 deref.throw:                                      ; preds = %deref.next, %entry
   call void @runtime.nilPanic(ptr undef) #3
@@ -116,8 +117,9 @@ deref.next1:                                      ; preds = %gep.next
   store i8 %.unpack7, ptr %t0.repack14, align 1
   %t0.repack16 = getelementptr inbounds nuw i8, ptr %t0, i32 4
   store i8 %.unpack9, ptr %t0.repack16, align 1
-  %arraycmp = call i1 @runtime.memequal(ptr nonnull %t0, ptr nonnull %x, i32 5, ptr undef) #3
-  ret i1 %arraycmp
+  %arraycmp = call i32 @memcmp(ptr noundef nonnull dereferenceable(5) %t0, ptr noundef nonnull dereferenceable(5) %x, i32 5) #3
+  %arraycmp.eq = icmp eq i32 %arraycmp, 0
+  ret i1 %arraycmp.eq
 
 deref.throw:                                      ; preds = %gep.next, %deref.next, %entry
   call void @runtime.nilPanic(ptr undef) #3
