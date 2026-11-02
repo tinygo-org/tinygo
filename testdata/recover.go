@@ -9,9 +9,13 @@ import (
 var wg sync.WaitGroup
 var panicMap = map[interface{}]int{}
 var recoveredInitValue = recoveredInit()
+var initRecoveryValues = initRecoveries()
 
 func main() {
 	println("recovered init:", recoveredInitValue)
+	for i, value := range initRecoveryValues {
+		println("init recovery:", i, value)
+	}
 	println("# simple recover")
 	recoverSimple()
 
@@ -63,6 +67,58 @@ func recoveredInit() (result int) {
 		}
 	}()
 	result = 40
+	panic("init panic")
+}
+
+func initRecoveries() [8]int {
+	var values [8]int
+	for i, body := range []func(){
+		func() {},
+		initPanic,
+		func() { initPanic() },
+		func() { defer initPanic() },
+		func() {
+			defer initPanic()
+			defer func() {
+				if recover() != nil {
+					panic("unexpected panic")
+				}
+			}()
+		},
+		func() {
+			defer func() {
+				defer func() {}()
+				_ = recover()
+			}()
+		},
+		func() {
+			i := 5
+			var a [2]int
+			_ = a[i]
+		},
+		func() {
+			defer func() { _ = recover() }()
+			defer initPanic()
+		},
+	} {
+		initRecovery(&values[i], body)
+	}
+	return values
+}
+
+func initRecovery(value *int, body func()) {
+	*value = 40
+	defer func() {
+		if recover() == nil {
+			*value += 1
+		} else {
+			*value += 2
+		}
+	}()
+	body()
+}
+
+func initPanic() {
 	panic("init panic")
 }
 

@@ -1,4 +1,12 @@
 recovered init: 42
+init recovery: 0 41
+init recovery: 1 42
+init recovery: 2 42
+init recovery: 3 42
+init recovery: 4 42
+init recovery: 5 41
+init recovery: 6 42
+init recovery: 7 41
 # simple recover
 running panic...
 recovering...
