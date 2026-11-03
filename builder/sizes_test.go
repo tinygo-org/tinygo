@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/internal/diff"
 	"github.com/tinygo-org/tinygo/interp"
 )
 
@@ -121,10 +123,10 @@ func TestBinarySize(t *testing.T) {
 	checkGolden(t, "testdata/binary-size.txt", output)
 }
 
-func checkGolden(t *testing.T, path, actual string) {
+func checkGolden(t *testing.T, path string, actual []byte) {
 	t.Helper()
 	if *flagUpdate {
-		if err := os.WriteFile(path, []byte(actual), 0o666); err != nil {
+		if err := os.WriteFile(path, actual, 0o666); err != nil {
 			t.Fatal("failed to write updated golden file:", err)
 		}
 		return
@@ -133,8 +135,8 @@ func checkGolden(t *testing.T, path, actual string) {
 	if err != nil {
 		t.Fatal("failed to read golden file:", err)
 	}
-	if actual != string(expected) {
-		t.Errorf("%s does not match expected output (re-run with -update to regenerate):\nexpected:\n%sactual:\n%s", path, expected, actual)
+	if !bytes.Equal(actual, expected) {
+		t.Errorf("%s does not match expected output (re-run with -update to regenerate):\n%s", path, string(diff.Diff("expected", expected, "actual", actual)))
 	}
 }
 
@@ -184,8 +186,8 @@ func measureBinarySize(tc sizeTest, tmpdir string) (*programSize, error) {
 	return size, nil
 }
 
-func formatSizeTable(tests []sizeTest, sizes []*programSize) string {
-	var output strings.Builder
+func formatSizeTable(tests []sizeTest, sizes []*programSize) []byte {
+	var output bytes.Buffer
 	fmt.Fprintf(&output, "%-24s %-40s %-3s %8s %8s %8s %8s\n",
 		"target", "package", "opt", "code", "rodata", "data", "bss")
 	for i, tc := range tests {
@@ -193,7 +195,7 @@ func formatSizeTable(tests []sizeTest, sizes []*programSize) string {
 		fmt.Fprintf(&output, "%-24s %-40s %-3s %8d %8d %8d %8d\n",
 			tc.target, tc.path, tc.opt, size.Code, size.ROData, size.Data, size.BSS)
 	}
-	return output.String()
+	return output.Bytes()
 }
 
 // Check that the -size=full flag attributes binary size to the correct package.
