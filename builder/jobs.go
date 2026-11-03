@@ -98,6 +98,10 @@ func runJobs(job *compileJob, sema chan struct{}) error {
 
 	// Send each job in the jobs slice to a worker, taking care of job dependencies.
 	numRunningJobs := 0
+	finishJob := func() {
+		numRunningJobs--
+		<-sema
+	}
 	var totalTime time.Duration
 	start := time.Now()
 	for len(ready.IntSlice) > 0 || numRunningJobs != 0 {
@@ -121,8 +125,7 @@ func runJobs(job *compileJob, sema chan struct{}) error {
 			// Wait for a job to complete.
 			completed = <-doneChan
 		}
-		numRunningJobs--
-		<-sema
+		finishJob()
 		if jobRunnerDebug {
 			fmt.Println("## finished:", completed.description, "(time "+completed.duration.String()+")")
 		}
@@ -130,7 +133,7 @@ func runJobs(job *compileJob, sema chan struct{}) error {
 			// Wait for any current jobs to finish.
 			for numRunningJobs != 0 {
 				<-doneChan
-				numRunningJobs--
+				finishJob()
 			}
 
 			// The build failed.
