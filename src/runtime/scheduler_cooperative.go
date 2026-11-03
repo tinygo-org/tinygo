@@ -159,6 +159,7 @@ func addTimer(tim *timerNode) {
 // callbacks to completion, so periodic timers can be re-added directly.
 func reAddTimer(tn *timerNode) {
 	if tn.timer.period == 0 {
+		releaseTimerNode(tn)
 		return
 	}
 	tn.timer.when += tn.timer.period
@@ -325,6 +326,14 @@ func lockAtomics() interrupt.State {
 }
 
 func unlockAtomics(mask interrupt.State) {
+	interrupt.Restore(mask)
+}
+
+func lockTimers() interrupt.State {
+	return interrupt.Disable()
+}
+
+func unlockTimers(mask interrupt.State) {
 	interrupt.Restore(mask)
 }
 
