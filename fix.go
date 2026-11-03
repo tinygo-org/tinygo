@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/builder"
@@ -42,6 +43,7 @@ func runFix(args []string, stdout, stderr io.Writer) int {
 		GOOS: goenv.Get("GOOS"), GOARCH: goenv.Get("GOARCH"),
 		GOARM: goenv.Get("GOARM"), GOMIPS: goenv.Get("GOMIPS"),
 		GoCompatibility: true, Opt: "z", PanicStrategy: "print",
+		Semaphore: make(chan struct{}, runtime.GOMAXPROCS(0)),
 	}
 	set.StringVar(&options.Target, "target", "", "chip/board name or JSON target specification file")
 	set.StringVar(&options.GC, "gc", "", "garbage collector")

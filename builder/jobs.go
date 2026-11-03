@@ -7,7 +7,6 @@ import (
 	"container/heap"
 	"errors"
 	"fmt"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -45,11 +44,8 @@ func dummyCompileJob(result string) *compileJob {
 // It runs all jobs in the order of the dependencies slice, depth-first.
 // Therefore, if some jobs are preferred to run before others, they should be
 // ordered as such in the job dependencies.
+// The semaphore must have positive capacity.
 func runJobs(job *compileJob, sema chan struct{}) error {
-	if sema == nil {
-		// Have a default, if the semaphore isn't set. This is useful for tests.
-		sema = make(chan struct{}, runtime.NumCPU())
-	}
 	if cap(sema) == 0 {
 		return errors.New("cannot run 0 jobs at a time")
 	}
