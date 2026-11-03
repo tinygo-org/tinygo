@@ -103,10 +103,16 @@ type packageAction struct {
 // Build performs a single package to executable Go build. It takes in a package
 // name, an output path, and set of compile options and from that it manages the
 // whole compilation process.
+// The configuration must have a semaphore with positive capacity.
 //
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
 func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildResult, error) {
+	sema := config.Options.Semaphore
+	if cap(sema) == 0 {
+		return nil, errors.New("cannot run 0 jobs at a time")
+	}
+
 	if err := config.ValidateOutputExtension(filepath.Ext(outpath)); err != nil {
 		return nil, err
 	}
@@ -752,7 +758,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 	outext := filepath.Ext(outpath)
 	if outext == ".o" || outext == ".bc" || outext == ".ll" {
 		// Run jobs to produce the LLVM module.
-		err := runJobs(programJob, config.Options.Semaphore)
+		err := runJobs(programJob, sema)
 		if err != nil {
 			return nil, err
 		}
@@ -1195,7 +1201,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 	// Run all jobs to compile and link the program.
 	// Do this now (instead of after elf-to-hex and similar conversions) as it
 	// is simpler and cannot be parallelized.
-	err = runJobs(linkJob, config.Options.Semaphore)
+	err = runJobs(linkJob, sema)
 	if err != nil {
 		return nil, err
 	}

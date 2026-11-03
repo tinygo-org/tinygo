@@ -39,7 +39,7 @@ var testTarget = flag.String("target", "", "override test target")
 
 func TestBuildAndRunBuildErrorReturnsNil(t *testing.T) {
 	config := &compileopts.Config{
-		Options: &compileopts.Options{},
+		Options: &compileopts.Options{Semaphore: sema},
 		Target:  &compileopts.TargetSpec{Libc: "unknown"},
 	}
 	result, err := buildAndRun("", config, io.Discard, nil, nil, 0, func(cmd *exec.Cmd, result *builder.BuildResult) error {
@@ -55,7 +55,7 @@ func TestBuildAndRunBuildErrorReturnsNil(t *testing.T) {
 }
 
 func TestFlashRejectsUnsupportedFirmwareExtension(t *testing.T) {
-	err := Flash("testdata/print.go", "", "firmware.bin", &compileopts.Options{Target: "pico"})
+	err := Flash("testdata/print.go", "", "firmware.bin", &compileopts.Options{Target: "pico", Semaphore: sema})
 	want := "target pico does not support firmware output extension .bin; use .elf, .hex, or .uf2"
 	if err == nil || err.Error() != want {
 		t.Fatalf("Flash() error = %v, want %q", err, want)
@@ -63,7 +63,7 @@ func TestFlashRejectsUnsupportedFirmwareExtension(t *testing.T) {
 }
 
 func TestFlashAcceptsSupportedFirmwareExtension(t *testing.T) {
-	err := Flash("github.com/tinygo-org/tinygo/testdata/does-not-exist-output-format", "", "firmware.uf2", &compileopts.Options{Target: "pico", Opt: "z"})
+	err := Flash("github.com/tinygo-org/tinygo/testdata/does-not-exist-output-format", "", "firmware.uf2", &compileopts.Options{Target: "pico", Opt: "z", Semaphore: sema})
 	if err == nil {
 		t.Fatal("Flash() succeeded for a missing package")
 	}
@@ -77,7 +77,7 @@ func TestBuildOutputDirectoryWithFirmwareSuffix(t *testing.T) {
 	if err := os.Mkdir(outputDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	config, err := builder.NewConfig(&compileopts.Options{Target: "pico", Opt: "z"})
+	config, err := builder.NewConfig(&compileopts.Options{Target: "pico", Opt: "z", Semaphore: sema})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -55,6 +55,7 @@ func fixtureWithTests(t *testing.T, files map[string]string, includeTests bool, 
 	t.Chdir(dir)
 	config, err := builder.NewConfig(&compileopts.Options{
 		GOOS: goenv.Get("GOOS"), GOARCH: goenv.Get("GOARCH"), Opt: "z",
+		Semaphore: make(chan struct{}, 1),
 	})
 	if err != nil {
 		t.Fatal(err)

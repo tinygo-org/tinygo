@@ -5,6 +5,22 @@ import (
 	"testing"
 )
 
+func TestRunJobsRejectsZeroCapacitySemaphore(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		sema chan struct{}
+	}{
+		{name: "nil"},
+		{name: "unbuffered", sema: make(chan struct{})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := runJobs(dummyCompileJob(""), tc.sema); err == nil || err.Error() != "cannot run 0 jobs at a time" {
+				t.Fatalf("runJobs returned %v, want cannot run 0 jobs at a time", err)
+			}
+		})
+	}
+}
+
 func TestRunJobsReleasesSemaphoreAfterFailure(t *testing.T) {
 	sema := make(chan struct{}, 2)
 	otherStarted := make(chan struct{})

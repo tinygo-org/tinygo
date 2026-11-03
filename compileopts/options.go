@@ -47,7 +47,7 @@ type Options struct {
 	VerifyIR                bool
 	SkipDWARF               bool
 	PrintCommands           func(cmd string, args ...string) `json:"-"`
-	Semaphore               chan struct{}                    `json:"-"` // -p flag controls cap
+	Semaphore               chan struct{}                    `json:"-"` // -p controls capacity, which must be positive
 	Debug                   bool
 	Nobounds                bool
 	PrintSizes              string
