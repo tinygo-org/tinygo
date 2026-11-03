@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	testEmptyInterfaceAssertions()
 	thing := &Thing{"foo"}
 	println("thing:", thing.String())
 	thing.Print()
@@ -128,6 +129,29 @@ func main() {
 	emptyintfcrash()
 
 	testUnexportedFieldIdentity()
+}
+
+func testEmptyInterfaceAssertions() {
+	var nilError error
+	var nilPointer *int
+	for _, test := range []struct {
+		name  string
+		value any
+	}{
+		{"nil any", nil},
+		{"nil error", nilError},
+		{"typed nil", nilPointer},
+		{"concrete", 42},
+	} {
+		value, ok := test.value.(any)
+		println("empty assertion:", test.name, value == nil, ok, emptyAssertionPanics(test.value))
+	}
+}
+
+func emptyAssertionPanics(value any) (panicked bool) {
+	defer func() { panicked = recover() != nil }()
+	_ = value.(any)
+	return
 }
 
 func testUnexportedFieldIdentity() {

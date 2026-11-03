@@ -1082,8 +1082,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	if intf, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
 		if intf.Empty() {
 			// intf is the empty interface => no methods
-			// This type assertion always succeeds, so we can just set commaOk to true.
-			commaOk = llvm.ConstInt(b.ctx.Int1Type(), 1, true)
+			commaOk = b.CreateIsNotNull(actualTypeNum, "typeassert.ok")
 		} else {
 			// Type assert on an interface type with methods.
 			// Create a call to a declared-but-not-defined function that will
