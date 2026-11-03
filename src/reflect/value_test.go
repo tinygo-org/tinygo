@@ -1079,6 +1079,9 @@ func TestTypeAssert(t *testing.T) {
 	testTypeAssert(t, int(123), uint(0), false)
 
 	testTypeAssert[any](t, 1, 1, true)
+	testTypeAssert[any](t, any(nil), nil, false)
+	testTypeAssert[any](t, error(nil), nil, false)
+	testTypeAssert[any](t, (*int)(nil), (*int)(nil), true)
 	testTypeAssert[fmt.Stringer](t, 1, nil, false)
 
 	vv := testTypeWithMethod{"test"}
