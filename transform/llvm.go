@@ -37,7 +37,7 @@ func hasUses(value llvm.Value) bool {
 // lowers a Go value into a vector of pointers, and OptimizeAllocs runs long
 // before any vectorizer. It is also why escape analysis may rely on this: a
 // pointer can only reach a vector lane through insertelement, which
-// valueEscapesAtImpl treats as an escape. A pass that starts feeding pointer
+// valueEscapesAt treats as an escape. A pass that starts feeding pointer
 // vectors to either caller needs a case here first.
 func typeHasPointers(typ llvm.Type) bool {
 	switch typ.TypeKind() {

@@ -413,3 +413,42 @@ define void @recursiveSwap() {
   call void @walkSwap(ptr %p, ptr null, i1 true)
   ret void
 }
+
+define i32 @sharedReturnLoad() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %first = call %inner @forward(ptr %p)
+  %second = call %inner @forward(ptr %p)
+  %firstPointer = extractvalue %inner %first, 0
+  %secondPointer = extractvalue %inner %second, 0
+  %a = load i32, ptr %firstPointer
+  %b = load i32, ptr %secondPointer
+  %sum = add i32 %a, %b
+  ret i32 %sum
+}
+
+define %inner @sharedReturnEscape() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %escaped = call %inner @forward(ptr %p)
+  %loaded = call %inner @forward(ptr %p)
+  %pointer = extractvalue %inner %loaded, 0
+  %value = load i32, ptr %pointer
+  ret %inner %escaped
+}
+
+define void @walkSharedCaptureA(ptr %p) {
+  store ptr %p, ptr @pointerSink
+  call void @walkSharedCaptureB(ptr %p)
+  ret void
+}
+
+define void @walkSharedCaptureB(ptr %p) {
+  call void @walkSharedCaptureA(ptr %p)
+  call void @walkSharedCaptureA(ptr %p)
+  ret void
+}
+
+define void @sharedCapture() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  call void @walkSharedCaptureA(ptr %p)
+  ret void
+}
