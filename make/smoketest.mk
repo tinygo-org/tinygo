@@ -250,6 +250,8 @@ smoketest-samd: | build/smoke
 	@$(MD5SUM) $(SMOKE_OUT).hex
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=qtpy                examples/machinetest
 	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=arduino-due         examples/blinky1
+	@$(MD5SUM) $(SMOKE_OUT).hex
 
 smoketest-renesas: SMOKE_OUT = build/smoke/renesas
 smoketest-renesas: | build/smoke
