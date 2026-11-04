@@ -59,6 +59,8 @@ func TestBuild(t *testing.T) {
 		"sort.go",
 		"stdlib.go",
 		"string.go",
+		"stringfrombytes.go",
+		"stringfrombytes_stress.go",
 		"structs.go",
 		"testing.go",
 		"timers.go",
@@ -441,6 +443,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			case "reflect.go":
 				// Reflect tests do not run correctly, probably because of the
 				// limited amount of memory.
+				continue
+
+			case "stringfrombytes_stress.go":
+				// Needs more RAM than AVR has.
 				continue
 
 			case "map_bigkey.go":
