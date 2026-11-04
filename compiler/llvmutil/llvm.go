@@ -230,3 +230,9 @@ func ByteOrder(target string) binary.ByteOrder {
 		return binary.LittleEndian
 	}
 }
+
+// WritesArgsOnlyAttrName is a string function attribute set by the compiler on
+// runtime functions that write memory only through pointer parameters, and
+// never through ones marked readonly. LLVM ignores it. The transform passes
+// use it where LLVM cannot infer this, for example across indirect calls.
+const WritesArgsOnlyAttrName = "tinygo-writes-args-only"
