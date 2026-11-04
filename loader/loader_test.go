@@ -354,7 +354,7 @@ func TestRecordedPath(t *testing.T) {
 	if got, want := pkg.RecordedPath(header), "example.com/dependency@v1.2.3/include/shared.h"; got != want {
 		t.Fatalf("RecordedPath() = %q, want %q", got, want)
 	}
-	if got, want := dependency.DebugPrefixMap(), "-ffile-prefix-map="+testPath("/tmp/dependency")+"=/_/example.com/dependency@v1.2.3"; got != want {
+	if got, want := dependency.DebugPrefixMap(), "-ffile-prefix-map="+testPath("/tmp/dependency")+string(filepath.Separator)+"=/_/example.com/dependency@v1.2.3/"; got != want {
 		t.Fatalf("DebugPrefixMap() = %q, want %q", got, want)
 	}
 	if got, want := dependency.RecordedCFlags(), []string{
@@ -400,7 +400,7 @@ func TestRecordedPath(t *testing.T) {
 	if got, want := pkg.RecordedPath(vendoredHeader), "example.com/dependency@v1.2.3/include/shared.h"; got != want {
 		t.Fatalf("vendored RecordedPath() = %q, want %q", got, want)
 	}
-	if got, want := vendored.DebugPrefixMap(), "-ffile-prefix-map="+testPath("/tmp/main/vendor/example.com/dependency")+"=/_/example.com/dependency@v1.2.3"; got != want {
+	if got, want := vendored.DebugPrefixMap(), "-ffile-prefix-map="+testPath("/tmp/main/vendor/example.com/dependency")+string(filepath.Separator)+"=/_/example.com/dependency@v1.2.3/"; got != want {
 		t.Fatalf("vendored DebugPrefixMap() = %q, want %q", got, want)
 	}
 
@@ -421,7 +421,7 @@ func TestRecordedPath(t *testing.T) {
 	if got, want := pkg.RecordedPath(gopathHeader), "example.com/dependency/include/shared.h"; got != want {
 		t.Fatalf("GOPATH RecordedPath() = %q, want %q", got, want)
 	}
-	if got, want := gopath.DebugPrefixMap(), "-ffile-prefix-map="+testPath("/gopath/src")+"=/_"; got != want {
+	if got, want := gopath.DebugPrefixMap(), "-ffile-prefix-map="+testPath("/gopath/src")+string(filepath.Separator)+"=/_/"; got != want {
 		t.Fatalf("GOPATH DebugPrefixMap() = %q, want %q", got, want)
 	}
 }

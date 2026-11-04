@@ -197,6 +197,23 @@ func TestTrimPath(t *testing.T) {
 	if !bytes.Equal(binaries[0], binaries[1]) {
 		t.Error("trimmed binaries built in different directories are not identical")
 	}
+	t.Run("cache-prefix-overlap", func(t *testing.T) {
+		dir := filepath.Join(root, "b")
+		cache := filepath.Join(root, "bc")
+		outpath := filepath.Join(root, "b.out")
+		cmd := trimPathCommand(t, dir, "build", "-trimpath", "-p=4", "-o", outpath, ".")
+		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+cache, "HOME="+cache, "LocalAppData="+cache)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("build failed: %v\n%s", err, output)
+		}
+		binary, err := os.ReadFile(outpath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(binaries[1], binary) {
+			t.Error("trimmed binary changed when only the cache directory changed")
+		}
+	})
 	if config.GOOS() != "darwin" {
 		files := trimPathDWARFFiles(t, filepath.Join(root, "a.out"), config.GOOS())
 		headerPath := "/_/example.com/dependency@v1.2.3/include/shared.h"

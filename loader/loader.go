@@ -563,7 +563,8 @@ func (p *Package) RecordedPath(filename string) string {
 // DebugPrefixMap returns the Clang flag that maps this package to its recorded
 // source directory.
 func (p *Package) DebugPrefixMap() string {
-	return "-ffile-prefix-map=" + p.OriginalModuleDir() + "=" + p.program.config.CSourcePath(p.RecordedModuleDir())
+	dir := strings.TrimSuffix(p.OriginalModuleDir(), string(filepath.Separator)) + string(filepath.Separator)
+	return "-ffile-prefix-map=" + dir + "=" + p.program.config.CSourcePath(p.RecordedModuleDir()) + "/"
 }
 
 // RecordedCFlags returns C flags with path options rewritten to use recorded
