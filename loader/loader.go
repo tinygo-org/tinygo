@@ -767,7 +767,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 		if p.program.config.TrimPath() {
 			initialCFlags = append(initialCFlags,
 				p.DebugPrefixMap(),
-				"-ffile-prefix-map="+filepath.Join(p.program.goroot, "src")+"="+p.program.config.CSourcePath("."),
+				compileopts.FilePrefixMap(filepath.Join(p.program.goroot, "src"), p.program.config.CSourcePath(".")),
 			)
 		}
 		var env cgo.Flags
