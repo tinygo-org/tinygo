@@ -370,7 +370,7 @@ func (c *Config) LibraryPath(name string) string {
 		options += "+malloc"
 	}
 	if c.TrimPath() {
-		options += "+trimpath-v1"
+		options += "+trimpath-v2"
 	}
 
 	// No precompiled library found. Determine the path name that will be used
@@ -426,13 +426,13 @@ func (c *Config) CFlags(libclang bool) []string {
 	}
 	if c.TrimPath() {
 		cflags = append(cflags,
-			"-ffile-prefix-map="+goenv.Get("TINYGOROOT")+"="+c.CSourcePath("github.com/tinygo-org/tinygo"),
-			"-ffile-prefix-map="+goenv.Get("GOCACHE")+"="+c.CSourcePath("tinygo-cache"),
+			FilePrefixMap(goenv.Get("TINYGOROOT"), c.CSourcePath("github.com/tinygo-org/tinygo")),
+			FilePrefixMap(goenv.Get("GOCACHE"), c.CSourcePath("tinygo-cache")),
 			"-fdebug-compilation-dir=.",
 			"-gno-record-command-line",
 		)
 		if resourceDir != "" {
-			cflags = append(cflags, "-ffile-prefix-map="+resourceDir+"="+c.CSourcePath("clang"))
+			cflags = append(cflags, FilePrefixMap(resourceDir, c.CSourcePath("clang")))
 		}
 	}
 	// Always emit debug information. It is optionally stripped at link time.

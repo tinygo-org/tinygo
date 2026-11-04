@@ -498,7 +498,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 					flags = append(flags, "-working-directory="+tmpdir)
 					if config.TrimPath() {
 						flags = append(flags,
-							"-ffile-prefix-map="+tmpdir+"="+config.CSourcePath(pkg.RecordedDir()),
+							compileopts.FilePrefixMap(tmpdir, config.CSourcePath(pkg.RecordedDir())),
 						)
 					}
 					if config.Options.PrintCommands != nil {
