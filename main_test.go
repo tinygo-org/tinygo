@@ -160,7 +160,7 @@ func TestParseGoLinkFlag(t *testing.T) {
 }
 
 func TestTrimPath(t *testing.T) {
-	t.Setenv("CGO_CFLAGS", "-iquoteinclude -includestdint.h -imacros relative.h")
+	t.Parallel()
 	root := t.TempDir()
 	var binaries [][]byte
 	options := optionsFromTarget(*testTarget, sema)
@@ -178,7 +178,7 @@ func TestTrimPath(t *testing.T) {
 		outpath := filepath.Join(root, name+".out")
 		cache := filepath.Join(root, "cache-"+name)
 		cmd := trimPathCommand(t, dir, "build", "-trimpath", "-p=4", "-o", outpath, ".")
-		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+cache, "HOME="+cache, "LocalAppData="+cache)
+		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+cache, "HOME="+cache, "LocalAppData="+cache, "CGO_CFLAGS=-iquoteinclude -includestdint.h -imacros relative.h")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("build failed: %v\n%s", err, output)
 		}
@@ -244,6 +244,7 @@ func TestTrimPath(t *testing.T) {
 			args = append(args, "-trimpath")
 		}
 		cmd := trimPathCommand(t, dir, append(args, ".")...)
+		cmd.Env = append(cmd.Env, "CGO_CFLAGS=-iquoteinclude -includestdint.h -imacros relative.h")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("build failed: %v\n%s", err, output)
 		}
