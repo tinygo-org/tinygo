@@ -53,6 +53,9 @@ func main() {
 	// faster.
 	clearbss()
 
+	// PSRAM needs the 80MHz APB clock set above. Only with the numa_psram_qspi tag.
+	initPSRAM()
+
 	// Initialize main system timer used for time.Now.
 	initTimer()
 
@@ -67,6 +70,7 @@ func main() {
 	// Initialize UART. This enables the UART RX interrupt, which must happen
 	// after interruptInit so the INTENABLE bit is not cleared again.
 	machine.InitSerial()
+	reportPSRAM()
 
 	// Initialize the heap, call main.main, etc.
 	run()
