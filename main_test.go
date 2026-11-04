@@ -62,13 +62,16 @@ func TestFlashRejectsUnsupportedFirmwareExtension(t *testing.T) {
 	}
 }
 
-func TestFlashAcceptsSupportedFirmwareExtension(t *testing.T) {
-	err := Flash("github.com/tinygo-org/tinygo/testdata/does-not-exist-output-format", "", "firmware.uf2", &compileopts.Options{Target: "pico", Opt: "z", Semaphore: sema})
-	if err == nil {
-		t.Fatal("Flash() succeeded for a missing package")
+func TestValidateSupportedFirmwareOutput(t *testing.T) {
+	config, err := builder.NewConfig(&compileopts.Options{Target: "pico", Opt: "z", Semaphore: sema})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(err.Error(), "does not support firmware output extension") || strings.Contains(err.Error(), "output format") {
-		t.Fatalf("Flash() rejected supported UF2 output: %v", err)
+	if err := config.ValidateOutputExtension(".uf2"); err != nil {
+		t.Fatalf("ValidateOutputExtension() rejected supported UF2 output: %v", err)
+	}
+	if err := validateOutputFormat("firmware.uf2", ".uf2"); err != nil {
+		t.Fatalf("validateOutputFormat() rejected supported UF2 output: %v", err)
 	}
 }
 
