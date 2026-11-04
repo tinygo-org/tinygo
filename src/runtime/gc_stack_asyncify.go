@@ -1,7 +1,8 @@
-//go:build (gc.conservative || gc.custom || gc.precise || gc.boehm) && tinygo.wasm && scheduler.asyncify
+//go:build scheduler.asyncify
 
 package runtime
 
 import "internal/task"
 
-func markTaskStacks() { task.ScanStacks() }
+// stackReached is called with the address of the header of a goroutine stack.
+func stackReached(header uintptr) { task.StackReached(header) }

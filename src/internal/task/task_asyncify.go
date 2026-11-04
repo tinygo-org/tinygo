@@ -33,8 +33,8 @@ type state struct {
 	panicReplay    uintptr
 	panicTarget    uintptr
 
-	// nextStack and prevStack link the tasks whose stacks the GC scans.
-	nextStack, prevStack *Task
+	// stackEnd is the address after the last byte of the stack buffer.
+	stackEnd uintptr
 
 	// running is set while Resume runs this task, so a task that resumed
 	// another from a JS callback is known to have frames below csp.
@@ -70,7 +70,7 @@ func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	inheritSynctest(t)
 	addLiveTask(t)
 	t.state.initialize(fn, args, stackSize)
-	linkStack(t)
+	setStackOwner(t)
 	scheduleTask(t)
 }
 
@@ -86,7 +86,8 @@ func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	s.entry = fn
 	s.args = args
 
-	// Create a stack.
+	// Create a stack. The last word holds the owner, see setStackOwner.
+	stackSize = stackBodySize(stackSize)
 	stack := runtime_alloc(stackSize, stackLayout())
 	s.stackBase = uintptr(stack)
 
@@ -99,8 +100,9 @@ func (s *state) initialize(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 
 	// Calculate stack base addresses.
 	s.asyncifysp = unsafe.Add(stack, unsafe.Sizeof(uintptr(0)))
-	s.csp = unsafe.Add(stack, stackSize)
-	s.top = unsafe.Add(stack, stackSize)
+	s.stackEnd = uintptr(stack) + stackSize
+	s.top = unsafe.Pointer((s.stackEnd - ownerSize) &^ 15)
+	s.csp = s.top
 }
 
 //go:linkname memzero runtime.memzero

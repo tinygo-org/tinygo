@@ -269,6 +269,65 @@ func TestWasmExport(t *testing.T) {
 	}
 }
 
+// Test that calling a //go:wasmexport function does not leak its goroutine
+// stack.
+func TestWasmExportHeapInuse(t *testing.T) {
+	t.Parallel()
+
+	tmpdir := t.TempDir()
+	options := optionsFromTarget("wasip1", sema)
+	options.BuildMode = "c-shared"
+	buildConfig, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build("testdata/wasmexport-heap.go", ".wasm", tmpdir, buildConfig)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+	data, err := os.ReadFile(result.Binary)
+	if err != nil {
+		t.Fatal("could not read wasm binary: ", err)
+	}
+
+	ctx := context.Background()
+	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	defer r.Close(ctx)
+	wasi_snapshot_preview1.MustInstantiate(ctx, r)
+	mod, err := r.InstantiateWithConfig(ctx, data, wazero.NewModuleConfig().WithStartFunctions())
+	if err != nil {
+		t.Fatal("could not instantiate wasm module:", err)
+	}
+	call := func(name string) uint64 {
+		fn := mod.ExportedFunction(name)
+		if fn == nil {
+			t.Fatalf("missing export %s", name)
+		}
+		results, err := fn.Call(ctx)
+		if err != nil {
+			t.Fatalf("failed to call %s: %v", name, err)
+		}
+		if len(results) > 0 {
+			return results[0]
+		}
+		return 0
+	}
+	call("_initialize")
+
+	before := call("heapInuse")
+	const calls = 1000
+	for i := 0; i < calls; i++ {
+		call("noop")
+	}
+	after := call("heapInuse")
+
+	// A leaked stack is at least a few KiB per call, so this allows for
+	// ordinary heap growth but not for 1000 leaked stacks.
+	if after > before+1<<20 {
+		t.Errorf("HeapInuse grew from %d to %d bytes after %d exports", before, after, calls)
+	}
+}
+
 // Test js.FuncOf (for syscall/js).
 // This test might be extended in the future to cover more cases in syscall/js.
 func TestWasmFuncOf(t *testing.T) {
