@@ -215,6 +215,7 @@ endif
 TEST_SKIP_FLAG := -skip='TestExtraMethods|TestAsValidation|TestUnmarshalNestingLimitSlice|TestUnmarshalNestingLimitStruct'
 TEST_ADDITIONAL_FLAGS ?=
 
+TEST_OPTIONS_crypto/dsa := -short
 TEST_OPTIONS_crypto/sha256 := -skip='^(TestExtraMethods|TestAllocations|TestAllocatonsWithTypeAsserts)$$'
 TEST_OPTIONS_crypto/sha512 := -skip='^(TestExtraMethods|TestAllocations|TestAllocatonsWithTypeAsserts)$$'
 TEST_OPTIONS_strconv := -skip='^(TestCountMallocs|TestAllocationsFromBytes)$$'
