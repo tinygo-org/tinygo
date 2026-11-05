@@ -287,6 +287,7 @@ func psramClearBuffer() {
 }
 
 // psramSelectTiming sets the select hold and setup time of SPI0 and SPI1 for the normal clock.
+// Hold time 0 is for 40MHz PSRAM, see ESP-IDF PSRAM_CS_HOLD_TIME (1 only at 80MHz).
 //
 //go:section .iram.psram
 func psramSelectTiming() {

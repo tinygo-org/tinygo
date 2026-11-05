@@ -212,8 +212,8 @@ SECTIONS
         _text_end = ABSOLUTE(.);
     } >IROM
 
-    /* PSRAM is off when the boot ROM loads the program, so this section is not
-     * loaded. The garbage collector does not scan it, so it must hold no pointers. */
+    /* PSRAM is off at boot, so this section is not loaded and the compiler refuses start
+     * values. The garbage collector does not scan it, so it must hold no pointers. */
     .psram (NOLOAD) : ALIGN(4)
     {
         _spsram = ABSOLUTE(.);

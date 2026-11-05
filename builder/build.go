@@ -1343,6 +1343,18 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		}
 	}
 
+	// PSRAM is off when the program is loaded, so its variables start as zero.
+	// See the .psram section in targets/esp32.ld.
+	for g := mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
+		section := g.Section()
+		if section != ".psram" && !strings.HasPrefix(section, ".psram.") {
+			continue
+		}
+		if init := g.Initializer(); !init.IsNil() && !init.IsNull() {
+			return fmt.Errorf("%s: variables in .psram cannot have a start value", g.Name())
+		}
+	}
+
 	// Run most of the whole-program optimizations (including the whole
 	// O0/O1/O2/Os/Oz optimization pipeline).
 	errs := transform.Optimize(mod, config)

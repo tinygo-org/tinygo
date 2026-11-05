@@ -540,6 +540,9 @@ func (uart *UART) Configure(config UARTConfig) error {
 			config.RX = 16
 		}
 	}
+	if psramPin(config.TX) || psramPin(config.RX) {
+		return errPinUsedByPSRAM
+	}
 
 	uart.Bus.CLKDIV.Set(peripheralClock / config.BaudRate)
 
