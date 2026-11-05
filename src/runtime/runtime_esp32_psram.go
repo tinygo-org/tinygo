@@ -19,7 +19,6 @@ const (
 	psramCSPin  = 16
 	psramClkPin = 17
 	flashCSPin  = 11
-	flashClkPin = 6
 	spiQPin     = 7
 	spiDPin     = 8
 	spiHDPin    = 9
@@ -66,6 +65,8 @@ const (
 	psramOldPSRAM
 	psramBadReadBack
 	psramTooSmall
+	psramUnknownSize
+	psramMapFailed
 )
 
 var (
@@ -115,14 +116,19 @@ func initPSRAM() {
 		psramReason = psramTooSmall
 		return
 	}
-	for p := start; p < end; p += 4 {
-		*(*uint32)(unsafe.Pointer(p)) = 0
-	}
+	memzero(unsafe.Pointer(start), end-start)
 }
 
 // reportPSRAM stops the program when it has variables in PSRAM but PSRAM is off.
+// Without such variables it only prints why PSRAM is off.
 func reportPSRAM() {
-	if psramReason == psramOK || uintptr(unsafe.Pointer(&_epsram)) == uintptr(unsafe.Pointer(&_spsram)) {
+	if psramReason == psramOK {
+		return
+	}
+	if uintptr(unsafe.Pointer(&_epsram)) == uintptr(unsafe.Pointer(&_spsram)) {
+		printstring("PSRAM is off: ")
+		printstring(psramReasonText())
+		printnl()
 		return
 	}
 	printstring("panic: PSRAM is off: ")
@@ -147,6 +153,10 @@ func psramReasonText() string {
 		return "PSRAM read back test failed"
 	case psramTooSmall:
 		return ".psram section is bigger than the PSRAM"
+	case psramUnknownSize:
+		return "PSRAM ID has an unknown size"
+	case psramMapFailed:
+		return "PSRAM memory map failed"
 	}
 	return "unknown"
 }
@@ -178,7 +188,27 @@ func psramStart() uint8 {
 	romMatrixOut(psramClkPin, sigInFunc225, 0, 0)
 
 	psramPins()
+	reason := psramTalk()
+	if reason != psramOK {
+		psramRelease()
+	}
+	return reason
+}
 
+// psramRelease gives the PSRAM clock and select pins back as plain GPIO pins.
+//
+//go:section .iram.psram
+func psramRelease() {
+	romMatrixOut(loopPin28, sigGPIOOut, 0, 0)
+	romMatrixOut(loopPin29, sigGPIOOut, 0, 0)
+	romMatrixOut(psramClkPin, sigGPIOOut, 0, 0)
+	romMatrixOut(psramCSPin, sigGPIOOut, 0, 0)
+}
+
+// psramTalk reads the ID, switches the PSRAM to quad mode and maps it.
+//
+//go:section .iram.psram
+func psramTalk() uint8 {
 	// Exit quad mode, because the PSRAM keeps its power over a restart.
 	psramCommand(&psramCmd{tx: psramExitQuad << 8, txBits: 16, quad: true})
 
@@ -204,19 +234,28 @@ func psramStart() uint8 {
 
 	psramCommand(&psramCmd{addr: psramEnterQuad << 24, addrBits: 8})
 
-	psramSize = 4 << 20 // 4MB, and 8MB chips used as 4MB
-	if (eid>>5)&7 == 0 {
+	// Size codes 0, 1 and 2 are 2MB, 4MB and 8MB, see ESP-IDF PSRAM_EID_SIZE. 8MB
+	// chips are used as 4MB. No switch here: its lookup table would be in flash.
+	sizeCode := (eid >> 5) & 7
+	if sizeCode > 2 {
+		return psramUnknownSize
+	}
+	psramSize = 4 << 20
+	if sizeCode == 0 {
 		psramSize = 2 << 20
 	}
 	psramCacheInit()
-	romCacheSRAMMap(0, 0, psramAddr, 0, 32, psramSize>>15)
-
-	// Writes can be lost without an error when the timing is wrong.
-	for off := uint32(1023); off < psramSize; off += 1024 {
-		*(*byte)(unsafe.Pointer(uintptr(psramAddr + off))) = byte(off >> 10)
+	if romCacheSRAMMap(0, 0, psramAddr, 0, 32, psramSize>>15) != 0 {
+		return psramMapFailed
 	}
-	for off := uint32(1023); off < psramSize; off += 1024 {
-		if *(*byte)(unsafe.Pointer(uintptr(psramAddr + off))) != byte(off>>10) {
+
+	// Writes can be lost without an error when the timing is wrong. The offset
+	// in each word also finds a wrong size, because a mirror overwrites lower words.
+	for off := uint32(0); off < psramSize; off += 1024 {
+		*(*uint32)(unsafe.Pointer(uintptr(psramAddr + off))) = off
+	}
+	for off := uint32(0); off < psramSize; off += 1024 {
+		if *(*uint32)(unsafe.Pointer(uintptr(psramAddr + off))) != off {
 			return psramBadReadBack
 		}
 	}
@@ -305,8 +344,8 @@ func psramPins() {
 	ioMuxFunction(&esp.IO_MUX.GPIO10, 2)
 }
 
-// ioMuxFunction and ioMuxDrive use volatile.LoadUint32 and StoreUint32, which always
-// compile inline. The Register32 methods may stay in flash.
+// ioMuxFunction and ioMuxDrive use volatile.LoadUint32 and StoreUint32. In a test
+// build Register32.Get and Set were not inlined here, so they ran from flash.
 //
 //go:section .iram.psram
 func ioMuxFunction(reg *volatile.Register32, function uint32) {
