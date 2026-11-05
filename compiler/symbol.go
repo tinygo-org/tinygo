@@ -165,6 +165,15 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 			readonly := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0)
 			llvmFn.AddAttributeAtIndex(i+1, readonly)
 		}
+		if !info.exported && info.wasmExport == "" && paramInfo.flags&paramIsLength != 0 && paramInfo.llvmType.TypeKind() == llvm.IntegerTypeKind &&
+			paramInfo.llvmType.IntTypeWidth() >= c.intType.IntTypeWidth() {
+			// maxSliceSize permits a full-width length when uintptr is narrower than int.
+			bits := uint(paramInfo.llvmType.IntTypeWidth())
+			nonNegative := c.ctx.CreateConstantRangeAttribute(llvm.AttributeKindID("range"), bits, []uint64{0}, []uint64{uint64(1) << (bits - 1)})
+			if !nonNegative.IsNil() {
+				llvmFn.AddAttributeAtIndex(i+1, nonNegative)
+			}
+		}
 	}
 
 	// Set a number of function or parameter attributes, depending on the
