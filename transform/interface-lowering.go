@@ -210,10 +210,21 @@ func (p *lowerInterfacesPass) run() error {
 		}
 	}
 
+	// runtime.composeInterface can make an interface value from any typecode,
+	// for example the element typecode that reflect reads from a chan type.
+	// When it is used, all types are boxable.
+	allBoxable := hasUses(p.mod.NamedFunction("runtime.composeInterface"))
+
 	// Find all the interfaces that are implemented per type.
 	for _, t := range p.types {
 		// This type has no methods, so don't spend time calculating them.
 		if len(t.methods) == 0 {
+			continue
+		}
+
+		// A value of this type can not be in an interface, so no interface
+		// method call or type assert can match it.
+		if !allBoxable && !isBoxable(t.typecode) {
 			continue
 		}
 
@@ -471,6 +482,29 @@ func (p *lowerInterfacesPass) run() error {
 	}
 
 	return nil
+}
+
+// isBoxable reports whether the program can put a value with this typecode
+// into an interface. This is true when the typecode has a use outside other
+// typecodes. A typecode that is only the element of a different typecode (for
+// example chan T or *T) is not boxable.
+func isBoxable(value llvm.Value) bool {
+	for _, use := range getUses(value) {
+		if !use.IsAGlobalVariable().IsNil() {
+			if !strings.HasPrefix(use.Name(), "reflect/types.type:") {
+				return true
+			}
+			continue
+		}
+		if !use.IsAConstant().IsNil() {
+			if isBoxable(use) {
+				return true
+			}
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // addTypeMethods reads the method set of the given type info struct. It
