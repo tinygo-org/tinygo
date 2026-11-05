@@ -1463,7 +1463,20 @@ func (b *builder) createFunction() {
 				}
 				dbgVar := b.getLocalVariable(variable)
 				pos := b.program.Fset.Position(instr.Pos())
-				b.dibuilder.InsertValueAtEnd(b.getValue(instr.X, getPos(instr)), dbgVar, b.dibuilder.CreateExpression(nil), llvm.DebugLoc{
+				expr := b.dibuilder.CreateExpression(nil)
+				var value llvm.Value
+				ptr, indirect := b.indirectValues[instr.X]
+				if unop, ok := instr.X.(*ssa.UnOp); indirect && ok && canUseDereferencePointer(unop) {
+					// ptr is the source of the dereference, which can change later.
+					indirect = false
+				}
+				if indirect {
+					value = ptr
+					expr = b.dibuilder.CreateExpression([]uint64{0x06}) // DW_OP_deref, DWARF 5 section 2.5.1.3.
+				} else {
+					value = b.getValue(instr.X, getPos(instr))
+				}
+				b.dibuilder.InsertValueAtEnd(value, dbgVar, expr, llvm.DebugLoc{
 					Line:  uint(pos.Line),
 					Col:   uint(pos.Column),
 					Scope: b.difunc,
@@ -1870,7 +1883,9 @@ func (b *builder) copyIndirectAggregate(dst, src llvm.Value, typ llvm.Type) {
 
 func (b *builder) storeValue(dst llvm.Value, value ssa.Value) {
 	typ := b.getLLVMType(value.Type())
-	if src, ok := b.indirectValues[value]; ok {
+	if _, ok := value.(*ssa.Const); ok && b.isIndirectAggregate(typ) {
+		b.zeroIndirectStorage(dst, typ)
+	} else if src, ok := b.indirectValues[value]; ok {
 		b.copyIndirectAggregate(dst, src, typ)
 	} else {
 		b.CreateStore(b.getValue(value, getPos(value)), dst)

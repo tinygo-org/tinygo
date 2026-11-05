@@ -20,6 +20,7 @@ func TestBuild(t *testing.T) {
 	t.Parallel()
 
 	tests := []string{
+		"aggregatestorage.go",
 		"alias.go",
 		"atomic.go",
 		"binop.go",
@@ -562,7 +563,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// limited amount of memory.
 				continue
 
-			case "stringfrombytes_stress.go":
+			case "aggregatestorage.go", "stringfrombytes_stress.go":
 				// Needs more RAM than AVR has.
 				continue
 

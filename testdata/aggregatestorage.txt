@@ -1,0 +1,5 @@
+copy: 7 9 true 7
+reset: true true 42 9
+reset array: true
+reset small array: true
+compare: true 42
