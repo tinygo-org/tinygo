@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0 # fetch all history (no sparse checkout)
+          fetch-depth: 2 # HEAD^1 of the merge commit is the dev base
           submodules: true
       - name: Install Go
         uses: actions/setup-go@v6
