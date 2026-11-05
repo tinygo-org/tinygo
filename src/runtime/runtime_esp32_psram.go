@@ -3,7 +3,7 @@
 package runtime
 
 // PSRAM on ESP32-D0WD modules such as the WROVER. Order and values follow ESP-IDF
-// components/esp_psram/esp32/esp_psram_impl_quad.c, mode PSRAM_CACHE_F80M_S40M.
+// components/esp_psram/esp32/esp_psram_impl_quad.c, mode PSRAM_CACHE_F80M_S80M.
 
 import (
 	"device"
@@ -23,22 +23,18 @@ const (
 	spiDPin     = 8
 	spiHDPin    = 9
 	spiWPPin    = 10
-	loopPin28   = 28 // pads without a pin, used to delay the PSRAM clock
-	loopPin29   = 29
 )
 
 // GPIO matrix signals, from ESP-IDF soc/esp32/include/soc/gpio_sig_map.h.
 const (
-	sigSPICLK    = 0
-	sigSPIQ      = 1
-	sigSPID      = 2
-	sigSPIHD     = 3
-	sigSPIWP     = 4
-	sigSPICS0    = 5
-	sigSPICS1    = 6
-	sigInFunc224 = 224
-	sigInFunc225 = 225
-	sigGPIOOut   = 256
+	sigSPICLK  = 0
+	sigSPIQ    = 1
+	sigSPID    = 2
+	sigSPIHD   = 3
+	sigSPIWP   = 4
+	sigSPICS0  = 5
+	sigSPICS1  = 6
+	sigGPIOOut = 256
 )
 
 // PSRAM chip commands and ID fields.
@@ -50,8 +46,7 @@ const (
 	psramReadQuad   = 0xEB
 	psramWriteQuad  = 0x38
 	psramReadWait   = 5 // wait cycles of psramReadQuad
-	matrixWait40    = 1 // extra wait cycles for the GPIO matrix delay at 40MHz
-	matrixWait80    = 2 // and at 80MHz
+	matrixWait      = 2 // extra wait cycles at 80MHz for the GPIO matrix delay
 	psram32MbitVer0 = 0x20
 )
 
@@ -185,12 +180,7 @@ func psramStart() uint8 {
 	esp.SPI1.SetUSER_USR_PREP_HOLD(0)
 	psramSPI1Init()
 
-	// Delay the PSRAM clock through two loop-back signals for the ID read.
-	romMatrixOut(loopPin28, sigSPICLK, 0, 0)
-	romMatrixIn(loopPin28, sigInFunc224, 0)
-	romMatrixOut(loopPin29, sigInFunc224, 0, 0)
-	romMatrixIn(loopPin29, sigInFunc225, 0)
-	romMatrixOut(psramClkPin, sigInFunc225, 0, 0)
+	romMatrixOut(psramClkPin, sigSPICLK, 0, 0)
 
 	psramPins()
 	reason := psramTalk()
@@ -204,8 +194,6 @@ func psramStart() uint8 {
 //
 //go:section .iram.psram
 func psramRelease() {
-	romMatrixOut(loopPin28, sigGPIOOut, 0, 0)
-	romMatrixOut(loopPin29, sigGPIOOut, 0, 0)
 	romMatrixOut(psramClkPin, sigGPIOOut, 0, 0)
 	romMatrixOut(psramCSPin, sigGPIOOut, 0, 0)
 }
@@ -215,10 +203,10 @@ func psramRelease() {
 //go:section .iram.psram
 func psramTalk() uint8 {
 	// Exit quad mode, because the PSRAM keeps its power over a restart.
-	psramCommand(&psramCmd{tx: psramExitQuad << 8, txBits: 16, quad: true})
+	psramCommand(&psramCmd{tx: psramExitQuad, txBits: 8, quad: true})
 
 	// Read the ID. Some 16Mbit chips answer wrong the first time.
-	read := psramCmd{addr: psramReadID << 24, addrBits: 32, cmdBits: 2, waitBits: matrixWait40, rxBits: 64}
+	read := psramCmd{cmd: psramReadID, cmdBits: 8, addrBits: 24, waitBits: matrixWait, rxBits: 64}
 	id, _ := psramCommand(&read)
 	if byte(id>>8) != psramGoodDie {
 		id, _ = psramCommand(&read)
@@ -231,10 +219,6 @@ func psramTalk() uint8 {
 		return psramOldPSRAM
 	}
 
-	// Normal clock from now on.
-	romMatrixOut(loopPin28, sigGPIOOut, 0, 0)
-	romMatrixOut(loopPin29, sigGPIOOut, 0, 0)
-	romMatrixOut(psramClkPin, sigSPICLK, 0, 0)
 	psramSelectTiming()
 
 	psramCommand(&psramCmd{addr: psramEnterQuad << 24, addrBits: 8})
@@ -292,22 +276,21 @@ func psramClearBuffer() {
 }
 
 // psramSelectTiming sets the select hold and setup time of SPI0 and SPI1 for the normal clock.
-// Hold time 0 is for 40MHz PSRAM, see ESP-IDF PSRAM_CS_HOLD_TIME (1 only at 80MHz).
+// Hold time 1 is for 80MHz PSRAM, see ESP-IDF PSRAM_CS_HOLD_TIME.
 //
 //go:section .iram.psram
 func psramSelectTiming() {
 	esp.SPI1.SetUSER_CS_HOLD(1)
 	esp.SPI1.SetUSER_CS_SETUP(1)
-	esp.SPI1.SetCTRL2_HOLD_TIME(0)
+	esp.SPI1.SetCTRL2_HOLD_TIME(1)
 	esp.SPI1.SetCTRL2_SETUP_TIME(0)
 	esp.SPI0.SetUSER_CS_HOLD(1)
 	esp.SPI0.SetUSER_CS_SETUP(1)
-	esp.SPI0.SetCTRL2_HOLD_TIME(0)
+	esp.SPI0.SetCTRL2_HOLD_TIME(1)
 	esp.SPI0.SetCTRL2_SETUP_TIME(0)
 }
 
-// psramPins connects flash and PSRAM signals. SPI0 stays at 80MHz for the
-// flash, SPI1 runs at 40MHz for the PSRAM commands.
+// psramPins connects flash and PSRAM signals, with SPI0 and SPI1 at 80MHz.
 //
 //go:section .iram.psram
 func psramPins() {
@@ -319,13 +302,13 @@ func psramPins() {
 		flashWait = 1
 		esp.SPI0.SetUSER1_USR_ADDR_BITLEN(27)
 	}
-	romExtraWait[0] = matrixWait80
-	romExtraWait[1] = matrixWait40
-	esp.SPI0.SetUSER1_USR_DUMMY_CYCLELEN(flashWait + matrixWait80)
+	romExtraWait[0] = matrixWait
+	romExtraWait[1] = matrixWait
+	esp.SPI0.SetUSER1_USR_DUMMY_CYCLELEN(flashWait + matrixWait)
 	romSPIClock(1, 0)
-	romSPIClock(2, 1)
+	romSPIClock(1, 1)
 	ioMuxDrive(&esp.IO_MUX.GPIO6, 3)
-	ioMuxDrive(&esp.IO_MUX.GPIO17, 2)
+	ioMuxDrive(&esp.IO_MUX.GPIO17, 3)
 	esp.SPI0.SetUSER_USR_DUMMY(1)
 
 	romMatrixOut(flashCSPin, sigSPICS0, 0, 0)
@@ -370,14 +353,8 @@ func ioMuxDrive(reg *volatile.Register32, drive uint32) {
 //go:section .iram.psram
 func psramCacheInit() {
 	spi := esp.SPI0
-	// PSRAM at 80MHz / 2. DATE bit 31 keeps the flash at 80MHz (not in the TRM, as ESP-IDF).
-	spi.SetCLOCK_CLK_EQU_SYSCLK(0)
-	spi.SetCLOCK_CLKDIV_PRE(0)
-	spi.SetCLOCK_CLKCNT_N(1)
-	spi.SetCLOCK_CLKCNT_H(0)
-	spi.SetCLOCK_CLKCNT_L(1)
-	spi.DATE.SetBits(1 << 31)
-	spi.DATE.ClearBits(1 << 30)
+	spi.DATE.ClearBits(1<<31 | 1<<30) // same 80MHz clock for flash and PSRAM, as ESP-IDF
+
 	spi.SetCACHE_SCTRL_USR_SRAM_DIO(0)
 	spi.SetCACHE_SCTRL_USR_SRAM_QIO(1)
 	spi.SetCACHE_SCTRL_CACHE_SRAM_USR_RCMD(1)
@@ -388,7 +365,7 @@ func psramCacheInit() {
 	spi.SetSRAM_DRD_CMD_CACHE_SRAM_USR_RD_CMD_VALUE(psramReadQuad)
 	spi.SetSRAM_DWR_CMD_CACHE_SRAM_USR_WR_CMD_BITLEN(7)
 	spi.SetSRAM_DWR_CMD_CACHE_SRAM_USR_WR_CMD_VALUE(psramWriteQuad)
-	spi.SetCACHE_SCTRL_SRAM_DUMMY_CYCLELEN(psramReadWait + matrixWait40)
+	spi.SetCACHE_SCTRL_SRAM_DUMMY_CYCLELEN(psramReadWait + matrixWait)
 
 	// Normal mode with 32KB pages. ESP32 TRM v5.8 table 4.3-14.
 	esp.DPORT.SetPRO_CACHE_CTRL_PRO_DRAM_HL(0)
