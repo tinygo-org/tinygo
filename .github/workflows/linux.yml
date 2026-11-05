@@ -298,7 +298,7 @@ jobs:
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
-      - run: make gen-device -j4
+      - uses: ./.github/actions/gen-device
       - name: Test TinyGo
         run: make ASSERT=1 test
       - name: Check Go code formatting after device generation
