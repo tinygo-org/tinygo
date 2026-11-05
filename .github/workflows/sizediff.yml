@@ -36,14 +36,15 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-      - run: make gen-device -j4
+      - uses: ./.github/actions/gen-device
       - name: Download drivers repo
         run: git clone https://github.com/tinygo-org/drivers.git
       - name: Save PR configuration
         id: pr
         run: |
-          # Keep the action available after checking out the base commit.
+          # Keep the actions available after checking out the base commit.
           cp -r .github/actions/setup-llvm .github/actions/setup-llvm-base
+          cp -r .github/actions/gen-device .github/actions/gen-device-base
           echo "base_sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
           echo "llvm_version=$(cat llvm-version.txt)" >> "$GITHUB_OUTPUT"
 
@@ -77,9 +78,10 @@ jobs:
             export XDG_CACHE_HOME="$RUNNER_TEMP/cache-base"
             echo "GOCACHE=$GOCACHE" >> "$GITHUB_ENV"
             echo "XDG_CACHE_HOME=$XDG_CACHE_HOME" >> "$GITHUB_ENV"
-            make gen-device -j4
             echo "llvm_version=$(cat llvm-version.txt)" >> "$GITHUB_OUTPUT"
           fi
+      - uses: ./.github/actions/gen-device-base
+        if: steps.base-cache.outputs.cache-hit != 'true'
       - name: Remove LLVM build for the PR branch
         if: steps.base-cache.outputs.cache-hit != 'true' && steps.pr.outputs.llvm_version != steps.dev.outputs.llvm_version
         run: rm -rf llvm-build llvm-project
