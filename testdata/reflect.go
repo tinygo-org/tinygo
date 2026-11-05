@@ -443,6 +443,21 @@ func main() {
 		}
 		println("reflect map interface key ok")
 	}
+
+	// An array element type that only reflect boxes must stay in the
+	// interface method dispatch. See issue #6168.
+	{
+		var a any = [1]elemStringer{7}
+		println(reflect.ValueOf(a).Index(0).Interface().(stringer).String())
+	}
+}
+
+type elemStringer int
+
+func (e elemStringer) String() string { return "elemStringer " + strconv.Itoa(int(e)) }
+
+type stringer interface {
+	String() string
 }
 
 func emptyFunc() {
