@@ -1721,6 +1721,10 @@ func (b *builder) getValuePointer(value ssa.Value) llvm.Value {
 	}
 	llvmType := b.getLLVMType(value.Type())
 	ptr := b.createIndirectStorage(llvmType, value.Name())
+	if c, ok := value.(*ssa.Const); ok && c.Value == nil {
+		// createIndirectStorage returns zeroed memory.
+		return ptr
+	}
 	b.storeValue(ptr, value)
 	return ptr
 }

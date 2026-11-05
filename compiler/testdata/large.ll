@@ -14,12 +14,21 @@ target triple = "wasm32-unknown-wasi"
 @"runtime/gc.layout:258-000000000000000000000000000000000000000000000000000000000000000002" = linkonce_odr unnamed_addr constant { i32, [33 x i8] } { i32 258, [33 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\02" }
 @"reflect/types.typeid:named:main.largeValue" = external constant i8
 @"runtime.hashmapType:[1025]byte:[1025]byte" = linkonce_odr unnamed_addr constant { ptr, ptr, ptr } { ptr inttoptr (i32 3 to ptr), ptr inttoptr (i32 3 to ptr), ptr inttoptr (i32 67108137 to ptr) }
-@llvm.used = appending global [15 x ptr] [ptr @"(main.largeReceiver).makeLargeValue", ptr @"(main.largeReceiver).readLargeValue", ptr @main.makeLargeValue, ptr @main.makeZeroLargeValue, ptr @main.readLargeValue, ptr @main.deferLargeValue, ptr @main.goLargeValue, ptr @main.makeLargeResults, ptr @main.makeTwoLargeResults, ptr @main.makeMixedLargeResults, ptr @main.chooseLargeValue, ptr @main.makePointerLargeValue, ptr @main.useLargeMap, ptr @main.useLargeChannel, ptr @main.selectLargeChannel]
-@tinygo.indirect-abi = appending global [15 x ptr] [ptr @"(main.largeReceiver).makeLargeValue", ptr @"(main.largeReceiver).readLargeValue", ptr @main.makeLargeValue, ptr @main.makeZeroLargeValue, ptr @main.readLargeValue, ptr @main.deferLargeValue, ptr @main.goLargeValue, ptr @main.makeLargeResults, ptr @main.makeTwoLargeResults, ptr @main.makeMixedLargeResults, ptr @main.chooseLargeValue, ptr @main.makePointerLargeValue, ptr @main.useLargeMap, ptr @main.useLargeChannel, ptr @main.selectLargeChannel]
 @"main$string" = internal unnamed_addr constant [31 x i8] c"blocking select matched no case", align 1
 @"main$pack" = internal unnamed_addr constant { %runtime._string } { %runtime._string { ptr @"main$string", i32 31 } }
 @"reflect/types.type:basic:string" = linkonce_odr constant { i8, ptr } { i8 81, ptr @"reflect/types.type:pointer:basic:string" }, align 4
 @"reflect/types.type:pointer:basic:string" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:string" }, align 4
+@"reflect/types.type:named:main.largeValue" = linkonce_odr constant { i8, i16, ptr, ptr, ptr, [16 x i8] } { i8 -9, i16 0, ptr @"reflect/types.type:pointer:named:main.largeValue", ptr @"reflect/types.type:array:1025:basic:uint8", ptr @"reflect/types.type.pkgpath:main", [16 x i8] c"main.largeValue\00" }, align 4
+@"reflect/types.type.pkgpath:main" = linkonce_odr unnamed_addr constant [5 x i8] c"main\00", align 1
+@"reflect/types.type:pointer:named:main.largeValue" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:named:main.largeValue" }, align 4
+@"reflect/types.type:array:1025:basic:uint8" = linkonce_odr constant { i8, i16, ptr, ptr, i32, ptr, ptr } { i8 -41, i16 0, ptr @"reflect/types.type:pointer:array:1025:basic:uint8", ptr @"reflect/types.type:basic:uint8", i32 1025, ptr @"reflect/types.type:slice:basic:uint8", ptr inttoptr (i32 3 to ptr) }, align 4
+@"reflect/types.type:pointer:array:1025:basic:uint8" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:array:1025:basic:uint8" }, align 4
+@"reflect/types.type:basic:uint8" = linkonce_odr constant { i8, ptr } { i8 -56, ptr @"reflect/types.type:pointer:basic:uint8" }, align 4
+@"reflect/types.type:pointer:basic:uint8" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:uint8" }, align 4
+@"reflect/types.type:slice:basic:uint8" = linkonce_odr constant { i8, i16, ptr, ptr } { i8 22, i16 0, ptr @"reflect/types.type:pointer:slice:basic:uint8", ptr @"reflect/types.type:basic:uint8" }, align 4
+@"reflect/types.type:pointer:slice:basic:uint8" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:slice:basic:uint8" }, align 4
+@llvm.used = appending global [16 x ptr] [ptr @"(main.largeReceiver).makeLargeValue", ptr @"(main.largeReceiver).readLargeValue", ptr @main.makeLargeValue, ptr @main.makeZeroLargeValue, ptr @main.readLargeValue, ptr @main.deferLargeValue, ptr @main.goLargeValue, ptr @main.makeLargeResults, ptr @main.makeTwoLargeResults, ptr @main.makeMixedLargeResults, ptr @main.chooseLargeValue, ptr @main.makePointerLargeValue, ptr @main.useLargeMap, ptr @main.useLargeChannel, ptr @main.selectLargeChannel, ptr @main.isZeroLargeValue]
+@tinygo.indirect-abi = appending global [16 x ptr] [ptr @"(main.largeReceiver).makeLargeValue", ptr @"(main.largeReceiver).readLargeValue", ptr @main.makeLargeValue, ptr @main.makeZeroLargeValue, ptr @main.readLargeValue, ptr @main.deferLargeValue, ptr @main.goLargeValue, ptr @main.makeLargeResults, ptr @main.makeTwoLargeResults, ptr @main.makeMixedLargeResults, ptr @main.chooseLargeValue, ptr @main.makePointerLargeValue, ptr @main.useLargeMap, ptr @main.useLargeChannel, ptr @main.selectLargeChannel, ptr @main.isZeroLargeValue]
 
 declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
@@ -82,7 +91,6 @@ entry:
   %stackalloc = alloca i8, align 1
   %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
   call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
-  store [1025 x i8] zeroinitializer, ptr %"main.largeValue{}:main.largeValue", align 1
   %0 = call i8 @main.readLargeValue(ptr nonnull %"main.largeValue{}:main.largeValue", ptr undef)
   ret i8 %0
 }
@@ -236,7 +244,7 @@ unwind.return:                                    ; preds = %recover, %rundefers
   ret void
 }
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn
+; Function Attrs: nocallback nofree nounwind willreturn
 declare ptr @llvm.stacksave.p0() #6
 
 declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(28), ptr, ptr) #0
@@ -522,12 +530,12 @@ if.then:                                          ; preds = %entry
   ret i8 0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(ptr nocapture) #12
 
 declare void @runtime.chanSend(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(ptr nocapture) #12
 
 declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
@@ -589,17 +597,137 @@ declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32, i32, ptr, i32, i32, ptr) 
 
 declare void @runtime._panic(ptr, ptr, ptr) #0
 
+; Function Attrs: nounwind
+define hidden void @main.sendZeroLargeValue(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+entry:
+  %chan.op = alloca %runtime.channelOp, align 8
+  %stackalloc = alloca i8, align 1
+  %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
+  call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
+  call void @runtime.chanSend(ptr %ch, ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %chan.op, ptr undef) #13
+  call void @llvm.lifetime.end.p0(ptr nonnull %chan.op)
+  ret void
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.selectZeroLargeValue(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
+  %select.sent = call i1 @runtime.chanTrySend(ptr %ch, ptr nonnull %"main.largeValue{}:main.largeValue", ptr undef) #13
+  br i1 %select.sent, label %select.body, label %select.next
+
+select.body:                                      ; preds = %entry
+  ret i1 true
+
+select.next:                                      ; preds = %entry
+  ret i1 false
+}
+
+declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(40), ptr, ptr) #0
+
+; Function Attrs: nounwind
+define hidden void @main.storeZeroLargeMap(ptr dereferenceable_or_null(52) %values, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
+  %"main.largeValue{}:main.largeValue1" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue1", ptr nonnull %stackalloc, ptr undef) #13
+  call void @runtime.hashmapBinarySet(ptr %values, ptr nonnull %"main.largeValue{}:main.largeValue1", ptr nonnull %"main.largeValue{}:main.largeValue", ptr undef) #13
+  ret void
+}
+
+; Function Attrs: nounwind
+define hidden i8 @main.lookupZeroLargeMap(ptr dereferenceable_or_null(52) %values, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %result, ptr nonnull %stackalloc, ptr undef) #13
+  %hashmap.result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %hashmap.result, ptr nonnull %stackalloc, ptr undef) #13
+  %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
+  %0 = call i1 @runtime.hashmapBinaryGet(ptr %values, ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %hashmap.result, i32 1025, ptr undef) #13
+  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %result, ptr noundef nonnull align 1 dereferenceable(1025) %hashmap.result, i32 1025, i1 false)
+  %1 = load i8, ptr %result, align 1
+  ret i8 %1
+}
+
+; Function Attrs: nounwind
+define hidden %runtime._interface @main.zeroLargeInterface(ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
+  %interface.value = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %interface.value, ptr nonnull %stackalloc, ptr undef) #13
+  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %interface.value, ptr noundef nonnull align 1 dereferenceable(1025) %"main.largeValue{}:main.largeValue", i32 1025, i1 false)
+  %0 = insertvalue %runtime._interface { ptr @"reflect/types.type:named:main.largeValue", ptr undef }, ptr %interface.value, 1
+  call void @runtime.trackPointer(ptr nonnull @"reflect/types.type:named:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %interface.value, ptr nonnull %stackalloc, ptr undef) #13
+  ret %runtime._interface %0
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.isZeroLargeValue(ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
+  %arraycmp = call i1 @runtime.memequal(ptr %value, ptr nonnull %"main.largeValue{}:main.largeValue", i32 1025, ptr undef) #13
+  ret i1 %arraycmp
+}
+
+; Function Attrs: nounwind
+define hidden i8 @main.indexZeroLargeValue(i32 %i, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %0 = icmp ugt i32 %i, 1024
+  br i1 %0, label %lookup.throw, label %lookup.next
+
+lookup.next:                                      ; preds = %entry
+  %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
+  %index.gep = getelementptr inbounds nuw i8, ptr %"main.largeValue{}:main.largeValue", i32 %i
+  %index.load = load i8, ptr %index.gep, align 1
+  ret i8 %index.load
+
+lookup.throw:                                     ; preds = %entry
+  call void @runtime.lookupPanic(ptr undef) #13
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %lookup.throw
+  ret i8 undef
+}
+
+declare void @runtime.lookupPanic(ptr) #0
+
+; Function Attrs: nounwind
+define hidden i8 @main.zeroLargeReceiver(ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
+  %"main.largeValue{}:main.largeValue1" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
+  call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue1", ptr nonnull %stackalloc, ptr undef) #13
+  %0 = call i8 @"(main.largeReceiver).readLargeValue"(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %"main.largeValue{}:main.largeValue1", ptr undef)
+  ret i8 %0
+}
+
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #3 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #4 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-indirect-result"="true" "tinygo-invoke"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}" "tinygo-methods"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}; main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" }
 attributes #5 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-invoke"="main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" "tinygo-methods"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}; main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" }
-attributes #6 = { nocallback nofree nosync nounwind willreturn }
+attributes #6 = { nocallback nofree nounwind willreturn }
 attributes #7 = { noinline }
 attributes #8 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="asyncify" "wasm-import-name"="start_rewind" }
 attributes #9 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="asyncify" "wasm-import-name"="stop_unwind" }
 attributes #10 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.readLargeValue" }
 attributes #11 = { nocallback nofree nounwind willreturn memory(argmem: write) }
-attributes #12 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
+attributes #12 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #13 = { nounwind }
