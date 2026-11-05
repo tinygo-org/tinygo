@@ -60,6 +60,9 @@ func syscall_Exit(code int) {
 	exit.Exit(code != 0)
 }
 
+// WASIp2 does not use wasi-libc's stdio.
+func flushStdio() {}
+
 func mainReturnExit() {
 	// WASIp2 does not use _start, instead it uses _initialize and a custom
 	// WASIp2-specific main function. So this should never be called in
