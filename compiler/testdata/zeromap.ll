@@ -149,7 +149,7 @@ entry:
   ret i1 %6
 }
 
-declare i1 @runtime.stringEqual(ptr readonly, i32, ptr readonly, i32, ptr) #0
+declare i1 @runtime.stringEqual(ptr readonly, i32 range(i32 0, -2147483648), ptr readonly, i32 range(i32 0, -2147483648), ptr) #0
 
 declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr) #0
 
@@ -298,7 +298,7 @@ entry:
 declare void @runtime.hashmapBinaryDelete(ptr dereferenceable_or_null(52), ptr captures(none), ptr) #0
 
 ; Function Attrs: noinline nounwind
-define hidden void @main.testStringSet(ptr dereferenceable_or_null(52) %m, ptr readonly %key.data, i32 %key.len, i32 %value, ptr %context) unnamed_addr #2 {
+define hidden void @main.testStringSet(ptr dereferenceable_or_null(52) %m, ptr readonly %key.data, i32 range(i32 0, -2147483648) %key.len, i32 %value, ptr %context) unnamed_addr #2 {
 entry:
   %hashmap.value = alloca i32, align 4
   call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.value)
@@ -308,7 +308,7 @@ entry:
   ret void
 }
 
-declare void @runtime.hashmapStringSet(ptr dereferenceable_or_null(52), ptr readonly, i32, ptr captures(none), ptr) #0
+declare void @runtime.hashmapStringSet(ptr dereferenceable_or_null(52), ptr readonly, i32 range(i32 0, -2147483648), ptr captures(none), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.main(ptr %context) unnamed_addr #1 {
