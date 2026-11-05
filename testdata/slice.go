@@ -1,6 +1,9 @@
 package main
 
-import "unsafe"
+import (
+	"reflect"
+	"unsafe"
+)
 
 type MySlice [32]byte
 
@@ -25,6 +28,7 @@ func main() {
 
 	// creating a slice of uncommon base type
 	assert(len(make([]struct{}, makeInt(4))) == 4)
+	assert(reflect.SliceOf(reflect.TypeOf(MySlice{})).Kind() == reflect.Slice)
 
 	// creating a slice with uncommon len, cap types
 	assert(len(make([]int, makeInt(2), makeInt(3))) == 2)
