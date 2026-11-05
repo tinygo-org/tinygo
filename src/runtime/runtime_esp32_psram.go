@@ -119,6 +119,11 @@ func initPSRAM() {
 	memzero(unsafe.Pointer(start), end-start)
 }
 
+// psramActive reports whether PSRAM is on. The machine package uses it.
+func psramActive() bool {
+	return psramReason == psramOK
+}
+
 // reportPSRAM stops the program when it has variables in PSRAM but PSRAM is off.
 // Without such variables it only prints why PSRAM is off.
 func reportPSRAM() {

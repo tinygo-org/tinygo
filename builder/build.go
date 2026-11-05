@@ -1326,6 +1326,10 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
+	if _, speedLevel, _ := config.OptLevel(); speedLevel == 0 && slices.ContainsFunc(config.BuildTags(), func(tag string) bool { return strings.HasPrefix(tag, "numa_psram") }) {
+		// The PSRAM start-up must run from IRAM, which needs the inliner.
+		return errors.New("PSRAM targets need -opt=1 or higher")
+	}
 	err := interp.Run(mod, config.Options.InterpTimeout, config.Options.InterpMaxLoopIterations, config.DumpSSA())
 	if err != nil {
 		return err
@@ -1343,18 +1347,6 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		}
 	}
 
-	// PSRAM is off when the program is loaded, so its variables start as zero.
-	// See the .psram section in targets/esp32.ld.
-	for g := mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
-		section := g.Section()
-		if section != ".psram" && !strings.HasPrefix(section, ".psram.") {
-			continue
-		}
-		if init := g.Initializer(); !init.IsNil() && !init.IsNull() {
-			return fmt.Errorf("%s: variables in .psram cannot have a start value", g.Name())
-		}
-	}
-
 	// Run most of the whole-program optimizations (including the whole
 	// O0/O1/O2/Os/Oz optimization pipeline).
 	errs := transform.Optimize(mod, config)
@@ -1365,7 +1357,41 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		return errors.New("verification failure after LLVM optimization passes")
 	}
 
+	return checkPSRAMGlobals(mod, config)
+}
+
+// checkPSRAMGlobals checks the .psram rules of the targets with a numa_psram
+// build tag, see targets/esp32.ld. PSRAM is off when the program is loaded.
+func checkPSRAMGlobals(mod llvm.Module, config *compileopts.Config) error {
+	if !slices.ContainsFunc(config.BuildTags(), func(tag string) bool { return strings.HasPrefix(tag, "numa_psram") }) {
+		return nil
+	}
+	for g := mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
+		section := g.Section()
+		if section != ".psram" && !strings.HasPrefix(section, ".psram.") {
+			continue
+		}
+		if init := g.Initializer(); !init.IsNil() && !init.IsNull() {
+			return fmt.Errorf("%s: variables in .psram cannot have a start value at load time", g.Name())
+		}
+		if typeHasPointer(g.GlobalValueType()) {
+			return fmt.Errorf("%s: variables in .psram cannot hold pointers, because the garbage collector does not scan PSRAM", g.Name())
+		}
+	}
 	return nil
+}
+
+// typeHasPointer reports whether a value of type t can hold a pointer.
+func typeHasPointer(t llvm.Type) bool {
+	switch t.TypeKind() {
+	case llvm.PointerTypeKind:
+		return true
+	case llvm.ArrayTypeKind, llvm.VectorTypeKind:
+		return typeHasPointer(t.ElementType())
+	case llvm.StructTypeKind:
+		return slices.ContainsFunc(t.StructElementTypes(), typeHasPointer)
+	}
+	return false
 }
 
 // addInitAllDebugInfo gives runtime.initAll a subprogram so that code emitted

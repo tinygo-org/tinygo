@@ -540,7 +540,7 @@ func (uart *UART) Configure(config UARTConfig) error {
 			config.RX = 16
 		}
 	}
-	if psramPin(config.TX) || psramPin(config.RX) {
+	if psramPin(config.TX) || psramPin(config.RX) || psramPin(config.RTS) || psramPin(config.CTS) {
 		return errPinUsedByPSRAM
 	}
 

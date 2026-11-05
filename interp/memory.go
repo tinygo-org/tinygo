@@ -1239,7 +1239,7 @@ func (r *runner) getValue(llvmValue llvm.Value) value {
 			r.objects = append(r.objects, obj)
 			if !llvmValue.IsAGlobalVariable().IsNil() {
 				obj.size = uint32(r.targetData.TypeAllocSize(llvmValue.GlobalValueType()))
-				if initializer := llvmValue.Initializer(); !initializer.IsNil() {
+				if initializer := llvmValue.Initializer(); !initializer.IsNil() && !isPSRAMGlobal(llvmValue) {
 					// Treat the global as external if its initializer is only known at runtime.
 					buf := r.getValue(initializer)
 					if _, ok := buf.(localValue); !ok {
@@ -1402,4 +1402,11 @@ func reverseBytes(buf []byte) {
 		opp := len(buf) - 1 - i
 		buf[i], buf[opp] = buf[opp], buf[i]
 	}
+}
+
+// isPSRAMGlobal reports whether a global is in the .psram section. PSRAM is off
+// when the program is loaded, so these globals get their values at runtime.
+func isPSRAMGlobal(global llvm.Value) bool {
+	section := global.Section()
+	return section == ".psram" || strings.HasPrefix(section, ".psram.")
 }
