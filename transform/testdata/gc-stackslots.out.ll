@@ -388,12 +388,12 @@ define i32 @copyToSlice(ptr %src.ptr, i32 %src.len, i32 %src.cap) {
   ret i32 %minLen
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nofree nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umin.i32(i32, i32) #1
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.memmove.p0.p0.i32(ptr nocapture writeonly, ptr nocapture readonly, i32, i1 immarg) #2
 
 attributes #0 = { memory(readwrite) }
-attributes #1 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #1 = { nocallback nofree nounwind speculatable willreturn memory(none) }
 attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }

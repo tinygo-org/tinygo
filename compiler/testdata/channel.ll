@@ -12,7 +12,7 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:basic:string" = linkonce_odr constant { i8, ptr } { i8 81, ptr @"reflect/types.type:pointer:basic:string" }, align 4
 @"reflect/types.type:pointer:basic:string" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:string" }, align 4
 
-declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
+declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -34,12 +34,12 @@ entry:
   ret void
 }
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(ptr nocapture) #2
 
 declare void @runtime.chanSend(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(ptr nocapture) #2
 
 ; Function Attrs: nounwind
@@ -231,7 +231,7 @@ select.next2:                                     ; preds = %select.next
   call void @runtime._panic(ptr nonnull @"reflect/types.type:basic:string", ptr nonnull @"main$pack", ptr undef) #3
   br label %unwind.return
 
-unwind.return:
+unwind.return:                                    ; preds = %select.next2
   ret { i32, i1 } undef
 }
 
@@ -239,5 +239,5 @@ declare void @runtime._panic(ptr, ptr, ptr) #0
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #3 = { nounwind }

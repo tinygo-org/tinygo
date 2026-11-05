@@ -19,7 +19,7 @@ entry:
   ret i32 %a
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nofree nounwind speculatable willreturn memory(none)
 declare i32 @llvm.smin.i32(i32, i32) #2
 
 ; Function Attrs: nounwind
@@ -53,7 +53,7 @@ entry:
   ret i8 %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nofree nounwind speculatable willreturn memory(none)
 declare i8 @llvm.umin.i8(i8, i8) #2
 
 ; Function Attrs: nounwind
@@ -63,7 +63,7 @@ entry:
   ret i32 %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nofree nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umin.i32(i32, i32) #2
 
 ; Function Attrs: nounwind
@@ -73,7 +73,7 @@ entry:
   ret float %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nofree nounwind speculatable willreturn memory(none)
 declare float @llvm.minimum.f32(float, float) #2
 
 ; Function Attrs: nounwind
@@ -83,7 +83,7 @@ entry:
   ret double %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nofree nounwind speculatable willreturn memory(none)
 declare double @llvm.minimum.f64(double, double) #2
 
 ; Function Attrs: nounwind
@@ -110,7 +110,7 @@ entry:
   ret i32 %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nofree nounwind speculatable willreturn memory(none)
 declare i32 @llvm.smax.i32(i32, i32) #2
 
 ; Function Attrs: nounwind
@@ -120,7 +120,7 @@ entry:
   ret i32 %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nofree nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umax.i32(i32, i32) #2
 
 ; Function Attrs: nounwind
@@ -130,7 +130,7 @@ entry:
   ret float %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nofree nounwind speculatable willreturn memory(none)
 declare float @llvm.maximum.f32(float, float) #2
 
 ; Function Attrs: nounwind
@@ -176,6 +176,6 @@ declare void @runtime.hashmapClear(ptr dereferenceable_or_null(52), ptr) #0
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #2 = { nocallback nofree nounwind speculatable willreturn memory(none) }
 attributes #3 = { nocallback nofree nounwind willreturn memory(argmem: write) }
 attributes #4 = { nounwind }

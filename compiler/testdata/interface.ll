@@ -165,10 +165,10 @@ typeswitch.next5:                                 ; preds = %typeassert.next33
   ret i1 false
 }
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(ptr nocapture) #2
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(ptr nocapture) #2
 
 ; Function Attrs: nounwind
@@ -224,7 +224,7 @@ declare %runtime._string @"interface:{Error:func:{}{basic:string}}.Error$invoke"
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #3 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-methods"="reflect/methods.Error:func:{}{basic:string}" }
 attributes #4 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-methods"="reflect/methods.String:func:{}{basic:string}" }
 attributes #5 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-invoke"="main.$methods.foo:func:{basic:int}{basic:uint8}" "tinygo-methods"="reflect/methods.String:func:{}{basic:string}; main.$methods.foo:func:{basic:int}{basic:uint8}" }

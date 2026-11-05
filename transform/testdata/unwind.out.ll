@@ -6,7 +6,7 @@ target triple = "wasm32-unknown-unknown"
 
 declare void @external() local_unnamed_addr
 
-; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(readwrite, argmem: none, inaccessiblemem: write, target_mem0: none, target_mem1: none)
+; Function Attrs: mustprogress nofree norecurse nounwind willreturn memory(readwrite, argmem: none, inaccessiblemem: write)
 define noundef i1 @checkSafe() local_unnamed_addr #0 {
 entry:
   %unwind.entry = load i1, ptr @runtime.unwindPendingSignal, align 1
@@ -16,7 +16,7 @@ entry:
   ret i1 false
 }
 
-; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(readwrite, argmem: none, inaccessiblemem: write, target_mem0: none, target_mem1: none)
+; Function Attrs: mustprogress nofree norecurse nounwind willreturn memory(readwrite, argmem: none, inaccessiblemem: write)
 define noundef i1 @checkPanic() local_unnamed_addr #0 {
 entry:
   %unwind.entry = load i1, ptr @runtime.unwindPendingSignal, align 1
@@ -46,16 +46,16 @@ entry:
   ret i1 %unwind.i
 }
 
-; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(read, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+; Function Attrs: mustprogress nofree norecurse nounwind willreturn memory(read, argmem: none, inaccessiblemem: none)
 define i1 @runtime.unwindPending() local_unnamed_addr #1 {
 entry:
   %unwind = load i1, ptr @runtime.unwindPendingSignal, align 1
   ret i1 %unwind
 }
 
-; Function Attrs: mustprogress nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: write)
+; Function Attrs: mustprogress nocallback nofree nounwind willreturn memory(inaccessiblemem: write)
 declare void @llvm.assume(i1 noundef) #2
 
-attributes #0 = { mustprogress nofree norecurse nosync nounwind willreturn memory(readwrite, argmem: none, inaccessiblemem: write, target_mem0: none, target_mem1: none) }
-attributes #1 = { mustprogress nofree norecurse nosync nounwind willreturn memory(read, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
-attributes #2 = { mustprogress nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: write) }
+attributes #0 = { mustprogress nofree norecurse nounwind willreturn memory(readwrite, argmem: none, inaccessiblemem: write) }
+attributes #1 = { mustprogress nofree norecurse nounwind willreturn memory(read, argmem: none, inaccessiblemem: none) }
+attributes #2 = { mustprogress nocallback nofree nounwind willreturn memory(inaccessiblemem: write) }

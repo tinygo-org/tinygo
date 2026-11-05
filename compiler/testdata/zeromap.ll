@@ -38,12 +38,12 @@ entry:
   ret i32 %4
 }
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(ptr nocapture) #3
 
 declare i1 @runtime.hashmapGenericGet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, i32, ptr) #0
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(ptr nocapture) #3
 
 ; Function Attrs: noinline nounwind
@@ -259,5 +259,5 @@ entry:
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { noinline nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #3 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
+attributes #3 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #4 = { nounwind }
