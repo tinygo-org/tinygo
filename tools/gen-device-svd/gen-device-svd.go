@@ -359,7 +359,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		return nil, err
 	}
 	defer f.Close()
-	decoder := xml.NewDecoder(f)
+	decoder := xml.NewDecoder(bufio.NewReaderSize(f, 1<<20))
 	device := &SVDFile{}
 	err = decoder.Decode(device)
 	if err != nil {
@@ -1225,7 +1225,7 @@ func writeGo(outdir string, device *Device, interruptSystem string) error {
 		return err
 	}
 	defer outf.Close()
-	w := bufio.NewWriter(outf)
+	w := bufio.NewWriterSize(outf, 1<<20)
 
 	maxInterruptValue := 0
 	for _, intr := range device.Interrupts {
