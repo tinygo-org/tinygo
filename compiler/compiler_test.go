@@ -151,6 +151,9 @@ func TestCompiler(t *testing.T) {
 		{"large.go", "", ""},
 		{"go1.20.go", "", ""},
 		{"go1.21.go", "", ""},
+		{"lenrange.go", "", ""},
+		{"lenrange.go", "arduino", ""},
+		{"lenrange-wasmexport.go", "", ""},
 	}
 	if goMinor >= 27 {
 		tests = append(tests, testCase{"go1.27.go", "", ""})

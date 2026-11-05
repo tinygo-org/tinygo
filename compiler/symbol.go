@@ -190,6 +190,12 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 			readonly := c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0)
 			llvmFn.AddAttributeAtIndex(i+1, readonly)
 		}
+		if !info.isExported() && info.wasmExport == "" && paramInfo.maxLen != 0 {
+			bits := uint(paramInfo.llvmType.IntTypeWidth())
+			if attr := llvmutil.UnsignedRangeAttribute(c.ctx, bits, paramInfo.maxLen); !attr.IsNil() {
+				llvmFn.AddAttributeAtIndex(i+1, attr)
+			}
+		}
 	}
 
 	// Set a number of function or parameter attributes, depending on the

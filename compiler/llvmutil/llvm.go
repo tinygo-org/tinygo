@@ -9,6 +9,7 @@ package llvmutil
 
 import (
 	"encoding/binary"
+	"math"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -219,6 +220,15 @@ func IsNoCapture(attr llvm.Attribute) bool {
 		return attr.GetEnumValue() == 0
 	}
 	return true
+}
+
+// UnsignedRangeAttribute returns a range attribute that limits an integer of
+// the given width to [0, max]. It returns a nil attribute before LLVM 19 or when max+1 does not fit.
+func UnsignedRangeAttribute(ctx llvm.Context, bits uint, max uint64) llvm.Attribute {
+	if max >= math.MaxUint64>>(64-bits) {
+		return llvm.Attribute{}
+	}
+	return ctx.CreateConstantRangeAttribute(llvm.AttributeKindID("range"), bits, []uint64{0}, []uint64{max + 1})
 }
 
 // ByteOrder returns the byte order for the given target triple. Most targets are little

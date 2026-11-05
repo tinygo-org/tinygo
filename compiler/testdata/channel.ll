@@ -108,7 +108,7 @@ select.body:                                      ; preds = %select.next
   br label %select.done
 }
 
-declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32, i32, ptr, i32, i32, ptr) #0
+declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 536870912), i32 range(i32 0, 536870912), ptr, i32 range(i32 0, 268435456), i32 range(i32 0, 268435456), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i1 @main.selectNonBlockingSend(ptr dereferenceable_or_null(40) %ch, i32 %value, ptr %context) unnamed_addr #1 {

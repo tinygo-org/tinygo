@@ -591,7 +591,7 @@ unwind.return:                                    ; preds = %select.next2
   ret i8 undef
 }
 
-declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32, i32, ptr, i32, i32, ptr) #0
+declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 536870912), i32 range(i32 0, 536870912), ptr, i32 range(i32 0, 268435456), i32 range(i32 0, 268435456), ptr) #0
 
 declare void @runtime._panic(ptr, ptr, ptr) #0
 
