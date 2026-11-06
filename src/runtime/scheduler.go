@@ -119,6 +119,27 @@ func timerQueuePeek() *timerNode {
 	return timerQueue.peek()
 }
 
+// timerQueueFull reports whether the next add would have to grow the queue.
+func timerQueueFull() bool {
+	return timerQueue == nil || len(timerQueue.nodes) == cap(timerQueue.nodes)
+}
+
+// timerQueueGrow installs h, an empty heap with spare capacity allocated by the
+// caller. It does not allocate, so it can run while holding a scheduler lock.
+func timerQueueGrow(h *timerHeap) {
+	if timerQueue == nil {
+		timerQueue = h
+		return
+	}
+	if cap(h.nodes) <= cap(timerQueue.nodes) {
+		// Another core already grew the queue.
+		return
+	}
+	h.nodes = append(h.nodes, timerQueue.nodes...)
+	h.seq = timerQueue.seq
+	timerQueue = h
+}
+
 func timerQueueAdd(tn *timerNode) {
 	if timerQueue == nil {
 		timerQueue = new(timerHeap)
