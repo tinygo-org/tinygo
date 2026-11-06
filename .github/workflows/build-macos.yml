@@ -46,8 +46,6 @@ jobs:
       - uses: ./.github/actions/setup-llvm-macos
         with:
           os: ${{ matrix.os }}
-      - name: make gen-device
-        run: make -j3 gen-device
       - name: Build TinyGo release tarball
         run: make release -j3
       - name: Make release artifact

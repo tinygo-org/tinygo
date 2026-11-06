@@ -331,7 +331,6 @@ jobs:
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
-      - run: make gen-device -j4
       - name: Build TinyGo release tarball
         run: |
           make release ASSERT=1 -j4
