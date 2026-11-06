@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1369,15 +1370,20 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 	if exported {
 		internalABI := c.getFunctionABI(fn.Signature, false)
 		var abiError string
-		if internalABI.indirectResult {
+		if aggregateValueCountExceeds(internalABI.resultType, maxDirectAggregateValues) {
 			abiError = fmt.Sprintf("exported method %s with a large aggregate result cannot be called through an interface", fn.RelString(nil))
 		}
 		if abiError == "" {
+			// The context, the type code and the receiver are also parameters.
+			count := uint64(3)
+			if aggregateValueCountExceeds(internalABI.resultType, 1) {
+				count++
+			}
 			for _, param := range internalABI.params[1:] {
-				if param.indirect {
-					abiError = fmt.Sprintf("exported method %s with an aggregate parameter passed indirectly by the internal ABI cannot be called through an interface", fn.RelString(nil))
-					break
-				}
+				count += param.leafCount
+			}
+			if count > maxFunctionParams {
+				abiError = fmt.Sprintf("exported method %s with an aggregate parameter passed indirectly by the internal ABI cannot be called through an interface", fn.RelString(nil))
 			}
 		}
 		if abiError != "" {
@@ -1406,6 +1412,9 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 			}
 			wrapper.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-interface-abi-error", abiError))
 			return wrapper
+		}
+		if internalABI.indirectResult || slices.ContainsFunc(internalABI.params[1:], func(p functionABIParam) bool { return p.indirect }) {
+			return c.createExportedInvokeWrapper(fn, wrapperName, internalABI, llvmFnType, llvmFn)
 		}
 	}
 
@@ -1482,5 +1491,74 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 		b.CreateRet(ret)
 	}
 
+	return wrapper
+}
+
+// createExportedInvokeWrapper wraps an exported method that takes or returns an
+// aggregate directly, while interface calls pass it by pointer.
+func (c *context) createExportedInvokeWrapper(fn *ssa.Function, wrapperName string, abi functionABI, llvmFnType llvm.Type, llvmFn llvm.Value) llvm.Value {
+	resultType := abi.resultType
+	var paramTypes []llvm.Type
+	if abi.indirectResult {
+		paramTypes = append(paramTypes, c.dataPtrType)
+		resultType = c.ctx.VoidType()
+	}
+	paramTypes = append(paramTypes, c.dataPtrType)
+	for _, param := range abi.params[1:] {
+		if param.indirect {
+			paramTypes = append(paramTypes, c.dataPtrType)
+			continue
+		}
+		for _, info := range c.expandDirectFormalParamType(param.llvmType, "", nil) {
+			paramTypes = append(paramTypes, info.llvmType)
+		}
+	}
+	paramTypes = append(paramTypes, c.dataPtrType) // context
+	wrapper := llvm.AddFunction(c.mod, wrapperName, llvm.FunctionType(resultType, paramTypes, false))
+	c.addStandardAttributes(wrapper)
+	wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
+	wrapper.SetUnnamedAddr(true)
+
+	b := builder{
+		context: c,
+		Builder: c.ctx.NewBuilder(),
+	}
+	defer b.Builder.Dispose()
+	if c.Debug {
+		pos := c.program.Fset.Position(fn.Pos())
+		difunc := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
+		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
+	}
+	b.SetInsertPointAtEnd(b.ctx.AddBasicBlock(wrapper, "entry"))
+
+	incoming := wrapper.Params()
+	var returnPtr llvm.Value
+	if abi.indirectResult {
+		returnPtr, incoming = incoming[0], incoming[1:]
+	}
+	receiver := b.emitPointerUnpack(incoming[0], []llvm.Type{abi.params[0].llvmType})[0]
+	incoming = incoming[1:]
+	args := b.expandFormalParam(receiver)
+	for _, param := range abi.params[1:] {
+		if param.indirect {
+			args = append(args, b.expandFormalParam(b.CreateLoad(param.llvmType, incoming[0], ""))...)
+			incoming = incoming[1:]
+			continue
+		}
+		n := len(c.expandDirectFormalParamType(param.llvmType, "", nil))
+		args = append(args, incoming[:n]...)
+		incoming = incoming[n:]
+	}
+
+	ret := b.CreateCall(llvmFnType, llvmFn, args, "")
+	switch {
+	case abi.indirectResult:
+		b.CreateStore(ret, returnPtr)
+		b.CreateRetVoid()
+	case llvmFnType.ReturnType().TypeKind() == llvm.VoidTypeKind:
+		b.CreateRetVoid()
+	default:
+		b.CreateRet(ret)
+	}
 	return wrapper
 }

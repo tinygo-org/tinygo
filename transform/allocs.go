@@ -282,10 +282,19 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 // not otherwise capture the parameter and the returned alias does not escape.
 func (a *escapeAnalysis) callValueEscapesAt(call, value llvm.Value, allowReturn bool) escapeResult {
 	called := call.CalledValue()
-	if called.IsAFunction().IsNil() {
-		return escapeResult{escapeAt: call}
-	}
 	kindNoCapture := llvm.AttributeKindID(llvmutil.NoCaptureAttrName())
+	if called.IsAFunction().IsNil() {
+		// The callee is unknown, so only the attributes of the call can help.
+		if called == value {
+			return escapeResult{escapeAt: call}
+		}
+		for i := 0; i < call.OperandsCount()-1; i++ {
+			if call.Operand(i) == value && !llvmutil.IsNoCapture(call.GetCallSiteEnumAttribute(i+1, kindNoCapture)) {
+				return escapeResult{escapeAt: call}
+			}
+		}
+		return escapeResult{}
+	}
 	kindReturned := llvm.AttributeKindID("returned")
 	matched := false
 	var result escapeResult

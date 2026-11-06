@@ -354,13 +354,15 @@ func TestAggregateFunctionABI(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			checkFunctionParamABI(t, mod, "main.readDirectAggregates", false, false)
+			// Only wasm has a large stack, and [600]int32 is too big for its cap.
+			largeStack := target == "wasm"
+			checkFunctionParamABI(t, mod, "main.readDirectAggregate", false, largeStack)
 			checkFunctionParamABI(t, mod, "main.readLimitAggregates", false, false)
 			checkFunctionParamABI(t, mod, "main.readBoundaryAggregates", true, false)
 			checkFunctionParamABI(t, mod, "main.readAggregates", true, false)
 			checkFunctionParamABI(t, mod, "main.readSingleAggregate", false)
 			checkFunctionParamABI(t, mod, "main.readThreeAggregates", true, false, false)
-			checkFunctionParamABI(t, mod, "main.readResultBudget", false, true)
+			checkFunctionParamABI(t, mod, "main.readResultBudget", true, false)
 			checkFunctionParamABI(t, mod, "readAggregateExport", false)
 			if target == "wasm" {
 				if err := ValidateWasmFunctionParameters(mod); err != nil {
