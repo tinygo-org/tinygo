@@ -9,7 +9,6 @@ import (
 	"machine"
 	_ "machine/usb/cdc"
 	"math/bits"
-	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -350,27 +349,6 @@ func (l *spinLock) Lock() {
 func (l *spinLock) Unlock() {
 	l.spinlock().Set(0)
 	arm.Asm("sev")
-}
-
-// schedulerSpinLock keeps interrupts off while held. An interrupt handler on
-// this core that wakes a goroutine would otherwise spin on a lock that the
-// code it interrupted holds.
-type schedulerSpinLock struct {
-	spinLock
-	state [numCPU]interrupt.State
-}
-
-func (l *schedulerSpinLock) Lock() {
-	core := currentCPU()
-	state := interrupt.Disable()
-	l.spinLock.Lock()
-	l.state[core] = state
-}
-
-func (l *schedulerSpinLock) Unlock() {
-	state := l.state[currentCPU()]
-	l.spinLock.Unlock()
-	interrupt.Restore(state)
 }
 
 // Wait until a signal is received, indicating that it can resume from the
