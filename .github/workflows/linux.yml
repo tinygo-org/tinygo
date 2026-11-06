@@ -73,8 +73,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Extract TinyGo version
         id: version
         run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
@@ -177,8 +176,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -222,8 +220,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -246,8 +243,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install apt dependencies
         run: |
           echo "Show cpuinfo; sometimes useful when troubleshooting"
@@ -312,8 +308,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -355,8 +350,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -382,8 +376,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install apt dependencies
         run: |
           sudo apt-get update

@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 2 # HEAD^1 of the merge commit is the dev base
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -45,6 +45,7 @@ jobs:
           # Keep the actions available after checking out the base commit.
           cp -r .github/actions/setup-llvm .github/actions/setup-llvm-base
           cp -r .github/actions/gen-device .github/actions/gen-device-base
+          cp -r .github/actions/submodules .github/actions/submodules-base
           echo "base_sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
           echo "llvm_version=$(cat llvm-version.txt)" >> "$GITHUB_OUTPUT"
 
@@ -64,22 +65,22 @@ jobs:
         with:
           base-sha: ${{ steps.pr.outputs.base_sha }}
       - name: Checkout dev branch
-        id: dev
         env:
           BASE_SHA: ${{ steps.pr.outputs.base_sha }}
-          BASE_CACHE_HIT: ${{ steps.base-cache.outputs.cache-hit }}
+        run: git checkout --force "$BASE_SHA"
+      - uses: ./.github/actions/submodules-base
+        if: steps.base-cache.outputs.cache-hit != 'true'
+      - name: Prepare dev build
+        id: dev
+        if: steps.base-cache.outputs.cache-hit != 'true'
         run: |
-          git checkout --force "$BASE_SHA"
-          if [ "$BASE_CACHE_HIT" != "true" ]; then
-            git submodule update --init
-            rm -rf build
-            git clean -fdX src/device
-            export GOCACHE="$RUNNER_TEMP/go-build-base"
-            export XDG_CACHE_HOME="$RUNNER_TEMP/cache-base"
-            echo "GOCACHE=$GOCACHE" >> "$GITHUB_ENV"
-            echo "XDG_CACHE_HOME=$XDG_CACHE_HOME" >> "$GITHUB_ENV"
-            echo "llvm_version=$(cat llvm-version.txt)" >> "$GITHUB_OUTPUT"
-          fi
+          rm -rf build
+          git clean -fdX src/device
+          export GOCACHE="$RUNNER_TEMP/go-build-base"
+          export XDG_CACHE_HOME="$RUNNER_TEMP/cache-base"
+          echo "GOCACHE=$GOCACHE" >> "$GITHUB_ENV"
+          echo "XDG_CACHE_HOME=$XDG_CACHE_HOME" >> "$GITHUB_ENV"
+          echo "llvm_version=$(cat llvm-version.txt)" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/gen-device-base
         if: steps.base-cache.outputs.cache-hit != 'true'
       - name: Remove LLVM build for the PR branch

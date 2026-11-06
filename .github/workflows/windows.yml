@@ -25,8 +25,7 @@ jobs:
           scoop install ninja binaryen
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Extract TinyGo version
         id: version
         shell: bash
