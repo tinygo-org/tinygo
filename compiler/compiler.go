@@ -11,6 +11,7 @@ import (
 	"math/bits"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -2475,6 +2476,12 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		paramOffset = 1
 	}
 	params := b.getCallArguments(instr.Args, abi.params[paramOffset:])
+	var indirectArgs []llvm.Value
+	for i, arg := range params {
+		if abi.params[paramOffset+i].indirect {
+			indirectArgs = append(indirectArgs, arg)
+		}
+	}
 	if instr.IsInvoke() {
 		params = append([]llvm.Value{invokeReceiver}, params...)
 		params = append(params, invokeTypecode)
@@ -2485,7 +2492,8 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			result := b.createIndirectStorage(abi.resultType, "call.result")
 			params = append([]llvm.Value{result}, params...)
 			params = append(params, context)
-			b.createInvoke(calleeType, callee, params, "", instr)
+			call := b.createInvoke(calleeType, callee, params, "", instr)
+			b.markIndirectArgs(call, append(indirectArgs, result))
 			return result, nil
 		}
 		// This function takes a context parameter.
@@ -2493,7 +2501,23 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		params = append(params, context)
 	}
 
-	return b.createInvoke(calleeType, callee, params, "", instr), nil
+	call := b.createInvoke(calleeType, callee, params, "", instr)
+	b.markIndirectArgs(call, indirectArgs)
+	return call, nil
+}
+
+// markIndirectArgs records on a function value call that it does not capture
+// its indirect aggregates, which can then stay on the stack.
+func (b *builder) markIndirectArgs(call llvm.Value, args []llvm.Value) {
+	if len(args) == 0 || !call.CalledValue().IsAFunction().IsNil() {
+		return
+	}
+	nocapture := b.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0)
+	for i := 0; i < call.OperandsCount()-1; i++ {
+		if slices.Contains(args, call.Operand(i)) {
+			call.AddCallSiteAttribute(i+1, nocapture)
+		}
+	}
 }
 
 // getValue returns the LLVM value of a constant, function value, global, or

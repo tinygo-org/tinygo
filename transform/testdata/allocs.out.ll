@@ -100,6 +100,19 @@ define i32 @testNonEscapingReturnedAggregate() {
   ret i32 %n
 }
 
+define void @testFuncValueNoCapture(ptr %fn) {
+  %stackalloc = alloca [4 x i8], align 4
+  store [4 x i8] zeroinitializer, ptr %stackalloc, align 4
+  call void %fn(ptr nocapture %stackalloc)
+  ret void
+}
+
+define void @testFuncValueCapture(ptr %fn) {
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  call void %fn(ptr %alloc)
+  ret void
+}
+
 define { i32, { ptr, ptr } } @wrapInAggregate(ptr %p) {
   %itf = insertvalue { ptr, ptr } { ptr null, ptr undef }, ptr %p, 1
   %result = insertvalue { i32, { ptr, ptr } } { i32 1, { ptr, ptr } undef }, { ptr, ptr } %itf, 1

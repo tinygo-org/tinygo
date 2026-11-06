@@ -89,6 +89,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 			llvmType: c.dataPtrType,
 			name:     "return",
 			elemSize: c.targetData.TypeAllocSize(retType),
+			flags:    paramIsIndirect,
 		})
 		retType = c.ctx.VoidType()
 	}
@@ -151,12 +152,13 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, paramInfo.elemSize)
 			llvmFn.AddAttributeAtIndex(i+1, dereferenceableOrNull)
 		}
-		if info.noescape && paramInfo.flags&paramIsGoParam != 0 && paramInfo.llvmType.TypeKind() == llvm.PointerTypeKind {
+		if paramInfo.flags&paramIsIndirect != 0 || info.noescape && paramInfo.flags&paramIsGoParam != 0 && paramInfo.llvmType.TypeKind() == llvm.PointerTypeKind {
 			// Parameters to functions with a //go:noescape parameter should get
 			// the nocapture attribute. However, the context parameter should
 			// not.
 			// (It may be safe to add the nocapture parameter to the context
 			// parameter, but I'd like to stay on the safe side here).
+			// Indirect aggregates are copied by the callee if it keeps them.
 			nocapture := c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0)
 			llvmFn.AddAttributeAtIndex(i+1, nocapture)
 		}
