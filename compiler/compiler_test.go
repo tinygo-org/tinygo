@@ -566,7 +566,7 @@ func TestAggregateFunctionABI(t *testing.T) {
 			if target != "wasm" {
 				options.Scheduler = "tasks"
 			}
-			mod, errs := testCompilePackage(t, options, "aggregate-abi.go")
+			mod, errs := testCompilePackageWithConfig(t, options, "aggregate-abi.go", false, true)
 			if len(errs) != 0 {
 				for _, err := range errs {
 					t.Error(err)
@@ -584,13 +584,15 @@ func TestAggregateFunctionABI(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			checkFunctionParamABI(t, mod, "main.readDirectAggregates", false, false)
+			// Only wasm has a large stack, and [600]int32 does not fit in MaxStackAlloc.
+			largeStack := target == "wasm"
+			checkFunctionParamABI(t, mod, "main.readDirectAggregate", false, largeStack)
 			checkFunctionParamABI(t, mod, "main.readLimitAggregates", false, false)
 			checkFunctionParamABI(t, mod, "main.readBoundaryAggregates", true, false)
 			checkFunctionParamABI(t, mod, "main.readAggregates", true, false)
 			checkFunctionParamABI(t, mod, "main.readSingleAggregate", false)
 			checkFunctionParamABI(t, mod, "main.readThreeAggregates", true, false, false)
-			checkFunctionParamABI(t, mod, "main.readResultBudget", false, true)
+			checkFunctionParamABI(t, mod, "main.readResultBudget", true, false)
 			checkFunctionParamABI(t, mod, "readAggregateExport", false)
 			if target == "wasm" {
 				if err := ValidateWasmFunctionParameters(mod); err != nil {
@@ -941,6 +943,12 @@ func testCompilePackage(t *testing.T, options *compileopts.Options, file string)
 }
 
 func testCompilePackageWithDebug(t *testing.T, options *compileopts.Options, file string, debug bool) (llvm.Module, []error) {
+	return testCompilePackageWithConfig(t, options, file, debug, false)
+}
+
+// testCompilePackageWithConfig sets MaxStackAlloc if stackAlloc is true, which
+// changes which aggregates are passed by pointer and moves Allocs to the stack.
+func testCompilePackageWithConfig(t *testing.T, options *compileopts.Options, file string, debug, stackAlloc bool) (llvm.Module, []error) {
 	target, err := compileopts.LoadTarget(options)
 	if err != nil {
 		t.Fatal("failed to load target:", err)
@@ -963,6 +971,9 @@ func testCompilePackageWithDebug(t *testing.T, options *compileopts.Options, fil
 		NeedsStackObjects:  config.NeedsStackObjects(),
 		PanicUnwind:        config.PanicUnwind(),
 		Debug:              debug,
+	}
+	if stackAlloc {
+		compilerConfig.MaxStackAlloc = config.MaxStackAlloc()
 	}
 	machine, err := NewTargetMachine(compilerConfig)
 	if err != nil {

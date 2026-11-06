@@ -158,7 +158,7 @@ unwind.return:                                    ; preds = %deref.throw
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.indirectResult(ptr dereferenceable_or_null(1025) %return, ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.indirectResult(ptr captures(none) dereferenceable_or_null(1025) %return, ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   call void @llvm.memset.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %return, i8 0, i32 1025, i1 false)
   ret void

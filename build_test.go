@@ -174,6 +174,7 @@ func TestBuild(t *testing.T) {
 	t.Parallel()
 
 	tests := []string{
+		"aggregate.go",
 		"aggregatestorage.go",
 		"alias.go",
 		"atomic.go",
