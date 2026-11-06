@@ -767,6 +767,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// Reslicing returns wrong lengths on AVR, also without the len <= cap assume.
 				continue
 
+			case "aggregate.go":
+				// Its 33 byte values and goroutines overflow the small AVR stack.
+				continue
+
 			case "map_bigkey.go":
 				// Compiler generates many large stack temporaries for [256]byte
 				// map keys, overflowing the goroutine stack (384 bytes).
