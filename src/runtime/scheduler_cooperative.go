@@ -225,10 +225,12 @@ func scheduler(returnAtDeadlock bool) {
 			}
 			if sleepQueue == nil && timerQueuePeek() == nil {
 				if returnAtDeadlock {
+					drainIfExited()
 					return
 				}
 				if asyncScheduler {
 					// JavaScript is treated specially, see below.
+					drainIfExited()
 					return
 				}
 				waitForEvents()
@@ -288,8 +290,23 @@ func scheduler(returnAtDeadlock bool) {
 					sleepTicks(0)
 				}
 			}
+			drainIfExited()
 			return
 		}
+	}
+	drainIfExited()
+}
+
+// exitDrained makes the exit cleanup run once, even if the host calls back
+// into a program that has already exited.
+var exitDrained bool
+
+// drainIfExited releases goroutine stacks and runs their finalizers once main
+// has returned, so a stopped program does not keep the values they held.
+func drainIfExited() {
+	if mainExited && !exitDrained {
+		exitDrained = true
+		releaseStacksAtExit()
 	}
 }
 
