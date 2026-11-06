@@ -6,14 +6,5 @@ package os
 func runtime_executable_path() string
 
 func Executable() (string, error) {
-	p := runtime_executable_path()
-	if p != "" && p[0] == '/' {
-		// absolute path
-		return p, nil
-	}
-	cwd, err := Getwd()
-	if err != nil {
-		return "", err
-	}
-	return joinPath(cwd, p), nil
+	return runtime_executable_path(), nil
 }

@@ -95,6 +95,9 @@ func main(argc int32, argv *unsafe.Pointer) int {
 	// The run function has been moved to a separate (non-inlined) function so
 	// that the correct stack pointer is read.
 	stackTop = getCurrentStackPointer()
+
+	platform_argv(main_argc, main_argv)
+
 	runMain()
 
 	// For libc compatibility.
