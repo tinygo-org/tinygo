@@ -13,8 +13,13 @@ import (
 
 func fixCommand(t *testing.T, dir string, args ...string) (int, string) {
 	t.Helper()
+	root, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	cmd := exec.Command(os.Args[0], append([]string{"test-main", "fix"}, args...)...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "TINYGOROOT="+root, "GOWORK=off", "GOFLAGS=")
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		return 0, string(output)
@@ -27,13 +32,11 @@ func fixCommand(t *testing.T, dir string, args ...string) (int, string) {
 }
 
 func TestFixCommand(t *testing.T) {
+	t.Parallel()
 	root, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TINYGOROOT", root)
-	t.Setenv("GOWORK", "off")
-	t.Setenv("GOFLAGS", "")
 	dir := t.TempDir()
 	source := "package probe\n\nvar X interface{}\n"
 	path := filepath.Join(dir, "probe.go")
@@ -78,6 +81,7 @@ func TestFixCommand(t *testing.T) {
 		}
 		cmd := exec.Command(filepath.Join(goenv.Get("GOROOT"), "bin", "go"), "fix", "-any")
 		cmd.Dir = reference
+		cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("go fix: %v\n%s", err, output)
 		}
@@ -93,6 +97,7 @@ func TestFixCommand(t *testing.T) {
 }
 
 func TestFixHelpAndFlags(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		args   []string
 		status int
@@ -115,13 +120,7 @@ func TestFixHelpAndFlags(t *testing.T) {
 }
 
 func TestFixExcludesUnbuildableTargetTests(t *testing.T) {
-	root, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TINYGOROOT", root)
-	t.Setenv("GOWORK", "off")
-	t.Setenv("GOFLAGS", "")
+	t.Parallel()
 	dir := t.TempDir()
 	files := map[string]string{
 		"go.mod":        "module example.com/probe\n\ngo 1.25.0\n",
@@ -145,6 +144,7 @@ func TestFixExcludesUnbuildableTargetTests(t *testing.T) {
 }
 
 func TestFixTinyGoSource(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{
 		{"-diff", "-any", "./src/internal/itoa"},
 		{"-diff", "internal/itoa"},
@@ -162,13 +162,7 @@ func TestFixTinyGoSource(t *testing.T) {
 }
 
 func TestFixTargetSelection(t *testing.T) {
-	root, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("TINYGOROOT", root)
-	t.Setenv("GOWORK", "off")
-	t.Setenv("GOFLAGS", "")
+	t.Parallel()
 	dir := t.TempDir()
 	files := map[string]string{
 		"go.mod":      "module example.com/target\n\ngo 1.25.0\n",
