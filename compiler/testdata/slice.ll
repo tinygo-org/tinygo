@@ -102,6 +102,65 @@ declare i32 @llvm.umin.i32(i32, i32) #3
 declare void @llvm.memmove.p0.p0.i32(ptr nocapture writeonly, ptr nocapture readonly, i32, i1 immarg) #4
 
 ; Function Attrs: nounwind
+define hidden void @main.sliceFrom(ptr %ints.data, i32 %ints.len, i32 %ints.cap, i32 %low, ptr %context) unnamed_addr #1 {
+entry:
+  %slice.lowhigh = icmp ugt i32 %low, %ints.len
+  br i1 %slice.lowhigh, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  ret void
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(ptr undef) #5
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret void
+}
+
+declare void @runtime.slicePanic(ptr) #0
+
+; Function Attrs: nounwind
+define hidden void @main.sliceRange(ptr %ints.data, i32 %ints.len, i32 %ints.cap, i32 %low, i32 %high, ptr %context) unnamed_addr #1 {
+entry:
+  %slice.lowhigh = icmp ugt i32 %low, %high
+  %slice.highmax = icmp ugt i32 %high, %ints.cap
+  %slice.lowmax = or i1 %slice.lowhigh, %slice.highmax
+  br i1 %slice.lowmax, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  ret void
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(ptr undef) #5
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret void
+}
+
+; Function Attrs: nounwind
+define hidden void @main.sliceRangeMax(ptr %ints.data, i32 %ints.len, i32 %ints.cap, i32 %low, i32 %high, i32 %max, ptr %context) unnamed_addr #1 {
+entry:
+  %slice.lowhigh = icmp ugt i32 %low, %high
+  %slice.highmax = icmp ugt i32 %high, %max
+  %slice.lowmax = or i1 %slice.lowhigh, %slice.highmax
+  %slice.maxcap = icmp ugt i32 %max, %ints.cap
+  %slice.lowcap = or i1 %slice.lowmax, %slice.maxcap
+  br i1 %slice.lowcap, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  ret void
+
+slice.throw:                                      ; preds = %entry
+  call void @runtime.slicePanic(ptr undef) #5
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret void
+}
+
+; Function Attrs: nounwind
 define hidden { ptr, i32, i32 } @main.makeByteSlice(i32 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
@@ -123,8 +182,6 @@ slice.throw:                                      ; preds = %entry
 unwind.return:                                    ; preds = %slice.throw
   ret { ptr, i32, i32 } undef
 }
-
-declare void @runtime.slicePanic(ptr) #0
 
 ; Function Attrs: nounwind
 define hidden { ptr, i32, i32 } @main.makeInt16Slice(i32 %len, ptr %context) unnamed_addr #1 {

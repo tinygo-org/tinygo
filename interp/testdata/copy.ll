@@ -13,6 +13,9 @@ target triple = "x86_64--linux"
 
 @volatileSrc = global [2 x i8] c"xy"
 @volatileDst = global [2 x i8] zeroinitializer
+@fillDst = global [4 x i8] c"ABCD"
+@fillEscapedDst = global [4 x i8] c"ABCD"
+@fillVolatileDst = global [4 x i8] c"ABCD"
 
 declare void @use(ptr)
 
@@ -27,6 +30,9 @@ define internal void @main.init() {
   call void @testMoveExternal()
   call void @testMoveEscaped()
   call void @testVolatileCopy()
+  call void @testFill()
+  call void @testFillEscaped()
+  call void @testVolatileFill()
   ret void
 }
 
@@ -66,3 +72,25 @@ define internal void @testVolatileCopy() {
 declare void @llvm.memmove.p0.p0.i64(ptr, ptr, i64, i1)
 
 declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)
+
+define internal void @testFill() {
+  %dst = getelementptr [4 x i8], ptr @fillDst, i64 0, i64 1
+  call void @llvm.memset.p0.i64(ptr %dst, i8 127, i64 2, i1 false)
+  call void @llvm.memset.p0.i64(ptr null, i8 0, i64 0, i1 false)
+  ret void
+}
+
+define internal void @testFillEscaped() {
+  call void @use(ptr @fillEscapedDst)
+  %dst = getelementptr [4 x i8], ptr @fillEscapedDst, i64 0, i64 1
+  call void @llvm.memset.p0.i64(ptr %dst, i8 127, i64 2, i1 false)
+  ret void
+}
+
+define internal void @testVolatileFill() {
+  %dst = getelementptr [4 x i8], ptr @fillVolatileDst, i64 0, i64 1
+  call void @llvm.memset.p0.i64(ptr %dst, i8 127, i64 2, i1 true)
+  ret void
+}
+
+declare void @llvm.memset.p0.i64(ptr, i8, i64, i1)

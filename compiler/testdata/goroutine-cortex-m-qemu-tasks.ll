@@ -15,7 +15,7 @@ entry:
 define hidden void @main.regularFunctionGoroutine(ptr %context) unnamed_addr #0 {
 entry:
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"main.regularFunction$gowrapper" to i32), ptr undef) #11
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.regularFunction$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 %stacksize, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.regularFunction$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 %stacksize, ptr undef) #12
   ret void
 }
 
@@ -25,7 +25,7 @@ declare void @main.regularFunction(i32, ptr) #1
 define linkonce_odr void @"main.regularFunction$gowrapper"(ptr %0) unnamed_addr #2 {
 entry:
   %unpack.int = ptrtoint ptr %0 to i32
-  call void @main.regularFunction(i32 %unpack.int, ptr undef) #11
+  call void @main.regularFunction(i32 %unpack.int, ptr undef) #12
   ret void
 }
 
@@ -37,7 +37,7 @@ declare void @"internal/task.start"(i32, ptr, i32, ptr) #1
 define hidden void @main.inlineFunctionGoroutine(ptr %context) unnamed_addr #0 {
 entry:
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"main.inlineFunctionGoroutine$1$gowrapper" to i32), ptr undef) #11
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.inlineFunctionGoroutine$1$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 %stacksize, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.inlineFunctionGoroutine$1$gowrapper" to i32), ptr nonnull inttoptr (i32 5 to ptr), i32 %stacksize, ptr undef) #12
   ret void
 }
 
@@ -58,18 +58,18 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.closureFunctionGoroutine(ptr %context) unnamed_addr #0 {
 entry:
-  %n = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #11
+  %n = call align 4 dereferenceable(4) ptr @runtime.alloc(i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #12
   store i32 3, ptr %n, align 4
-  %0 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 133 to ptr), ptr undef) #11
+  %0 = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 133 to ptr), ptr undef) #12
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr %n, ptr %1, align 4
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"main.closureFunctionGoroutine$1$gowrapper" to i32), ptr undef) #11
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.closureFunctionGoroutine$1$gowrapper" to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"main.closureFunctionGoroutine$1$gowrapper" to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #12
   %2 = load i32, ptr %n, align 4
-  call void @runtime.printlock(ptr undef) #11
-  call void @runtime.printint32(i32 %2, ptr undef) #11
-  call void @runtime.printunlock(ptr undef) #11
+  call void @runtime.printlock(ptr undef) #12
+  call void @runtime.printint32(i32 %2, ptr undef) #12
+  call void @runtime.printunlock(ptr undef) #12
   ret void
 }
 
@@ -102,14 +102,14 @@ declare void @runtime.printunlock(ptr) #1
 ; Function Attrs: nounwind
 define hidden void @main.funcGoroutine(ptr %fn.context, ptr %fn.funcptr, ptr %context) unnamed_addr #0 {
 entry:
-  %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 391 to ptr), ptr undef) #11
+  %0 = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 391 to ptr), ptr undef) #12
   store i32 5, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr %fn.context, ptr %1, align 4
   %2 = getelementptr inbounds nuw i8, ptr %0, i32 8
   store ptr %fn.funcptr, ptr %2, align 4
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @main.funcGoroutine.gowrapper to i32), ptr undef) #11
-  call void @"internal/task.start"(i32 ptrtoint (ptr @main.funcGoroutine.gowrapper to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @main.funcGoroutine.gowrapper to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #12
   ret void
 }
 
@@ -121,7 +121,7 @@ entry:
   %3 = load ptr, ptr %2, align 4
   %4 = getelementptr inbounds nuw i8, ptr %0, i32 8
   %5 = load ptr, ptr %4, align 4
-  call void %5(i32 %1, ptr %3) #11
+  call void %5(i32 %1, ptr %3) #12
   ret void
 }
 
@@ -148,7 +148,7 @@ declare void @llvm.memmove.p0.p0.i32(ptr nocapture writeonly, ptr nocapture read
 ; Function Attrs: nounwind
 define hidden void @main.closeBuiltinGoroutine(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #0 {
 entry:
-  call void @runtime.chanClose(ptr %ch, ptr undef) #11
+  call void @runtime.chanClose(ptr %ch, ptr undef) #12
   ret void
 }
 
@@ -157,7 +157,7 @@ declare void @runtime.chanClose(ptr dereferenceable_or_null(40), ptr) #1
 ; Function Attrs: nounwind
 define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #0 {
 entry:
-  %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 713 to ptr), ptr undef) #11
+  %0 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 713 to ptr), ptr undef) #12
   store ptr %itf.value, ptr %0, align 4
   %1 = getelementptr inbounds nuw i8, ptr %0, i32 4
   store ptr @"main$string", ptr %1, align 4
@@ -166,7 +166,7 @@ entry:
   %3 = getelementptr inbounds nuw i8, ptr %0, i32 12
   store ptr %itf.typecode, ptr %3, align 4
   %stacksize = call i32 @"internal/task.getGoroutineStackSize"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr undef) #11
-  call void @"internal/task.start"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #11
+  call void @"internal/task.start"(i32 ptrtoint (ptr @"interface:{Print:func:{basic:string}{}}.Print$invoke$gowrapper" to i32), ptr nonnull %0, i32 %stacksize, ptr undef) #12
   ret void
 }
 
@@ -182,7 +182,7 @@ entry:
   %5 = load i32, ptr %4, align 4
   %6 = getelementptr inbounds nuw i8, ptr %0, i32 12
   %7 = load ptr, ptr %6, align 4
-  call void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr %1, ptr %3, i32 %5, ptr %7, ptr undef) #11
+  call void @"interface:{Print:func:{basic:string}{}}.Print$invoke"(ptr %1, ptr %3, i32 %5, ptr %7, ptr undef) #12
   ret void
 }
 
@@ -197,4 +197,5 @@ attributes #7 = { nocallback nofree nosync nounwind speculatable willreturn memo
 attributes #8 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #9 = { "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-invoke"="reflect/methods.Print:func:{basic:string}{}" "tinygo-methods"="reflect/methods.Print:func:{basic:string}{}" }
 attributes #10 = { nounwind "target-features"="+armv7-m,+hwdiv,+soft-float,+thumb-mode,-aes,-bf16,-cdecp0,-cdecp1,-cdecp2,-cdecp3,-cdecp4,-cdecp5,-cdecp6,-cdecp7,-crc,-crypto,-d32,-dotprod,-dsp,-fp-armv8,-fp-armv8d16,-fp-armv8d16sp,-fp-armv8sp,-fp16,-fp16fml,-fp64,-fpregs,-fullfp16,-hwdiv-arm,-i8mm,-lob,-mve,-mve.fp,-neon,-pacbti,-ras,-sb,-sha2,-vfp2,-vfp2sp,-vfp3,-vfp3d16,-vfp3d16sp,-vfp3sp,-vfp4,-vfp4d16,-vfp4d16sp,-vfp4sp" "tinygo-gowrapper"="interface:{Print:func:{basic:string}{}}.Print$invoke" }
-attributes #11 = { nounwind }
+attributes #11 = { nomerge nounwind }
+attributes #12 = { nounwind }

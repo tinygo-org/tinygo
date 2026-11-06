@@ -77,3 +77,6 @@ func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	t.state.initialize(fn, args, stackSize)
 	scheduleTask(t)
 }
+
+// unlinkStack does nothing here, since only asyncify keeps a list of stacks.
+func unlinkStack(t *Task) {}

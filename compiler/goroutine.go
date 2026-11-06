@@ -14,6 +14,8 @@ import (
 
 // createGo emits code to start a new goroutine.
 func (b *builder) createGo(instr *ssa.Go) {
+	b.markRuntimeFeatureUse(&instr.Call)
+
 	if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		// We cheat. None of the builtins do any long or blocking operation, so
 		// we might as well run these builtins right away without the program
@@ -121,6 +123,9 @@ func (b *builder) createGo(instr *ssa.Go) {
 		// linking).
 		stackSizeFnType, stackSizeFn := b.getFunction(b.program.ImportedPackage("internal/task").Members["getGoroutineStackSize"].(*ssa.Function))
 		stackSize = b.createCall(stackSizeFnType, stackSizeFn, []llvm.Value{callee, llvm.Undef(b.dataPtrType)}, "stacksize")
+		// CreateStackSizeLoads needs a constant callee, so stop SimplifyCFG
+		// from merging calls into one that takes a select or phi.
+		stackSize.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("nomerge"), 0))
 	} else {
 		// The stack size is fixed at compile time. By emitting it here as a
 		// constant, it can be optimized.

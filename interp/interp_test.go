@@ -2,6 +2,7 @@ package interp
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -11,21 +12,15 @@ import (
 )
 
 func TestInterp(t *testing.T) {
-	for _, name := range []string{
-		"basic",
-		"phi",
-		"consteval",
-		"intrinsics",
-		"copy",
-		"interface",
-		"revert",
-		"store",
-		"alloc",
-		"slicedata",
-		"aggregate",
-		"fastrand",
-		"ptrtoint",
-	} {
+	matches, err := filepath.Glob("testdata/*.out.ll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) == 0 {
+		t.Fatal("no test cases found in testdata")
+	}
+	for _, match := range matches {
+		name := strings.TrimSuffix(filepath.Base(match), ".out.ll")
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			runTest(t, "testdata/"+name)
@@ -37,7 +32,6 @@ func runTest(t *testing.T, pathPrefix string) {
 	// Read the input IR.
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
-	ensureTestCacheFreshness(t, pathPrefix+".ll")
 	buf, err := llvm.NewMemoryBufferFromFile(pathPrefix + ".ll")
 	if err != nil {
 		t.Fatalf("could not read file %s: %v", pathPrefix+".ll", err)
@@ -127,12 +121,40 @@ func fuzzyEqualIR(s1, s2 string) bool {
 // around).
 var capturesNoneAttrRe = regexp.MustCompile(`\b(readonly|readnone|writeonly|nonnull)\s+captures\(none\)`)
 
+// nosyncAttrRe matches the standalone 'nosync' function attribute, which
+// LLVM 23 started inferring for llvm.memcpy/llvm.memmove declarations.
+var nosyncAttrRe = regexp.MustCompile(`\bnosync\s+`)
+
+// guidAttachmentRe matches the inline '!guid !N' metadata LLVM 23 attaches
+// to every GlobalValue once a pass builds a module summary. A global's
+// attachment is comma separated, a function's is space separated.
+var guidAttachmentRe = regexp.MustCompile(`,?\s*!guid\s+!\d+`)
+
+// guidMetadataRe matches the standalone metadata node backing a '!guid'
+// attachment.
+var guidMetadataRe = regexp.MustCompile(`(?m)^!\d+ = !\{i64 -?\d+\}\n?`)
+
+// targetMemAttrRe matches the target_mem entries of a memory() attribute.
+// Older LLVM numbered them target_mem0/target_mem1; LLVM 23 emits one
+// unnumbered target_mem instead.
+var targetMemAttrRe = regexp.MustCompile(`(,\s*target_mem\d*: none)+`)
+
+// nofreeNocaptureRe matches LLVM 23's added 'nofree' on a parameter that's
+// already 'nocapture'.
+var nofreeNocaptureRe = regexp.MustCompile(`\bnofree\s+nocapture\b`)
+
 // normalizeCapturesAttr rewrites LLVM 21+'s 'captures(none)' attribute back
-// to the pre-LLVM21 'nocapture' spelling and position, so golden IR files
-// written against LLVM <21 keep matching.
+// to the pre-LLVM21 'nocapture' spelling, and drops LLVM 23's added
+// 'nosync' attribute and '!guid' metadata, so golden files keep matching
+// across versions.
 func normalizeCapturesAttr(s string) string {
 	s = capturesNoneAttrRe.ReplaceAllString(s, "nocapture $1")
 	s = strings.ReplaceAll(s, "captures(none)", "nocapture")
+	s = nosyncAttrRe.ReplaceAllString(s, "")
+	s = guidAttachmentRe.ReplaceAllString(s, "")
+	s = guidMetadataRe.ReplaceAllString(s, "")
+	s = targetMemAttrRe.ReplaceAllString(s, "")
+	s = nofreeNocaptureRe.ReplaceAllString(s, "nocapture")
 	return s
 }
 
@@ -142,7 +164,7 @@ func normalizeCapturesAttr(s string) string {
 func filterIrrelevantIRLines(lines []string) []string {
 	var out []string
 	for _, line := range lines {
-		line = strings.TrimSpace(line) // drop '\r' on Windows
+		line = strings.TrimSpace(line)
 		if line == "" || line[0] == ';' {
 			continue
 		}
@@ -154,11 +176,110 @@ func filterIrrelevantIRLines(lines []string) []string {
 	return out
 }
 
-// ensureTestCacheFreshness registers path as an input of the running test.
-// see https://github.com/tinygo-org/tinygo/issues/5780.
-func ensureTestCacheFreshness(t *testing.T, path string) {
-	t.Helper()
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("could not stat test fixture %s: %v", path, err)
+// TestInterpLargeArray checks that a large global written by an init function
+// is serialized in linear time. It used to take about half an hour.
+func TestInterpLargeArray(t *testing.T) {
+	t.Parallel()
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	buf, err := llvm.NewMemoryBufferFromFile("testdata/largearray.ll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+
+	start := time.Now()
+	if err := Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 30*time.Second {
+		t.Errorf("interp took %v", d)
+	}
+
+	init := mod.NamedGlobal("lut").Initializer()
+	plane := init.Operand(0)
+	if !plane.IsConstantString() {
+		t.Fatal("first plane is not a byte array")
+	}
+	got := plane.ConstGetAsString()
+	if len(got) != 0x110000 || got[0] != 1 || got[767] != 2 || strings.Trim(got[1:767]+got[768:], "\x00") != "" {
+		t.Error("first plane holds the wrong bytes")
+	}
+	if !init.Operand(1).IsNull() {
+		t.Error("second plane is not zero")
+	}
+}
+
+// TestInterpPartialPointer checks that a global which holds part of a pointer
+// is reported as an error instead of being written out as zero.
+func TestInterpPartialPointer(t *testing.T) {
+	t.Parallel()
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	buf, err := llvm.NewMemoryBufferFromFile("testdata/partialpointer.ll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+
+	if err := Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false); err != errUnsupportedInst {
+		t.Errorf("expected %v, got %v", errUnsupportedInst, err)
+	}
+}
+
+// TestInterpRollbackReason checks that the error that makes interp roll back
+// names its cause and the function being interpreted.
+func TestInterpRollbackReason(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "rollback.ll")
+	ir := `target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64--linux"
+
+define i64 @fill(i64 %n) {
+entry:
+  br label %loop
+loop:
+  %i = phi i64 [ 0, %entry ], [ %next, %loop ]
+  %next = add i64 %i, 1
+  %done = icmp eq i64 %next, %n
+  br i1 %done, label %exit, label %loop
+exit:
+  ret i64 %next
+}
+`
+	if err := os.WriteFile(path, []byte(ir), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	buf, err := llvm.NewMemoryBufferFromFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+
+	r := newRunner(mod, time.Minute, 10, false)
+	defer r.dispose()
+	_, _, runErr := r.run(r.getFunction(mod.NamedFunction("fill")), []value{literalValue{uint64(100)}}, nil, nil, 0)
+	if runErr == nil {
+		t.Fatal("expected the loop limit to stop interpretation")
+	}
+	if !isRecoverableError(runErr.Err) {
+		t.Errorf("expected a recoverable error, got %v", runErr.Err)
+	}
+	if want := "interp: loop ran too many iterations (in fill)"; runErr.Err.Error() != want {
+		t.Errorf("expected %q, got %q", want, runErr.Err.Error())
 	}
 }

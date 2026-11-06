@@ -17,6 +17,12 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
+// Go minor version range supported by TinyGo.
+const (
+	MinimumGoMinorVersion = 26
+	MaximumGoMinorVersion = 27
+)
+
 // Library versions. Whenever an existing library is changed, this number should
 // be added/increased so that existing caches are invalidated.
 //
@@ -28,6 +34,7 @@ var libVersions = map[string]int{
 	"bdwgc":        4,
 	"picolibc":     2,
 	"wasmbuiltins": 1,
+	"compiler-rt":  1,
 }
 
 // Config keeps all configuration affecting the build in a single struct.
@@ -227,16 +234,21 @@ func (c *Config) PanicStrategy() string {
 }
 
 // PanicUnwind returns the mechanism used to unwind panics and Goexit. Asyncify
-// provides unwinding whenever that scheduler is selected. Explicit
-// return-based unwinding must be requested by the command line or target
-// specification.
+// provides unwinding whenever that scheduler is selected, unless unwinding is
+// turned off with "none". Explicit return-based unwinding must be requested by
+// the command line or target specification.
 func (c *Config) PanicUnwind() string {
-	if c.Scheduler() == "asyncify" {
-		return "asyncify"
-	}
 	requested := c.Target.PanicUnwind
 	if c.Options.PanicUnwind != "" {
 		requested = c.Options.PanicUnwind
+	}
+	if requested == "none" {
+		// Without unwinding, recover never stops a panic and Goexit cannot run
+		// deferred calls, but calls need no code to propagate an unwind.
+		return "none"
+	}
+	if c.Scheduler() == "asyncify" {
+		return "asyncify"
 	}
 	if requested == "explicit" {
 		return "explicit"
@@ -358,7 +370,7 @@ func (c *Config) LibraryPath(name string) string {
 		options += "+malloc"
 	}
 	if c.TrimPath() {
-		options += "+trimpath-v1"
+		options += "+trimpath-v2"
 	}
 
 	// No precompiled library found. Determine the path name that will be used
@@ -414,13 +426,13 @@ func (c *Config) CFlags(libclang bool) []string {
 	}
 	if c.TrimPath() {
 		cflags = append(cflags,
-			"-ffile-prefix-map="+goenv.Get("TINYGOROOT")+"="+c.CSourcePath("github.com/tinygo-org/tinygo"),
-			"-ffile-prefix-map="+goenv.Get("GOCACHE")+"="+c.CSourcePath("tinygo-cache"),
+			FilePrefixMap(goenv.Get("TINYGOROOT"), c.CSourcePath("github.com/tinygo-org/tinygo")),
+			FilePrefixMap(goenv.Get("GOCACHE"), c.CSourcePath("tinygo-cache")),
 			"-fdebug-compilation-dir=.",
 			"-gno-record-command-line",
 		)
 		if resourceDir != "" {
-			cflags = append(cflags, "-ffile-prefix-map="+resourceDir+"="+c.CSourcePath("clang"))
+			cflags = append(cflags, FilePrefixMap(resourceDir, c.CSourcePath("clang")))
 		}
 	}
 	// Always emit debug information. It is optionally stripped at link time.
@@ -471,6 +483,12 @@ func (c *Config) LibcCFlags() []string {
 			"-isystem", filepath.Join(picolibcDir, "stdio"),
 			"-D__PICOLIBC_ERRNO_FUNCTION=__errno_location",
 		}
+	case "glibc":
+		// Use the system headers that belong to the installed glibc. The
+		// gnu triple makes clang look for a GCC install, and cgo treats the
+		// warning it prints with more than one GCC version as an error.
+		// Older clang does not know this warning, so silence that too.
+		return []string{"-Wno-unknown-warning-option", "-Wno-gcc-install-dir-libstdcxx"}
 	case "musl":
 		root := goenv.Get("TINYGOROOT")
 		path := c.LibraryPath("musl")
@@ -622,6 +640,38 @@ func (c *Config) BinaryFormat(ext string) string {
 		// Use the ELF format for unrecognized file formats.
 		return "elf"
 	}
+}
+
+var firmwareOutputExtensions = []string{
+	".elf",
+	".bin",
+	".gba",
+	".nro",
+	".img",
+	".hex",
+	".uf2",
+	".zip",
+}
+
+// ValidateOutputExtension checks whether a firmware output extension is supported by the target.
+func (c *Config) ValidateOutputExtension(ext string) error {
+	supported := c.Target.FirmwareExts
+	if len(supported) == 0 || !slices.Contains(firmwareOutputExtensions, ext) || slices.Contains(supported, ext) {
+		return nil
+	}
+
+	supportedList := ""
+	switch len(supported) {
+	case 1:
+		supportedList = supported[0]
+	case 2:
+		supportedList = supported[0] + " or " + supported[1]
+	default:
+		supportedList = strings.Join(supported[:len(supported)-1], ", ") + ", or " + supported[len(supported)-1]
+	}
+
+	targetName := strings.TrimSuffix(filepath.Base(c.Options.Target), ".json")
+	return fmt.Errorf("target %s does not support firmware output extension %s; use %s", targetName, ext, supportedList)
 }
 
 // Programmer returns the flash method and OpenOCD interface name given a

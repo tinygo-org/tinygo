@@ -1082,8 +1082,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	if intf, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
 		if intf.Empty() {
 			// intf is the empty interface => no methods
-			// This type assertion always succeeds, so we can just set commaOk to true.
-			commaOk = llvm.ConstInt(b.ctx.Int1Type(), 1, true)
+			commaOk = b.CreateIsNotNull(actualTypeNum, "typeassert.ok")
 		} else {
 			// Type assert on an interface type with methods.
 			// Create a call to a declared-but-not-defined function that will
@@ -1092,18 +1091,29 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 			commaOk = b.createInterfaceTypeAssert(intf, actualTypeNum)
 		}
 	} else {
-		name, _ := b.getTypeCodeName(expr.AssertedType)
-		globalName := "reflect/types.typeid:" + name
-		assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
-		if assertedTypeCodeGlobal.IsNil() {
-			// Create a new typecode global.
-			assertedTypeCodeGlobal = llvm.AddGlobal(b.mod, b.ctx.Int8Type(), globalName)
-			assertedTypeCodeGlobal.SetGlobalConstant(true)
+		baseType := types.Unalias(expr.AssertedType)
+		for {
+			ptr, ok := baseType.(*types.Pointer)
+			if !ok {
+				break
+			}
+			baseType = types.Unalias(ptr.Elem())
 		}
-		// Type assert on concrete type.
-		// Call runtime.typeAssert, which will be lowered to a simple icmp or
-		// const false in the interface lowering pass.
-		commaOk = b.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
+		// getTypeCode emits pointer descriptors with basic, named, and interface types.
+		switch baseType.(type) {
+		case *types.Basic, *types.Named, *types.Interface:
+			name, _ := b.getTypeCodeName(expr.AssertedType)
+			globalName := "reflect/types.typeid:" + name
+			assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
+			if assertedTypeCodeGlobal.IsNil() {
+				assertedTypeCodeGlobal = llvm.AddGlobal(b.mod, b.ctx.Int8Type(), globalName)
+				assertedTypeCodeGlobal.SetGlobalConstant(true)
+			}
+			commaOk = b.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
+		default:
+			assertedTypeCode := b.getTypeCode(expr.AssertedType)
+			commaOk = b.CreateICmp(llvm.IntEQ, actualTypeNum, assertedTypeCode, "typecode")
+		}
 	}
 
 	// Add 2 new basic blocks (that should get optimized away): one for the

@@ -148,7 +148,7 @@ var pllsysFB, pllsysPD1, pllsysPD2 uint32
 // Note that the entire init function is computed at compile time
 // by interp.
 func init() {
-	fb, _, pd1, pd2, err := pllSearch{LockRefDiv: 1}.CalcDivs(xoscFreq*MHz, cpuFreq, MHz)
+	fb, _, pd1, pd2, err := calcPLLDivs(pllSearch{LockRefDiv: 1}, xoscFreq*MHz, cpuFreq, MHz)
 	if err != nil {
 		panic(err)
 	}

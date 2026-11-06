@@ -40,6 +40,45 @@ func TestTinyIndirectPointers(t *testing.T) {
 	}
 }
 
+func TestSetPointer(t *testing.T) {
+	type pointer unsafe.Pointer
+	var p pointer
+	value := ValueOf(&p).Elem()
+	object := new(int)
+	*object = 17
+	value.SetPointer(unsafe.Pointer(object))
+	runtime.GC()
+	if got := *(*int)(unsafe.Pointer(p)); got != 17 {
+		t.Fatalf("SetPointer stored %d, want 17", got)
+	}
+	value.SetPointer(nil)
+	if p != nil {
+		t.Fatal("SetPointer(nil) did not clear the pointer")
+	}
+	fields := struct{ pointer unsafe.Pointer }{unsafe.Pointer(object)}
+	for _, tc := range []struct {
+		name string
+		fn   func()
+	}{
+		{"Unaddressable", func() { ValueOf(p).SetPointer(nil) }},
+		{"WrongKind", func() { ValueOf(new(*int)).Elem().SetPointer(nil) }},
+		{"ZeroValue", func() { Value{}.SetPointer(nil) }},
+		{"UnexportedField", func() { ValueOf(&fields).Elem().Field(0).SetPointer(nil) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatal("SetPointer did not panic")
+				}
+			}()
+			tc.fn()
+		})
+	}
+	if fields.pointer != unsafe.Pointer(object) {
+		t.Fatal("SetPointer changed an unexported field")
+	}
+}
+
 func TestTinyInvalidValueString(t *testing.T) {
 	if got := (Value{}).String(); got != "<invalid Value>" {
 		t.Errorf("Value{}.String() = %q, want %q", got, "<invalid Value>")
@@ -503,6 +542,26 @@ func TestTinySetCap(t *testing.T) {
 		}{slice}).Elem().Field(0)
 		value.SetCap(5)
 	})
+}
+
+func TestTinySetLen(t *testing.T) {
+	slice := []int{1, 2, 3}
+	value := ValueOf(&slice).Elem()
+	value.SetLen(1)
+	if len(slice) != 1 || cap(slice) != 3 || slice[0] != 1 {
+		t.Fatalf("SetLen changed the wrong slice data: %v, cap %d", slice, cap(slice))
+	}
+	value.SetLen(3)
+	shouldPanic("", func() { value.SetLen(-1) })
+	shouldPanic("", func() { value.SetLen(4) })
+	shouldPanic("", func() { ValueOf(slice).SetLen(1) })
+	shouldPanic("", func() { ValueOf(new(int)).Elem().SetLen(1) })
+
+	fields := struct{ slice []int }{slice}
+	shouldPanic("", func() { ValueOf(&fields).Elem().Field(0).SetLen(1) })
+	if len(fields.slice) != 3 {
+		t.Fatal("SetLen changed an unexported field")
+	}
 }
 
 func TestTinyBytes(t *testing.T) {
@@ -1040,6 +1099,9 @@ func TestTypeAssert(t *testing.T) {
 	testTypeAssert(t, int(123), uint(0), false)
 
 	testTypeAssert[any](t, 1, 1, true)
+	testTypeAssert[any](t, any(nil), nil, false)
+	testTypeAssert[any](t, error(nil), nil, false)
+	testTypeAssert[any](t, (*int)(nil), (*int)(nil), true)
 	testTypeAssert[fmt.Stringer](t, 1, nil, false)
 
 	vv := testTypeWithMethod{"test"}
@@ -1129,11 +1191,6 @@ func (v testTypeWithMethod) String() string { return v.val }
 func (v testTypeWithMethod) M()             {}
 
 func TestTypeAssertPanic(t *testing.T) {
-	if runtime.GOARCH == "wasm" {
-		t.Log("recover not supported")
-		return
-	}
-
 	t.Run("zero val", func(t *testing.T) {
 		defer func() { recover() }()
 		TypeAssert[int](Value{})
@@ -1224,18 +1281,6 @@ func TestTinyMakeChan(t *testing.T) {
 		}
 	})
 
-	// The three cases below rely on recovering from a panic, which wasm
-	// cannot do yet without exceptions. Log and return rather than Skip:
-	// t.Skip needs the same machinery it is standing in for.
-	//
-	// Checked on GOARCH rather than GOOS because the limitation is wasm's, not
-	// any one platform's: this covers wasip1, wasip2 and js/wasm alike.
-	// TODO: drop this once tinygo-org/tinygo#5550 lands.
-	if runtime.GOARCH == "wasm" {
-		t.Log("not running the panic cases: panic/recover on wasm needs #5550")
-		return
-	}
-
 	t.Run("not a channel", func(t *testing.T) {
 		defer func() { recover() }()
 		MakeChan(TypeOf(0), 0)
@@ -1292,6 +1337,37 @@ func TestTinyDeepEqualSliceVisits(t *testing.T) {
 	y.Second = right[:2]
 	if !DeepEqual(x, y) {
 		t.Error("DeepEqual rejected equal slices")
+	}
+}
+
+func TestTinyDeepEqualLargeCycle(t *testing.T) {
+	type node struct {
+		Value int
+		Next  *node
+	}
+	makeCycle := func(backEdge int) []*node {
+		nodes := make([]*node, 32)
+		for i := range nodes {
+			nodes[i] = &node{Value: i}
+		}
+		for i := range nodes {
+			nodes[i].Next = nodes[(i+1)%len(nodes)]
+		}
+		nodes[len(nodes)-1].Next = nodes[backEdge]
+		return nodes
+	}
+	for _, backEdge := range []int{0, 16} {
+		left, right := makeCycle(backEdge), makeCycle(backEdge)
+		if !DeepEqual(left[0], right[0]) {
+			t.Fatalf("equal large cycles compare unequal with back edge %d", backEdge)
+		}
+		right[24].Value++
+		if DeepEqual(left[0], right[0]) {
+			t.Errorf("unequal large cycles compare equal with back edge %d", backEdge)
+		}
+		if DeepEqual(right[0], left[0]) {
+			t.Errorf("reverse comparison of unequal large cycles compares equal with back edge %d", backEdge)
+		}
 	}
 }
 

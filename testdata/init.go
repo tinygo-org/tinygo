@@ -1,5 +1,10 @@
 package main
 
+import (
+	"sync"
+	"sync/atomic"
+)
+
 func init() {
 	println("init")
 }
@@ -15,11 +20,33 @@ func main() {
 	println("v7:", cap(v7), string(v7))
 	println("v8:", v8)
 	println("v9:", len(v9), v9[0], v9[1], v9[2])
+	println("deferred init:", deferredInitValue)
+	initOnce.Do(func() { initOnceCalls++ })
+	println("once init:", onceInitValue, initOnceCalls)
 
 	println(uint8SliceSrc[0])
 	println(uint8SliceDst[0])
 	println(intSliceSrc[0])
 	println(intSliceDst[0])
+	println("loaded:", loaded)
+	println("shifted:", string(shifted[:]), shiftDone)
+}
+
+var deferredInitValue = deferredInit()
+var initOnce sync.Once
+var initOnceCalls int
+var onceInitValue = onceInit()
+
+func deferredInit() (result int) {
+	result = 20
+	defer func() { result++ }()
+	defer func() { result *= 2 }()
+	return
+}
+
+func onceInit() int {
+	initOnce.Do(func() { initOnceCalls++ })
+	return initOnceCalls
 }
 
 type (
@@ -112,6 +139,35 @@ func sliceSlice(s []int, start, end int) []int {
 
 type outside struct{}
 
+var (
+	loadPair struct{ a, b int }
+	loaded   int
+)
+
+func loadA() int { return loadPair.a }
+
+// The value loaded by loadA must not change when init stores to loadPair.a.
+func init() {
+	loadPair.a = 1
+	x := loadA()
+	loadPair.a = 2
+	loaded = x
+}
+
+// The copy runs in interp, then the function is reverted and run again at
+// runtime. The reverted copy must not change the initial value of shifted.
+var (
+	shifted   = [4]byte{'A', 'B', 'C', 'D'}
+	shiftDone = shift()
+)
+
+func shift() int {
+	defer func() {}()
+	copy(shifted[1:], shifted[:3])
+	println("shift")
+	return 1
+}
+
 func init() {
 	_, _ = any(0).(interface{ DoesNotExist() })
 	_, _ = any("").(interface{ DoesNotExist() })
@@ -119,4 +175,27 @@ func init() {
 
 	type inside struct{}
 	_, _ = any(inside{}).(interface{ DoesNotExist() })
+}
+
+// escapeLeak runs at runtime, so the atomic store also runs at runtime and lets
+// runtime code read escapeValue. escapeObserve must see the value from before the next store.
+var (
+	escapeValue   = 1
+	escapePointer atomic.Pointer[int]
+)
+
+func init() {
+	escapeLeak(&escapePointer)
+	escapePointer.Store(&escapeValue)
+	escapeObserve()
+	escapeValue = 2
+}
+
+func escapeLeak(p *atomic.Pointer[int]) {
+	defer func() {}()
+	println("escape loaded:", p.Load() == nil)
+}
+
+func escapeObserve() {
+	println("escape:", *escapePointer.Load())
 }

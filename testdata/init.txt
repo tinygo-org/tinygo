@@ -1,4 +1,7 @@
+shift
 init
+escape loaded: true
+escape: 1
 main
 v1: 3
 v2: 2 5
@@ -9,7 +12,11 @@ v6: false
 v7: 3 foo
 v8: barba
 v9: 3 2 3 4
+deferred init: 41
+once init: 1 1
 3
 3
 5
 5
+loaded: 1
+shifted: AABC 1

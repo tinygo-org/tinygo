@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"os"
 	"testing"
 
 	"tinygo.org/x/go-llvm"
@@ -10,7 +9,6 @@ import (
 func TestBlockGlobalAllocPromotionUses(t *testing.T) {
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
-	ensureTestCacheFreshness(t, "testdata/optimizer-alloc-uses.ll")
 	buf, err := llvm.NewMemoryBufferFromFile("testdata/optimizer-alloc-uses.ll")
 	if err != nil {
 		t.Fatal(err)
@@ -34,11 +32,59 @@ func TestBlockGlobalAllocPromotionUses(t *testing.T) {
 	}
 }
 
-// ensureTestCacheFreshness registers path as an input of the running test.
-// see https://github.com/tinygo-org/tinygo/issues/5780.
-func ensureTestCacheFreshness(t *testing.T, path string) {
-	t.Helper()
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("could not stat test fixture %s: %v", path, err)
+func TestPruneUnusedRuntimeStartup(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		path        string
+		wantEnabled bool
+	}{
+		{
+			name: "unused",
+			path: "testdata/runtime-startup-unused.ll",
+		},
+		{
+			name:        "used",
+			path:        "testdata/runtime-startup-used.ll",
+			wantEnabled: true,
+		},
+		{
+			name:        "referenced",
+			path:        "testdata/runtime-startup-referenced.ll",
+			wantEnabled: true,
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			buf, err := llvm.NewMemoryBufferFromFile(tc.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mod, err := ctx.ParseIR(buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer mod.Dispose()
+
+			if err := PrepareRuntimeStartup(mod); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"runtime.gorootEnvEnabled", "runtime.godebugEnvEnabled"} {
+				if !mod.NamedFunction(name).IsNil() {
+					t.Errorf("%s was not removed", name)
+				}
+			}
+			for _, name := range []string{"test.goroot", "test.godebug"} {
+				ret := mod.NamedFunction(name).EntryBasicBlock().LastInstruction()
+				got := ret.Operand(0).ZExtValue() != 0
+				if got != tc.wantEnabled {
+					t.Errorf("%s returned %v, want %v", name, got, tc.wantEnabled)
+				}
+			}
+		})
 	}
 }

@@ -117,6 +117,13 @@ func signalInterrupt() {
 	interruptPending.Set(1)
 }
 
+var timerAlarmInterrupt interrupt.Interrupt
+
+// timerAlarmHandler clears the timer interrupt at the peripheral level.
+func timerAlarmHandler(interrupt.Interrupt) {
+	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+}
+
 // initTimerInterrupt routes the TIMG0 timer 0 alarm interrupt to a CPU
 // interrupt and registers a handler that signals timerWakeup.
 func initTimerInterrupt() {
@@ -127,31 +134,12 @@ func initTimerInterrupt() {
 	esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
 
 	// Register the interrupt handler (compile-time wiring).
-	interrupt.New(timerAlarmCPUInterrupt, func(interrupt.Interrupt) {
-		// Clear the timer interrupt at the peripheral level.
-		esp.TIMG0.INT_CLR_TIMERS.Set(1)
-	})
+	timerAlarmInterrupt = interrupt.New(timerAlarmCPUInterrupt, timerAlarmHandler)
+	timerAlarmInterrupt.Enable()
 
-	// Manually enable the CPU interrupt with correct ordering:
-	// 1) clear any stale pending bit first
-	// 2) set edge-triggered
-	// 3) set priority above threshold
-	// 4) enable the interrupt last
-	mie := riscv.DisableInterrupts()
-
-	esp.INTERRUPT_CORE0.CPU_INT_CLEAR.SetBits(1 << timerAlarmCPUInterrupt)
-	esp.INTERRUPT_CORE0.CPU_INT_CLEAR.ClearBits(1 << timerAlarmCPUInterrupt)
-
-	esp.INTERRUPT_CORE0.CPU_INT_TYPE.SetBits(1 << timerAlarmCPUInterrupt)
-
+	// Raise the priority above the default that Enable sets for peripherals.
 	priReg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI_0), timerAlarmCPUInterrupt*4))
 	priReg.Set(10)
-
-	riscv.Asm("fence")
-
-	esp.INTERRUPT_CORE0.CPU_INT_ENABLE.SetBits(1 << timerAlarmCPUInterrupt)
-
-	riscv.EnableInterrupts(mie)
 }
 
 // sleepTicks spins until the given number of ticks have elapsed, using the

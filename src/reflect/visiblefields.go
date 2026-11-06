@@ -1,11 +1,12 @@
 package reflect
 
-import (
-	"internal/reflectlite"
-	"unsafe"
-)
+import "internal/reflectlite"
 
 func VisibleFields(t Type) []StructField {
 	fields := reflectlite.VisibleFields(toRawType(t))
-	return *(*[]StructField)(unsafe.Pointer(&fields))
+	result := make([]StructField, len(fields))
+	for i, field := range fields {
+		result[i] = toStructField(field)
+	}
+	return result
 }

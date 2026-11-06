@@ -17,6 +17,17 @@ const xtalClock = 40_000000       // 40MHz
 const apbClock = 80_000000        // 80MHz
 const cryptoPWMClock = 160_000000 // 160MHz
 
+// CurrentCore returns the core number the call was made from.
+func CurrentCore() int {
+	return int(currentCPU())
+}
+
+//go:linkname currentCPU runtime.currentCPU
+func currentCPU() uint32
+
+// NumCores returns number of cores available on the device.
+func NumCores() int { return 2 }
+
 // GetCPUFrequency returns the current CPU frequency of the chip.
 func GetCPUFrequency() (uint32, error) {
 	switch esp.SYSTEM.GetSYSCLK_CONF_SOC_CLK_SEL() {

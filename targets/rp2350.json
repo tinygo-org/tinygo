@@ -8,6 +8,7 @@
     "serial": "usb",
     "msd-volume-name": ["RP2350"],
     "msd-firmware-name": "firmware.uf2",
+    "firmware-extensions": [".elf", ".hex", ".uf2"],
     "binary-format": "uf2",
     "uf2-family-id": "0xe48bff59","comment":"See page 393 of RP2350 datasheet: RP2350 Arm Secure image (i.e. one intended to be booted directly by the bootrom)",
     "extra-files": [

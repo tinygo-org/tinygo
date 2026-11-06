@@ -1,0 +1,4 @@
+{
+  "inherits": ["ra4m1"],
+  "build-tags": ["arduino_uno_r4"]
+}

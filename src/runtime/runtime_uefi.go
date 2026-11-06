@@ -41,7 +41,7 @@ func ticksToNanoseconds(t timeUnit) int64 {
 	if frequency == 0 {
 		return int64(t)
 	}
-	return int64(t) * 1000000000 / frequency
+	return int64(t)/frequency*1000000000 + int64(t)%frequency*1000000000/frequency
 }
 
 func sleepTicks(d timeUnit) {

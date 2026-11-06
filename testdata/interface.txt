@@ -1,3 +1,7 @@
+empty assertion: nil any true false true
+empty assertion: nil error true false true
+empty assertion: typed nil false true false
+empty assertion: concrete false true false
 thing: foo
 Thing.Print: foo
 is int: 5

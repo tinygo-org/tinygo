@@ -13,6 +13,10 @@ type Queue struct {
 // Push a task onto the queue.
 func (q *Queue) Push(t *Task) {
 	mask := lockAtomics()
+	if asserts && t == nil {
+		unlockAtomics(mask)
+		runtimeFatal("runtime: pushing a nil task to a queue")
+	}
 	if asserts && t.Next != nil {
 		unlockAtomics(mask)
 		runtimeFatal("runtime: pushing a task to a queue with a non-nil Next pointer")
@@ -76,6 +80,10 @@ type Stack struct {
 // Push a task onto the stack.
 func (s *Stack) Push(t *Task) {
 	mask := lockAtomics()
+	if asserts && t == nil {
+		unlockAtomics(mask)
+		runtimeFatal("runtime: pushing a nil task to a stack")
+	}
 	if asserts && t.Next != nil {
 		unlockAtomics(mask)
 		runtimeFatal("runtime: pushing a task to a stack with a non-nil Next pointer")

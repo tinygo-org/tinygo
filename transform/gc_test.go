@@ -36,7 +36,6 @@ func TestGCStackSlotCounts(t *testing.T) {
 
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
-	ensureTestCacheFreshness(t, "testdata/gc-slotcounts.ll")
 	buf, err := llvm.NewMemoryBufferFromFile("testdata/gc-slotcounts.ll")
 	if err != nil {
 		t.Fatalf("could not read file: %v", err)

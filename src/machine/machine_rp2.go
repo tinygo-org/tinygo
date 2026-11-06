@@ -105,7 +105,8 @@ type dmaChannel struct {
 	WRITE_ADDR  volatile.Register32
 	TRANS_COUNT volatile.Register32
 	CTRL_TRIG   volatile.Register32
-	_           [12]volatile.Register32 // aliases
+	AL1_CTRL    volatile.Register32
+	_           [11]volatile.Register32 // aliases
 }
 
 // Static assignment of DMA channels to peripherals.

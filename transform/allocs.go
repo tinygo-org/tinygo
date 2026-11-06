@@ -223,6 +223,11 @@ func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Va
 					return result
 				}
 			}
+		case llvm.Select:
+			// A select escapes if the selected value escapes.
+			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+				return result
+			}
 		case llvm.Load:
 			// Load does not escape.
 		case llvm.Store:
@@ -281,6 +286,10 @@ func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[l
 		}
 		if called.IsDeclaration() {
 			return escapeResult{escapeAt: call}
+		}
+		if _, recursive := visiting[called.Param(i)]; recursive && !typeHasPointers(call.Type()) {
+			// valueEscapesAtImpl is already checking this parameter's other uses.
+			continue
 		}
 		if !result.merge(valueEscapesAtImpl(called.Param(i), true, visiting)) {
 			return result

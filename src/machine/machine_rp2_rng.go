@@ -13,20 +13,27 @@ const numberOfCycles = 32
 
 // GetRNG returns 32 bits of semi-random data based on ring oscillator.
 //
+// It is safe to call from multiple goroutines.
+//
 // Unlike some other implementations of GetRNG, these random numbers are not
 // cryptographically secure and must not be used for cryptographic operations
 // (nonces, etc).
 func GetRNG() (uint32, error) {
+	core := CurrentCore()
+	randomByte := randomBytes[core]
 	var val uint32
 	for i := 0; i < 4; i++ {
-		val = (val << 8) | uint32(roscRandByte())
+		randomByte = roscRandByte(randomByte)
+		val = (val << 8) | uint32(randomByte)
 	}
+	randomBytes[core] = randomByte
 	return val, nil
 }
 
-var randomByte uint8
+// randomBytes holds the LFSR state for each core.
+var randomBytes [2]uint8
 
-func roscRandByte() uint8 {
+func roscRandByte(randomByte uint8) uint8 {
 	var poly uint8
 	for i := 0; i < numberOfCycles; i++ {
 		if randomByte&0x80 != 0 {

@@ -359,7 +359,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 		return nil, err
 	}
 	defer f.Close()
-	decoder := xml.NewDecoder(f)
+	decoder := xml.NewDecoder(bufio.NewReaderSize(f, 1<<20))
 	device := &SVDFile{}
 	err = decoder.Decode(device)
 	if err != nil {
@@ -649,6 +649,9 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		// names like "CNT[31]". Replace invalid characters with "_" when
 		// needed.
 		fieldNameTpl := cleanDimableName(fieldEl.Name)
+		if strings.EqualFold(fieldNameTpl, "reserved") {
+			continue
+		}
 		if !unicode.IsUpper(rune(fieldNameTpl[0])) && !unicode.IsDigit(rune(fieldNameTpl[0])) {
 			fieldNameTpl = strings.ReplaceAll(strings.ToUpper(fieldNameTpl), "%S", "%s")
 		}
@@ -685,12 +688,9 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 		}
 
 		da := decodeDimArray(fieldEl.Dim, fieldEl.DimIndex, fieldEl.DimIncrement, "field", fieldNameTpl)
-		da.rangeElems(func(ia int, _ uint32) bool {
-			if da != nil {
-				lsb += da.incr
-				msb += da.incr
-			}
+		da.rangeElems(func(ia int, offset uint32) bool {
 			fieldName := da.replace(fieldNameTpl, ia)
+			lsb, msb := lsb+offset, msb+offset
 
 			// The enumerated values can be the same as another field, so to avoid
 			// duplication SVD files can simply refer to another set of enumerated
@@ -780,8 +780,8 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 
 					var enumValue uint64
 					var err error
-					if strings.HasPrefix(enumEl.Value, "0b") {
-						val := strings.TrimPrefix(enumEl.Value, "0b")
+					if after, ok := strings.CutPrefix(enumEl.Value, "0b"); ok {
+						val := after
 						enumValue, err = strconv.ParseUint(val, 2, 64)
 					} else {
 						enumValue, err = strconv.ParseUint(enumEl.Value, 0, 64)
@@ -802,6 +802,7 @@ func parseBitfields(groupName, regName string, fieldEls []*SVDField, bitfieldPre
 				}
 				enumDefault.resolve()
 			}
+
 			return true
 		})
 	}
@@ -1174,12 +1175,15 @@ func parseRegister(groupName string, regEl *SVDRegister, baseAddress uint64, bit
 		// we need to generate a separate register for each "element"
 		var results []*PeripheralField
 		shortName := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(name, "_%s", ""), "%s", ""))
+		if regEl.DimIndex != nil && da.idx[0] != "0" && da.idx[0] != "1" {
+			shortName = strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(name, "_%s", ""), "%s", da.idx[0]))
+		}
 		for i := range da.idx {
 			regAddress := reg.address() + (uint64(i) * uint64(da.incr))
 			results = append(results, &PeripheralField{
 				Name:        strings.ToUpper(da.replace(name, i)),
 				Address:     regAddress,
-				Description: reg.description(),
+				Description: da.replace(reg.description(), i),
 				Array:       -1,
 				ElementSize: reg.size(),
 				ShortName:   shortName,
@@ -1221,7 +1225,7 @@ func writeGo(outdir string, device *Device, interruptSystem string) error {
 		return err
 	}
 	defer outf.Close()
-	w := bufio.NewWriter(outf)
+	w := bufio.NewWriterSize(outf, 1<<20)
 
 	maxInterruptValue := 0
 	for _, intr := range device.Interrupts {
@@ -1329,7 +1333,7 @@ var (
 	pkgName := filepath.Base(strings.TrimRight(outdir, "/"))
 	tweakDevice(device, pkgName)
 
-	err = t.Execute(w, map[string]interface{}{
+	err = t.Execute(w, map[string]any{
 		"device":            device,
 		"pkgName":           pkgName,
 		"interruptMax":      maxInterruptValue,

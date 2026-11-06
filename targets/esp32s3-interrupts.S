@@ -317,6 +317,7 @@ _handle_level1:
     //  24: a6  28: a7  32: a8  36: a9  40: a10 44: a11
     //  48: a12 52: a13 56: a14 60: a15
     //  64: SAR 68: EPC1  72: PS  76: WINDOWBASE  80: WINDOWSTART
+    //  84: SCOMPARE1
     //
     // 128, not the 84 the layout needs: the low 16 bytes are the interruptee's
     // windowed-ABI base save area, as in ESP-IDF's XT_STK_FRMSZ (+0x20).
@@ -349,6 +350,11 @@ _handle_level1:
     s32i    a2, a1, 64
     rsr     a2, EPC1
     s32i    a2, a1, 68
+    // A handler that uses atomics changes SCOMPARE1, which breaks an
+    // interrupted S32C1I. ESP-IDF saves it in xthal_save_extra_nw, see
+    // xchal_ncp_store in components/xtensa/esp32s3/include/xtensa/config/tie-asm.h.
+    rsr     a2, SCOMPARE1
+    s32i    a2, a1, 84
 
     // Clear PS.EXCM (bit 4) so window overflow/underflow exceptions work
     // during the Go call. Set PS.INTLEVEL=1 to prevent re-entry of
@@ -401,6 +407,31 @@ _handle_level1:
     // After retw, WindowBase is restored.  a0..a3 are preserved because
     // they are outside the callee's register window.
 
+    // Our a1 is the caller's a5/a9/a13, so a deep handler spilled the caller's
+    // a0..a3 below our frame. Move them below the interruptee SP, where the
+    // underflow reads them. ESP-IDF spills on entry, see _xt_context_save.
+    l32i    a2, a1, 80          // WINDOWSTART on entry
+    slli    a3, a2, 16
+    or      a2, a2, a3
+    rsr     a3, WINDOWBASE
+    addi    a3, a3, 13
+    ssr     a3
+    srl     a2, a2
+    extui   a2, a2, 0, 3        // panes WINDOWBASE-3 .. WINDOWBASE-1
+    beqz    a2, 1f
+    l32i    a3, a1, 4           // interruptee SP
+    addi    a4, a1, -16
+    addi    a3, a3, -16
+    l32i    a5, a4, 0
+    s32i    a5, a3, 0
+    l32i    a5, a4, 4
+    s32i    a5, a3, 4
+    l32i    a5, a4, 8
+    s32i    a5, a3, 8
+    l32i    a5, a4, 12
+    s32i    a5, a3, 12
+1:
+
     // --- restore context ---
 
     // Restore PS (restores EXCM=1).
@@ -413,6 +444,8 @@ _handle_level1:
     wsr     a2, SAR
     l32i    a2, a1, 68
     wsr     a2, EPC1
+    l32i    a2, a1, 84
+    wsr     a2, SCOMPARE1
 
     // Restore general registers a15..a2.
     l32i    a15, a1, 60

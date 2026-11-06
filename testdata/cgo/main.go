@@ -8,7 +8,13 @@ int fortytwo(void);
 #include "test.h"
 int mul(int, int);
 #include <string.h>
+#cgo CPPFLAGS: -DSHARED_CONSTANT=23
 #cgo CFLAGS: -DSOME_CONSTANT=17
+#cgo CXXFLAGS: -std=c++17 -DCXX_CONSTANT=19
+int cxxConstant(void);
+#if defined(CXX_CONSTANT) || !defined(SHARED_CONSTANT)
+#error incorrect C flags
+#endif
 #define someDefine -5 + 2 * 7
 bool someBool;
 */
@@ -25,6 +31,9 @@ import (
 )
 
 func main() {
+	if C.cxxConstant() != 42 {
+		panic("incorrect C++ flags")
+	}
 	println("fortytwo:", C.fortytwo())
 	println("add:", C.add(C.int(3), 5))
 	var x C.myint = 3

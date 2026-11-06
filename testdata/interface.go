@@ -2,11 +2,13 @@ package main
 
 import (
 	"time"
+	"unsafe"
 
 	"github.com/tinygo-org/tinygo/testdata/interfacepkg"
 )
 
 func main() {
+	testEmptyInterfaceAssertions()
 	thing := &Thing{"foo"}
 	println("thing:", thing.String())
 	thing.Print()
@@ -103,6 +105,8 @@ func main() {
 		{false, named2(), named3()},
 		{true, namedptr1(), namedptr1()},
 		{false, namedptr1(), namedptr2()},
+		{true, *(*blankStruct)(unsafe.Pointer(&[2]int{1, 2})), *(*blankStruct)(unsafe.Pointer(&[2]int{1, 3}))},
+		{false, *(*blankStruct)(unsafe.Pointer(&[2]int{1, 2})), *(*blankStruct)(unsafe.Pointer(&[2]int{2, 2}))},
 	}
 	for i, tc := range interfaceEqualTests {
 		if (tc.lhs == tc.rhs) != tc.equal {
@@ -125,6 +129,29 @@ func main() {
 	emptyintfcrash()
 
 	testUnexportedFieldIdentity()
+}
+
+func testEmptyInterfaceAssertions() {
+	var nilError error
+	var nilPointer *int
+	for _, test := range []struct {
+		name  string
+		value any
+	}{
+		{"nil any", nil},
+		{"nil error", nilError},
+		{"typed nil", nilPointer},
+		{"concrete", 42},
+	} {
+		value, ok := test.value.(any)
+		println("empty assertion:", test.name, value == nil, ok, emptyAssertionPanics(test.value))
+	}
+}
+
+func emptyAssertionPanics(value any) (panicked bool) {
+	defer func() { panicked = recover() != nil }()
+	_ = value.(any)
+	return
 }
 
 func testUnexportedFieldIdentity() {
@@ -226,6 +253,11 @@ func blockDynamic(blocker DynamicBlocker) {
 
 func blockStatic(blocker StaticBlocker) {
 	blocker.Sleep()
+}
+
+type blankStruct struct {
+	a int
+	_ int
 }
 
 type Thing struct {

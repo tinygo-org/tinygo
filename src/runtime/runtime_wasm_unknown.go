@@ -29,6 +29,9 @@ func ticks() timeUnit {
 	return timeUnit(0)
 }
 
+// There is no C stdio to flush.
+func flushStdio() {}
+
 func mainReturnExit() {
 	// Don't exit explicitly here. We can't (there is no environment with an
 	// exit call) but also it's not needed. We can just let _start and main.main

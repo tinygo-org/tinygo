@@ -22,11 +22,6 @@ const (
 	SPI_DEFAULT_FREQUENCY = 80e6 // 80MHz
 )
 
-const (
-	// IO MUX function number for SPI direct connection
-	SPI_IOMUX_FUNC = 4
-)
-
 // ESP32-S3 GPIO Matrix signal indices for SPI - CORRECTED from ESP-IDF gpio_sig_map.h
 const (
 	// SPI2 (FSPI) signals - Hardware SPI2 - CORRECT VALUES from ESP-IDF
@@ -114,47 +109,28 @@ func (spi *SPI) Configure(config SPIConfig) error {
 		return ErrInvalidSPIBus
 	}
 
-	// Check if we can use IO MUX direct connection for better performance
-	if isDefaultSPIPins(spi.busID, config) {
-		// Use IO MUX direct connection - better signal quality and performance
-		// Configure pins using IO MUX direct connection (SPI function)
-		if config.SCK != NoPin {
-			config.SCK.configure(PinConfig{Mode: PinOutput}, SPI_IOMUX_FUNC)
-		}
-		if config.SDO != NoPin {
-			config.SDO.configure(PinConfig{Mode: PinOutput}, SPI_IOMUX_FUNC)
-		}
-		if config.SDI != NoPin {
-			config.SDI.configure(PinConfig{Mode: PinInput}, SPI_IOMUX_FUNC)
-		}
-		if config.CS != NoPin {
-			config.CS.configure(PinConfig{Mode: PinOutput}, SPI_IOMUX_FUNC)
-		}
-	} else {
-		// Use GPIO Matrix routing - more flexible but slightly slower
-		// Configure SDI (MISO) pin
-		if config.SDI != NoPin {
-			config.SDI.Configure(PinConfig{Mode: PinInput})
-			inFunc(misoInIdx).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDI))
-		}
+	// Route every pin through the GPIO matrix, which works for any pin.
+	if config.SDI != NoPin {
+		config.SDI.Configure(PinConfig{Mode: PinInput})
+		inFunc(misoInIdx).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDI))
+	}
 
-		// Configure SDO (MOSI) pin
-		if config.SDO != NoPin {
-			config.SDO.Configure(PinConfig{Mode: PinOutput})
-			config.SDO.outFunc().Set(mosiOutIdx)
-		}
+	// Configure SDO (MOSI) pin
+	if config.SDO != NoPin {
+		config.SDO.Configure(PinConfig{Mode: PinOutput})
+		config.SDO.outFunc().Set(mosiOutIdx)
+	}
 
-		// Configure SCK (Clock) pin
-		if config.SCK != NoPin {
-			config.SCK.Configure(PinConfig{Mode: PinOutput})
-			config.SCK.outFunc().Set(sckOutIdx)
-		}
+	// Configure SCK (Clock) pin
+	if config.SCK != NoPin {
+		config.SCK.Configure(PinConfig{Mode: PinOutput})
+		config.SCK.outFunc().Set(sckOutIdx)
+	}
 
-		// Configure CS (Chip Select) pin
-		if config.CS != NoPin {
-			config.CS.Configure(PinConfig{Mode: PinOutput})
-			config.CS.outFunc().Set(csOutIdx)
-		}
+	// Configure CS (Chip Select) pin
+	if config.CS != NoPin {
+		config.CS.Configure(PinConfig{Mode: PinOutput})
+		config.CS.outFunc().Set(csOutIdx)
 	}
 
 	// Enable peripheral clock and reset
@@ -348,23 +324,4 @@ func (spi *SPI) Tx(w, r []byte) error {
 	}
 
 	return nil
-}
-
-// isDefaultSPIPins checks if the given pins match the default SPI pin configuration
-// that supports IO MUX direct connection for better performance
-func isDefaultSPIPins(busID uint8, config SPIConfig) bool {
-	switch busID {
-	case 2: // SPI2 (FSPI)
-		return config.SCK == SPI1_SCK_PIN &&
-			config.SDO == SPI1_MOSI_PIN &&
-			config.SDI == SPI1_MISO_PIN &&
-			(config.CS == SPI1_CS_PIN || config.CS == NoPin)
-	case 3: // SPI3 (HSPI)
-		return config.SCK == SPI2_SCK_PIN &&
-			config.SDO == SPI2_MOSI_PIN &&
-			config.SDI == SPI2_MISO_PIN &&
-			(config.CS == SPI2_CS_PIN || config.CS == NoPin)
-	default:
-		return false
-	}
 }

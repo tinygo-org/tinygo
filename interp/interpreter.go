@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/bits"
 	"os"
 	"slices"
 	"strconv"
@@ -19,9 +20,11 @@ import (
 // the init function to runtime.
 const DefaultMaxInterpBlockEntries = 1000
 
-func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent string) (value, memoryView, *Error) {
+func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames []value, depth int) (value, memoryView, *Error) {
 	mem := memoryView{r: r, parent: parentMem}
-	locals := make([]value, len(fn.locals))
+	frames = slices.Grow(frames, len(fn.locals))[:len(fn.locals)] // make room for this call's slots; a reallocation copies nothing
+	locals, frames := frames, frames[len(fn.locals):]             // take this call's slots from the head, keep the free space after them for children
+	clear(locals)                                                 // these slots may hold values from an earlier sibling
 	r.callsExecuted++
 
 	// Parameters are considered a kind of local values.
@@ -35,7 +38,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 
 	// Track how many times each basic block has been entered, to detect
 	// loops that are too expensive to evaluate at compile time.
-	var blockCounts map[int]int
+	blockCounts := make([]uint32, len(fn.blocks))
 
 	// Start with the first basic block and the first instruction.
 	// Branch instructions may modify both bb and instIndex when branching.
@@ -51,12 +54,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// Check whether this block has been entered too many times,
 			// which indicates an expensive loop that should be deferred
 			// to runtime.
-			if blockCounts == nil {
-				blockCounts = make(map[int]int)
-			}
 			blockCounts[currentBB]++
-			if r.maxLoopIterations > 0 && blockCounts[currentBB] > r.maxLoopIterations {
-				return nil, mem, r.errorAt(bb.instructions[0], errLoopTooLong)
+			if r.maxLoopIterations > 0 && int(blockCounts[currentBB]) > r.maxLoopIterations {
+				err := &recoverableError{msg: "interp: loop ran too many iterations", fn: fn.name}
+				return nil, mem, r.errorAt(bb.instructions[0], err)
 			}
 
 			if len(mem.instructions) != startRTInsts {
@@ -65,7 +66,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					// Avoid doing this, as it can result in a large amount of extra machine code.
 					// This currently uses the branch from the last block, as there is no available information to give a better location.
 					lastBBInsts := fn.blocks[lastBB].instructions
-					return nil, mem, r.errorAt(lastBBInsts[len(lastBBInsts)-1], errLoopUnrolled)
+					err := &recoverableError{msg: "interp: loop unrolled", fn: fn.name}
+					return nil, mem, r.errorAt(lastBBInsts[len(lastBBInsts)-1], err)
 				}
 
 				// Flag the last block as having run stuff at runtime.
@@ -107,7 +109,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					}
 				}
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"phi", inst.operands, "->", result)
+					r.debugf(depth, "phi %v -> %v", inst.operands, result)
 				}
 				if result == nil {
 					panic("could not find PHI input")
@@ -121,6 +123,25 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 		}
 
 		inst := bb.instructions[instIndex]
+		// compiler/defer.go emits these checkpoints for panic recovery.
+		// A fully evaluated call cannot panic or need a runtime defer frame.
+		if !fn.deferFrame.IsNil() && inst.opcode == llvm.Call {
+			if inst.llvmInst == fn.deferStack {
+				locals[inst.localIndex] = literalValue{uint64(0)}
+				continue
+			}
+			called := inst.llvmInst.CalledValue()
+			if inst.llvmInst.OperandsCount() >= 2 && inst.llvmInst.Operand(0) == fn.deferFrame {
+				name := called.Name()
+				if name == "runtime.setupDeferFrame" || name == "runtime.destroyDeferFrame" {
+					continue
+				}
+				if attr := inst.llvmInst.GetCallSiteEnumAttribute(-1, llvm.AttributeKindID("returns_twice")); !attr.IsNil() {
+					locals[inst.localIndex] = makeLiteralInt(0, inst.llvmInst.Type().IntTypeWidth())
+					continue
+				}
+			}
+		}
 		operands = operands[:0]
 		isRuntimeInst := false
 		if inst.opcode != llvm.PHI {
@@ -156,33 +177,13 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 		}
 		if isRuntimeInst {
-			err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+			err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 			if err != nil {
 				return nil, mem, err
 			}
 			continue
 		}
-		switch inst.opcode {
-		case llvm.Ret:
-			if time.Since(r.start) > r.timeout {
-				// Running for more than the allowed timeout; This shouldn't happen, but it does.
-				// See github.com/tinygo-org/tinygo/issues/2124
-				return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than %s, timing out (executed calls: %d)", r.timeout, r.callsExecuted))
-			}
-
-			if len(operands) != 0 {
-				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"ret", operands[0])
-				}
-				// Return instruction has a value to return.
-				return operands[0], mem, nil
-			}
-			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"ret")
-			}
-			// Return instruction doesn't return anything, it's just 'ret void'.
-			return nil, mem, nil
-		case llvm.Br:
+		if inst.branch {
 			switch len(operands) {
 			case 1:
 				// Unconditional branch: [nextBB]
@@ -191,12 +192,16 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				bb = fn.blocks[currentBB]
 				instIndex = -1 // start at 0 the next cycle
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"br", operands, "->", currentBB)
+					r.debugf(depth, "br %v -> %v", operands, currentBB)
 				}
 			case 3:
 				// Conditional branch: [cond, thenBB, elseBB]
+				cond, err := operands[0].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
 				lastBB = currentBB
-				switch operands[0].Uint(r) {
+				switch cond {
 				case 1: // true -> thenBB
 					currentBB = int(operands[1].(literalValue).value.(uint32))
 				case 0: // false -> elseBB
@@ -205,21 +210,54 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					panic("bool should be 0 or 1")
 				}
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"br", operands, "->", currentBB)
+					r.debugf(depth, "br %v -> %v", operands, currentBB)
 				}
 				bb = fn.blocks[currentBB]
 				instIndex = -1 // start at 0 the next cycle
 			default:
 				panic("unknown operands length")
 			}
+			continue
+		}
+		switch inst.opcode {
+		case llvm.Ret:
+			if !fn.deferFrame.IsNil() && len(mem.instructions) != 0 {
+				err := &recoverableError{msg: "interp: cannot partially evaluate a function with defer", fn: fn.name}
+				return nil, mem, r.errorAt(inst, err)
+			}
+			if time.Since(r.start) > r.timeout {
+				// Running for more than the allowed timeout; This shouldn't happen, but it does.
+				// See github.com/tinygo-org/tinygo/issues/2124
+				return nil, mem, r.errorAt(fn.blocks[0].instructions[0], fmt.Errorf("interp: running for more than %s, timing out (executed calls: %d)", r.timeout, r.callsExecuted))
+			}
+
+			if len(operands) != 0 {
+				if r.debug {
+					r.debugf(depth, "ret %v", operands[0])
+				}
+				// Return instruction has a value to return.
+				return operands[0], mem, nil
+			}
+			if r.debug {
+				r.debugf(depth, "ret")
+			}
+			// Return instruction doesn't return anything, it's just 'ret void'.
+			return nil, mem, nil
 		case llvm.Switch:
 			// Switch statement: [value, defaultLabel, case0, label0, case1, label1, ...]
-			value := operands[0].Uint(r)
-			targetLabel := operands[1].Uint(r) // default label
+			value, err := operands[0].Uint(r)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
+			targetLabel := operands[1].(literalValue).value.(uint32) // default label
 			// Do a lazy switch by iterating over all cases.
 			for i := 2; i < len(operands); i += 2 {
-				if value == operands[i].Uint(r) {
-					targetLabel = operands[i+1].Uint(r)
+				caseValue, err := operands[i].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				if value == caseValue {
+					targetLabel = operands[i+1].(literalValue).value.(uint32)
 					break
 				}
 			}
@@ -228,13 +266,17 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			bb = fn.blocks[currentBB]
 			instIndex = -1 // start at 0 the next cycle
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"switch", operands, "->", currentBB)
+				r.debugf(depth, "switch %v -> %v", operands, currentBB)
 			}
 		case llvm.Select:
 			// Select is much like a ternary operator: it picks a result from
 			// the second and third operand based on the boolean first operand.
+			cond, err := operands[0].Uint(r)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
 			var result value
-			switch operands[0].Uint(r) {
+			switch cond {
 			case 1:
 				result = operands[1]
 			case 0:
@@ -244,7 +286,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			locals[inst.localIndex] = result
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"select", operands, "->", result)
+				r.debugf(depth, "select %v -> %v", operands, result)
 			}
 		case llvm.Call:
 			// A call instruction can either be a regular call or a runtime intrinsic.
@@ -254,6 +296,53 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			callFn := r.getFunction(fnPtr.llvmValue(&mem))
 			switch {
+			case callFn.name == "sync/atomic.SwapInt32" || callFn.name == "sync/atomic.SwapInt64" ||
+				callFn.name == "sync/atomic.SwapUint32" || callFn.name == "sync/atomic.SwapUint64" ||
+				callFn.name == "sync/atomic.SwapUintptr" || callFn.name == "sync/atomic.SwapPointer" ||
+				callFn.name == "sync/atomic.CompareAndSwapInt32" || callFn.name == "sync/atomic.CompareAndSwapInt64" ||
+				callFn.name == "sync/atomic.CompareAndSwapUint32" || callFn.name == "sync/atomic.CompareAndSwapUint64" ||
+				callFn.name == "sync/atomic.CompareAndSwapUintptr" || callFn.name == "sync/atomic.CompareAndSwapPointer":
+				ptr, err := operands[1].asPointer(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				if mem.hasExternalLoadOrStore(ptr) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				old := mem.load(ptr, operands[2].len(r))
+				if old == nil {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				newValue := operands[2]
+				compare := strings.HasPrefix(callFn.name, "sync/atomic.CompareAndSwap")
+				if compare {
+					equal, err := r.interpretICmp(old, operands[2], llvm.IntEQ)
+					if err != nil {
+						return nil, mem, r.errorAt(inst, err)
+					}
+					if !equal {
+						locals[inst.localIndex] = literalValue{uint8(0)}
+						continue
+					}
+					newValue = operands[3]
+				}
+				if !mem.store(newValue, ptr) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				if compare {
+					locals[inst.localIndex] = literalValue{uint8(1)}
+				} else {
+					locals[inst.localIndex] = old
+				}
 			case callFn.name == "runtime.trackPointer":
 				// Allocas and such are created as globals, so don't need a
 				// runtime.trackPointer.
@@ -261,16 +350,17 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// which case this call won't even get to this point but will
 				// already be emitted in initAll.
 				continue
-			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" || callFn.name == "runtime.hashmapGet" || callFn.name == "runtime.hashmapInterfaceHash" ||
+			case callFn.name == "runtime._recover":
+				// Panicking calls stay at runtime, so recover returns nil here.
+				// https://go.dev/ref/spec#Handling_panics
+				locals[inst.localIndex] = r.getValue(llvm.ConstNull(inst.llvmInst.Type()))
+			case strings.HasPrefix(callFn.name, "runtime.print") || callFn.name == "runtime._panic" ||
 				callFn.name == "os.runtime_args" || callFn.name == "internal/task.start" || callFn.name == "internal/task.Current" ||
 				callFn.name == "time.startTimer" || callFn.name == "time.stopTimer" || callFn.name == "time.resetTimer":
 				// These functions should be run at runtime. Specifically:
 				//   * Print and panic functions are best emitted directly without
 				//     interpreting them, otherwise we get a ton of putchar (etc.)
 				//     calls.
-				//   * runtime.hashmapGet tries to access the map value directly.
-				//     This is not possible as the map value is treated as a special
-				//     kind of object in this package.
 				//   * os.runtime_args reads globals that are initialized outside
 				//     the view of the interp package so it always needs to be run
 				//     at runtime.
@@ -278,13 +368,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				//     which is modified elsewhere.
 				//   * Timer functions access runtime internal state which may
 				//     not be initialized.
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
 			case callFn.name == "internal/task.Pause":
 				// Task scheduling isn't possible at compile time.
-				return nil, mem, r.errorAt(inst, errUnsupportedRuntimeInst)
+				err := &recoverableError{msg: "interp: goroutine would block", fn: fn.name}
+				return nil, mem, r.errorAt(inst, err)
 			case callFn.name == "runtime.fastrand" || callFn.name == "runtime.fastrand64":
 				// Use a local sequence instead of the global RNG state. The
 				// state is replaced by initRand before initAll runs anyway.
@@ -299,7 +390,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				}
 				locals[inst.localIndex] = makeLiteralInt(result, bits)
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+callFn.name, "->", result)
+					r.debugf(depth, "%s -> %v", callFn.name, result)
 				}
 			case callFn.name == "runtime.nanotime" && r.pkgName == "time":
 				// The time package contains a call to runtime.nanotime.
@@ -321,7 +412,10 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// by creating a global variable.
 
 				// Get the requested memory size to be allocated.
-				size := operands[1].Uint(r)
+				size, err := operands[1].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
 
 				// Get the object layout, if it is available.
 				llvmLayoutType := r.getLLVMTypeFromLayout(operands[2])
@@ -348,28 +442,98 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// that stores to it copy it, etc).
 				ptr := newPointerValue(r, index, 0)
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"runtime.alloc:", size, "->", ptr)
+					r.debugf(depth, "runtime.alloc: %v -> %v", size, ptr)
 				}
 				locals[inst.localIndex] = ptr
-			case strings.HasPrefix(callFn.name, "llvm.umin."):
-				locals[inst.localIndex] = makeLiteralInt(min(operands[1].Uint(r), operands[2].Uint(r)), inst.llvmInst.Type().IntTypeWidth())
-			case strings.HasPrefix(callFn.name, "llvm.smin."):
-				locals[inst.localIndex] = makeLiteralInt(uint64(min(operands[1].Int(r), operands[2].Int(r))), inst.llvmInst.Type().IntTypeWidth())
-			case strings.HasPrefix(callFn.name, "llvm.umax."):
-				locals[inst.localIndex] = makeLiteralInt(max(operands[1].Uint(r), operands[2].Uint(r)), inst.llvmInst.Type().IntTypeWidth())
-			case strings.HasPrefix(callFn.name, "llvm.smax."):
-				locals[inst.localIndex] = makeLiteralInt(uint64(max(operands[1].Int(r), operands[2].Int(r))), inst.llvmInst.Type().IntTypeWidth())
-			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
-				// Copy a block of memory from one pointer to another.
-				if operands[4].Uint(r) != 0 {
-					// This is a volatile copy/move.
-					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+			case strings.HasPrefix(callFn.name, "llvm.ctlz.i"):
+				width := inst.llvmInst.Type().IntTypeWidth()
+				x, isZeroPoison, err := uintOperands(r, operands[1], operands[2])
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				// A zero input is poison when the flag is set.
+				// https://llvm.org/docs/LangRef.html#llvm-ctlz-intrinsic
+				if (width != 8 && width != 16 && width != 32 && width != 64) || (x == 0 && isZeroPoison != 0) {
+					err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 					if err != nil {
 						return nil, mem, err
 					}
 					continue
 				}
-				nBytes := operands[3].Uint(r)
+				count := width - bits.Len64(x)
+				locals[inst.localIndex] = makeLiteralInt(uint64(count), width)
+			case strings.HasPrefix(callFn.name, "llvm.umin."), strings.HasPrefix(callFn.name, "llvm.umax."):
+				lhs, rhs, err := uintOperands(r, operands[1], operands[2])
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				result := min(lhs, rhs)
+				if strings.HasPrefix(callFn.name, "llvm.umax.") {
+					result = max(lhs, rhs)
+				}
+				locals[inst.localIndex] = makeLiteralInt(result, inst.llvmInst.Type().IntTypeWidth())
+			case strings.HasPrefix(callFn.name, "llvm.smin."), strings.HasPrefix(callFn.name, "llvm.smax."):
+				lhs, rhs, err := intOperands(r, operands[1], operands[2])
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				result := min(lhs, rhs)
+				if strings.HasPrefix(callFn.name, "llvm.smax.") {
+					result = max(lhs, rhs)
+				}
+				locals[inst.localIndex] = makeLiteralInt(uint64(result), inst.llvmInst.Type().IntTypeWidth())
+			case strings.HasPrefix(callFn.name, "llvm.memset.p0"):
+				nBytes, err := operands[3].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				volatile, err := operands[4].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				if volatile != 0 {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				if nBytes == 0 {
+					continue
+				}
+				dst, err := operands[1].asPointer(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				obj := mem.get(dst.index())
+				if mem.hasExternalLoadOrStore(dst) || obj.buffer == nil || uint64(dst.offset())+nBytes > uint64(obj.size) {
+					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				fill, err := operands[2].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				buf := newRawValue(uint32(nBytes))
+				for i := range buf.buf {
+					buf.buf[i] = fill
+				}
+				mem.store(buf, dst)
+			case strings.HasPrefix(callFn.name, "llvm.memcpy.p0") || strings.HasPrefix(callFn.name, "llvm.memmove.p0"):
+				// Copy a block of memory from one pointer to another.
+				if operands[4].(literalValue).value.(uint8) != 0 {
+					// This is a volatile copy/move.
+					err := r.runAtRuntime(fn, inst, locals, &mem, depth)
+					if err != nil {
+						return nil, mem, err
+					}
+					continue
+				}
+				nBytes, err := operands[3].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
 				if nBytes != 0 {
 					// Only try to copy bytes when there are any bytes to copy.
 					// This is not just an optimization. If one of the pointers
@@ -391,7 +555,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 						// same checks here.
 						// This fixes the following bug:
 						// https://github.com/tinygo-org/tinygo/issues/3890
-						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 						if err != nil {
 							return nil, mem, err
 						}
@@ -405,7 +569,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 						// a //go:embed slice, which is not available at interp
 						// time.
 						// See: https://github.com/tinygo-org/tinygo/issues/4895
-						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 						if err != nil {
 							return nil, mem, err
 						}
@@ -421,7 +585,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// This function must be implemented manually as it is normally
 				// implemented by the interface lowering pass.
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"typeassert:", operands[1:])
+					r.debugf(depth, "typeassert: %v", operands[1:])
 				}
 				assertedType, err := operands[2].toLLVMValue(inst.llvmInst.Operand(1).Type(), &mem)
 				if err != nil {
@@ -457,7 +621,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				// with all regular parameters and a type code. It will then
 				// call the concrete method for it.
 				if r.debug {
-					fmt.Fprintln(os.Stderr, indent+"invoke method:", operands[1:])
+					r.debugf(depth, "invoke method: %v", operands[1:])
 				}
 
 				// Load the type code and method set of the interface value.
@@ -507,7 +671,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				if len(callFn.blocks) == 0 {
 					// Call to a function declaration without a definition
 					// available.
-					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+					err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 					if err != nil {
 						return nil, mem, err
 					}
@@ -520,19 +684,19 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					for i, v := range operands[1:] {
 						argStrings[i] = v.String()
 					}
-					fmt.Fprintln(os.Stderr, indent+"call:", callFn.name+"("+strings.Join(argStrings, ", ")+")")
+					r.debugf(depth, "call: %s(%s)", callFn.name, strings.Join(argStrings, ", "))
 				}
-				retval, callMem, callErr := r.run(callFn, operands[1:], &mem, indent+"    ")
+				retval, callMem, callErr := r.run(callFn, operands[1:], &mem, frames, depth+1)
 				if callErr != nil {
 					if isRecoverableError(callErr.Err) {
 						// This error can be recovered by doing the call at
 						// runtime instead of at compile time. But we need to
 						// revert any changes made by the call first.
 						if r.debug {
-							fmt.Fprintln(os.Stderr, indent+"!! revert because of error:", callErr.Error())
+							r.debugf(depth, "!! revert because of error: %s", callErr.Error())
 						}
 						callMem.revert()
-						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 						if err != nil {
 							return nil, mem, err
 						}
@@ -542,7 +706,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					// how this function got called.
 					callErr.Traceback = append(callErr.Traceback, ErrorLine{
 						Pos:  getPosition(inst.llvmInst),
-						Inst: inst.llvmInst.String(),
+						inst: inst.llvmInst,
 					})
 					return nil, mem, callErr
 				}
@@ -556,12 +720,12 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				return nil, mem, r.errorAt(inst, err)
 			}
 			size := operands[1].(literalValue).value.(uint64)
-			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalStore(ptr) {
+			if inst.llvmInst.IsVolatile() || mem.hasExternalStore(ptr) {
 				// If there could be an external store (for example, because a
 				// pointer to the object was passed to a function that could not
 				// be interpreted at compile time) then the load must be done at
 				// runtime.
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
@@ -569,14 +733,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			result := mem.load(ptr, uint32(size))
 			if result == nil {
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
 				continue
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"load:", ptr, "->", result)
+				r.debugf(depth, "load: %v -> %v", ptr, result)
 			}
 			locals[inst.localIndex] = result
 		case llvm.Store:
@@ -586,8 +750,8 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if err != nil {
 				return nil, mem, r.errorAt(inst, err)
 			}
-			if inst.llvmInst.IsVolatile() || inst.llvmInst.Ordering() != llvm.AtomicOrderingNotAtomic || mem.hasExternalLoadOrStore(ptr) {
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+			if inst.llvmInst.IsVolatile() || mem.hasExternalLoadOrStore(ptr) {
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
@@ -595,12 +759,12 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			val := operands[0]
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"store:", val, ptr)
+				r.debugf(depth, "store: %v %v", val, ptr)
 			}
 			ok := mem.store(val, ptr)
 			if !ok {
 				// Could not store the value, do it at runtime.
-				err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 				if err != nil {
 					return nil, mem, err
 				}
@@ -627,7 +791,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// Create a pointer to this object (an alloca produces a pointer).
 			ptr := newPointerValue(r, index, 0)
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"alloca:", operands, "->", ptr)
+				r.debugf(depth, "alloca: %v -> %v", operands, ptr)
 			}
 			locals[inst.localIndex] = ptr
 		case llvm.GetElementPtr:
@@ -635,8 +799,11 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// pointer into the underlying object.
 			var offset int64
 			for i := 1; i < len(operands); i += 2 {
-				index := operands[i].Int(r)
-				elementSize := operands[i+1].Int(r)
+				index, err := operands[i].Int(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				elementSize := int64(operands[i+1].(literalValue).value.(uint64))
 				if elementSize < 0 {
 					// This is a struct field.
 					offset += index
@@ -651,8 +818,11 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 					return nil, mem, r.errorAt(inst, err)
 				}
 				// GEP on fixed pointer value (for example, memory-mapped I/O).
-				ptrValue := operands[0].Uint(r) + uint64(offset)
-				locals[inst.localIndex] = makeLiteralInt(ptrValue, int(operands[0].len(r)*8))
+				ptrValue, err := operands[0].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				locals[inst.localIndex] = makeLiteralInt(ptrValue+uint64(offset), int(operands[0].len(r)*8))
 				continue
 			}
 			ptr, err = ptr.addOffset(int64(offset))
@@ -661,7 +831,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 			locals[inst.localIndex] = ptr
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"gep:", operands, "->", ptr)
+				r.debugf(depth, "gep: %v -> %v", operands, ptr)
 			}
 		case llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt:
 			// Various bitcast-like instructions that all keep the same bits
@@ -681,18 +851,22 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 						isPtr = true
 					}
 					if isPtr || (bits != 8 && bits != 16 && bits != 32 && bits != 64) {
-						err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+						err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 						if err != nil {
 							return nil, mem, err
 						}
 						continue
 					}
-					locals[inst.localIndex] = makeLiteralInt(operands[0].Uint(r), bits)
+					value, err := operands[0].Uint(r)
+					if err != nil {
+						return nil, mem, r.errorAt(inst, err)
+					}
+					locals[inst.localIndex] = makeLiteralInt(value, bits)
 					continue
 				}
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", operands[0])
+				r.debugf(depth, "%s: %v", instructionNameMap[inst.opcode], operands[0])
 			}
 			locals[inst.localIndex] = operands[0]
 		case llvm.ExtractValue:
@@ -703,7 +877,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				buf: agg.buf[offset : offset+size],
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"extractvalue:", operands, "->", elt)
+				r.debugf(depth, "extractvalue: %v -> %v", operands, elt)
 			}
 			locals[inst.localIndex] = elt
 		case llvm.InsertValue:
@@ -714,33 +888,40 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			copy(newagg.buf, agg.buf)
 			copy(newagg.buf[offset:], elt.buf)
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"insertvalue:", operands, "->", newagg)
+				r.debugf(depth, "insertvalue: %v -> %v", operands, newagg)
 			}
 			locals[inst.localIndex] = newagg
 		case llvm.ICmp:
 			predicate := llvm.IntPredicate(operands[2].(literalValue).value.(uint8))
 			lhs := operands[0]
 			rhs := operands[1]
-			result := r.interpretICmp(lhs, rhs, predicate)
+			result, err := r.interpretICmp(lhs, rhs, predicate)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
 			if result {
 				locals[inst.localIndex] = literalValue{uint8(1)}
 			} else {
 				locals[inst.localIndex] = literalValue{uint8(0)}
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"icmp:", operands[0], intPredicateString(predicate), operands[1], "->", result)
+				r.debugf(depth, "icmp: %v %v %v -> %v", operands[0], intPredicateString(predicate), operands[1], result)
 			}
 		case llvm.FCmp:
 			predicate := llvm.FloatPredicate(operands[2].(literalValue).value.(uint8))
 			var result bool
+			lhsBits, rhsBits, err := uintOperands(r, operands[0], operands[1])
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
 			var lhs, rhs float64
 			switch operands[0].len(r) {
 			case 8:
-				lhs = math.Float64frombits(operands[0].Uint(r))
-				rhs = math.Float64frombits(operands[1].Uint(r))
+				lhs = math.Float64frombits(lhsBits)
+				rhs = math.Float64frombits(rhsBits)
 			case 4:
-				lhs = float64(math.Float32frombits(uint32(operands[0].Uint(r))))
-				rhs = float64(math.Float32frombits(uint32(operands[1].Uint(r))))
+				lhs = float64(math.Float32frombits(uint32(lhsBits)))
+				rhs = float64(math.Float32frombits(uint32(rhsBits)))
 			default:
 				panic("unknown float type")
 			}
@@ -766,7 +947,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 				locals[inst.localIndex] = literalValue{uint8(0)}
 			}
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+"fcmp:", operands[0], predicate, operands[1], "->", result)
+				r.debugf(depth, "fcmp: %v %v %v -> %v", operands[0], predicate, operands[1], result)
 			}
 		case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.SDiv, llvm.URem, llvm.SRem, llvm.Shl, llvm.LShr, llvm.AShr, llvm.And, llvm.Or, llvm.Xor:
 			// Integer binary operations.
@@ -776,71 +957,88 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			if err == nil {
 				// The lhs is a pointer. This sometimes happens for particular
 				// pointer tricks.
-				if inst.opcode == llvm.Add {
+				rhsUint, rhsErr := rhs.Uint(r)
+				if inst.opcode == llvm.Add && rhsErr == nil {
 					// This likely means this is part of a
 					// unsafe.Pointer(uintptr(ptr) + offset) pattern.
-					lhsPtr, err = lhsPtr.addOffset(int64(rhs.Uint(r)))
+					lhsPtr, err = lhsPtr.addOffset(int64(rhsUint))
 					if err != nil {
 						return nil, mem, r.errorAt(inst, err)
 					}
 					locals[inst.localIndex] = lhsPtr
-				} else if inst.opcode == llvm.Xor && rhs.Uint(r) == 0 {
+				} else if inst.opcode == llvm.Xor && rhsErr == nil && rhsUint == 0 {
 					// Special workaround for strings.noescape, see
 					// src/strings/builder.go in the Go source tree. This is
 					// the identity operator, so we can return the input.
 					locals[inst.localIndex] = lhs
-				} else if inst.opcode == llvm.And && rhs.Uint(r) < 8 {
+				} else if inst.opcode == llvm.And && rhsErr == nil && rhsUint < 8 {
 					// This is probably part of a pattern to get the lower bits
 					// of a pointer for pointer tagging, like this:
 					//     uintptr(unsafe.Pointer(t)) & 0b11
 					// We can actually support this easily by ANDing with the
 					// pointer offset.
-					result := uint64(lhsPtr.offset()) & rhs.Uint(r)
+					result := uint64(lhsPtr.offset()) & rhsUint
 					locals[inst.localIndex] = makeLiteralInt(result, int(lhs.len(r)*8))
 				} else {
 					// Catch-all for weird operations that should just be done
 					// at runtime.
-					err := r.runAtRuntime(fn, inst, locals, &mem, indent)
+					err := r.runAtRuntime(fn, inst, locals, &mem, depth)
 					if err != nil {
 						return nil, mem, err
 					}
 				}
 				continue
 			}
+			lhsUint, rhsUint, err := uintOperands(r, lhs, rhs)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
 			var result uint64
 			switch inst.opcode {
 			case llvm.Add:
-				result = lhs.Uint(r) + rhs.Uint(r)
+				result = lhsUint + rhsUint
 			case llvm.Sub:
-				result = lhs.Uint(r) - rhs.Uint(r)
+				result = lhsUint - rhsUint
 			case llvm.Mul:
-				result = lhs.Uint(r) * rhs.Uint(r)
+				result = lhsUint * rhsUint
 			case llvm.UDiv:
-				result = lhs.Uint(r) / rhs.Uint(r)
+				result = lhsUint / rhsUint
 			case llvm.SDiv:
-				result = uint64(lhs.Int(r) / rhs.Int(r))
+				lhsInt, rhsInt, err := intOperands(r, lhs, rhs)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				result = uint64(lhsInt / rhsInt)
 			case llvm.URem:
-				result = lhs.Uint(r) % rhs.Uint(r)
+				result = lhsUint % rhsUint
 			case llvm.SRem:
-				result = uint64(lhs.Int(r) % rhs.Int(r))
+				lhsInt, rhsInt, err := intOperands(r, lhs, rhs)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				result = uint64(lhsInt % rhsInt)
 			case llvm.Shl:
-				result = lhs.Uint(r) << rhs.Uint(r)
+				result = lhsUint << rhsUint
 			case llvm.LShr:
-				result = lhs.Uint(r) >> rhs.Uint(r)
+				result = lhsUint >> rhsUint
 			case llvm.AShr:
-				result = uint64(lhs.Int(r) >> rhs.Uint(r))
+				lhsInt, err := lhs.Int(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				result = uint64(lhsInt >> rhsUint)
 			case llvm.And:
-				result = lhs.Uint(r) & rhs.Uint(r)
+				result = lhsUint & rhsUint
 			case llvm.Or:
-				result = lhs.Uint(r) | rhs.Uint(r)
+				result = lhsUint | rhsUint
 			case llvm.Xor:
-				result = lhs.Uint(r) ^ rhs.Uint(r)
+				result = lhsUint ^ rhsUint
 			default:
 				panic("unreachable")
 			}
 			locals[inst.localIndex] = makeLiteralInt(result, int(lhs.len(r)*8))
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", lhs, rhs, "->", result)
+				r.debugf(depth, "%s: %v %v -> %v", instructionNameMap[inst.opcode], lhs, rhs, result)
 			}
 		case llvm.SExt, llvm.ZExt, llvm.Trunc:
 			// Change the size of an integer to a larger or smaller bit width.
@@ -852,26 +1050,42 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			// and then truncating it as necessary.
 			var value uint64
 			if inst.opcode == llvm.SExt {
-				value = uint64(operands[0].Int(r))
+				n, err := operands[0].Int(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				value = uint64(n)
 			} else {
-				value = operands[0].Uint(r)
+				n, err := operands[0].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				value = n
 			}
-			bitwidth := operands[1].Uint(r)
+			bitwidth := operands[1].(literalValue).value.(uint64)
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", value, bitwidth)
+				r.debugf(depth, "%s: %v %v", instructionNameMap[inst.opcode], value, bitwidth)
 			}
 			locals[inst.localIndex] = makeLiteralInt(value, int(bitwidth))
 		case llvm.SIToFP, llvm.UIToFP:
 			var value float64
 			switch inst.opcode {
 			case llvm.SIToFP:
-				value = float64(operands[0].Int(r))
+				n, err := operands[0].Int(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				value = float64(n)
 			case llvm.UIToFP:
-				value = float64(operands[0].Uint(r))
+				n, err := operands[0].Uint(r)
+				if err != nil {
+					return nil, mem, r.errorAt(inst, err)
+				}
+				value = float64(n)
 			}
-			bitwidth := operands[1].Uint(r)
+			bitwidth := operands[1].(literalValue).value.(uint64)
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+instructionNameMap[inst.opcode]+":", value, bitwidth)
+				r.debugf(depth, "%s: %v %v", instructionNameMap[inst.opcode], value, bitwidth)
 			}
 			switch bitwidth {
 			case 64:
@@ -883,17 +1097,9 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 			}
 		default:
 			if r.debug {
-				fmt.Fprintln(os.Stderr, indent+inst.String())
+				r.debugf(depth, "%s", inst.String())
 			}
 			return nil, mem, r.errorAt(inst, errUnsupportedInst)
-		}
-
-		// Check if an instruction triggered a recoverable error (e.g.,
-		// trying to interpret pointer data as integer bytes).
-		if r.interpErr != nil {
-			err := r.interpErr
-			r.interpErr = nil
-			return nil, mem, r.errorAt(inst, err)
 		}
 	}
 	return nil, mem, r.errorAt(bb.instructions[len(bb.instructions)-1], errors.New("interp: reached end of basic block without terminator"))
@@ -901,7 +1107,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, indent
 
 // Interpret an icmp instruction. Doesn't have side effects, only returns the
 // output of the comparison.
-func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) bool {
+func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) (bool, error) {
 	switch predicate {
 	case llvm.IntEQ, llvm.IntNE:
 		var result bool
@@ -921,30 +1127,66 @@ func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) bool
 		if predicate == llvm.IntNE {
 			result = !result
 		}
-		return result
-	case llvm.IntUGT:
-		return lhs.Uint(r) > rhs.Uint(r)
-	case llvm.IntUGE:
-		return lhs.Uint(r) >= rhs.Uint(r)
-	case llvm.IntULT:
-		return lhs.Uint(r) < rhs.Uint(r)
-	case llvm.IntULE:
-		return lhs.Uint(r) <= rhs.Uint(r)
-	case llvm.IntSGT:
-		return lhs.Int(r) > rhs.Int(r)
-	case llvm.IntSGE:
-		return lhs.Int(r) >= rhs.Int(r)
-	case llvm.IntSLT:
-		return lhs.Int(r) < rhs.Int(r)
-	case llvm.IntSLE:
-		return lhs.Int(r) <= rhs.Int(r)
+		return result, nil
+	case llvm.IntUGT, llvm.IntUGE, llvm.IntULT, llvm.IntULE:
+		lhs, rhs, err := uintOperands(r, lhs, rhs)
+		if err != nil {
+			return false, err
+		}
+		switch predicate {
+		case llvm.IntUGT:
+			return lhs > rhs, nil
+		case llvm.IntUGE:
+			return lhs >= rhs, nil
+		case llvm.IntULT:
+			return lhs < rhs, nil
+		default:
+			return lhs <= rhs, nil
+		}
+	case llvm.IntSGT, llvm.IntSGE, llvm.IntSLT, llvm.IntSLE:
+		lhs, rhs, err := intOperands(r, lhs, rhs)
+		if err != nil {
+			return false, err
+		}
+		switch predicate {
+		case llvm.IntSGT:
+			return lhs > rhs, nil
+		case llvm.IntSGE:
+			return lhs >= rhs, nil
+		case llvm.IntSLT:
+			return lhs < rhs, nil
+		default:
+			return lhs <= rhs, nil
+		}
 	default:
 		// _should_ be unreachable, until LLVM adds new icmp operands (unlikely)
 		panic("interp: unsupported icmp")
 	}
 }
 
-func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, indent string) *Error {
+func uintOperands(r *runner, lhs, rhs value) (uint64, uint64, error) {
+	lhsUint, err := lhs.Uint(r)
+	if err != nil {
+		return 0, 0, err
+	}
+	rhsUint, err := rhs.Uint(r)
+	return lhsUint, rhsUint, err
+}
+
+func intOperands(r *runner, lhs, rhs value) (int64, int64, error) {
+	lhsInt, err := lhs.Int(r)
+	if err != nil {
+		return 0, 0, err
+	}
+	rhsInt, err := rhs.Int(r)
+	return lhsInt, rhsInt, err
+}
+
+func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, mem *memoryView, depth int) *Error {
+	if !fn.deferFrame.IsNil() {
+		err := &recoverableError{msg: "interp: cannot partially evaluate a function with defer", op: inst.opcodeName(), fn: fn.name}
+		return r.errorAt(inst, err)
+	}
 	numOperands := inst.llvmInst.OperandsCount()
 	operands := make([]llvm.Value, numOperands)
 	for i := range numOperands {
@@ -959,7 +1201,7 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		operands[i] = operand
 	}
 	if r.debug {
-		fmt.Fprintln(os.Stderr, indent+inst.String())
+		r.debugf(depth, "%s", inst.String())
 	}
 	var result llvm.Value
 	switch inst.opcode {
@@ -986,9 +1228,12 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 			result.SetOrdering(ordering)
 		}
 	case llvm.Store:
-		err := mem.markExternalStore(operands[1])
-		if err != nil {
-			return r.errorAt(inst, err)
+		// Runtime code can read objects through the stored value.
+		for _, op := range operands {
+			err := mem.markExternalStore(op)
+			if err != nil {
+				return r.errorAt(inst, err)
+			}
 		}
 		result = r.builder.CreateStore(operands[0], operands[1])
 		if inst.llvmInst.IsVolatile() {
@@ -1052,7 +1297,12 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 	case llvm.ZExt:
 		result = r.builder.CreateZExt(operands[0], inst.llvmInst.Type(), inst.name)
 	default:
-		return r.errorAt(inst, errUnsupportedRuntimeInst)
+		if inst.branch || inst.opcode == llvm.Switch || inst.opcode == llvm.IndirectBr {
+			err := &recoverableError{msg: "interp: branch on a value not known at compile time", fn: fn.name}
+			return r.errorAt(inst, err)
+		}
+		err := &recoverableError{msg: "interp: cannot emit instruction at runtime", op: inst.opcodeName(), fn: fn.name}
+		return r.errorAt(inst, err)
 	}
 	locals[inst.localIndex] = localValue{result}
 	mem.instructions = append(mem.instructions, result)
@@ -1084,4 +1334,9 @@ func intPredicateString(predicate llvm.IntPredicate) string {
 	default:
 		return "cmp?"
 	}
+}
+
+// debugf prints a debug line indented by the call depth.
+func (r *runner) debugf(depth int, format string, args ...any) {
+	fmt.Fprintf(os.Stderr, strings.Repeat("    ", depth)+format+"\n", args...)
 }

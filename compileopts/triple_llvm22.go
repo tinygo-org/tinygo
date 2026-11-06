@@ -1,4 +1,4 @@
-//go:build llvm22
+//go:build llvm22 || llvm23
 
 package compileopts
 

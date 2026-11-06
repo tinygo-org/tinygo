@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -13,7 +14,7 @@ import (
 // loads from internal/task.stackSizes that will be updated after linking. This
 // way the stack sizes are loaded from a separate section and can easily be
 // modified after linking.
-func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string {
+func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) ([]string, error) {
 	functionMap := map[llvm.Value][]llvm.Value{}
 	var functions []llvm.Value // ptrtoint values of functions
 	var functionNames []string
@@ -25,6 +26,9 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 			continue
 		}
 		ptrtoint := use.Operand(0)
+		if ptrtoint.IsAConstantExpr().IsNil() || ptrtoint.Opcode() != llvm.PtrToInt || ptrtoint.Operand(0).IsAFunction().IsNil() {
+			return nil, fmt.Errorf("%s: internal/task.getGoroutineStackSize argument is not a constant function pointer: %s", use.InstructionParent().Parent().Name(), ptrtoint.String())
+		}
 		if _, ok := functionMap[ptrtoint]; !ok {
 			functions = append(functions, ptrtoint)
 			functionNames = append(functionNames, ptrtoint.Operand(0).Name())
@@ -35,7 +39,7 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 
 	if len(functions) == 0 {
 		// Nothing to do.
-		return nil
+		return nil, nil
 	}
 
 	ctx := mod.Context()
@@ -117,5 +121,5 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) []string 
 		}
 	}
 
-	return functionNames
+	return functionNames, nil
 }

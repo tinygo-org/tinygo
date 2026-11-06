@@ -331,7 +331,7 @@ func (fd *FD) Read(p []byte) (int, error) {
 		return fd.sockRecv(p)
 	}
 	if fd.rDeadline.IsZero() {
-		return syscall.Read(fd.Sysfd, p)
+		return byteCount(syscall.Read(fd.Sysfd, p))
 	}
 	return fd.readWithDeadline(p)
 }
@@ -346,7 +346,7 @@ func (fd *FD) Write(p []byte) (int, error) {
 		return fd.sockSend(p)
 	}
 	if fd.wDeadline.IsZero() {
-		return syscall.Write(fd.Sysfd, p)
+		return byteCount(syscall.Write(fd.Sysfd, p))
 	}
 	return fd.writeWithDeadline(p)
 }
@@ -357,7 +357,7 @@ func (fd *FD) Pread(p []byte, off int64) (int, error) {
 	if fd.closed {
 		return 0, ErrFileClosing
 	}
-	return syscall.Pread(fd.Sysfd, p, off)
+	return byteCount(syscall.Pread(fd.Sysfd, p, off))
 }
 
 // Pwrite writes to the FD at the given offset.
@@ -365,7 +365,7 @@ func (fd *FD) Pwrite(p []byte, off int64) (int, error) {
 	if fd.closed {
 		return 0, ErrFileClosing
 	}
-	return syscall.Pwrite(fd.Sysfd, p, off)
+	return byteCount(syscall.Pwrite(fd.Sysfd, p, off))
 }
 
 // SetDeadline sets both the read and write deadlines.
@@ -546,4 +546,13 @@ func (fd *FD) parkUntil(mode uint8, deadline time.Time) error {
 	timer.Stop()
 	runtime_netpoll_done(pd)
 	return nil
+}
+
+// byteCount turns the -1 a failed read or write returns into 0, as Go's
+// internal/poll does in fd_unix.go.
+func byteCount(n int, err error) (int, error) {
+	if n < 0 {
+		n = 0
+	}
+	return n, err
 }

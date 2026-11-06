@@ -56,6 +56,13 @@ func signalInterrupt() {
 	interruptPending.Set(1)
 }
 
+var timerAlarmInterrupt interrupt.Interrupt
+
+// timerAlarmHandler clears the timer interrupt at the peripheral level.
+func timerAlarmHandler(interrupt.Interrupt) {
+	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+}
+
 // initTimerInterrupt routes the TIMG0 timer 0 alarm interrupt to a CPU
 // interrupt and registers a handler.
 func initTimerInterrupt() {
@@ -66,28 +73,11 @@ func initTimerInterrupt() {
 	esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
 
 	// Register the interrupt handler.
-	interrupt.New(timerAlarmCPUInterrupt, func(interrupt.Interrupt) {
-		esp.TIMG0.INT_CLR_TIMERS.Set(1)
-	})
+	timerAlarmInterrupt = interrupt.New(timerAlarmCPUInterrupt, timerAlarmHandler)
+	timerAlarmInterrupt.Enable()
 
-	// Enable the CPU interrupt.
-	mie := riscv.DisableInterrupts()
-
-	// Clear any stale pending bit.
-	plic.MXINT_CLEAR.SetBits(1 << timerAlarmCPUInterrupt)
-	plic.MXINT_CLEAR.ClearBits(1 << timerAlarmCPUInterrupt)
-
-	// Set edge-triggered.
-	plic.MXINT_TYPE.SetBits(1 << timerAlarmCPUInterrupt)
-
-	// Set priority above threshold.
+	// Raise the priority above the default that Enable sets for peripherals.
 	plic.MXINT_PRI[timerAlarmCPUInterrupt].Set(10)
-
-	riscv.Asm("fence")
-
-	plic.MXINT_ENABLE.SetBits(1 << timerAlarmCPUInterrupt)
-
-	riscv.EnableInterrupts(mie)
 }
 
 // sleepTicks spins until the given number of ticks have elapsed, using the

@@ -36,6 +36,10 @@ type Task struct {
 	// SynctestBlocked is set while this task is durably blocked.
 	SynctestBlocked bool
 
+	// Affinity is the assigned core used by the cores scheduler.
+	// It fits in the padding before DeferFrame, and is empty for other schedulers.
+	Affinity Affinity
+
 	// DeferFrame stores a pointer to the (stack allocated) defer frame of the
 	// goroutine that is used for the recover builtin.
 	DeferFrame unsafe.Pointer

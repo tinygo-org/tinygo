@@ -13,6 +13,14 @@ func main() {
 	}
 	println("ENV2:", v)
 
+	// A value that holds '=' must still be found.
+	os.Setenv("ENV3", "a=b")
+	v, ok = os.LookupEnv("ENV3")
+	if !ok {
+		println("ENV3 not found")
+	}
+	println("ENV3:", v)
+
 	found := false
 	expected := "ENV1=" + os.Getenv("ENV1")
 	for _, envVar := range os.Environ() {

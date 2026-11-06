@@ -90,6 +90,33 @@ func main() {
 	done := make(chan int)
 	go testPaddedParameters(paddedStruct{x: 5, y: 7}, done)
 	<-done
+
+	testGoInBranches(true)
+	testGoInBranches(false)
+}
+
+var goInBranchesDone = make(chan struct{})
+
+// Regression test for https://github.com/tinygo-org/tinygo/issues/3878.
+//
+//go:noinline
+func testGoInBranches(cond bool) {
+	if cond {
+		go goInBranchA()
+	} else {
+		go goInBranchB()
+	}
+	<-goInBranchesDone
+}
+
+func goInBranchA() {
+	println("go in branch A")
+	goInBranchesDone <- struct{}{}
+}
+
+func goInBranchB() {
+	println("go in branch B")
+	goInBranchesDone <- struct{}{}
 }
 
 func acquire(m *sync.Mutex, wg *sync.WaitGroup) {

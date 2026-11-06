@@ -97,9 +97,6 @@ func foobarImport()
 func foobarExportModule() {
 }
 
-// This function should not: it's only a declaration and not a definition.
-//
-//go:section .special_function_section
 func undefinedFunctionNotInSection()
 
 //go:section .special_global_section
@@ -116,9 +113,6 @@ var multipleGlobalPragmas uint32
 //go:noescape
 func doesNotEscapeParam(a *int, b []int, c chan int, d *[0]byte)
 
-// The //go:noescape pragma only works on declarations, not definitions.
-//
-//go:noescape
 func stillEscapes(a *int, b []int, c chan int, d *[0]byte) {
 }
 

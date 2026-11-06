@@ -17,15 +17,15 @@ jobs:
       - name: Add GOBIN to $PATH
         run: |
           echo "$HOME/go/bin" >> $GITHUB_PATH
-      - name: Install Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '~1.25'
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0 # fetch all history (no sparse checkout)
           submodules: true
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
       - uses: ./.github/actions/setup-llvm
         with:
           save-cache: "false"
@@ -57,30 +57,42 @@ jobs:
           (cd drivers; make smoke-test | tee sizes-pr.txt)
 
       # Compute sizes for the dev branch
+      - name: Restore dev sizes
+        id: base-cache
+        uses: ./.github/actions/sizediff-cache
+        with:
+          base-sha: ${{ steps.pr.outputs.base_sha }}
       - name: Checkout dev branch
         id: dev
+        env:
+          BASE_SHA: ${{ steps.pr.outputs.base_sha }}
+          BASE_CACHE_HIT: ${{ steps.base-cache.outputs.cache-hit }}
         run: |
-          git checkout --force "${{ steps.pr.outputs.base_sha }}"
-          git submodule update --init
-          rm -rf build
-          git clean -fdX src/device
-          export GOCACHE="$RUNNER_TEMP/go-build-base"
-          export XDG_CACHE_HOME="$RUNNER_TEMP/cache-base"
-          echo "GOCACHE=$GOCACHE" >> "$GITHUB_ENV"
-          echo "XDG_CACHE_HOME=$XDG_CACHE_HOME" >> "$GITHUB_ENV"
-          make gen-device -j4
-          echo "llvm_version=$(cat llvm-version.txt)" >> "$GITHUB_OUTPUT"
+          git checkout --force "$BASE_SHA"
+          if [ "$BASE_CACHE_HIT" != "true" ]; then
+            git submodule update --init
+            rm -rf build
+            git clean -fdX src/device
+            export GOCACHE="$RUNNER_TEMP/go-build-base"
+            export XDG_CACHE_HOME="$RUNNER_TEMP/cache-base"
+            echo "GOCACHE=$GOCACHE" >> "$GITHUB_ENV"
+            echo "XDG_CACHE_HOME=$XDG_CACHE_HOME" >> "$GITHUB_ENV"
+            make gen-device -j4
+            echo "llvm_version=$(cat llvm-version.txt)" >> "$GITHUB_OUTPUT"
+          fi
       - name: Remove LLVM build for the PR branch
-        if: steps.pr.outputs.llvm_version != steps.dev.outputs.llvm_version
+        if: steps.base-cache.outputs.cache-hit != 'true' && steps.pr.outputs.llvm_version != steps.dev.outputs.llvm_version
         run: rm -rf llvm-build llvm-project
       - name: Set up LLVM for the dev branch
         uses: ./.github/actions/setup-llvm-base
-        if: steps.pr.outputs.llvm_version != steps.dev.outputs.llvm_version
+        if: steps.base-cache.outputs.cache-hit != 'true' && steps.pr.outputs.llvm_version != steps.dev.outputs.llvm_version
         with:
           save-cache: "false"
       - name: Build tinygo binary for the dev branch
+        if: steps.base-cache.outputs.cache-hit != 'true'
         run: make tinygo
       - name: Determine binary sizes on the dev branch
+        if: steps.base-cache.outputs.cache-hit != 'true'
         run: |
           set -o pipefail
           export PATH="$PWD/build:$PATH"

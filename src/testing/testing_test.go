@@ -172,12 +172,24 @@ func TestSetenv(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		originalValue, originalExists := os.LookupEnv(test.key)
+		key := test.key
+		t.Cleanup(func() {
+			if originalExists {
+				if err := os.Setenv(key, originalValue); err != nil {
+					t.Errorf("unable to restore environment: %v", err)
+				}
+			} else if err := os.Unsetenv(key); err != nil {
+				t.Errorf("unable to restore environment: %v", err)
+			}
+		})
+
 		if test.initialValueExists {
 			if err := os.Setenv(test.key, test.initialValue); err != nil {
 				t.Fatalf("unable to set env: got %v", err)
 			}
-		} else {
-			os.Unsetenv(test.key)
+		} else if err := os.Unsetenv(test.key); err != nil {
+			t.Fatalf("unable to unset env: got %v", err)
 		}
 
 		t.Run(test.name, func(t *testing.T) {

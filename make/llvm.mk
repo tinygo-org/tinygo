@@ -100,11 +100,19 @@ $(LLVM_BUILDDIR): $(LLVM_BUILDDIR)/build.ninja ## Build LLVM
 	cd $(LLVM_BUILDDIR) && ninja $(NINJA_BUILD_TARGETS)
 
 ifneq ($(USE_SYSTEM_BINARYEN),1)
+# musl malloc serializes the wasm-opt pass threads. Binaryen Linux releases also
+# use mimalloc, see https://github.com/WebAssembly/binaryen/issues/5561
+ifeq ($(uname),Linux)
+BINARYEN_OPTION += -DBUILD_MIMALLOC=ON
+BINARYEN_SUBMODULES = third_party/mimalloc
+endif
+
 # Build Binaryen
 .PHONY: binaryen
 binaryen: build/wasm-opt$(EXE)
 build/wasm-opt$(EXE):
 	mkdir -p build
+	$(if $(BINARYEN_SUBMODULES),cd lib/binaryen && git submodule update --init $(BINARYEN_SUBMODULES))
 	cd lib/binaryen && cmake -G Ninja . -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=OFF -DENABLE_WERROR=OFF $(BINARYEN_OPTION) && ninja bin/wasm-opt$(EXE)
 	cp lib/binaryen/bin/wasm-opt$(EXE) build/wasm-opt$(EXE)
 endif

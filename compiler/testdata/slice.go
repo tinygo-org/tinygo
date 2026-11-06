@@ -26,6 +26,20 @@ func sliceCopy(dst, src []int) int {
 	return copy(dst, src)
 }
 
+// Slicing a slice only emits the bounds checks that can fail.
+
+func sliceFrom(ints []int, low int) {
+	_ = ints[low:]
+}
+
+func sliceRange(ints []int, low, high int) {
+	_ = ints[low:high]
+}
+
+func sliceRangeMax(ints []int, low, high, max int) {
+	_ = ints[low:high:max]
+}
+
 // Test bounds checking in *ssa.MakeSlice instruction.
 
 func makeByteSlice(len int) []byte {

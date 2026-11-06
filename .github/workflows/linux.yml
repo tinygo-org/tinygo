@@ -12,23 +12,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  go-mod-tidy:
-    # Check that go.sum is up to date.
+  lint:
     runs-on: ubuntu-slim
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: true
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      # go mod tidy needs src/net/http/response.go for golang.org/x/net.
+      # The other submodules do not affect go.mod or go.sum.
+      - name: Checkout net submodule
+        run: git submodule update --init --depth 1 src/net
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: stable
           cache: true
-      - name: Run go mod tidy
-        run: go mod tidy
+      - name: Check commit authors
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          commits=$(git log --format='%h %ae %ce' "origin/$BASE_REF..HEAD")
+          if printf '%s\n' "$commits" | grep -iE 'noreply@anthropic\.com|copilot@users\.noreply\.github\.com'; then
+            echo "::error::Commits must not be authored or committed by Claude or Copilot."
+            exit 1
+          fi
       - name: Check go.mod and go.sum are up to date
-        run: git diff --exit-code
+        if: ${{ !cancelled() }}
+        run: |
+          go mod tidy
+          git diff --exit-code
+      - name: Run linter
+        if: ${{ !cancelled() }}
+        run: make lint
+      - name: Run spellcheck
+        if: ${{ !cancelled() }}
+        run: make spell
+      - name: Check Go code formatting
+        if: ${{ !cancelled() }}
+        run: make fmt-check
 
   build-linux:
     # Build Linux binaries, ready for release.
@@ -118,7 +141,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-alpine-v3-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-alpine-v4-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -130,10 +153,6 @@ jobs:
           gem install --version 4.0.7 public_suffix
           gem install --version 2.7.6 dotenv
           gem install --no-document fpm
-      - name: Run linter
-        run: make lint
-      - name: Run spellcheck
-        run: make spell
       - name: Build TinyGo release
         run: |
           make release deb -j3 STATIC=1
@@ -197,7 +216,7 @@ jobs:
         # shards finish at about the same time.
         group:
           - smoketest-rp2xxx smoketest-selftest smoketest-wasm-sim smoketest-py32
-          - smoketest-esp smoketest-riscv smoketest-flags
+          - smoketest-esp smoketest-riscv smoketest-flags smoketest-renesas
           - smoketest-examples smoketest-nxp smoketest-pwm-usb smoketest-avr
           - smoketest-samd smoketest-stm32 smoketest-nrf smoketest-wasm
     steps:
@@ -274,7 +293,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-asserts-v1-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-asserts-v2-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -282,8 +301,8 @@ jobs:
       - run: make gen-device -j4
       - name: Test TinyGo
         run: make ASSERT=1 test
-      - name: Check Go code formatting
-        run: make fmt-check lint
+      - name: Check Go code formatting after device generation
+        run: make fmt-check
 
   assert-build-linux:
     # Build TinyGo with LLVM assertions enabled and publish it for the jobs
@@ -312,7 +331,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-asserts-v1-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-asserts-v2-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -413,17 +432,18 @@ jobs:
     # in that process to avoid doing lots of duplicate work and to avoid
     # complications around precompiled libraries such as compiler-rt shipped as
     # part of the release tarball.
+    # Both run on arm64 runners. arm64 builds natively. arm still cross compiles
+    # and uses qemu-arm for llvm-config, since these runners can't run AArch32.
     strategy:
       matrix:
         goarch: [ arm, arm64 ]
         include:
           - goarch: arm64
-            toolchain: aarch64-linux-gnu
             libc: arm64
           - goarch: arm
             toolchain: arm-linux-gnueabihf
             libc: armhf
-    runs-on: ubuntu-22.04 # note: use the oldest image available! (see above)
+    runs-on: ubuntu-22.04-arm # note: use the oldest image available! (see above)
     needs: build-linux
     steps:
       - name: Checkout
@@ -434,10 +454,12 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends \
-              qemu-user \
-              g++-${{ matrix.toolchain }} \
-              libc6-dev-${{ matrix.libc }}-cross
+          if [ -n "${{ matrix.toolchain }}" ]; then
+            sudo apt-get install --no-install-recommends \
+                qemu-user \
+                g++-${{ matrix.toolchain }} \
+                libc6-dev-${{ matrix.libc }}-cross
+          fi
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -472,7 +494,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-22-linux-${{ matrix.goarch }}-v1-${{ hashFiles('llvm-version.txt') }}
+          key: llvm-build-22-linux-${{ matrix.goarch }}-v2-${{ hashFiles('llvm-version.txt') }}
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -499,7 +521,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-${{ matrix.goarch }}-v5-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-${{ matrix.goarch }}-v7-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'

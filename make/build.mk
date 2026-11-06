@@ -5,7 +5,7 @@
 clean: ## Remove build directory
 	@rm -rf build
 
-FMT_PATHS = ./*.go builder cgo/*.go compiler interp loader src transform
+FMT_PATHS = ./*.go builder cgo/*.go compiler fix interp loader src transform
 fmt: ## Reformat source
 	@gofmt -l -w $(FMT_PATHS)
 fmt-check: ## Warn if any source needs reformatting
@@ -17,7 +17,7 @@ WASM_TOOLS_MODULE=go.bytecodealliance.org
 .PHONY: wasi-syscall
 wasi-syscall: wasi-cm
 	rm -rf ./src/internal/wasi/*
-	go run $(WASM_TOOLS_MODULE)/cmd/wit-bindgen-go generate --versioned -o ./src/internal -p internal --cm internal/cm ./lib/wasi-cli/wit
+	go tool $(WASM_TOOLS_MODULE)/cmd/wit-bindgen-go generate --versioned -o ./src/internal -p internal --cm internal/cm ./lib/wasi-cli/wit
 
 # Copy package cm into src/internal/cm
 .PHONY: wasi-cm

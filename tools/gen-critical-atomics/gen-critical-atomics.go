@@ -13,7 +13,7 @@ var tmpl = template.Must(template.New("go").Funcs(template.FuncMap{
 	"mul": func(x, y int) int {
 		return x * y
 	},
-	"tuple": func(v ...interface{}) []interface{} {
+	"tuple": func(v ...any) []any {
 		return v
 	},
 	"title": strings.Title,

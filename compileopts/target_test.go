@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -53,6 +54,30 @@ func TestLoadTarget_InheritableOnlyTargetStillLoadable(t *testing.T) {
 	_, err := LoadTarget(&Options{Target: "esp32"})
 	if err != nil {
 		t.Errorf("LoadTarget should still load inheritable-only target esp32: %v", err)
+	}
+}
+
+func TestLoadTarget_FirmwareExtensionsInherited(t *testing.T) {
+	for _, target := range []string{"pico", "pico2"} {
+		t.Run(target, func(t *testing.T) {
+			spec, err := LoadTarget(&Options{Target: target})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []string{".elf", ".hex", ".uf2"}
+			if !slices.Equal(spec.FirmwareExts, want) {
+				t.Errorf("firmware extensions = %v, want %v", spec.FirmwareExts, want)
+			}
+			config := &Config{
+				Options: &Options{Target: target},
+				Target:  spec,
+			}
+			err = config.ValidateOutputExtension(".bin")
+			wantErr := "target " + target + " does not support firmware output extension .bin; use .elf, .hex, or .uf2"
+			if err == nil || err.Error() != wantErr {
+				t.Errorf("ValidateOutputExtension(.bin) error = %v, want %q", err, wantErr)
+			}
+		})
 	}
 }
 
@@ -147,6 +172,19 @@ func TestOverrideProperties(t *testing.T) {
 
 }
 
+func TestOverridePropertiesFirmwareExtensions(t *testing.T) {
+	base := &TargetSpec{FirmwareExts: []string{".uf2"}}
+	child := &TargetSpec{FirmwareExts: []string{".hex"}}
+
+	if err := base.overrideProperties(child); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{".uf2", ".hex"}
+	if !slices.Equal(base.FirmwareExts, want) {
+		t.Errorf("firmware extensions = %v, want %v", base.FirmwareExts, want)
+	}
+}
+
 func TestConfigLinkerFlavor(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -236,12 +274,85 @@ func TestConfigPanicUnwind(t *testing.T) {
 			target:  TargetSpec{Triple: "wasm32-unknown-unknown", PanicUnwind: "auto"},
 			want:    "asyncify",
 		},
+		{
+			name:    "none disables asyncify unwinding",
+			options: Options{Scheduler: "asyncify", PanicUnwind: "none"},
+			target:  TargetSpec{Triple: "wasm32-unknown-unknown"},
+			want:    "none",
+		},
+		{
+			name:    "none disables setjmp unwinding",
+			options: Options{PanicUnwind: "none"},
+			target:  TargetSpec{Triple: "x86_64-unknown-linux"},
+			want:    "none",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			config := Config{Options: &tc.options, Target: &tc.target}
 			if got := config.PanicUnwind(); got != tc.want {
 				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadTargetLibc(t *testing.T) {
+	tests := []struct {
+		name    string
+		options Options
+	}{
+		{"glibc with a target", Options{Target: "arduino", Libc: "glibc"}},
+		{"musl with a target", Options{Target: "wasip1", Libc: "musl"}},
+		{"glibc on windows", Options{GOOS: "windows", GOARCH: "amd64", Libc: "glibc"}},
+		{"glibc on 386", Options{GOOS: "linux", GOARCH: "386", Libc: "glibc"}},
+		{"glibc on arm", Options{GOOS: "linux", GOARCH: "arm", GOARM: "6", Libc: "glibc"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := LoadTarget(&tc.options); err == nil {
+				t.Errorf("LoadTarget should reject -libc=%s", tc.options.Libc)
+			}
+		})
+	}
+
+	if _, err := LoadTarget(&Options{GOOS: "linux", GOARCH: "amd64", Libc: "musl"}); err != nil {
+		t.Errorf("LoadTarget should accept -libc=musl on linux/amd64: %v", err)
+	}
+}
+
+func TestGlibcLibDirs(t *testing.T) {
+	tests := []struct {
+		goarch, hostGOARCH string
+		want               []string
+	}{
+		{"amd64", "amd64", []string{"/usr/lib/x86_64-linux-gnu", "/usr/lib64", "/usr/lib"}},
+		{"arm64", "arm64", []string{"/usr/lib/aarch64-linux-gnu", "/usr/lib64", "/usr/lib"}},
+		{"arm64", "amd64", []string{"/usr/lib/aarch64-linux-gnu"}},
+		{"amd64", "arm64", []string{"/usr/lib/x86_64-linux-gnu"}},
+	}
+	for _, tc := range tests {
+		got := glibcLibDirs(tc.goarch, tc.hostGOARCH)
+		if !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("glibcLibDirs(%q, %q) = %v, want %v", tc.goarch, tc.hostGOARCH, got, tc.want)
+		}
+	}
+}
+
+func TestGlibcLinkLibraries(t *testing.T) {
+	for _, goarch := range []string{"amd64", "arm64"} {
+		t.Run(goarch, func(t *testing.T) {
+			if _, err := GlibcLibDir(goarch); err != nil {
+				t.Skip(err)
+			}
+			target, err := LoadTarget(&Options{GOOS: "linux", GOARCH: goarch, Libc: "glibc"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, library := range []string{"-lm", "-lpthread"} {
+				if !slices.Contains(target.LDFlags, library) {
+					t.Errorf("glibc linker flags %v do not contain %s", target.LDFlags, library)
+				}
 			}
 		})
 	}

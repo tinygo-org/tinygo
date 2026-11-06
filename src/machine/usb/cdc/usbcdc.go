@@ -264,6 +264,19 @@ func cdcSetup(setup usb.Setup) bool {
 	return false
 }
 
+// reset resumes the TX pump after the host configures the device again. A bus
+// reset drops the packet in flight, so its completion never arrives.
+func reset() {
+	if USB == nil {
+		return
+	}
+	USB.inflight.Store(0)
+	USB.needZLP = false
+	if USB.txActive.Load() != 0 {
+		USB.sendFromRing()
+	}
+}
+
 func EnableUSBCDC() {
 	machine.USBCDC = New()
 	machine.EnableCDC(USB.txhandler, cdcCallbackRx, cdcSetup)

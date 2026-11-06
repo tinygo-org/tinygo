@@ -52,6 +52,7 @@ TEST_PACKAGES_FAST = \
 	image \
 	internal/itoa \
 	internal/profile \
+	internal/reflectlite \
 	math \
 	math/cmplx \
 	net/http/internal/ascii \
@@ -61,6 +62,7 @@ TEST_PACKAGES_FAST = \
 	path \
 	reflect \
 	regexp/syntax \
+	runtime \
 	strconv \
 	sync \
 	testing \
@@ -100,6 +102,7 @@ TEST_PACKAGES_LINUX := \
 	debug/dwarf \
 	debug/gosym \
 	debug/plan9obj \
+	encoding/gob \
 	encoding/xml \
 	go/build/constraint \
 	go/parser \
@@ -164,6 +167,7 @@ TEST_PACKAGES_NONBAREMETAL = \
 	$(TEST_PACKAGES_NONWASM) \
 	$(TEST_PACKAGES_NOBOUNDARYSLICES) \
 	crypto/des \
+	encoding/gob \
 	regexp/syntax \
 	$(nil)
 
@@ -212,6 +216,7 @@ endif
 TEST_SKIP_FLAG := -skip='TestExtraMethods|TestAsValidation|TestUnmarshalNestingLimitSlice|TestUnmarshalNestingLimitStruct'
 TEST_ADDITIONAL_FLAGS ?=
 
+TEST_OPTIONS_crypto/dsa := -short
 TEST_OPTIONS_crypto/sha256 := -skip='^(TestExtraMethods|TestAllocations|TestAllocatonsWithTypeAsserts)$$'
 TEST_OPTIONS_crypto/sha512 := -skip='^(TestExtraMethods|TestAllocations|TestAllocatonsWithTypeAsserts)$$'
 TEST_OPTIONS_strconv := -skip='^(TestCountMallocs|TestAllocationsFromBytes)$$'
@@ -220,13 +225,15 @@ TEST_OPTIONS_unicode/utf8 := -skip='^(TestAllocationsDecode|TestRuneCountNonASCI
 TEST_OPTIONS_context := -skip='^TestAllocs$$'
 TEST_OPTIONS_mime := -skip='^TestLookupMallocs$$'
 TEST_OPTIONS_net/textproto := -skip='^TestCommonHeaders$$'
-TEST_OPTIONS_reflect := -skip='^(TestMapIterSet|TestDeepEqualAllocs)$$'
-TEST_OPTIONS_bytes := -skip='^(TestNewBufferShallow|TestEqual|TestIndex|TestLastIndex|TestReplace)$$'
+TEST_OPTIONS_reflect := -skip='^TestMapIterSet$$'
+TEST_OPTIONS_bytes := -skip='^(TestNewBufferShallow|TestReplace)$$'
 TEST_OPTIONS_slices := -skip='^(TestGrow|TestInsert|TestConcat)$$'
 TEST_OPTIONS_strings := -skip='^(TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace)$$'
 TEST_OPTIONS_crypto/mldsa := -short -stack-size=1MB -skip='^TestAllocations$$'
+TEST_OPTIONS_encoding/gob := -skip='^(TestIgnoreDepthLimit|TestCountEncodeMallocs|TestCountDecodeMallocs)$$'
 
 tinygo-test tinygo-test-fast: TEST_OPTIONS_go/printer := -stack-size=1MB
+tinygo-test tinygo-test-fast: TEST_OPTIONS_encoding/gob := -stack-size=1MB -skip='^(TestCountDecodeMallocs|TestCountEncodeMallocs)$$'
 tinygo-test tinygo-test-fast: TEST_OPTIONS_go/build/constraint = $(HOST_TEST_STACK_SKIP_FLAG) -stack-size=1MB
 tinygo-test tinygo-test-fast: TEST_OPTIONS_regexp = $(HOST_TEST_STACK_SKIP_FLAG) -stack-size=1MB
 tinygo-test tinygo-test-fast: TEST_OPTIONS_path/filepath = $(HOST_TEST_STACK_SKIP_FLAG) -stack-size=4MB
@@ -243,7 +250,7 @@ tinygo-test-fast: HOST_TEST_STACK_SKIP_FLAG = $(TEST_SKIP_FLAG)
 tinygo-test-baremetal: TEST_OPTIONS_strconv := -skip='TestCountMallocs|TestAllocationsFromBytes'
 tinygo-test-baremetal: TEST_OPTIONS_unicode/utf16 := -skip='TestAllocationsDecode|TestRuneCountNonASCIIAllocation'
 tinygo-test-baremetal: TEST_OPTIONS_unicode/utf8 := -skip='TestAllocationsDecode|TestRuneCountNonASCIIAllocation'
-tinygo-test-baremetal: TEST_OPTIONS_reflect := -skip='TestMapIterSet|TestDeepEqualAllocs'
+tinygo-test-baremetal: TEST_OPTIONS_reflect := -skip='TestMapIterSet'
 
 # Explicit options replace default flags, even when empty.
 # https://www.gnu.org/software/make/manual/html_node/Origin-Function.html

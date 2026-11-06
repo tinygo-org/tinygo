@@ -7,7 +7,6 @@ import "unsafe"
 var systemTable *EFI_SYSTEM_TABLE
 var imageHandle uintptr
 
-//go:nobounds
 func Init(argImageHandle uintptr, argSystemTable uintptr) {
 	systemTable = (*EFI_SYSTEM_TABLE)(unsafe.Pointer(argSystemTable))
 	imageHandle = argImageHandle

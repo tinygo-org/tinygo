@@ -18,12 +18,12 @@ jobs:
     name: build-macos
     strategy:
       matrix:
-        # macos-14: arm64 (oldest supported version as of 18-11-2025)
+        # macos-15: arm64 (oldest supported version as of 16-10-2026)
         # macos-15-intel: amd64 (last intel version to be supported by github runners)
         # See https://github.com/actions/runner-images/issues/13046
-        os: [macos-14, macos-15-intel]
+        os: [macos-15, macos-15-intel]
         include:
-          - os: macos-14
+          - os: macos-15
             goarch: arm64
           - os: macos-15-intel
             goarch: amd64
@@ -63,12 +63,10 @@ jobs:
   test-macos:
     # The compiler test suite. It needs LLVM, thus it cannot use the release
     # tarball. It restores the LLVM cache and runs at the same time as
-    # build-macos. Only build-macos saves that cache.
+    # build-macos. Only build-macos saves that cache. The intel runner only
+    # runs the smoke tests below, as the full suite is slow there.
     name: test-macos
-    strategy:
-      matrix:
-        os: [macos-14, macos-15-intel]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15
     steps:
       - name: Install Dependencies
         run: |
@@ -84,26 +82,18 @@ jobs:
           cache: true
       - uses: ./.github/actions/setup-llvm-macos
         with:
-          os: ${{ matrix.os }}
+          os: macos-15
           save-cache: "false"
       - name: make gen-device
         run: make -j3 gen-device
       - name: Test TinyGo
-        run: make test GOTESTFLAGS="-only-current-os"
+        run: make test GOTESTFLAGS="-short"
 
   stdlib-test-macos:
     # Test the standard library, compiled and run on the host itself.
     name: stdlib-test-macos
     needs: build-macos
-    strategy:
-      matrix:
-        os: [macos-14, macos-15-intel]
-        include:
-          - os: macos-14
-            goarch: arm64
-          - os: macos-15-intel
-            goarch: amd64
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -121,7 +111,7 @@ jobs:
           # An artifact uploaded with "archive: false" takes the name of the
           # file, not the name given to upload-artifact. See the comment on
           # "Collect the release files" in release.yml.
-          name: tinygo${{ steps.version.outputs.version }}.darwin-${{ matrix.goarch }}.tar.gz
+          name: tinygo${{ steps.version.outputs.version }}.darwin-arm64.tar.gz
           path: build/
           skip-decompress: true
       - name: Unpack TinyGo build
@@ -140,9 +130,9 @@ jobs:
     needs: build-macos
     strategy:
       matrix:
-        os: [macos-14, macos-15-intel]
+        os: [macos-15, macos-15-intel]
         include:
-          - os: macos-14
+          - os: macos-15
             goarch: arm64
             smoketest: smoketest-quick
           - os: macos-15-intel
@@ -185,7 +175,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        version: [16, 17, 18, 19, 20]
+        version: [16, 21, 22, 23]
     steps:
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@main
@@ -198,8 +188,32 @@ jobs:
         run: |
           brew install llvm@${{ matrix.version }}
           brew link llvm@${{ matrix.version }}
+      - name: Install lld, binaryen
+        run: |
+          # llvm@20 and later do not ship lld, so users install it after the
+          # first link fails. Older llvm@N formulas still ship it.
+          command -v ld.lld >/dev/null || brew install lld
+          brew install binaryen
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Pull wasi-libc, macos-minimal-sdk, bdwgc
+        run: |
+          git submodule update --init lib/wasi-libc lib/macos-minimal-sdk lib/bdwgc
+      - name: Restore LLVM source cache
+        uses: actions/cache/restore@v5
+        id: cache-llvm-source
+        with:
+          key: llvm-source-22-macos-homebrew-${{ hashFiles('llvm-version.txt') }}
+          path: llvm-project/compiler-rt
+      - name: Download LLVM source
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        run: make llvm-source
+      - name: Save LLVM source cache
+        uses: actions/cache/save@v5
+        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
+        with:
+          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
+          path: llvm-project/compiler-rt
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -209,9 +223,8 @@ jobs:
         run: go install -tags=llvm${{ matrix.version }}
       - name: Check binary
         run: tinygo version
-      - name: Build TinyGo (default LLVM)
-        if: matrix.version == 20
-        run: go install
-      - name: Check binary
-        if: matrix.version == 20
-        run: tinygo version
+      - name: Link test programs
+        run: |
+          tinygo build -o "$RUNNER_TEMP/alias" testdata/alias.go
+          "$RUNNER_TEMP/alias" | diff - testdata/alias.txt
+          tinygo build -target=wasm-unknown -o "$RUNNER_TEMP/alias.wasm" testdata/alias.go

@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -102,15 +103,25 @@ type packageAction struct {
 // Build performs a single package to executable Go build. It takes in a package
 // name, an output path, and set of compile options and from that it manages the
 // whole compilation process.
+// The configuration must have a semaphore with positive capacity.
 //
 // The error value may be of type *MultiError. Callers will likely want to check
 // for this case and print such errors individually.
-func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildResult, error) {
+func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildResult, error) {
+	sema := config.Options.Semaphore
+	if cap(sema) == 0 {
+		return nil, errors.New("cannot run 0 jobs at a time")
+	}
+
+	if err := config.ValidateOutputExtension(filepath.Ext(outpath)); err != nil {
+		return nil, err
+	}
+
 	// Read the build ID of the tinygo binary.
 	// Used as a cache key for package builds.
 	compilerBuildID, err := ReadBuildID()
 	if err != nil {
-		return BuildResult{}, err
+		return nil, err
 	}
 
 	if config.Options.Work {
@@ -165,36 +176,42 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		var unlock func()
 		libcJob, unlock, err := libMusl.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(libcJob.result), "crt1.o")))
 		libcDependencies = append(libcDependencies, libcJob)
+	case "glibc":
+		libDir, err := compileopts.GlibcLibDir(config.GOARCH())
+		if err != nil {
+			return nil, err
+		}
+		libcDependencies = append(libcDependencies, glibcStartupJobs(libDir)...)
 	case "picolibc":
 		libcJob, unlock, err := libPicolibc.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
 		libcJob, unlock, err := libWasiLibc.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasmbuiltins":
 		libcJob, unlock, err := libWasmBuiltins.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "mingw-w64":
 		libcJob, unlock, err := libMinGW.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
@@ -202,7 +219,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	case "":
 		// no library specified, so nothing to do
 	default:
-		return BuildResult{}, fmt.Errorf("unknown libc: %s", config.Target.Libc)
+		return nil, fmt.Errorf("unknown libc: %s", config.Target.Libc)
 	}
 
 	optLevel, speedLevel, sizeLevel := config.OptLevel()
@@ -236,7 +253,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// address spaces, etc).
 	machine, err := compiler.NewTargetMachine(compilerConfig)
 	if err != nil {
-		return BuildResult{}, err
+		return nil, err
 	}
 	defer machine.Dispose()
 
@@ -245,9 +262,12 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		Sizes: compiler.Sizes(machine),
 	})
 	if err != nil {
-		return BuildResult{}, err
+		return nil, err
 	}
-	result := BuildResult{
+	if _, ok := globalValues["runtime"]["godebugDefault"]; !ok {
+		globalValues["runtime"]["godebugDefault"] = lprogram.MainPkg().DefaultGODEBUG
+	}
+	result := &BuildResult{
 		ModuleRoot: lprogram.MainPkg().Module.Dir,
 		MainDir:    lprogram.MainPkg().Dir,
 		ImportPath: lprogram.MainPkg().ImportPath,
@@ -258,7 +278,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	}
 	err = lprogram.Parse()
 	if err != nil {
-		return result, err
+		return nil, err
+	}
+	if config.TestConfig.CompileTestBinary && !strings.HasSuffix(result.ImportPath, ".test") {
+		// Validate the package even when there is no test binary to build.
+		return result, loader.NoTestFilesError{ImportPath: result.ImportPath}
 	}
 
 	// Embed module build information so runtime/debug.ReadBuildInfo() works,
@@ -271,7 +295,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if _, overridden := globalValues["runtime/debug"]["modinfo"]; !overridden {
 		mi, err := moduleBuildInfo(lprogram, config.Options.BuildVCS)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		if mi != "" {
 			if globalValues["runtime/debug"] == nil {
@@ -372,7 +396,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		for _, imported := range pkg.Pkg.Imports() {
 			job, ok := packageActionIDJobs[imported.Path()]
 			if !ok {
-				return result, fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
+				return nil, fmt.Errorf("package %s imports %s but couldn't find dependency", pkg.ImportPath, imported.Path())
 			}
 			importedPackages = append(importedPackages, job)
 			actionIDDependencies = append(actionIDDependencies, job)
@@ -477,7 +501,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					flags = append(flags, "-working-directory="+tmpdir)
 					if config.TrimPath() {
 						flags = append(flags,
-							"-ffile-prefix-map="+tmpdir+"="+config.CSourcePath(pkg.RecordedDir()),
+							compileopts.FilePrefixMap(tmpdir, config.CSourcePath(pkg.RecordedDir())),
 						)
 					}
 					if config.Options.PrintCommands != nil {
@@ -582,6 +606,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		packageJobs = append(packageJobs, job)
 	}
 
+	// The link job needs only these names, so go/ssa can be freed before it.
+	var initFuncs []string
+	for _, pkg := range lprogram.Sorted() {
+		initFuncs = append(initFuncs, pkg.Pkg.Path()+".init")
+	}
+	debugInitAll := config.Debug() && !config.Options.SkipDWARF
+	var initAllPos token.Position
+	if debugInitAll {
+		initAllPos = program.Fset.Position(program.ImportedPackage("runtime").Members["initAll"].Pos())
+		initAllPos.Filename = lprogram.Packages["runtime"].RecordedPath(initAllPos.Filename)
+	}
+
 	// Add job that links and optimizes all packages together.
 	var mod llvm.Module
 	defer func() {
@@ -598,8 +634,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		run: func(*compileJob) error {
 			// Load and link all the bitcode files. This does not yet optimize
 			// anything, it only links the bitcode files together.
+			debug.FreeOSMemory()
 			ctx := llvm.NewContext()
 			mod = ctx.NewModule("main")
+			// Use one Linker for all packages. LinkModules rescans the whole
+			// module on every call.
+			linker := llvm.NewLinker(mod)
+			defer linker.Dispose()
 			for _, pkgJob := range packageJobs {
 				pkgMod, err := ctx.ParseBitcodeFile(pkgJob.result)
 				if err != nil {
@@ -622,7 +663,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 					}
 					fn.SetLinkage(llvm.LinkOnceODRLinkage)
 				}
-				err = llvm.LinkModules(mod, pkgMod)
+				err = linker.LinkModule(pkgMod)
 				if err != nil {
 					return fmt.Errorf("failed to link module: %w", err)
 				}
@@ -635,7 +676,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			// works fine. See:
 			// https://github.com/tinygo-org/tinygo/issues/4810
 			globalsMod := makeGlobalsModule(ctx, globalValues, machine)
-			llvm.LinkModules(mod, globalsMod)
+			if err := linker.LinkModule(globalsMod); err != nil {
+				return fmt.Errorf("failed to link globals module: %w", err)
+			}
 
 			// Create runtime.initAll function that calls the runtime
 			// initializer of each package.
@@ -648,16 +691,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			irbuilder := mod.Context().NewBuilder()
 			defer irbuilder.Dispose()
 			irbuilder.SetInsertPointAtEnd(block)
-			if config.Debug() && !config.Options.SkipDWARF {
-				pos := program.Fset.Position(program.ImportedPackage("runtime").Members["initAll"].Pos())
-				pos.Filename = lprogram.Packages["runtime"].RecordedPath(pos.Filename)
-				addInitAllDebugInfo(mod, llvmInitFn, irbuilder, pos, config.TrimPath())
+			if debugInitAll {
+				addInitAllDebugInfo(mod, llvmInitFn, irbuilder, initAllPos, config.TrimPath())
 			}
 			ptrType := llvm.PointerType(mod.Context().Int8Type(), 0)
-			for _, pkg := range lprogram.Sorted() {
-				pkgInit := mod.NamedFunction(pkg.Pkg.Path() + ".init")
+			for _, name := range initFuncs {
+				pkgInit := mod.NamedFunction(name)
 				if pkgInit.IsNil() {
-					panic("init not found for " + pkg.Pkg.Path())
+					panic("init not found for " + name)
 				}
 				irbuilder.CreateCall(pkgInit.GlobalValueType(), pkgInit, []llvm.Value{llvm.Undef(ptrType)}, "")
 			}
@@ -707,7 +748,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			// Make sure stack sizes are loaded from a separate section so they can be
 			// modified after linking.
 			if config.AutomaticStackSize() {
-				stackSizeLoads = transform.CreateStackSizeLoads(mod, config)
+				stackSizeLoads, err = transform.CreateStackSizeLoads(mod, config)
+				if err != nil {
+					return err
+				}
 			}
 			return nil
 		},
@@ -715,7 +759,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	// Create the output directory, if needed
 	if err := os.MkdirAll(filepath.Dir(outpath), 0777); err != nil {
-		return result, err
+		return nil, err
 	}
 
 	// Check whether we only need to create an object file.
@@ -723,29 +767,37 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	outext := filepath.Ext(outpath)
 	if outext == ".o" || outext == ".bc" || outext == ".ll" {
 		// Run jobs to produce the LLVM module.
-		err := runJobs(programJob, config.Options.Semaphore)
+		err := runJobs(programJob, sema)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		// Generate output.
 		switch outext {
 		case ".o":
 			llvmBuf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
 			if err != nil {
-				return result, err
+				return nil, err
 			}
 			defer llvmBuf.Dispose()
-			return result, os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
+			err = os.WriteFile(outpath, llvmBuf.Bytes(), 0666)
+			if err != nil {
+				return nil, err
+			}
 		case ".bc":
 			buf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
 			defer buf.Dispose()
-			return result, os.WriteFile(outpath, buf.Bytes(), 0666)
+			if err := os.WriteFile(outpath, buf.Bytes(), 0666); err != nil {
+				return nil, err
+			}
 		case ".ll":
 			data := []byte(mod.String())
-			return result, os.WriteFile(outpath, data, 0666)
+			if err := os.WriteFile(outpath, data, 0666); err != nil {
+				return nil, err
+			}
 		default:
 			panic("unreachable")
 		}
+		return result, nil
 	}
 
 	// Act as a compiler driver, as we need to produce a complete executable.
@@ -760,8 +812,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		result:       objfile,
 		run: func(*compileJob) error {
 			llvmBuf := llvm.WriteThinLTOBitcodeToMemoryBuffer(mod)
-			defer llvmBuf.Dispose()
-			return os.WriteFile(objfile, llvmBuf.Bytes(), 0666)
+			err := os.WriteFile(objfile, llvmBuf.Bytes(), 0666)
+			llvmBuf.Dispose()
+			// Only the stack size analysis in the link job reads the module
+			// after this point, so free it when that analysis will not run.
+			if !config.Options.PrintStacks && !config.AutomaticStackSize() {
+				ctx := mod.Context()
+				mod.Dispose()
+				ctx.Dispose()
+				mod = llvm.Module{}
+				releaseCHeap()
+			}
+			return err
 		},
 	}
 
@@ -776,18 +838,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 
 	if config.Options.BuildMode == "c-shared" {
 		if !strings.HasPrefix(config.Triple(), "wasm32-") {
-			return result, fmt.Errorf("buildmode c-shared is only supported on wasm at the moment")
+			return nil, fmt.Errorf("buildmode c-shared is only supported on wasm at the moment")
 		}
 		ldflags = append(ldflags, "--no-entry")
 	}
 
 	if config.Options.BuildMode == "wasi-legacy" {
 		if !strings.HasPrefix(config.Triple(), "wasm32-") {
-			return result, fmt.Errorf("buildmode wasi-legacy is only supported on wasm")
-		}
-
-		if config.Options.Scheduler != "none" {
-			return result, fmt.Errorf("buildmode wasi-legacy only supports scheduler=none")
+			return nil, fmt.Errorf("buildmode wasi-legacy is only supported on wasm")
 		}
 	}
 
@@ -796,7 +854,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if config.Target.RTLib == "compiler-rt" {
 		job, unlock, err := libCompilerRT.load(config, tmpdir)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)
@@ -806,7 +864,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	if config.GC() == "boehm" {
 		job, unlock, err := BoehmGC.load(config, tmpdir)
 		if err != nil {
-			return BuildResult{}, err
+			return nil, err
 		}
 		defer unlock()
 		linkerDependencies = append(linkerDependencies, job)
@@ -834,28 +892,36 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		linkerDependencies = append(linkerDependencies, job)
 	}
 
-	// Add jobs to compile C files in all packages. This is part of CGo.
+	// Add jobs to compile C and C++ files in all packages. This is part of CGo.
 	// TODO: do this as part of building the package to be able to link the
 	// bitcode files together.
 	for _, pkg := range lprogram.Sorted() {
-		for _, filename := range pkg.CFiles {
-			abspath := filepath.Join(pkg.OriginalDir(), filename)
-			job := &compileJob{
-				description: "compile CGo file " + abspath,
-				run: func(job *compileJob) error {
-					cflags := pkg.CFlags
-					var compileConfig *cFileCompileConfig
-					if config.TrimPath() {
-						compileConfig = &cFileCompileConfig{
-							recordedPath: config.CSourcePath(pkg.RecordedPath(abspath)),
+		for _, source := range []struct {
+			files []string
+			flags []string
+		}{
+			{pkg.CFiles, pkg.CFlags},
+			{pkg.CXXFiles, pkg.CXXFlags},
+		} {
+			for _, filename := range source.files {
+				abspath := filepath.Join(pkg.OriginalDir(), filename)
+				job := &compileJob{
+					description: "compile CGo file " + abspath,
+					run: func(job *compileJob) error {
+						cflags := source.flags
+						var compileConfig *cFileCompileConfig
+						if config.TrimPath() {
+							compileConfig = &cFileCompileConfig{
+								recordedPath: config.CSourcePath(pkg.RecordedPath(abspath)),
+							}
 						}
-					}
-					result, err := compileAndCacheCFile(abspath, tmpdir, cflags, compileConfig, config.Options.PrintCommands)
-					job.result = result
-					return err
-				},
+						result, err := compileAndCacheCFile(abspath, tmpdir, cflags, compileConfig, config.Options.PrintCommands)
+						job.result = result
+						return err
+					},
+				}
+				linkerDependencies = append(linkerDependencies, job)
 			}
-			linkerDependencies = append(linkerDependencies, job)
 		}
 	}
 
@@ -893,7 +959,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 			ldflags = append(ldflags, "--strip-debug")
 		} else {
 			// Other linkers may have different flags.
-			return result, errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
+			return nil, errors.New("cannot remove debug information: unknown linker: " + config.Target.Linker)
 		}
 	}
 
@@ -1140,9 +1206,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 	// Run all jobs to compile and link the program.
 	// Do this now (instead of after elf-to-hex and similar conversions) as it
 	// is simpler and cannot be parallelized.
-	err = runJobs(linkJob, config.Options.Semaphore)
+	err = runJobs(linkJob, sema)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	// Get an Intel .hex file or .bin file from the .elf file.
@@ -1156,14 +1222,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
 		err := objcopy(result.Executable, result.Binary, outputBinaryFormat)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 	case "uf2":
 		// Get UF2 from the .elf file.
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
 		err := convertELFFileToUF2File(result.Executable, result.Binary, config.Target.UF2FamilyID)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 	case "esp32", "esp32-img", "esp32c3", "esp32s3", "esp32c6", "esp32h2", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
@@ -1171,17 +1237,17 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (BuildRe
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
 		err := makeESPFirmwareImage(result.Executable, result.Binary, outputBinaryFormat)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 	case "nrf-dfu":
 		// special format for nrfutil for Nordic chips
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
 		err = makeDFUFirmwareImage(config.Options, result.Executable, result.Binary)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
 	default:
-		return result, fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
+		return nil, fmt.Errorf("unknown output binary format: %s", outputBinaryFormat)
 	}
 
 	return result, nil
@@ -1329,6 +1395,9 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	if _, speedLevel, _ := config.OptLevel(); speedLevel == 0 && slices.ContainsFunc(config.BuildTags(), func(tag string) bool { return strings.HasPrefix(tag, "numa_psram") }) {
 		// The PSRAM start-up must run from IRAM, which needs the inliner.
 		return errors.New("PSRAM targets need -opt=1 or higher")
+	}
+	if err := transform.PrepareRuntimeStartup(mod); err != nil {
+		return err
 	}
 	err := interp.Run(mod, config.Options.InterpTimeout, config.Options.InterpMaxLoopIterations, config.DumpSSA())
 	if err != nil {
@@ -1990,7 +2059,7 @@ func gitVCSStamp(dir, modPath string) (version, settings string, gitErr error) {
 
 	// Use an exact semver tag on HEAD, else a pseudo-version from the last tag.
 	if tags, ok := git("tag", "--points-at", "HEAD"); ok {
-		for _, t := range strings.Fields(tags) {
+		for t := range strings.FieldsSeq(tags) {
 			if semver.IsValid(t) && semver.Canonical(t) == t {
 				version = t
 				break

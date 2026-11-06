@@ -211,6 +211,9 @@ func (f *File) chdir() error {
 // TODO: move to file_anyos once ReadAt is implemented for windows
 func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 	n, err = syscall.Pread(syscallFd(f), b, offset)
+	if n < 0 {
+		n = 0
+	}
 	err = handleSyscallError(err)
 	if n == 0 && len(b) > 0 && err == nil {
 		err = io.EOF
@@ -227,6 +230,9 @@ func (f unixFileHandle) ReadAt(b []byte, offset int64) (n int, err error) {
 // TODO: move to file_anyos once WriteAt is implemented for windows.
 func (f unixFileHandle) WriteAt(b []byte, offset int64) (int, error) {
 	n, err := syscall.Pwrite(syscallFd(f), b, offset)
+	if n < 0 {
+		n = 0
+	}
 	return n, handleSyscallError(err)
 }
 

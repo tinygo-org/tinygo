@@ -183,6 +183,10 @@ var aeabiBuiltins = []string{
 	"arm/aeabi_memset.S",
 	"arm/aeabi_uidivmod.S",
 	"arm/aeabi_uldivmod.S",
+	"arm/aeabi_uread4.S",
+	"arm/aeabi_uread8.S",
+	"arm/aeabi_uwrite4.S",
+	"arm/aeabi_uwrite8.S",
 
 	// These two are not technically EABI builtins but are used by them and only
 	// seem to be used on ARM. LLVM seems to use __divsi3 and __modsi3 on most
