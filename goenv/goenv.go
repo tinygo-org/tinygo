@@ -139,12 +139,21 @@ func Get(name string) string {
 		}
 		return gomips
 	case "GOROOT":
+		if dir := os.Getenv("GOROOT"); dir != "" {
+			return dir
+		}
 		readGoEnvVars()
 		return goEnvVars.GOROOT
 	case "GOPATH":
+		if dir := os.Getenv("GOPATH"); dir != "" {
+			return dir
+		}
 		readGoEnvVars()
 		return goEnvVars.GOPATH
 	case "GOCACHE":
+		if dir := os.Getenv("GOCACHE"); dir != "" {
+			return dir
+		}
 		// Get the cache directory, usually ~/.cache/tinygo
 		dir, err := os.UserCacheDir()
 		if err != nil {
