@@ -457,6 +457,27 @@ func TestWasmExit(t *testing.T) {
 	}
 }
 
+// Test that stopping a module releases the bridge slots held by the stacks of
+// goroutines that will never run again.
+func TestGCStacksBridge(t *testing.T) {
+	t.Parallel()
+
+	options := optionsFromTarget("wasm", sema)
+	buildConfig, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildConfig.Target.Emulator = "node --expose-gc testdata/gcstacks-bridge.js {}"
+	output := &bytes.Buffer{}
+	_, err = buildAndRun("testdata/gcstacks-bridge.go", buildConfig, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+		return cmd.Run()
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	checkOutputData(t, []byte("bridge slots released\n"), output.Bytes())
+}
+
 func TestWASIPanicTraceback(t *testing.T) {
 	t.Parallel()
 
