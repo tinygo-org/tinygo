@@ -234,7 +234,7 @@ jobs:
           mkdir -p ~/lib
           tar -C ~/lib -xf tinygo${{ needs.build-linux.outputs.version }}.linux-amd64.tar.gz
           ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
-      - run: make testchdir ${{ matrix.group }}
+      - run: make -j4 --output-sync=target testchdir ${{ matrix.group }}
   assert-test-linux:
     # Run all tests that can run on Linux, with LLVM assertions enabled to catch
     # potential bugs.
