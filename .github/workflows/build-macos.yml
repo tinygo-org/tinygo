@@ -34,8 +34,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Extract TinyGo version
         id: version
         run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
@@ -73,8 +72,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         uses: actions/setup-go@v6
         with:

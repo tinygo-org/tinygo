@@ -1,0 +1,9 @@
+name: Check out submodules
+description: Check out the submodules in parallel
+
+runs:
+  using: composite
+  steps:
+    - name: Check out submodules
+      shell: sh
+      run: git submodule update --init --depth=1 --jobs=4

@@ -23,8 +23,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         id: setup-go
         uses: actions/setup-go@v6
