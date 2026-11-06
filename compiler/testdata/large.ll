@@ -39,7 +39,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @"(main.largeReceiver).makeLargeValue"(ptr dereferenceable_or_null(1025) %return, ptr readonly dereferenceable_or_null(1025) %receiver, ptr %context) unnamed_addr #1 {
+define hidden void @"(main.largeReceiver).makeLargeValue"(ptr captures(none) dereferenceable_or_null(1025) %return, ptr readonly captures(none) dereferenceable_or_null(1025) %receiver, ptr %context) unnamed_addr #1 {
 entry:
   call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %return, ptr noundef nonnull align 1 dereferenceable(1025) %receiver, i32 1025, i1 false)
   ret void
@@ -49,7 +49,7 @@ entry:
 declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
 
 ; Function Attrs: nounwind
-define hidden i8 @"(main.largeReceiver).readLargeValue"(ptr readonly dereferenceable_or_null(1025) %receiver, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i8 @"(main.largeReceiver).readLargeValue"(ptr readonly captures(none) dereferenceable_or_null(1025) %receiver, ptr readonly captures(none) dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %value1 = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #14
@@ -64,7 +64,7 @@ entry:
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #3
 
 ; Function Attrs: nounwind
-define hidden void @main.makeLargeValue(ptr dereferenceable_or_null(1025) %return, i8 %value, ptr %context) unnamed_addr #1 {
+define hidden void @main.makeLargeValue(ptr captures(none) dereferenceable_or_null(1025) %return, i8 %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #14
@@ -79,7 +79,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.makeZeroLargeValue(ptr dereferenceable_or_null(1025) %return, ptr %context) unnamed_addr #1 {
+define hidden void @main.makeZeroLargeValue(ptr captures(none) dereferenceable_or_null(1025) %return, ptr %context) unnamed_addr #1 {
 entry:
   call void @llvm.memset.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %return, i8 0, i32 1025, i1 false)
   ret void
@@ -99,7 +99,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i8 @main.readLargeValue(ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i8 @main.readLargeValue(ptr readonly captures(none) dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %value1 = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #14
@@ -132,7 +132,7 @@ entry:
   br i1 %0, label %fpcall.throw, label %fpcall.next
 
 fpcall.next:                                      ; preds = %entry
-  %1 = call i8 %fn.funcptr(ptr nonnull %call.result, ptr %fn.context) #14
+  %1 = call i8 %fn.funcptr(ptr nonnull captures(none) %call.result, ptr %fn.context) #14
   ret i8 %1
 
 fpcall.throw:                                     ; preds = %entry
@@ -161,7 +161,7 @@ declare void @"interface:{main.makeLargeValue:func:{}{named:main.largeValue},mai
 declare i8 @"interface:{main.makeLargeValue:func:{}{named:main.largeValue},main.readLargeValue:func:{named:main.largeValue}{basic:uint8}}.readLargeValue$invoke"(ptr, ptr, ptr, ptr) #6
 
 ; Function Attrs: nounwind
-define hidden void @main.deferLargeValue(ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden void @main.deferLargeValue(ptr readonly captures(none) dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %defer.alloca = alloca { i32, ptr, ptr }, align 8
   %deferframe.buf = alloca %runtime.deferFrame, align 8
@@ -306,7 +306,7 @@ declare void @runtime.savePanicReplay(i32, i32, ptr) #0
 declare void @runtime.clearUnwind(ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.goLargeValue(ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden void @main.goLargeValue(ptr readonly captures(none) dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %go.param = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #14
@@ -329,7 +329,7 @@ entry:
 declare void @"internal/task.start"(i32, ptr, i32, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.makeLargeResults(ptr dereferenceable_or_null(1026) %return, i8 %value, ptr %context) unnamed_addr #1 {
+define hidden void @main.makeLargeResults(ptr captures(none) dereferenceable_or_null(1026) %return, i8 %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %call.result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #14
@@ -342,7 +342,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.makeTwoLargeResults(ptr dereferenceable_or_null(2050) %return, i8 %value, ptr %context) unnamed_addr #1 {
+define hidden void @main.makeTwoLargeResults(ptr captures(none) dereferenceable_or_null(2050) %return, i8 %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %call.result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #14
@@ -359,7 +359,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.makeMixedLargeResults(ptr dereferenceable_or_null(2051) %return, i8 %value, ptr %context) unnamed_addr #1 {
+define hidden void @main.makeMixedLargeResults(ptr captures(none) dereferenceable_or_null(2051) %return, i8 %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %call.result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #14
@@ -379,7 +379,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.chooseLargeValue(ptr dereferenceable_or_null(1025) %return, i1 %flag, ptr %context) unnamed_addr #1 {
+define hidden void @main.chooseLargeValue(ptr captures(none) dereferenceable_or_null(1025) %return, i1 %flag, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %call.result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #14
@@ -400,7 +400,7 @@ if.done:                                          ; preds = %if.then, %entry
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.makePointerLargeValue(ptr dereferenceable_or_null(1032) %return, ptr dereferenceable_or_null(1) %value, ptr %context) unnamed_addr #1 {
+define hidden void @main.makePointerLargeValue(ptr captures(none) dereferenceable_or_null(1032) %return, ptr dereferenceable_or_null(1) %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %complit = call align 4 dereferenceable(1032) ptr @runtime.alloc(i32 1032, ptr nonnull @"runtime/gc.layout:258-000000000000000000000000000000000000000000000000000000000000000002", ptr undef) #14
@@ -460,7 +460,7 @@ if.then:                                          ; preds = %typeassert.next
 declare i1 @runtime.typeAssert(ptr, ptr dereferenceable_or_null(1), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i8 @main.useLargeMap(ptr readonly dereferenceable_or_null(1025) %key, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i8 @main.useLargeMap(ptr readonly captures(none) dereferenceable_or_null(1025) %key, ptr readonly captures(none) dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %0 = call ptr @runtime.hashmapMakeGeneric(i32 1025, i32 1025, i32 1, ptr nonnull @"runtime.hashmapType:[1025]byte:[1025]byte", ptr null, ptr nonnull @runtime.hash32, ptr null, ptr nonnull @runtime.memequal, ptr undef) #14
@@ -499,7 +499,7 @@ declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr capt
 declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), i32, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i8 @main.useLargeChannel(ptr dereferenceable_or_null(44) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i8 @main.useLargeChannel(ptr dereferenceable_or_null(44) %ch, ptr readonly captures(none) dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op1 = alloca %runtime.channelOp, align 8
   %chan.op = alloca %runtime.channelOp, align 8
@@ -544,7 +544,7 @@ declare void @llvm.lifetime.end.p0(ptr captures(none)) #13
 declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(44), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i8 @main.selectLargeChannel(ptr dereferenceable_or_null(44) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i8 @main.selectLargeChannel(ptr dereferenceable_or_null(44) %ch, ptr readonly captures(none) dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %select.block.alloca = alloca [2 x %runtime.channelOp], align 8
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
@@ -675,7 +675,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.isZeroLargeValue(ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i1 @main.isZeroLargeValue(ptr readonly captures(none) dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #14
