@@ -174,6 +174,8 @@ func (b *builder) createAsyncifyNoSuspendInvoke(fnType llvm.Type, fn llvm.Value,
 		callArgs[i] = wrapper.Param(i + paramOffset)
 	}
 	result := builder.CreateCall(fnType, target, callArgs, "")
+	// The catcher is not Asyncify-instrumented, so its target must not be inlined.
+	result.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0))
 	unwindType, unwindLLVMFn := b.getRuntimeFunction("unwindPending")
 	unwinding := builder.CreateCall(unwindType, unwindLLVMFn, []llvm.Value{llvm.Undef(b.dataPtrType)}, "")
 	replay := b.createAsyncifyPanicReplay(wrapperType)
@@ -411,7 +413,7 @@ func (b *builder) functionCallProperties(fn *ssa.Function) callProperties {
 			common := call.Common()
 			if builtin, ok := common.Value.(*ssa.Builtin); ok {
 				switch builtin.Name() {
-				case "close", "delete", "panic":
+				case "append", "close", "delete", "panic":
 					properties |= callMayUnwind
 				}
 				continue
@@ -490,6 +492,9 @@ func instructionCallProperties(instruction ssa.Instruction) callProperties {
 
 func binOpMayUnwind(instruction *ssa.BinOp) bool {
 	switch instruction.Op {
+	case token.ADD:
+		basic, ok := instruction.X.Type().Underlying().(*types.Basic)
+		return ok && basic.Info()&types.IsString != 0
 	case token.QUO, token.REM:
 		basic, ok := instruction.X.Type().Underlying().(*types.Basic)
 		return ok && basic.Info()&types.IsInteger != 0

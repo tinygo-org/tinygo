@@ -59,12 +59,20 @@ func stringConcat(x, y _string) _string {
 	} else if y.length == 0 {
 		return x
 	} else {
-		length := x.length + y.length
+		length := stringConcatSize(x.length, y.length)
 		buf := alloc(length, gclayout.NoPtrs.AsPtr())
 		memcpy(buf, unsafe.Pointer(x.ptr), x.length)
 		memcpy(unsafe.Add(buf, x.length), unsafe.Pointer(y.ptr), y.length)
 		return _string{ptr: (*byte)(buf), length: length}
 	}
+}
+
+func stringConcatSize(x, y uintptr) uintptr {
+	length := x + y
+	if length < x || length > maxSliceCap(1) {
+		runtimePanic(errIntegerOverflow)
+	}
+	return length
 }
 
 // Create a string from a []byte slice.
