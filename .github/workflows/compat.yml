@@ -30,7 +30,7 @@ jobs:
         with:
           # Keep the go.mod go version in sync with MinimumGoMinorVersion in compileopts/config.go
           go-version-file: go.mod
-          cache: true
+          cache: false
       - name: Install LLVM
         run: |
           echo 'deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-${{ env.LLVM }} main' | sudo tee /etc/apt/sources.list.d/llvm.list
