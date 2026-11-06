@@ -26,3 +26,5 @@ recovered: map delete
 recovered: nil map
 recovered: divide by zero
 recovered: nil pointer
+recovered: append overflow from helper
+recovered: string overflow from helper

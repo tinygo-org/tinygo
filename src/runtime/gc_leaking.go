@@ -41,16 +41,21 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// TODO: this can be optimized by not casting between pointers and ints so
 	// much. And by using platform-native data types (e.g. *uint8 for 8-bit
 	// systems).
-	gcLock.Lock()
-	size = align(size)
-	addr := heapptr
-	gcTotalAlloc += uint64(size)
-	gcMallocs++
-	heapptr += size
-	if heapptr < addr {
-		// The allocation size overflowed the heap pointer.
+	alignedSize := align(size)
+	if alignedSize < size {
 		runtimePanic(errOutOfMemory)
 	}
+	size = alignedSize
+	gcLock.Lock()
+	addr := heapptr
+	end := addr + size
+	if end < addr {
+		gcLock.Unlock()
+		runtimePanic(errOutOfMemory)
+	}
+	gcTotalAlloc += uint64(size)
+	gcMallocs++
+	heapptr = end
 	for heapptr > heapEnd {
 		// Try to increase the heap and check again.
 		// Use > instead of >= because an allocation that exactly
