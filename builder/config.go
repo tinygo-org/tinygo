@@ -77,3 +77,28 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	}
 	return config, nil
 }
+
+// PrepareForAnalysis initializes library cache paths and generated libc headers.
+// It returns a copy without changing the caller's configuration.
+func PrepareForAnalysis(config *compileopts.Config) (*compileopts.Config, error) {
+	libraries, err := configuredLibraries(config)
+	if err != nil {
+		return nil, err
+	}
+	libraries.linker = nil
+	_, keys, err := makeLibraryCacheInputs(config, libraries)
+	if err != nil {
+		return nil, err
+	}
+	prepared := *config
+	prepared.LibraryKeys = keys
+	if libraries.libc != nil {
+		outdir := prepared.LibraryPath(libraries.libc.name)
+		unlock := lock(outdir + ".lock")
+		defer unlock()
+		if err := libraries.libc.prepareHeaders(prepared.Triple(), outdir); err != nil {
+			return nil, err
+		}
+	}
+	return &prepared, nil
+}
