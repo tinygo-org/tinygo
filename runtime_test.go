@@ -31,6 +31,48 @@ func TestTimerStopResetRace(t *testing.T) {
 	runTest("timer_stop_reset_race.go", optionsFromTarget("", sema), t, nil, nil)
 }
 
+// TestTimerStress runs timer and sleep stress programs. Timers fire while other
+// goroutines stop, reset and create timers, sleep, and the GC runs. It covers
+// the threads and tasks schedulers on the host, and the cores scheduler on
+// riscv-qemu when qemu is installed.
+func TestTimerStress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timer stress tests in short mode")
+	}
+	programs := []string{
+		"timer_queue_growth.go",
+		"timer_concurrent_growth.go",
+		"timer_stop_reset_stress.go",
+		"timer_ticker_gc.go",
+		"sleepers.go",
+	}
+	type config struct {
+		name      string
+		target    string
+		scheduler string
+	}
+	var configs []config
+	switch runtime.GOOS {
+	case "darwin", "linux":
+		configs = append(configs, config{"threads", "", "threads"}, config{"tasks", "", "tasks"})
+	}
+	if _, err := exec.LookPath("qemu-system-riscv32"); err == nil {
+		configs = append(configs, config{"riscv-qemu", "riscv-qemu", ""})
+	}
+	if len(configs) == 0 {
+		t.Skip("no supported scheduler configuration on this host")
+	}
+	for _, c := range configs {
+		for _, program := range programs {
+			t.Run(c.name+"/"+program, func(t *testing.T) {
+				options := optionsFromTarget(c.target, sema)
+				options.Scheduler = c.scheduler
+				runTest(program, options, t, nil, nil)
+			})
+		}
+	}
+}
+
 func TestGoexitCrash(t *testing.T) {
 	t.Parallel()
 
