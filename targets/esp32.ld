@@ -229,6 +229,15 @@ _heap_end = 0x3FFE0000;
 
 _stack_size = 4K;
 
+/* ROM functions and data for the PSRAM start-up, from ESP-IDF
+ * components/esp_rom/esp32/ld/esp32.rom.ld. */
+PROVIDE ( cache_sram_mmu_set_rom = 0x400097f4 );
+PROVIDE ( esp_rom_spiflash_config_clk = 0x40062bc8 );
+PROVIDE ( ets_efuse_get_spiconfig = 0x40008658 );
+PROVIDE ( g_rom_spiflash_dummy_len_plus = 0x3ffae290 );
+PROVIDE ( rom_gpio_matrix_in = 0x40009edc );
+PROVIDE ( rom_gpio_matrix_out = 0x40009f0c );
+
 /* ESP32 ROM-owned PHY DRAM symbols from ESP-IDF esp32.rom.ld.
  * Exposed as linker symbols so firmware code can reference them without
  * hardcoding addresses in C sources. */
