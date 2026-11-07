@@ -3,8 +3,9 @@ package ir
 
 import (
 	"regexp"
-	"strconv"
 	"strings"
+
+	"github.com/tinygo-org/tinygo/internal/diff"
 )
 
 // Normalize canonicalizes LLVM-version-specific IR spellings for comparison
@@ -34,44 +35,11 @@ func Normalize(s string) string {
 
 // Diff compares two LLVM IR strings, ignoring irrelevant lines (comments,
 // empty lines, etc.) and normalizing LLVM-version-specific spellings via
-// Normalize. It returns "" when they are equal. Otherwise it returns a
-// compact diff of only the region that differs: the common prefix and suffix
-// are trimmed, then the differing expected lines (prefixed "-") are shown
-// followed by the differing actual lines (prefixed "+").
+// Normalize. It returns "" when they are equal, otherwise a unified diff.
 func Diff(expected, actual string) string {
-	exp := filterIrrelevantLines(strings.Split(Normalize(expected), "\n"))
-	act := filterIrrelevantLines(strings.Split(Normalize(actual), "\n"))
-
-	// Trim the common prefix.
-	start := 0
-	for start < len(exp) && start < len(act) && exp[start] == act[start] {
-		start++
-	}
-	// Trim the common suffix.
-	e, a := len(exp), len(act)
-	for e > start && a > start && exp[e-1] == act[a-1] {
-		e--
-		a--
-	}
-	if start == e && start == a {
-		return "" // equal
-	}
-
-	var b strings.Builder
-	b.WriteString("first difference at relevant line ")
-	b.WriteString(strconv.Itoa(start + 1))
-	b.WriteString(":\n")
-	for _, line := range exp[start:e] {
-		b.WriteString("- ")
-		b.WriteString(line)
-		b.WriteByte('\n')
-	}
-	for _, line := range act[start:a] {
-		b.WriteString("+ ")
-		b.WriteString(line)
-		b.WriteByte('\n')
-	}
-	return b.String()
+	exp := strings.Join(filterIrrelevantLines(strings.Split(Normalize(expected), "\n")), "\n") + "\n"
+	act := strings.Join(filterIrrelevantLines(strings.Split(Normalize(actual), "\n")), "\n") + "\n"
+	return string(diff.Diff("expected", []byte(exp), "actual", []byte(act)))
 }
 
 // capturesNoneAttrRe matches a co-occurring attribute directly followed by
