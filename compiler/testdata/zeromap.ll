@@ -12,7 +12,7 @@ target triple = "wasm32-unknown-wasi"
 @"runtime/gc.layout:92-545555555555555555550500" = linkonce_odr unnamed_addr constant { i32, [12 x i8] } { i32 92, [12 x i8] c"TUUUUUUUUU\05\00" }
 @"runtime.hashmapType:[5]string:int" = linkonce_odr unnamed_addr constant { ptr, ptr, ptr } { ptr inttoptr (i32 69 to ptr), ptr inttoptr (i32 3 to ptr), ptr @"runtime/gc.layout:92-545555555555555555550500" }
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -39,12 +39,12 @@ entry:
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.start.p0(ptr nocapture) #3
+declare void @llvm.lifetime.start.p0(ptr captures(none)) #3
 
-declare i1 @runtime.hashmapGenericGet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, i32, ptr) #0
+declare i1 @runtime.hashmapGenericGet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), i32, ptr) #0
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.end.p0(ptr nocapture) #3
+declare void @llvm.lifetime.end.p0(ptr captures(none)) #3
 
 ; Function Attrs: noinline nounwind
 define hidden void @main.testZeroSet(ptr dereferenceable_or_null(52) %m, i1 %s.b1, i32 %s.i, i1 %s.b2, ptr %context) unnamed_addr #2 {
@@ -64,7 +64,7 @@ entry:
   ret void
 }
 
-declare void @runtime.hashmapGenericSet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, ptr) #0
+declare void @runtime.hashmapGenericSet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), ptr) #0
 
 ; Function Attrs: noinline nounwind
 define hidden i32 @main.testZeroArrayGet(ptr dereferenceable_or_null(52) %m, [2 x %main.hasPadding] %s, ptr %context) unnamed_addr #2 {

@@ -21,7 +21,7 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:named:main.onlyGenericMethod" = linkonce_odr constant { i8, i16, ptr, ptr, ptr, [23 x i8] } { i8 122, i16 0, ptr @"reflect/types.type:pointer:named:main.onlyGenericMethod", ptr @"reflect/types.type:struct:{}", ptr @"reflect/types.type.pkgpath:main", [23 x i8] c"main.onlyGenericMethod\00" }, align 4
 @"reflect/types.type:pointer:named:main.onlyGenericMethod" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:named:main.onlyGenericMethod" }, align 4
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {

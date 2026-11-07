@@ -73,7 +73,7 @@ func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Modu
 	actual = actual[strings.Index(actual, "\ntarget datalayout = ")+1:]
 
 	if *update {
-		err := os.WriteFile(pathPrefix+".out.ll", []byte(ir.Normalize(actual)), 0666)
+		err := ir.WriteGolden(pathPrefix+".out.ll", actual)
 		if err != nil {
 			t.Error("failed to write out new output:", err)
 		}

@@ -116,7 +116,7 @@ func TestCompiler(t *testing.T) {
 
 			// Update test if needed. Do not check the result.
 			if *flagUpdate {
-				err := os.WriteFile(outPath, []byte(ir.Normalize(mod.String())), 0666)
+				err := ir.WriteGolden(outPath, mod.String())
 				if err != nil {
 					t.Error("failed to write updated output file:", err)
 				}

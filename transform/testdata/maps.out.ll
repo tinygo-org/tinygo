@@ -5,9 +5,9 @@ target triple = "armv7m-none-eabi"
 
 declare nonnull ptr @runtime.hashmapMake(i8, i8, i32)
 
-declare void @runtime.hashmapStringSet(ptr nocapture, ptr, i32, ptr nocapture readonly)
+declare void @runtime.hashmapStringSet(ptr captures(none), ptr, i32, ptr readonly captures(none))
 
-declare i1 @runtime.hashmapStringGet(ptr nocapture, ptr, i32, ptr nocapture)
+declare i1 @runtime.hashmapStringGet(ptr captures(none), ptr, i32, ptr captures(none))
 
 define void @testUnused() {
   ret void

@@ -35,12 +35,12 @@ entry:
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.start.p0(ptr nocapture) #2
+declare void @llvm.lifetime.start.p0(ptr captures(none)) #2
 
 declare void @runtime.chanSend(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.end.p0(ptr nocapture) #2
+declare void @llvm.lifetime.end.p0(ptr captures(none)) #2
 
 ; Function Attrs: nounwind
 define hidden void @main.chanIntRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
@@ -231,7 +231,7 @@ select.next2:                                     ; preds = %select.next
   call void @runtime._panic(ptr nonnull @"reflect/types.type:basic:string", ptr nonnull @"main$pack", ptr undef) #3
   br label %unwind.return
 
-unwind.return:
+unwind.return:                                    ; preds = %select.next2
   ret { i32, i1 } undef
 }
 
