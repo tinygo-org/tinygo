@@ -295,6 +295,9 @@ jobs:
       - uses: ./.github/actions/gen-device
       - name: Test TinyGo
         run: make ASSERT=1 test
+      - name: Check for unreachable functions
+        if: ${{ !cancelled() }}
+        run: make ASSERT=1 deadcode
       - name: Check Go code formatting after device generation
         run: make fmt-check
 
