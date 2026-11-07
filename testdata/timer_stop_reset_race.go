@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync/atomic"
 	"time"
 	"unsafe"
 	_ "unsafe"
@@ -8,55 +9,82 @@ import (
 
 func main() {
 	testStopWhileFiring()
+	testStopPeriodicWhileFiring()
 	testResetWhileFiring()
 	println("timer stop/reset race tests done")
 }
 
+// The callbacks must not block on channels. The cores scheduler runs them on a
+// scheduler stack with no current task, so they spin on atomics instead.
+
+func waitFor(flag *atomic.Bool) {
+	for !flag.Load() {
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func testStopWhileFiring() {
-	started := make(chan struct{})
-	release := make(chan struct{})
+	var started, release atomic.Bool
 
 	tim := newTimerWithCallback(time.Millisecond, 0, func(any, uintptr, int64) {
-		close(started)
-		<-release
+		started.Store(true)
+		for !release.Load() {
+		}
 	})
 
-	<-started
+	waitFor(&started)
 	if stopTimer(tim) {
 		println("fail: Stop returned true for a firing timer")
 	} else {
 		println("Stop returned false for firing timer")
 	}
-	close(release)
+	release.Store(true)
 }
 
-func testResetWhileFiring() {
-	started := make(chan struct{})
-	release := make(chan struct{})
-	firedAgain := make(chan struct{}, 1)
-	first := true
+func testStopPeriodicWhileFiring() {
+	var started, release atomic.Bool
+	var calls atomic.Int32
 
-	tim := newTimerWithCallback(time.Millisecond, 5*time.Second, func(any, uintptr, int64) {
-		if first {
-			first = false
-			close(started)
-			<-release
-			return
-		}
-		select {
-		case firedAgain <- struct{}{}:
-		default:
+	tim := newTimerWithCallback(time.Millisecond, 10*time.Millisecond, func(any, uintptr, int64) {
+		if calls.Add(1) == 1 {
+			started.Store(true)
+			for !release.Load() {
+			}
 		}
 	})
 
-	<-started
+	waitFor(&started)
+	stopTimer(tim)
+	release.Store(true)
+	time.Sleep(100 * time.Millisecond)
+	if calls.Load() == 1 {
+		println("stopped periodic timer did not fire again")
+	} else {
+		println("fail: stopped periodic timer fired again")
+	}
+}
+
+func testResetWhileFiring() {
+	var started, release, firedAgain atomic.Bool
+	var calls atomic.Int32
+
+	tim := newTimerWithCallback(time.Millisecond, 5*time.Second, func(any, uintptr, int64) {
+		if calls.Add(1) == 1 {
+			started.Store(true)
+			for !release.Load() {
+			}
+			return
+		}
+		firedAgain.Store(true)
+	})
+
+	waitFor(&started)
 	resetPeriodicTimer(tim, 20*time.Millisecond, 5*time.Second)
-	close(release)
+	release.Store(true)
 	time.Sleep(200 * time.Millisecond)
-	select {
-	case <-firedAgain:
+	if firedAgain.Load() {
 		println("reset firing timer used reset deadline")
-	default:
+	} else {
 		println("fail: reset firing timer missed reset deadline")
 	}
 	stopTimer(tim)

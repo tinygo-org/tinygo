@@ -66,6 +66,63 @@ func main() {
 	}
 }
 
+// TestTimerStress runs timer and sleep stress programs. Timers fire while other
+// goroutines stop, reset and create timers, sleep, and the GC runs. It covers
+// the threads and tasks schedulers on the host, and the cores scheduler on
+// riscv-qemu when qemu is installed. Programs that hold a timer callback in
+// flight need a second core to keep running, so only the cores scheduler runs
+// them.
+func TestTimerStress(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timer stress tests in short mode")
+	}
+	programs := []string{
+		"timer_queue_growth.go",
+		"timer_concurrent_growth.go",
+		"timer_stop_reset_stress.go",
+		"timer_ticker_gc.go",
+		"sleepers.go",
+	}
+	coresPrograms := []string{
+		"timer_stop_reset_race.go",
+		"timer_reserve_alloc.go",
+		"timer_reserve_alloc_multicore.go",
+	}
+	type config struct {
+		name      string
+		target    string
+		scheduler string
+	}
+	var configs []config
+	switch runtime.GOOS {
+	case "darwin", "linux":
+		configs = append(configs, config{"threads", "", "threads"}, config{"tasks", "", "tasks"})
+	}
+	if _, err := exec.LookPath("qemu-system-riscv32"); err == nil {
+		configs = append(configs, config{"riscv-qemu", "riscv-qemu", ""})
+	}
+	if len(configs) == 0 {
+		t.Skip("no supported scheduler configuration on this host")
+	}
+	for _, c := range configs {
+		cfgPrograms := programs
+		if c.target == "riscv-qemu" {
+			cfgPrograms = append(cfgPrograms[:len(cfgPrograms):len(cfgPrograms)], coresPrograms...)
+		}
+		for _, program := range cfgPrograms {
+			t.Run(c.name+"/"+program, func(t *testing.T) {
+				options := optionsFromTarget(c.target, sema)
+				options.Scheduler = c.scheduler
+				if c.target == "riscv-qemu" && program == "timer_stop_reset_stress.go" {
+					// Short length still takes over 2 minutes on assert builds in CI.
+					options.GlobalValues = map[string]map[string]string{"main": {"size": "small"}}
+				}
+				runTest(program, options, t, nil, nil)
+			})
+		}
+	}
+}
+
 func TestGoexitCrash(t *testing.T) {
 	t.Parallel()
 
