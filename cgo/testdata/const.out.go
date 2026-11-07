@@ -60,3 +60,10 @@ const _Cgo_referenced = _Cgo_unreferenced
 const _Cgo_fnlike_val = 5
 const _Cgo_square_val = (20 * 20)
 const _Cgo_add_val = (3 + 5)
+
+type _Cgo_flag_t = _Cgo_uchar
+
+const _Cgo_cast_val = (_Cgo_flag_t((1 << 0)))
+const _Cgo_cast_fn_val = (_Cgo_flag_t(2))
+const _Cgo_cast_int = (_Cgo_int(-1))
+const _Cgo_cast_float = (float32(1))
