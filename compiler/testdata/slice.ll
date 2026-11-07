@@ -3,7 +3,7 @@ source_filename = "slice.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
 target triple = "wasm32-unknown-wasi"
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -69,7 +69,7 @@ entry:
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
 declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #2
 
-declare { ptr, i32, i32 } @runtime.sliceAppend(ptr, ptr nocapture readonly, i32, i32, i32, i32, ptr, ptr) #0
+declare { ptr, i32, i32 } @runtime.sliceAppend(ptr, ptr readonly captures(none), i32, i32, i32, i32, ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden { ptr, i32, i32 } @main.sliceAppendSlice(ptr %ints.data, i32 %ints.len, i32 %ints.cap, ptr %added.data, i32 %added.len, i32 %added.cap, ptr %context) unnamed_addr #1 {
@@ -95,11 +95,11 @@ entry:
   ret i32 %copy.n
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umin.i32(i32, i32) #3
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.memmove.p0.p0.i32(ptr nocapture writeonly, ptr nocapture readonly, i32, i1 immarg) #4
+declare void @llvm.memmove.p0.p0.i32(ptr writeonly captures(none), ptr readonly captures(none), i32, i1 immarg) #4
 
 ; Function Attrs: nounwind
 define hidden void @main.sliceFrom(ptr %ints.data, i32 %ints.len, i32 %ints.cap, i32 %low, ptr %context) unnamed_addr #1 {
@@ -421,6 +421,6 @@ unwind.return:                                    ; preds = %unsafe.Slice.throw
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #3 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #3 = { nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none) }
 attributes #4 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #5 = { nounwind }

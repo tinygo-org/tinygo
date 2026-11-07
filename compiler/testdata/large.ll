@@ -30,7 +30,7 @@ target triple = "wasm32-unknown-wasi"
 @llvm.used = appending global [16 x ptr] [ptr @"(main.largeReceiver).makeLargeValue", ptr @"(main.largeReceiver).readLargeValue", ptr @main.makeLargeValue, ptr @main.makeZeroLargeValue, ptr @main.readLargeValue, ptr @main.deferLargeValue, ptr @main.goLargeValue, ptr @main.makeLargeResults, ptr @main.makeTwoLargeResults, ptr @main.makeMixedLargeResults, ptr @main.chooseLargeValue, ptr @main.makePointerLargeValue, ptr @main.useLargeMap, ptr @main.useLargeChannel, ptr @main.selectLargeChannel, ptr @main.isZeroLargeValue]
 @tinygo.indirect-abi = appending global [16 x ptr] [ptr @"(main.largeReceiver).makeLargeValue", ptr @"(main.largeReceiver).readLargeValue", ptr @main.makeLargeValue, ptr @main.makeZeroLargeValue, ptr @main.readLargeValue, ptr @main.deferLargeValue, ptr @main.goLargeValue, ptr @main.makeLargeResults, ptr @main.makeTwoLargeResults, ptr @main.makeMixedLargeResults, ptr @main.chooseLargeValue, ptr @main.makePointerLargeValue, ptr @main.useLargeMap, ptr @main.useLargeChannel, ptr @main.selectLargeChannel, ptr @main.isZeroLargeValue]
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -46,7 +46,7 @@ entry:
 }
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.memcpy.p0.p0.i32(ptr noalias nocapture writeonly, ptr noalias nocapture readonly, i32, i1 immarg) #2
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
 
 ; Function Attrs: nounwind
 define hidden i8 @"(main.largeReceiver).readLargeValue"(ptr readonly dereferenceable_or_null(1025) %receiver, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
@@ -244,7 +244,7 @@ unwind.return:                                    ; preds = %recover, %rundefers
   ret void
 }
 
-; Function Attrs: nocallback nofree nounwind willreturn
+; Function Attrs: nocallback nofree nosync nounwind willreturn
 declare ptr @llvm.stacksave.p0() #6
 
 declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(28), ptr, ptr) #0
@@ -289,7 +289,7 @@ declare ptr @runtime.panicRewindStackPointer(ptr) #0
 
 declare void @tinygo_set_panic_rewind_stack_pointer(ptr, ptr) #0
 
-declare void @runtime.asyncifyStartRewindImport(ptr nocapture) #8
+declare void @runtime.asyncifyStartRewindImport(ptr captures(none)) #8
 
 declare void @runtime.asyncifyStopUnwindImport() #9
 
@@ -452,7 +452,7 @@ if.then:                                          ; preds = %typeassert.next
 declare i1 @runtime.typeAssert(ptr, ptr dereferenceable_or_null(1), ptr) #0
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
-declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #11
+declare void @llvm.memset.p0.i32(ptr writeonly captures(none), i8, i32, i1 immarg) #11
 
 ; Function Attrs: nounwind
 define hidden i8 @main.useLargeMap(ptr readonly dereferenceable_or_null(1025) %key, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
@@ -530,13 +530,13 @@ if.then:                                          ; preds = %entry
   ret i8 0
 }
 
-; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.start.p0(ptr nocapture) #12
+; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.lifetime.start.p0(ptr captures(none)) #12
 
 declare void @runtime.chanSend(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
-; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.end.p0(ptr nocapture) #12
+; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.lifetime.end.p0(ptr captures(none)) #12
 
 declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
@@ -723,11 +723,11 @@ attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite
 attributes #3 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #4 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-indirect-result"="true" "tinygo-invoke"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}" "tinygo-methods"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}; main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" }
 attributes #5 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-invoke"="main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" "tinygo-methods"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}; main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" }
-attributes #6 = { nocallback nofree nounwind willreturn }
+attributes #6 = { nocallback nofree nosync nounwind willreturn }
 attributes #7 = { noinline }
 attributes #8 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="asyncify" "wasm-import-name"="start_rewind" }
 attributes #9 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="asyncify" "wasm-import-name"="stop_unwind" }
 attributes #10 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.readLargeValue" }
 attributes #11 = { nocallback nofree nounwind willreturn memory(argmem: write) }
-attributes #12 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
+attributes #12 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
 attributes #13 = { nounwind }

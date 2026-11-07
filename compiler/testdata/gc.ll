@@ -25,7 +25,7 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:basic:complex128" = linkonce_odr constant { i8, ptr } { i8 80, ptr @"reflect/types.type:pointer:basic:complex128" }, align 4
 @"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:complex128" }, align 4
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {

@@ -37,7 +37,7 @@ target triple = "wasm32-unknown-wasi"
 @"reflect/types.type:pointer:struct:{Value:named:main.assertionElem}" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:struct:{Value:named:main.assertionElem}" }, align 4
 @"reflect/types.type:struct:{Value:named:main.assertionElem}.Value" = internal unnamed_addr constant [8 x i8] c"\04\00Value\00", align 1
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -166,10 +166,10 @@ typeswitch.next5:                                 ; preds = %typeassert.next33
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.start.p0(ptr nocapture) #2
+declare void @llvm.lifetime.start.p0(ptr captures(none)) #2
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.end.p0(ptr nocapture) #2
+declare void @llvm.lifetime.end.p0(ptr captures(none)) #2
 
 ; Function Attrs: nounwind
 define hidden i1 @main.isError(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {

@@ -11,13 +11,13 @@ target triple = "armv7em-none-eabi"
 
 declare void @"runtime/interrupt.callHandlers"(i32, ptr) local_unnamed_addr
 
-declare void @"device/arm.EnableIRQ"(i32, ptr nocapture readnone)
+declare void @"device/arm.EnableIRQ"(i32, ptr readnone captures(none))
 
-declare void @"device/arm.SetPriority"(i32, i32, ptr nocapture readnone)
+declare void @"device/arm.SetPriority"(i32, i32, ptr readnone captures(none))
 
 declare void @"runtime/interrupt.use"(%"runtime/interrupt.Interrupt")
 
-define void @runtime.initAll(ptr nocapture readnone %0) unnamed_addr {
+define void @runtime.initAll(ptr readnone captures(none) %0) unnamed_addr {
 entry:
   call void @"device/arm.SetPriority"(i32 2, i32 192, ptr undef)
   call void @"device/arm.EnableIRQ"(i32 2, ptr undef)
@@ -47,10 +47,10 @@ switch.done:                                      ; preds = %entry
   ret void
 }
 
-define internal void @"(*machine.UART).handleInterrupt$bound"(i32 %0, ptr nocapture %context) {
+define internal void @"(*machine.UART).handleInterrupt$bound"(i32 %0, ptr captures(none) %context) {
 entry:
   call void @"(*machine.UART).handleInterrupt"(ptr %context, i32 %0, ptr undef)
   ret void
 }
 
-declare void @"(*machine.UART).handleInterrupt"(ptr nocapture, i32, ptr nocapture readnone)
+declare void @"(*machine.UART).handleInterrupt"(ptr captures(none), i32, ptr readnone captures(none))

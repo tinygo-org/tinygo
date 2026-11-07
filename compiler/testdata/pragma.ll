@@ -11,7 +11,7 @@ target triple = "wasm32-unknown-wasi"
 @undefinedGlobalNotInSection = external global i32, align 4
 @main.multipleGlobalPragmas = hidden global i32 0, section ".global_section", align 1024
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -84,7 +84,7 @@ entry:
 
 declare void @main.undefinedFunctionNotInSection(ptr) #0
 
-declare void @main.doesNotEscapeParam(ptr nocapture dereferenceable_or_null(4), ptr nocapture, i32, i32, ptr nocapture dereferenceable_or_null(40), ptr nocapture, ptr) #0
+declare void @main.doesNotEscapeParam(ptr captures(none) dereferenceable_or_null(4), ptr captures(none), i32, i32, ptr captures(none) dereferenceable_or_null(40), ptr captures(none), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.stillEscapes(ptr dereferenceable_or_null(4) %a, ptr %b.data, i32 %b.len, i32 %b.cap, ptr dereferenceable_or_null(40) %c, ptr %d, ptr %context) unnamed_addr #1 {
