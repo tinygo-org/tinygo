@@ -39,9 +39,6 @@ MEMORY
 
     DROM (r)  : ORIGIN = 0x3F400000, LENGTH = 4M /* Flash data bus (page-aligned) */
     IROM (rx) : ORIGIN = 0x400D0000, LENGTH = 4M /* Flash instruction bus (page-aligned) */
-
-    /* External PSRAM through the cache. ESP32 TRM v5.8 section 4.3.2.2. */
-    PSRAM (rw) : ORIGIN = 0x3F800000, LENGTH = 4M
 }
 
 ENTRY(call_start_cpu0)
@@ -212,16 +209,6 @@ SECTIONS
         _text_end = ABSOLUTE(.);
     } >IROM
 
-    /* PSRAM is off at boot, so this section is not loaded and the compiler refuses start
-     * values. The garbage collector does not scan it, so it must hold no pointers. */
-    .psram (NOLOAD) : ALIGN(4)
-    {
-        _spsram = ABSOLUTE(.);
-        *(.psram .psram.*)
-        . = ALIGN(4);
-        _epsram = ABSOLUTE(.);
-    } >PSRAM
-
     /DISCARD/ :
     {
         *(.eh_frame)
@@ -241,9 +228,6 @@ _heap_start = ALIGN(_edata, 16);
 _heap_end = 0x3FFE0000;
 
 _stack_size = 4K;
-
-/* Only the esp32-psram target switches the PSRAM on. */
-ASSERT(_epsram == _spsram || DEFINED(_psram_enabled), "variables in .psram need -target=esp32-psram")
 
 /* ROM functions and data for the PSRAM start-up, from ESP-IDF
  * components/esp_rom/esp32/ld/esp32.rom.ld. */

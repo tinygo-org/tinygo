@@ -1,5 +1,4 @@
 {
 	"inherits": ["esp32-generic"],
-	"build-tags": ["numa_psram_qspi"],
-	"ldflags": ["--defsym=_psram_enabled=1"]
+	"build-tags": ["numa_psram_qspi"]
 }

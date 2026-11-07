@@ -59,7 +59,6 @@ const (
 	psramNoChip
 	psramOldPSRAM
 	psramBadReadBack
-	psramTooSmall
 	psramUnknownSize
 	psramMapFailed
 )
@@ -68,12 +67,6 @@ var (
 	psramSize   uint32
 	psramReason uint8 = psramNoChip
 )
-
-//go:extern _spsram
-var _spsram [0]byte
-
-//go:extern _epsram
-var _epsram [0]byte
 
 //export rom_gpio_matrix_out
 func romMatrixOut(gpio, signal, invertOut, invertEnable uint32)
@@ -102,39 +95,25 @@ func initPSRAM() {
 	psramReason = psramStart()
 	device.AsmFull("wsr {state}, PS", map[string]interface{}{"state": state})
 	device.Asm("rsync")
+}
+
+// psramMemory returns the mapped PSRAM, or nil when PSRAM is off.
+// machine.PSRAM uses it.
+func psramMemory() []byte {
 	if psramReason != psramOK {
-		return
+		return nil
 	}
-	start := uintptr(unsafe.Pointer(&_spsram))
-	end := uintptr(unsafe.Pointer(&_epsram))
-	if end-psramAddr > uintptr(psramSize) {
-		psramReason = psramTooSmall
-		return
-	}
-	memzero(unsafe.Pointer(start), end-start)
+	return unsafe.Slice((*byte)(unsafe.Pointer(uintptr(psramAddr))), psramSize)
 }
 
-// psramActive reports whether PSRAM is on. The machine package uses it.
-func psramActive() bool {
-	return psramReason == psramOK
-}
-
-// reportPSRAM stops the program when it has variables in PSRAM but PSRAM is off.
-// Without such variables it only prints why PSRAM is off.
+// reportPSRAM prints why PSRAM is off.
 func reportPSRAM() {
 	if psramReason == psramOK {
 		return
 	}
-	if uintptr(unsafe.Pointer(&_epsram)) == uintptr(unsafe.Pointer(&_spsram)) {
-		printstring("PSRAM is off: ")
-		printstring(psramReasonText())
-		printnl()
-		return
-	}
-	printstring("panic: PSRAM is off: ")
+	printstring("PSRAM is off: ")
 	printstring(psramReasonText())
 	printnl()
-	abort()
 }
 
 func psramReasonText() string {
@@ -151,8 +130,6 @@ func psramReasonText() string {
 		return "32Mbit PSRAM version 0 is not supported"
 	case psramBadReadBack:
 		return "PSRAM read back test failed"
-	case psramTooSmall:
-		return ".psram section is bigger than the PSRAM"
 	case psramUnknownSize:
 		return "PSRAM ID has an unknown size"
 	case psramMapFailed:

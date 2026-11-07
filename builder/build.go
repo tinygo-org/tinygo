@@ -1426,41 +1426,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 		return errors.New("verification failure after LLVM optimization passes")
 	}
 
-	return checkPSRAMGlobals(mod, config)
-}
-
-// checkPSRAMGlobals checks the .psram rules of the targets with a numa_psram
-// build tag, see targets/esp32.ld. PSRAM is off when the program is loaded.
-func checkPSRAMGlobals(mod llvm.Module, config *compileopts.Config) error {
-	if !slices.ContainsFunc(config.BuildTags(), func(tag string) bool { return strings.HasPrefix(tag, "numa_psram") }) {
-		return nil
-	}
-	for g := mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
-		section := g.Section()
-		if section != ".psram" && !strings.HasPrefix(section, ".psram.") {
-			continue
-		}
-		if init := g.Initializer(); !init.IsNil() && !init.IsNull() {
-			return fmt.Errorf("%s: variables in .psram cannot have a start value at load time", g.Name())
-		}
-		if typeHasPointer(g.GlobalValueType()) {
-			return fmt.Errorf("%s: variables in .psram cannot hold pointers, because the garbage collector does not scan PSRAM", g.Name())
-		}
-	}
 	return nil
-}
-
-// typeHasPointer reports whether a value of type t can hold a pointer.
-func typeHasPointer(t llvm.Type) bool {
-	switch t.TypeKind() {
-	case llvm.PointerTypeKind:
-		return true
-	case llvm.ArrayTypeKind, llvm.VectorTypeKind:
-		return typeHasPointer(t.ElementType())
-	case llvm.StructTypeKind:
-		return slices.ContainsFunc(t.StructElementTypes(), typeHasPointer)
-	}
-	return false
 }
 
 // addInitAllDebugInfo gives runtime.initAll a subprogram so that code emitted
