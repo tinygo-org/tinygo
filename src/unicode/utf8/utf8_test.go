@@ -429,11 +429,22 @@ func TestRuneCount(t *testing.T) {
 }
 
 func TestRuneCountNonASCIIAllocation(t *testing.T) {
-	if n := testing.AllocsPerRun(10, func() {
-		s := []byte("日本語日本語日本語日")
-		_ = RuneCount(s)
-	}); n > 0 {
-		t.Errorf("unexpected RuneCount allocation, got %v, want 0", n)
+	for _, input := range []string{
+		"日本語日本語日本語日",
+		strings.Repeat("日本語", 100),
+		"ASCII followed by 日本語 and more ASCII",
+		"\xff\x80\xe2\x82",
+	} {
+		s := []byte(input)
+		var got int
+		if n := testing.AllocsPerRun(10, func() {
+			got = RuneCount(s)
+		}); n > 0 {
+			t.Errorf("RuneCount(%q) allocated %v times, want 0", input, n)
+		}
+		if want := RuneCountInString(input); got != want {
+			t.Errorf("RuneCount(%q) = %d, want %d", input, got, want)
+		}
 	}
 }
 

@@ -224,7 +224,7 @@ TEST_OPTIONS_crypto/sha256 := -skip='^(TestExtraMethods|TestAllocations|TestAllo
 TEST_OPTIONS_crypto/sha512 := -skip='^(TestExtraMethods|TestAllocations|TestAllocatonsWithTypeAsserts)$$'
 TEST_OPTIONS_strconv := -skip='^(TestCountMallocs|TestAllocationsFromBytes)$$'
 TEST_OPTIONS_unicode/utf16 := -skip='^(TestAllocationsDecode|TestRuneCountNonASCIIAllocation)$$'
-TEST_OPTIONS_unicode/utf8 := -skip='^(TestAllocationsDecode|TestRuneCountNonASCIIAllocation)$$'
+TEST_OPTIONS_unicode/utf8 := -skip='^TestAllocationsDecode$$'
 TEST_OPTIONS_context := -skip='^TestAllocs$$'
 TEST_OPTIONS_mime := -skip='^TestLookupMallocs$$'
 TEST_OPTIONS_net/textproto := -skip='^TestCommonHeaders$$'
