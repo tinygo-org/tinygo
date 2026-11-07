@@ -275,6 +275,79 @@ func TestCGoBuildConstraints(t *testing.T) {
 	}
 }
 
+func TestCGoFlagsSingleQuotedBackslashes(t *testing.T) {
+	p := &cgoPackage{fset: token.NewFileSet()}
+	p.parseCGoPreprocessorLines(`#cgo CFLAGS: -DVALUE='C:\tools\flash'`, token.NoPos)
+	if len(p.errors) != 0 {
+		t.Fatal(p.errors)
+	}
+	if want := []string{`-DVALUE=C:\tools\flash`}; !reflect.DeepEqual(p.cflags, want) {
+		t.Errorf("CFLAGS = %q, want %q", p.cflags, want)
+	}
+}
+
+func TestCGoFlagsQuoting(t *testing.T) {
+	dir := t.TempDir()
+	p := &cgoPackage{fset: token.NewFileSet(), packageDir: dir}
+	text := `#cgo CPPFLAGS: -DCPP='two\ words'
+#cgo CFLAGS: -DC='two\ words'
+#cgo CXXFLAGS: -DCXX="two\ words"
+#cgo LDFLAGS: -L"lib\ dir"`
+	p.parseCGoPreprocessorLines(text, token.NoPos)
+	if len(p.errors) != 0 {
+		t.Fatal(p.errors)
+	}
+	for _, tc := range []struct {
+		name string
+		got  []string
+		want []string
+	}{
+		{"CPPFLAGS", p.cppflags, []string{`-DCPP=two\ words`}},
+		{"CFLAGS", p.cflags, []string{`-DC=two\ words`}},
+		{"CXXFLAGS", p.cxxflags, []string{"-DCXX=two words"}},
+		{"LDFLAGS", p.ldflags, []string{"-L" + filepath.Join(dir, "lib dir")}},
+	} {
+		if !reflect.DeepEqual(tc.got, tc.want) {
+			t.Errorf("%s = %q, want %q", tc.name, tc.got, tc.want)
+		}
+	}
+}
+
+func TestCGoFlagsTrailingComment(t *testing.T) {
+	p := &cgoPackage{fset: token.NewFileSet()}
+	p.parseCGoPreprocessorLines(`#cgo CFLAGS: -DVALUE=1 #comment`, token.NoPos)
+	if len(p.errors) != 0 {
+		t.Fatal(p.errors)
+	}
+	if want := []string{"-DVALUE=1"}; !reflect.DeepEqual(p.cflags, want) {
+		t.Errorf("CFLAGS = %q, want %q", p.cflags, want)
+	}
+}
+
+func TestCGoFlagsInvalidQuoting(t *testing.T) {
+	for _, directive := range []string{"CFLAGS", "CPPFLAGS", "CXXFLAGS", "LDFLAGS"} {
+		for _, tc := range []struct {
+			name  string
+			value string
+			err   string
+		}{
+			{"unclosed quote", `-DVALUE='unfinished`, "EOF found when expecting closing quote"},
+			{"unfinished escape", `-DVALUE=unfinished\`, "EOF found after escape character"},
+		} {
+			t.Run(directive+"/"+tc.name, func(t *testing.T) {
+				p := &cgoPackage{fset: token.NewFileSet()}
+				p.parseCGoPreprocessorLines("#cgo "+directive+": "+tc.value, token.NoPos)
+				if len(p.errors) != 1 || !strings.Contains(p.errors[0].Error(), "failed to parse flags in #cgo line: "+tc.err) {
+					t.Fatalf("errors = %v, want %q", p.errors, tc.err)
+				}
+				if len(p.cflags)+len(p.cppflags)+len(p.cxxflags)+len(p.ldflags) != 0 {
+					t.Fatal("invalid flags were retained")
+				}
+			})
+		}
+	}
+}
+
 func TestCGoBuildConstraintTargets(t *testing.T) {
 	for _, test := range []struct {
 		goos      string

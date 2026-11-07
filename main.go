@@ -472,32 +472,10 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 	// Flash the binary to the MCU.
 	switch flashMethod {
 	case "", "command":
-		// Create the command.
-		flashCmd := config.Target.FlashCommand
-		flashCmdList, err := shlex.Split(flashCmd)
+		var flashCmdList []string
+		flashCmdList, port, err = prepareFlashCommand(config.Target, fileExt, result.Binary, port)
 		if err != nil {
-			return fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
-		}
-
-		if strings.Contains(flashCmd, "{port}") {
-			var err error
-			port, err = getDefaultPort(port, config.Target.SerialPort)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Fill in fields in the command template.
-		fileToken := "{" + fileExt[1:] + "}"
-		for i, arg := range flashCmdList {
-			arg = strings.ReplaceAll(arg, fileToken, result.Binary)
-			arg = strings.ReplaceAll(arg, "{port}", port)
-			flashCmdList[i] = arg
-		}
-
-		// Execute the command.
-		if len(flashCmdList) < 2 {
-			return fmt.Errorf("invalid flash command: %#v", flashCmd)
+			return err
 		}
 		cmd := executeCommand(config.Options, flashCmdList[0], flashCmdList[1:]...)
 		cmd.Stdout = os.Stdout
@@ -625,6 +603,29 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		return Monitor(result.Executable, port, config)
 	}
 	return nil
+}
+
+func prepareFlashCommand(target *compileopts.TargetSpec, fileExt, binary, port string) ([]string, string, error) {
+	flashCmd := target.FlashCommand
+	args, err := shlex.Split(flashCmd)
+	if err != nil {
+		return nil, port, fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
+	}
+	if strings.Contains(flashCmd, "{port}") {
+		port, err = getDefaultPort(port, target.SerialPort)
+		if err != nil {
+			return nil, port, err
+		}
+	}
+	fileToken := "{" + fileExt[1:] + "}"
+	for i, arg := range args {
+		arg = strings.ReplaceAll(arg, fileToken, binary)
+		args[i] = strings.ReplaceAll(arg, "{port}", port)
+	}
+	if len(args) < 2 {
+		return nil, port, fmt.Errorf("invalid flash command: %#v", flashCmd)
+	}
+	return args, port, nil
 }
 
 // Debug compiles and flashes a program to a microcontroller (just like Flash)
