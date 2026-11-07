@@ -48,27 +48,6 @@ func CreateTemporaryAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type, n
 	return
 }
 
-// CreateInstructionAlloca creates an alloca in the entry block, and places lifetime control intrinsics around the instruction
-func CreateInstructionAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type, inst llvm.Value, name string) llvm.Value {
-	ctx := mod.Context()
-	targetData := llvm.NewTargetData(mod.DataLayout())
-	defer targetData.Dispose()
-
-	alloca := CreateEntryBlockAlloca(builder, t, name)
-	builder.SetInsertPointBefore(inst)
-	size := llvm.ConstInt(ctx.Int64Type(), targetData.TypeAllocSize(t), false)
-	fnType, fn := getLifetimeStartFunc(mod)
-	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, alloca), "")
-	if next := llvm.NextInstruction(inst); !next.IsNil() {
-		builder.SetInsertPointBefore(next)
-	} else {
-		builder.SetInsertPointAtEnd(inst.InstructionParent())
-	}
-	fnType, fn = getLifetimeEndFunc(mod)
-	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, alloca), "")
-	return alloca
-}
-
 // EmitLifetimeEnd signals the end of an (alloca) lifetime by calling the
 // llvm.lifetime.end intrinsic. It is commonly used together with
 // createTemporaryAlloca.
@@ -123,78 +102,6 @@ func getLifetimeEndFunc(mod llvm.Module) (llvm.Type, llvm.Value) {
 		fn = llvm.AddFunction(mod, fnName, fnType)
 	}
 	return fnType, fn
-}
-
-// SplitBasicBlock splits a LLVM basic block into two parts. All instructions
-// after afterInst are moved into a new basic block (created right after the
-// current one) with the given name.
-func SplitBasicBlock(builder llvm.Builder, afterInst llvm.Value, insertAfter llvm.BasicBlock, name string) llvm.BasicBlock {
-	oldBlock := afterInst.InstructionParent()
-	newBlock := afterInst.Type().Context().InsertBasicBlock(insertAfter, name)
-	var nextInstructions []llvm.Value // values to move
-
-	// Collect to-be-moved instructions.
-	inst := afterInst
-	for {
-		inst = llvm.NextInstruction(inst)
-		if inst.IsNil() {
-			break
-		}
-		nextInstructions = append(nextInstructions, inst)
-	}
-
-	// Move instructions.
-	builder.SetInsertPointAtEnd(newBlock)
-	for _, inst := range nextInstructions {
-		inst.RemoveFromParentAsInstruction()
-		builder.Insert(inst)
-	}
-
-	// Find PHI nodes to update.
-	var phiNodes []llvm.Value // PHI nodes to update
-	for bb := insertAfter.Parent().FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-		for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
-			if inst.IsAPHINode().IsNil() {
-				continue
-			}
-			needsUpdate := false
-			incomingCount := inst.IncomingCount()
-			for i := range incomingCount {
-				if inst.IncomingBlock(i) == oldBlock {
-					needsUpdate = true
-					break
-				}
-			}
-			if !needsUpdate {
-				// PHI node has no incoming edge from the old block.
-				continue
-			}
-			phiNodes = append(phiNodes, inst)
-		}
-	}
-
-	// Update PHI nodes.
-	for _, phi := range phiNodes {
-		builder.SetInsertPointBefore(phi)
-		newPhi := builder.CreatePHI(phi.Type(), "")
-		incomingCount := phi.IncomingCount()
-		incomingVals := make([]llvm.Value, incomingCount)
-		incomingBlocks := make([]llvm.BasicBlock, incomingCount)
-		for i := range incomingCount {
-			value := phi.IncomingValue(i)
-			block := phi.IncomingBlock(i)
-			if block == oldBlock {
-				block = newBlock
-			}
-			incomingVals[i] = value
-			incomingBlocks[i] = block
-		}
-		newPhi.AddIncoming(incomingVals, incomingBlocks)
-		phi.ReplaceAllUsesWith(newPhi)
-		phi.EraseFromParentAsInstruction()
-	}
-
-	return newBlock
 }
 
 // AppendToGlobal appends the given values to a global array like llvm.used. The global might

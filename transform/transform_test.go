@@ -4,10 +4,8 @@ package transform_test
 
 import (
 	"flag"
-	"go/token"
 	"go/types"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -262,33 +260,4 @@ func compileGoFileForTesting(t *testing.T, filename string) llvm.Module {
 		t.FailNow()
 	}
 	return mod
-}
-
-// getPosition returns the position information for the given value, as far as
-// it is available.
-func getPosition(val llvm.Value) token.Position {
-	if !val.IsAInstruction().IsNil() {
-		loc := val.InstructionDebugLoc()
-		if loc.IsNil() {
-			return token.Position{}
-		}
-		file := loc.LocationScope().ScopeFile()
-		return token.Position{
-			Filename: filepath.Join(file.FileDirectory(), file.FileFilename()),
-			Line:     int(loc.LocationLine()),
-			Column:   int(loc.LocationColumn()),
-		}
-	} else if !val.IsAFunction().IsNil() {
-		loc := val.Subprogram()
-		if loc.IsNil() {
-			return token.Position{}
-		}
-		file := loc.ScopeFile()
-		return token.Position{
-			Filename: filepath.Join(file.FileDirectory(), file.FileFilename()),
-			Line:     int(loc.SubprogramLine()),
-		}
-	} else {
-		return token.Position{}
-	}
 }
