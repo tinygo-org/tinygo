@@ -1,0 +1,25 @@
+{
+	"inherits": [
+		"riscv32"
+	],
+	"target-abi": "ilp32e",
+	"features": "+32bit,+c,+e",
+	"build-tags": [
+		"ch32v003",
+		"ch32v00xxx",
+		"ch32"
+	],
+	"serial": "none",
+	"scheduler": "none",
+	"gc": "leaking",
+	"rtlib": "compiler-rt",
+	"libc": "picolibc",
+	"cflags": [
+		"-march=rv32ec",
+		"-mabi=ilp32e"
+	],
+	"linkerscript": "targets/ch32v003.ld",
+	"extra-files": [],
+	"flash-method": "probe-rs",
+	"probe-rs-chip": "CH32V003F4U6"
+}
