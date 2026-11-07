@@ -16,6 +16,15 @@ import (
 // values. Pass larger aggregates indirectly before LLVM expands them.
 const maxDirectAggregateValues = 1024
 
+// Each expanded value is a separate move, so a [33]byte argument takes 33.
+// Use this lower limit for values that fit on the stack of a large stack target,
+// as anything else would go to the heap. See compileopts.Config.MaxStackAlloc.
+const (
+	maxDirectAggregateValuesLargeStack = 16
+	minLargeStackSize                  = 16 * 1024
+	maxLargeStackIndirectSize          = 1024
+)
+
 // The WebAssembly JavaScript API limits function types to 1000 parameters.
 // Apply the same internal ABI cap on every target.
 const maxFunctionParams = 1000
@@ -182,7 +191,12 @@ func (c *compilerContext) hasIndirectResult(sig *types.Signature) (llvm.Type, bo
 }
 
 func (c *compilerContext) isIndirectAggregate(typ llvm.Type) bool {
-	return aggregateValueCountExceeds(typ, maxDirectAggregateValues)
+	if aggregateValueCountExceeds(typ, maxDirectAggregateValues) {
+		return true
+	}
+	return c.DefaultStackSize >= minLargeStackSize &&
+		aggregateValueCountExceeds(typ, maxDirectAggregateValuesLargeStack) &&
+		c.targetData.TypeAllocSize(typ) <= maxLargeStackIndirectSize
 }
 
 func aggregateValueCountExceeds(typ llvm.Type, limit uint64) bool {
