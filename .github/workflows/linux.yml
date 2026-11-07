@@ -297,6 +297,8 @@ jobs:
         run: make ASSERT=1 test
       - name: Check for unreachable functions
         run: make ASSERT=1 deadcode
+      - name: Check golden IR files are up to date
+        run: make ASSERT=1 golden-check
       - name: Check Go code formatting after device generation
         run: make fmt-check
 

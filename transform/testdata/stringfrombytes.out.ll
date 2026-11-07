@@ -1,14 +1,14 @@
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64--linux"
 
-declare { ptr, i64 } @runtime.stringFromBytes(ptr nocapture readonly, i64, i64)
+declare { ptr, i64 } @runtime.stringFromBytes(ptr readonly captures(none), i64, i64)
 
 declare void @write()
 
 ; Function Attrs: memory(argmem: read)
-declare i64 @count(ptr nocapture readonly, i64) #0
+declare i64 @count(ptr readonly captures(none), i64) #0
 
-declare i64 @countWrites(ptr nocapture readonly, i64)
+declare i64 @countWrites(ptr readonly captures(none), i64)
 
 ; Function Attrs: memory(argmem: read)
 declare i64 @countCapture(ptr readonly, i64) #0
@@ -61,7 +61,7 @@ entry:
   ret i64 %n
 }
 
-define i64 @countLocalImpl(ptr nocapture readonly %s, i64 %len) {
+define i64 @countLocalImpl(ptr readonly captures(none) %s, i64 %len) {
 entry:
   %it = alloca i64, align 8
   store i64 0, ptr %it, align 8
@@ -70,7 +70,7 @@ entry:
   ret i64 %z
 }
 
-declare i1 @runtime.hashmapStringGet(ptr nocapture readonly, ptr nocapture readonly, i64, ptr nocapture, i64, ptr) #1
+declare i1 @runtime.hashmapStringGet(ptr readonly captures(none), ptr readonly captures(none), i64, ptr captures(none), i64, ptr) #1
 
 define i1 @testMapLookup(ptr %m, ptr %p, i64 %len, i64 %cap) {
 entry:
