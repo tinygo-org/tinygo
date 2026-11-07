@@ -436,7 +436,7 @@ func (c *compilerContext) isThumb() bool {
 // pointer as an *i8.
 func (b *builder) readStackPointer() llvm.Value {
 	name := "llvm.stacksave.p0"
-	if llvmutil.Version() < 18 {
+	if llvm.VersionMajor < 18 {
 		name = "llvm.stacksave" // backwards compatibility with LLVM 17 and below
 	}
 	stacksave := b.mod.NamedFunction(name)
@@ -451,7 +451,7 @@ func (b *builder) readStackPointer() llvm.Value {
 // pointer.
 func (b *builder) writeStackPointer(sp llvm.Value) {
 	name := "llvm.stackrestore.p0"
-	if llvmutil.Version() < 18 {
+	if llvm.VersionMajor < 18 {
 		name = "llvm.stackrestore" // backwards compatibility with LLVM 17 and below
 	}
 	stackrestore := b.mod.NamedFunction(name)
