@@ -1,9 +1,13 @@
 # Test suites: compiler tests, standard library tests, benchmarks, and the corpus.
 
-.PHONY: test wasmtest
+.PHONY: test wasmtest golden-check
 
 test: check-nodejs-version
 	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test $(GOTESTFLAGS) -timeout=1h -buildmode exe -tags "byollvm llvm22 osusergo" $(GOTESTPKGS)
+
+golden-check: ## Fail if regenerating the golden IR files changes them
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test -buildmode exe -tags "byollvm llvm22 osusergo" ./compiler ./transform -update
+	git diff --exit-code -- compiler/testdata transform/testdata
 
 # Standard library packages that pass tests on darwin, linux, wasi, and windows, but take over a minute in wasi
 TEST_PACKAGES_SLOW = \
