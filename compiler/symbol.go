@@ -215,6 +215,16 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 		// functionattrs pass from inferring this automatically.
 		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
 		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+	case "runtime.hashmapStringGet":
+		// The map (param 1) and key data (param 2) are only read, and never
+		// captured. Only the value (param 4) is written. The key comparison is
+		// an indirect call to hashmapStringEqual, so LLVM cannot see this.
+		for _, index := range []int{1, 2} {
+			llvmFn.AddAttributeAtIndex(index, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+			llvmFn.AddAttributeAtIndex(index, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
+		}
+		llvmFn.AddAttributeAtIndex(4, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute(llvmutil.WritesArgsOnlyAttrName, ""))
 	case "runtime.hashmapGet":
 		// The key (param 2) is read-only and never captured.
 		// The value (param 3) is written to (receives the result) but never captured.

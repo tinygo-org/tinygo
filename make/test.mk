@@ -220,8 +220,8 @@ TEST_OPTIONS_crypto/dsa := -short
 TEST_OPTIONS_crypto/sha256 := -skip='^(TestExtraMethods|TestAllocations|TestAllocatonsWithTypeAsserts)$$'
 TEST_OPTIONS_crypto/sha512 := -skip='^(TestExtraMethods|TestAllocations|TestAllocatonsWithTypeAsserts)$$'
 TEST_OPTIONS_strconv := -skip='^(TestCountMallocs|TestAllocationsFromBytes)$$'
-TEST_OPTIONS_unicode/utf16 := -skip='^(TestAllocationsDecode|TestRuneCountNonASCIIAllocation)$$'
-TEST_OPTIONS_unicode/utf8 := -skip='^(TestAllocationsDecode|TestRuneCountNonASCIIAllocation)$$'
+TEST_OPTIONS_unicode/utf16 := -skip='^(TestAllocationsDecode)$$'
+TEST_OPTIONS_unicode/utf8 := -skip='^(TestAllocationsDecode)$$'
 TEST_OPTIONS_context := -skip='^TestAllocs$$'
 TEST_OPTIONS_mime := -skip='^TestLookupMallocs$$'
 TEST_OPTIONS_net/textproto := -skip='^TestCommonHeaders$$'
@@ -248,8 +248,8 @@ tinygo-test: TEST_OPTIONS_testing/synctest := -skip='^(TestFatal|TestError|TestV
 tinygo-test-fast: HOST_TEST_STACK_SKIP_FLAG = $(TEST_SKIP_FLAG)
 
 tinygo-test-baremetal: TEST_OPTIONS_strconv := -skip='TestCountMallocs|TestAllocationsFromBytes'
-tinygo-test-baremetal: TEST_OPTIONS_unicode/utf16 := -skip='TestAllocationsDecode|TestRuneCountNonASCIIAllocation'
-tinygo-test-baremetal: TEST_OPTIONS_unicode/utf8 := -skip='TestAllocationsDecode|TestRuneCountNonASCIIAllocation'
+tinygo-test-baremetal: TEST_OPTIONS_unicode/utf16 := -skip='TestAllocationsDecode'
+tinygo-test-baremetal: TEST_OPTIONS_unicode/utf8 := -skip='TestAllocationsDecode'
 tinygo-test-baremetal: TEST_OPTIONS_reflect := -skip='TestMapIterSet'
 
 # Explicit options replace default flags, even when empty.
