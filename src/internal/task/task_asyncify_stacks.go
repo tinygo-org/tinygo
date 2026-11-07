@@ -80,3 +80,14 @@ func liveStackRanges(mark func(start, end uintptr)) {
 //
 //export tinygo_getCurrentStackPointer
 func getCurrentStackPointer() uintptr
+
+// ReleaseStacksAtExit clears the stacks of all paused tasks. It is only safe
+// once the program has exited, when no task can resume.
+func ReleaseStacksAtExit() {
+	for t := stackTasks; t != nil; t = t.state.nextStack {
+		if t == currentTask || t.state.running {
+			continue
+		}
+		t.clearStack()
+	}
+}

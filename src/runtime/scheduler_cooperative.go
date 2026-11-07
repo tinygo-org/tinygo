@@ -225,10 +225,16 @@ func scheduler(returnAtDeadlock bool) {
 			}
 			if sleepQueue == nil && timerQueuePeek() == nil {
 				if returnAtDeadlock {
+					if exitDrainSupported {
+						drainIfExited()
+					}
 					return
 				}
 				if asyncScheduler {
 					// JavaScript is treated specially, see below.
+					if exitDrainSupported {
+						drainIfExited()
+					}
 					return
 				}
 				waitForEvents()
@@ -288,8 +294,14 @@ func scheduler(returnAtDeadlock bool) {
 					sleepTicks(0)
 				}
 			}
+			if exitDrainSupported {
+				drainIfExited()
+			}
 			return
 		}
+	}
+	if exitDrainSupported {
+		drainIfExited()
 	}
 }
 
