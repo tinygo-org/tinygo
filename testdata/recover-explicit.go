@@ -1,5 +1,10 @@
 package main
 
+import (
+	"math"
+	"unsafe"
+)
+
 type pair struct {
 	first  int
 	second int
@@ -63,6 +68,17 @@ func main() {
 	mustRecover("nil pointer", func() {
 		var pointer *int
 		println(*pointer)
+	})
+	mustRecover("append overflow from helper", func() {
+		values := make([]struct{}, math.MaxInt)
+		extra := make([]struct{}, 1)
+		_ = appendOverflow(values, extra)
+		println("unreachable after append overflow")
+	})
+	mustRecover("string overflow from helper", func() {
+		var b byte
+		_ = concatOverflow(unsafe.String(&b, math.MaxInt), "x")
+		println("unreachable after string overflow")
 	})
 }
 
@@ -161,4 +177,14 @@ func mustRecover(name string, fn func()) {
 //go:noinline
 func readOutOfBounds(values []byte) byte {
 	return values[2]
+}
+
+//go:noinline
+func appendOverflow(values, extra []struct{}) []struct{} {
+	return append(values, extra...)
+}
+
+//go:noinline
+func concatOverflow(x, y string) string {
+	return x + y
 }

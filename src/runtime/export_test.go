@@ -63,3 +63,21 @@ func (h *TimerHeap) Check() string {
 	}
 	return ""
 }
+
+// SliceGrow calls sliceGrow on an empty slice and returns the new capacity.
+func SliceGrow(newCap, elemSize uintptr) uintptr {
+	_, _, c := sliceGrow(nil, 0, 0, newCap, elemSize, nil)
+	return c
+}
+
+// StringConcatLen concatenates two strings with the given lengths and returns
+// the length of the result. Use it only for lengths that must be rejected.
+func StringConcatLen(xlen, ylen uintptr) uintptr {
+	var b byte
+	return stringConcat(_string{&b, xlen}, _string{&b, ylen}).length
+}
+
+// StringConcatSize returns the checked sum of two string lengths.
+func StringConcatSize(xlen, ylen uintptr) uintptr {
+	return stringConcatSize(xlen, ylen)
+}

@@ -1,11 +1,14 @@
 package compiler
 
 import (
+	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"testing"
 
 	"golang.org/x/tools/go/ssa"
+	"golang.org/x/tools/go/ssa/ssautil"
 )
 
 func TestBinOpCallProperties(t *testing.T) {
@@ -37,7 +40,7 @@ func TestBinOpCallProperties(t *testing.T) {
 		{token.GEQ, intType, intType, false},
 		{token.EQL, intType, intType, false},
 		{token.NEQ, intType, intType, false},
-		{token.ADD, stringType, stringType, false},
+		{token.ADD, stringType, stringType, true},
 		{token.EQL, stringType, stringType, false},
 		{token.QUO, floatType, floatType, false},
 		{token.SHL, intType, uintType, false},
@@ -59,6 +62,33 @@ func TestBinOpCallProperties(t *testing.T) {
 		}
 		if got := instructionCallProperties(instr); got != want {
 			t.Errorf("%s %s %s: got properties %d, want %d", tc.x, tc.op, tc.y, got, want)
+		}
+	}
+}
+
+func TestAppendCallProperties(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "append.go", `package p
+		func appendSlice(s, values []int) []int { return append(s, values...) }
+		func sliceLen(s []int) int { return len(s) }
+	`, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, _, err := ssautil.BuildPackage(&types.Config{}, fset, types.NewPackage("p", "p"), []*ast.File{file}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := &builder{compilerContext: &compilerContext{callProperties: make(map[*ssa.Function]functionCallProperties)}}
+	for _, tc := range []struct {
+		name string
+		want callProperties
+	}{
+		{"appendSlice", callMayUnwind},
+		{"sliceLen", 0},
+	} {
+		if got := b.functionCallProperties(pkg.Func(tc.name)); got != tc.want {
+			t.Errorf("%s: got properties %d, want %d", tc.name, got, tc.want)
 		}
 	}
 }

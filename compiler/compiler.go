@@ -1989,7 +1989,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		elemType := b.getLLVMType(argTypes[0].Underlying().(*types.Slice).Elem())
 		elemSize := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(elemType), false)
 		elemLayout := b.createObjectLayout(elemType, pos)
-		result := b.createRuntimeCall("sliceAppend", []llvm.Value{srcBuf, elemsBuf, srcLen, srcCap, elemsLen, elemSize, elemLayout}, "append.new")
+		result := b.createRuntimeInvoke("sliceAppend", []llvm.Value{srcBuf, elemsBuf, srcLen, srcCap, elemsLen, elemSize, elemLayout}, "append.new")
 		newPtr := b.CreateExtractValue(result, 0, "append.newPtr")
 		newLen := b.CreateExtractValue(result, 1, "append.newLen")
 		newCap := b.CreateExtractValue(result, 2, "append.newCap")
@@ -3414,7 +3414,7 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			// Operations on strings
 			switch op {
 			case token.ADD: // +
-				return b.createRuntimeCall("stringConcat", []llvm.Value{x, y}, ""), nil
+				return b.createRuntimeInvoke("stringConcat", []llvm.Value{x, y}, ""), nil
 			case token.EQL: // ==
 				return b.createRuntimeCall("stringEqual", []llvm.Value{x, y}, ""), nil
 			case token.NEQ: // !=

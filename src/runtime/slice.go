@@ -29,12 +29,18 @@ func sliceGrow(oldBuf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr, 
 		// No need to grow, return the input slice.
 		return oldBuf, oldLen, oldCap
 	}
+	maxCap := maxSliceCap(elemSize)
+	if newCap > maxCap {
+		slicePanic()
+	}
 
 	// This can be made more memory-efficient by multiplying by some other constant, such as 1.5,
 	// which seems to be allowed by the Go language specification (but this can be observed by
 	// programs); however, due to memory fragmentation and the current state of the TinyGo
 	// memory allocators, this causes some difficult to debug issues.
-	newCap = 1 << bits.Len(uint(newCap))
+	if rounded := uintptr(1) << bits.Len(uint(newCap)); rounded > newCap && rounded <= maxCap {
+		newCap = rounded
+	}
 
 	buf := alloc(newCap*elemSize, layout)
 	if oldLen > 0 {
@@ -43,4 +49,18 @@ func sliceGrow(oldBuf unsafe.Pointer, oldLen, oldCap, newCap, elemSize uintptr, 
 	}
 
 	return buf, oldLen, newCap
+}
+
+// maxSliceCap returns the largest capacity that fits in an int and whose size
+// in bytes fits in a uintptr.
+func maxSliceCap(elemSize uintptr) uintptr {
+	maxInt := int(^uint(0) >> 1)
+	limit := ^uintptr(0)
+	if uint64(maxInt) < uint64(limit) {
+		limit = uintptr(maxInt)
+	}
+	if elemSize > 1 && ^uintptr(0)/elemSize < limit {
+		limit = ^uintptr(0) / elemSize
+	}
+	return limit
 }
