@@ -31,8 +31,7 @@ func robustRename(oldpath, newpath string) error {
 }
 
 func isEphemeralRenameError(err error) bool {
-	var errno syscall.Errno
-	if errors.As(err, &errno) {
+	if errno, ok := errors.AsType[syscall.Errno](err); ok {
 		switch errno {
 		case syscall.Errno(2), // ERROR_FILE_NOT_FOUND
 			syscall.Errno(5),  // ERROR_ACCESS_DENIED
