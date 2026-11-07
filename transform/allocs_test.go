@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
@@ -164,7 +163,7 @@ func TestAllocsRuntimePhi(t *testing.T) {
 	po := llvm.NewPassBuilderOptions()
 	defer po.Dispose()
 	passes := "globalopt,ipsccp,instcombine,adce,function-attrs"
-	if llvmutil.Version() >= 18 {
+	if llvm.VersionMajor >= 18 {
 		passes = "globalopt,ipsccp,instcombine<no-verify-fixpoint>,adce,function-attrs"
 	}
 	if err := mod.RunPasses(passes, llvm.TargetMachine{}, po); err != nil {
