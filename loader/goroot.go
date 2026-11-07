@@ -258,6 +258,7 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 		"internal/itoa/":                  false,
 		"internal/poll/":                  false,
 		"internal/reflectlite/":           false,
+		"internal/strconv/":               false,
 		"internal/gclayout":               false,
 		"internal/task/":                  false,
 		"internal/wasi/":                  false,
