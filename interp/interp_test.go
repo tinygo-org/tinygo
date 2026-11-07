@@ -3,11 +3,11 @@ package interp
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/tinygo-org/tinygo/internal/ir"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -80,100 +80,9 @@ func runTest(t *testing.T, pathPrefix string) {
 	// See whether the transform output matches with the expected output IR.
 	expected := string(out)
 	actual := mod.String()
-	if !fuzzyEqualIR(expected, actual) {
-		t.Logf("output does not match expected output:\n%s", actual)
-		t.Fail()
+	if diff := ir.Diff(expected, actual); diff != "" {
+		t.Errorf("output does not match expected output:\n%s", diff)
 	}
-}
-
-// fuzzyEqualIR returns true if the two LLVM IR strings passed in are roughly
-// equal. That means, only relevant lines are compared (excluding comments
-// etc.).
-func fuzzyEqualIR(s1, s2 string) bool {
-	// Golden files are written using the pre-LLVM21 'nocapture' spelling,
-	// which LLVM printed before any co-occurring attribute such as
-	// 'readonly' (e.g. "ptr nocapture readonly"). LLVM 21+ prints the
-	// equivalent 'captures(none)' instead, and after such attributes (e.g.
-	// "ptr readonly captures(none)"). Normalize both name and position back
-	// to the old spelling to keep a single golden file working across LLVM
-	// versions.
-	s1 = normalizeCapturesAttr(s1)
-	s2 = normalizeCapturesAttr(s2)
-
-	lines1 := filterIrrelevantIRLines(strings.Split(s1, "\n"))
-	lines2 := filterIrrelevantIRLines(strings.Split(s2, "\n"))
-	if len(lines1) != len(lines2) {
-		return false
-	}
-	for i, line1 := range lines1 {
-		line2 := lines2[i]
-		if line1 != line2 {
-			return false
-		}
-	}
-
-	return true
-}
-
-// capturesNoneAttrRe matches a co-occurring attribute directly followed by
-// 'captures(none)', which is how LLVM 21+ orders these two attributes when
-// printing IR (the pre-LLVM21 'nocapture' attribute printed the other way
-// around).
-var capturesNoneAttrRe = regexp.MustCompile(`\b(readonly|readnone|writeonly|nonnull)\s+captures\(none\)`)
-
-// nosyncAttrRe matches the standalone 'nosync' function attribute, which
-// LLVM 23 started inferring for llvm.memcpy/llvm.memmove declarations.
-var nosyncAttrRe = regexp.MustCompile(`\bnosync\s+`)
-
-// guidAttachmentRe matches the inline '!guid !N' metadata LLVM 23 attaches
-// to every GlobalValue once a pass builds a module summary. A global's
-// attachment is comma separated, a function's is space separated.
-var guidAttachmentRe = regexp.MustCompile(`,?\s*!guid\s+!\d+`)
-
-// guidMetadataRe matches the standalone metadata node backing a '!guid'
-// attachment.
-var guidMetadataRe = regexp.MustCompile(`(?m)^!\d+ = !\{i64 -?\d+\}\n?`)
-
-// targetMemAttrRe matches the target_mem entries of a memory() attribute.
-// Older LLVM numbered them target_mem0/target_mem1; LLVM 23 emits one
-// unnumbered target_mem instead.
-var targetMemAttrRe = regexp.MustCompile(`(,\s*target_mem\d*: none)+`)
-
-// nofreeNocaptureRe matches LLVM 23's added 'nofree' on a parameter that's
-// already 'nocapture'.
-var nofreeNocaptureRe = regexp.MustCompile(`\bnofree\s+nocapture\b`)
-
-// normalizeCapturesAttr rewrites LLVM 21+'s 'captures(none)' attribute back
-// to the pre-LLVM21 'nocapture' spelling, and drops LLVM 23's added
-// 'nosync' attribute and '!guid' metadata, so golden files keep matching
-// across versions.
-func normalizeCapturesAttr(s string) string {
-	s = capturesNoneAttrRe.ReplaceAllString(s, "nocapture $1")
-	s = strings.ReplaceAll(s, "captures(none)", "nocapture")
-	s = nosyncAttrRe.ReplaceAllString(s, "")
-	s = guidAttachmentRe.ReplaceAllString(s, "")
-	s = guidMetadataRe.ReplaceAllString(s, "")
-	s = targetMemAttrRe.ReplaceAllString(s, "")
-	s = nofreeNocaptureRe.ReplaceAllString(s, "nocapture")
-	return s
-}
-
-// filterIrrelevantIRLines removes lines from the input slice of strings that
-// are not relevant in comparing IR. For example, empty lines and comments are
-// stripped out.
-func filterIrrelevantIRLines(lines []string) []string {
-	var out []string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || line[0] == ';' {
-			continue
-		}
-		if strings.HasPrefix(line, "source_filename = ") {
-			continue
-		}
-		out = append(out, line)
-	}
-	return out
 }
 
 // TestInterpLargeArray checks that a large global written by an init function
