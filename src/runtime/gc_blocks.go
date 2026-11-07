@@ -171,6 +171,46 @@ func (b gcBlock) findHead() gcBlock {
 	return b
 }
 
+// Block range of the last object found by findHeadMarking, reset at each GC.
+var markHeadLo, markHeadHi gcBlock
+var markHeadValid bool
+
+// findHeadMarking is findHead for the mark phase. Many pointers into one large
+// object would otherwise each walk to its end, which is quadratic.
+func (b gcBlock) findHeadMarking() gcBlock {
+	if markHeadValid && b >= markHeadLo && b <= markHeadHi {
+		return markHeadHi
+	}
+	const wordBlocks = blocksPerStateByte * 8
+	const allTailsWord = uint64(blockStateByteAllTails) * 0x0101010101010101
+	start := b
+	for {
+		stateAddr := unsafe.Add(metadataStart, b/blocksPerStateByte)
+		if uintptr(stateAddr)%8 == 0 && b+wordBlocks <= endBlock && *(*uint64)(stateAddr) == allTailsWord {
+			b += wordBlocks - b%blocksPerStateByte
+			continue
+		}
+		if markHeadValid && b >= markHeadLo && b <= markHeadHi {
+			markHeadLo = start
+			return markHeadHi
+		}
+		stateByte := b.stateByte()
+		if stateByte == blockStateByteAllTails {
+			b += blocksPerStateByte - (b % blocksPerStateByte)
+			continue
+		}
+		if b.stateFromByte(stateByte) != blockStateTail {
+			break
+		}
+		b++
+	}
+	// Only cache large objects, so small ones do not evict them.
+	if b-start >= 256 {
+		markHeadLo, markHeadHi, markHeadValid = start, b, true
+	}
+	return b
+}
+
 func (b gcBlock) stateByte() byte {
 	return *(*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
 }
@@ -614,6 +654,7 @@ func GC() {
 //
 //go:noheap
 func runGC() (freeBytes uintptr) {
+	markHeadValid = false
 	if gcDebug {
 		println("running collection cycle...")
 	}
@@ -664,6 +705,7 @@ func runGC() (freeBytes uintptr) {
 
 	// Sweep phase: free all non-marked objects and unmark marked objects for
 	// the next collection cycle. This also rebuilds the free ranges list.
+	markHeadValid = false
 	freeBytes = sweep()
 
 	if gcDebugVerbose {
@@ -777,7 +819,13 @@ func markRoot(addr, root uintptr) {
 		// just a false positive.
 		return
 	}
-	head := block.findHead()
+	// Small chips keep the plain walk to save code size.
+	var head gcBlock
+	if baremetal {
+		head = block.findHead()
+	} else {
+		head = block.findHeadMarking()
+	}
 
 	// Mark the object.
 	if head.state() == blockStateMark {
