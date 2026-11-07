@@ -59,6 +59,8 @@ func machineInit() {
 	// Peripheral clocks should now all be running
 	unresetBlockWait(RESETS_RESET_Msk)
 
+	initPSRAM()
+
 	// DBGPAUSE pauses the timer when a debugger is connected. This prevents
 	// sleep functions from ever returning, so disable it.
 	timer.setDbgPause(false)
