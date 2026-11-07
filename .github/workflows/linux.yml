@@ -375,10 +375,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - uses: ./.github/actions/submodules
-      - name: Install apt dependencies
+      - name: Update apt package lists
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends \
+      - name: Resolve apt package versions
+        run: |
+          mkdir -p .apt-cache/archives
+          sudo apt-get --print-uris --yes --no-install-recommends install \
+              libgcrypt20 \
+              libpixman-1-0 \
+              libsdl2-2.0-0 \
+              libslirp0 \
+              qemu-system-arm \
+              qemu-system-riscv32 \
+              qemu-user \
+              simavr | tee apt-package-uris.txt
+      - name: Cache apt packages
+        uses: actions/cache@v5
+        with:
+          path: .apt-cache/archives
+          key: apt-debs-noble-${{ hashFiles('apt-package-uris.txt') }}
+      - name: Install apt dependencies
+        run: |
+          mkdir -p .apt-cache/archives/partial
+          sudo apt-get \
+              -o Dir::Cache::archives="$GITHUB_WORKSPACE/.apt-cache/archives" \
+              install --no-install-recommends \
               libgcrypt20 \
               libpixman-1-0 \
               libsdl2-2.0-0 \
