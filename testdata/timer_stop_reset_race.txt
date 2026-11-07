@@ -1,3 +1,4 @@
 Stop returned false for firing timer
+stopped periodic timer did not fire again
 reset firing timer used reset deadline
 timer stop/reset race tests done
