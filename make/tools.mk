@@ -13,6 +13,13 @@ lint: ## Lint source tree
 		| grep '.' \
 		| awk '{print}; END {exit NR>0}'
 
+.PHONY: deadcode
+deadcode: ## Report unreachable functions in the compiler
+	# deadcode does not see calls from C, so skip the cgo callbacks and what they call.
+	{ CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) tool golang.org/x/tools/cmd/deadcode -test -tags "byollvm llvm22 osusergo" $(GOTESTPKGS) || echo "deadcode failed"; } \
+		| grep -v -e 'unreachable func: tinygo_clang_' -e 'unreachable func: refMap.Get' \
+		| awk '{print}; END {exit NR>0}'
+
 SPELLDIRSCMD=find . -mindepth 1 -maxdepth 1 -type d  | egrep -wv '.git|lib|llvm|src'; find src -mindepth 1 -maxdepth 1 | egrep -wv 'device|internal|net|vendor'; find src/internal -mindepth 1 -maxdepth 1 -type d | egrep -wv src/internal/wasi
 .PHONY: spell
 spell: ## Spellcheck source tree

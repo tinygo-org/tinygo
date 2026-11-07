@@ -49,6 +49,7 @@ require (
 	go.bytecodealliance.org v0.6.2 // indirect
 	go.bytecodealliance.org/cm v0.2.2 // indirect
 	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260625142307-59b4966ccb57 // indirect
 	golang.org/x/text v0.38.0 // indirect
 )
 
@@ -56,4 +57,5 @@ tool (
 	github.com/golangci/misspell/cmd/misspell
 	github.com/mgechev/revive
 	go.bytecodealliance.org/cmd/wit-bindgen-go
+	golang.org/x/tools/cmd/deadcode
 )
