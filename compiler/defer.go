@@ -397,12 +397,6 @@ func (l *llvmValueList) append(values ...llvm.Value) {
 	}
 }
 
-func (l *llvmValueList) appendSSAValues(values []ssa.Value, lower func(ssa.Value) llvm.Value) {
-	for _, value := range values {
-		l.append(lower(value))
-	}
-}
-
 func (b *builder) loadDeferredCallParams(structType llvm.Type, ptr llvm.Value) []llvm.Value {
 	fieldTypes := structType.StructElementTypes()
 	values := make([]llvm.Value, 0, len(fieldTypes)-2)
