@@ -105,8 +105,7 @@ func TestParallelTypecheckErrors(t *testing.T) {
 					`package dependent; import "first"; var X = first.X`,
 				)
 				err := p.Parse()
-				var errs Errors
-				if !errors.As(err, &errs) || errs.Pkg != p.sorted[0] {
+				if errs, ok := errors.AsType[*Errors](err); !ok || errs.Pkg != p.sorted[0] {
 					t.Fatalf("Parse error = %v, want errors from first", err)
 				}
 				if p.sorted[2].Pkg != nil {
@@ -280,14 +279,16 @@ func TestParallelTypecheckErrorOrder(t *testing.T) {
 	if err := baseline.sorted[0].Check(); err != nil {
 		t.Fatal(err)
 	}
-	var want Errors
-	if err := baseline.sorted[1].Check(); !errors.As(err, &want) {
+	err := baseline.sorted[1].Check()
+	want, ok := errors.AsType[*Errors](err)
+	if !ok {
 		t.Fatalf("sequential Check error = %v, want package errors", err)
 	}
 	for range 10 {
 		p := typecheckProgram(t, sources...)
-		var got Errors
-		if err := p.Parse(); !errors.As(err, &got) || got.Pkg != p.sorted[1] {
+		err := p.Parse()
+		got, ok := errors.AsType[*Errors](err)
+		if !ok || got.Pkg != p.sorted[1] {
 			t.Fatalf("Parse error = %v, want errors from first", err)
 		}
 		if len(got.Errs) != len(want.Errs) {

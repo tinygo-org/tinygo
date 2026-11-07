@@ -9,8 +9,12 @@ type Errors struct {
 	Errs []error
 }
 
-func (e Errors) Error() string {
+func (e *Errors) Error() string {
 	return "could not compile: " + e.Errs[0].Error()
+}
+
+func (e *Errors) Unwrap() []error {
+	return e.Errs
 }
 
 // Error is a regular error but with an added import stack. This is especially
@@ -20,7 +24,7 @@ type Error struct {
 	Err         scanner.Error
 }
 
-func (e Error) Error() string {
+func (e *Error) Error() string {
 	return e.Err.Error()
 }
 
@@ -30,6 +34,6 @@ type NoTestFilesError struct {
 	ImportPath string
 }
 
-func (e NoTestFilesError) Error() string {
+func (e *NoTestFilesError) Error() string {
 	return "no test files"
 }

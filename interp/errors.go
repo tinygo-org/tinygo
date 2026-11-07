@@ -32,8 +32,8 @@ var (
 )
 
 func isRecoverableError(err error) bool {
-	var target *recoverableError
-	return errors.As(err, &target)
+	_, ok := errors.AsType[*recoverableError](err)
+	return ok
 }
 
 // ErrorLine is one line in a traceback. The position may be missing.

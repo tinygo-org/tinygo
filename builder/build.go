@@ -281,7 +281,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 	}
 	if config.TestConfig.CompileTestBinary && !strings.HasSuffix(result.ImportPath, ".test") {
 		// Validate the package even when there is no test binary to build.
-		return result, loader.NoTestFilesError{ImportPath: result.ImportPath}
+		return result, &loader.NoTestFilesError{ImportPath: result.ImportPath}
 	}
 
 	// Embed module build information so runtime/debug.ReadBuildInfo() works,
