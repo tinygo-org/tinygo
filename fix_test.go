@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,7 +25,7 @@ func fixCommand(t *testing.T, dir string, args ...string) (int, string) {
 	if err == nil {
 		return 0, string(output)
 	}
-	if exit, ok := err.(*exec.ExitError); ok {
+	if exit, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exit.ExitCode(), string(output)
 	}
 	t.Fatal(err)

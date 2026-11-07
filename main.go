@@ -311,7 +311,7 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 			buf.WriteTo(stdout)
 		}
 
-		if _, ok := err.(*exec.ExitError); ok {
+		if _, ok := errors.AsType[*exec.ExitError](err); ok {
 			// Binary exited with a non-zero exit code, which means the test
 			// failed. Return nil to avoid printing a useless "exited with
 			// error" error message.
@@ -2235,7 +2235,7 @@ func main() {
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
 		if err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 				os.Exit(exitErr.ExitCode())
 			}
 			fmt.Fprintln(os.Stderr, "failed to run `go list`:", err)

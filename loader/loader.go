@@ -182,7 +182,7 @@ func load(config *compileopts.Config, inputs []string, typeChecker types.Config,
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && !analysis {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && !analysis {
 			os.Exit(exitErr.ExitCode())
 		}
 		return nil, fmt.Errorf("failed to run `go list`: %s", err)

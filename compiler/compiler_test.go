@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"errors"
 	"flag"
 	"go/scanner"
 	"go/types"
@@ -426,7 +427,7 @@ func TestAggregateExportedInterfaceABI(t *testing.T) {
 			if err == nil {
 				t.Fatal("missing exported interface ABI error")
 			}
-			errList, ok := err.(scanner.ErrorList)
+			errList, ok := errors.AsType[scanner.ErrorList](err)
 			if !ok {
 				t.Fatalf("expected scanner.ErrorList, got %T", err)
 			}

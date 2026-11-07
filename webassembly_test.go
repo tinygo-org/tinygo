@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"slices"
@@ -255,7 +256,7 @@ func TestWasmExport(t *testing.T) {
 				// tester.callTestMain, which then runs all the tests.
 				_, err := mod.ExportedFunction("_start").Call(ctx)
 				if err != nil {
-					if exitErr, ok := err.(*sys.ExitError); ok && exitErr.ExitCode() == 0 {
+					if exitErr, ok := errors.AsType[*sys.ExitError](err); ok && exitErr.ExitCode() == 0 {
 						// Exited with code 0. Nothing to worry about.
 					} else {
 						t.Error("failed to run _start:", err)

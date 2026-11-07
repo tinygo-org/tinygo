@@ -70,13 +70,13 @@ func readGoEnvVars() error {
 		output, err := cmd.Output()
 		if err != nil {
 			// Check for "command not found" error.
-			if execErr, ok := err.(*exec.Error); ok {
+			if execErr, ok := errors.AsType[*exec.Error](err); ok {
 				goEnvVarsErr = fmt.Errorf("could not find '%s' command: %w", execErr.Name, execErr.Err)
 				return
 			}
 			// It's perhaps a bit ugly to handle this error here, but I couldn't
 			// think of a better place further up in the call chain.
-			if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() != 0 {
+			if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() != 0 {
 				if len(exitErr.Stderr) != 0 {
 					// The 'go' command exited with an error message. Print that
 					// message and exit, so we behave in a similar way.

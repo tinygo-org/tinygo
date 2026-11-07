@@ -1,6 +1,7 @@
 package interp
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,7 @@ func runTest(t *testing.T, pathPrefix string) {
 	// Perform the transform.
 	err = Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false)
 	if err != nil {
-		if err, match := err.(*Error); match {
+		if err, match := errors.AsType[*Error](err); match {
 			println(err.Error())
 			if len(err.Inst) != 0 {
 				println(err.Inst)
