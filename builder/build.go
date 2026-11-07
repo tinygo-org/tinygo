@@ -33,7 +33,6 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
@@ -995,7 +994,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 				ldflags = append(ldflags, "--lto-O"+strconv.Itoa(speedLevel))
 				// LLD 15 embeds cache paths in OSO symbols, unlike LLD 16+.
 				// Fixed in LLD 16 by https://reviews.llvm.org/D131624.
-				if !config.TrimPath() || llvmutil.Version() >= 16 {
+				if !config.TrimPath() || llvm.VersionMajor >= 16 {
 					ldflags = append(ldflags, "-cache_path_lto", filepath.Join(cacheDir, "thinlto"))
 				}
 				if config.TrimPath() {

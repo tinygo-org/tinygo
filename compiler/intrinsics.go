@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -212,7 +211,7 @@ func (b *builder) defineMathOp() bool {
 			llvmName = "sin"
 		}
 	}
-	if strings.HasSuffix(b.Triple, "-wasi") || llvmutil.Version() < 19 {
+	if strings.HasSuffix(b.Triple, "-wasi") || llvm.VersionMajor < 19 {
 		// We don't have a real libc for wasip2. Until that is fixed, we need to
 		// limit math intrinsics on WASI to a subset supported natively in
 		// WebAssembly.

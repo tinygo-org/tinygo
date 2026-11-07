@@ -9,7 +9,6 @@ package llvmutil
 
 import (
 	"encoding/binary"
-	"strconv"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -82,7 +81,7 @@ func EmitLifetimeEnd(builder llvm.Builder, mod llvm.Module, ptr, size llvm.Value
 // already required to match the alloca size) i64 size argument, so the
 // intrinsic now only takes the pointer.
 func lifetimeCallArgs(size, ptr llvm.Value) []llvm.Value {
-	if Version() >= 22 {
+	if llvm.VersionMajor >= 22 {
 		return []llvm.Value{ptr}
 	}
 	return []llvm.Value{size, ptr}
@@ -91,7 +90,7 @@ func lifetimeCallArgs(size, ptr llvm.Value) []llvm.Value {
 // lifetimeFuncType returns the function type of the llvm.lifetime.start/end
 // intrinsics, which lost their i64 size parameter in LLVM 22.
 func lifetimeFuncType(ctx llvm.Context, ptrType llvm.Type) llvm.Type {
-	if Version() >= 22 {
+	if llvm.VersionMajor >= 22 {
 		return llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
 	}
 	return llvm.FunctionType(ctx.VoidType(), []llvm.Type{ctx.Int64Type(), ptrType}, false)
@@ -285,16 +284,6 @@ func RemoveGlobalReferences(mod llvm.Module, targetGlobal, referenceGlobal strin
 	})
 }
 
-// Version returns the LLVM major version.
-func Version() int {
-	majorStr, _, _ := strings.Cut(llvm.Version, ".")
-	major, err := strconv.Atoi(majorStr)
-	if err != nil {
-		panic("unexpected error while parsing LLVM version: " + err.Error()) // should not happen
-	}
-	return major
-}
-
 // NoCaptureAttrName returns the name of the LLVM attribute kind that marks a
 // pointer parameter as guaranteed not to escape by capture.
 //
@@ -304,7 +293,7 @@ func Version() int {
 // both, but its own optimizer still emits 'nocapture', so the cutoff for
 // reading/writing the new name is LLVM 21.
 func NoCaptureAttrName() string {
-	if Version() >= 21 {
+	if llvm.VersionMajor >= 21 {
 		return "captures"
 	}
 	return "nocapture"
@@ -317,7 +306,7 @@ func IsNoCapture(attr llvm.Attribute) bool {
 	if attr.IsNil() {
 		return false
 	}
-	if Version() >= 21 {
+	if llvm.VersionMajor >= 21 {
 		// captures(none) is encoded as the value 0; any other value permits
 		// some form of capture.
 		return attr.GetEnumValue() == 0
