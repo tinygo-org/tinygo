@@ -39,14 +39,15 @@ type functionInfo struct {
 type functionFlags uint
 
 const (
-	funcExported    functionFlags = 1 << iota // go:export, CGo
-	funcInterrupt                             // go:interrupt
-	funcNoBounds                              // go:nobounds
-	funcNoEscape                              // go:noescape
-	funcNoHeap                                // go:noheap
-	funcNoRuntime                             // go:noruntime
-	funcVariadic                              // go:variadic (CGo only)
-	funcInlineShift = iota                    // go:inline, go:noinline
+	funcExported     functionFlags = 1 << iota // go:export, CGo
+	funcInterrupt                              // go:interrupt
+	funcNoBounds                               // go:nobounds
+	funcNoPanicIndex                           // go:nopanic index
+	funcNoEscape                               // go:noescape
+	funcNoHeap                                 // go:noheap
+	funcNoRuntime                              // go:noruntime
+	funcVariadic                               // go:variadic (CGo only)
+	funcInlineShift  = iota                    // go:inline, go:noinline
 )
 
 const funcInlineMask functionFlags = 0b11 << funcInlineShift
@@ -59,13 +60,14 @@ func (info *functionInfo) setInline(inline inlineType) {
 	info.flags = info.flags&^funcInlineMask | functionFlags(inline)<<funcInlineShift
 }
 
-func (info *functionInfo) isExported() bool  { return info.flags&funcExported != 0 }
-func (info *functionInfo) isInterrupt() bool { return info.flags&funcInterrupt != 0 }
-func (info *functionInfo) isNoBounds() bool  { return info.flags&funcNoBounds != 0 }
-func (info *functionInfo) isNoEscape() bool  { return info.flags&funcNoEscape != 0 }
-func (info *functionInfo) isNoHeap() bool    { return info.flags&funcNoHeap != 0 }
-func (info *functionInfo) isNoRuntime() bool { return info.flags&funcNoRuntime != 0 }
-func (info *functionInfo) isVariadic() bool  { return info.flags&funcVariadic != 0 }
+func (info *functionInfo) isExported() bool     { return info.flags&funcExported != 0 }
+func (info *functionInfo) isInterrupt() bool    { return info.flags&funcInterrupt != 0 }
+func (info *functionInfo) isNoBounds() bool     { return info.flags&funcNoBounds != 0 }
+func (info *functionInfo) isNoPanicIndex() bool { return info.flags&funcNoPanicIndex != 0 }
+func (info *functionInfo) isNoEscape() bool     { return info.flags&funcNoEscape != 0 }
+func (info *functionInfo) isNoHeap() bool       { return info.flags&funcNoHeap != 0 }
+func (info *functionInfo) isNoRuntime() bool    { return info.flags&funcNoRuntime != 0 }
+func (info *functionInfo) isVariadic() bool     { return info.flags&funcVariadic != 0 }
 
 type inlineType int
 
@@ -615,6 +617,24 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 			// that import unsafe.
 			if c.checkDefinition(hasBody, comment, pragma) && c.checkUnsafe(f.Pkg, comment, pragma) {
 				info.flags |= funcNoBounds
+			}
+		case "//go:nopanic":
+			// The optimizer must prove the checks of the given kinds.
+			// transform.CheckNoPanic reports each check that it does not prove.
+			if len(parts) != 2 {
+				c.addPragmaError(comment, fmt.Sprintf("expected one parameter to //go:nopanic, not %d", len(parts)-1))
+				continue
+			}
+			if !c.checkDefinition(hasBody, comment, pragma) {
+				continue
+			}
+			for kind := range strings.SplitSeq(parts[1], ",") {
+				switch kind {
+				case "index":
+					info.flags |= funcNoPanicIndex
+				default:
+					c.addPragmaError(comment, fmt.Sprintf("unknown //go:nopanic kind %q", kind))
+				}
 			}
 		case "//go:noescape":
 			// Don't let pointer parameters escape.

@@ -288,7 +288,7 @@ func hashmapSlotValue(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Poin
 
 // Set a specified key to a given value. Grow the map if necessary.
 //
-//go:nobounds
+//go:nopanic index
 func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint32) {
 	if hashmapHasSpaceToGrow(m.bucketBits) && hashmapOverLoadFactor(m.count, m.bucketBits) {
 		hashmapGrow(m)
@@ -435,7 +435,7 @@ func hashmapCopy(m *hashmap, sizeBits uint8) hashmap {
 
 // Get the value of a specified key, or zero the value if not found.
 //
-//go:nobounds
+//go:nopanic index
 func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash uint32) bool {
 	if m == nil {
 		// Getting a value out of a nil map is valid. From the spec:
@@ -473,7 +473,7 @@ func hashmapGet(m *hashmap, key, value unsafe.Pointer, valueSize uintptr, hash u
 // Delete a given key from the map. No-op when the key does not exist in the
 // map.
 //
-//go:nobounds
+//go:nopanic index
 func hashmapDelete(m *hashmap, key unsafe.Pointer, hash uint32) {
 	if m == nil {
 		// The delete builtin is defined even when the map is nil. From the spec:
