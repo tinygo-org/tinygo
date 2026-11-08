@@ -1212,10 +1212,10 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	}
 
 	b.addStandardDefinedAttributes(b.llvmFn)
-	if b.info.noruntime {
+	if b.info.isNoRuntime() {
 		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-noruntime", ""))
 	}
-	if !b.info.exported {
+	if !b.info.isExported() {
 		// Do not set visibility for local linkage (internal or private).
 		// Otherwise a "local linkage requires default visibility"
 		// assertion error in llvm-project/llvm/include/llvm/IR/GlobalValue.h:236
@@ -1229,7 +1229,7 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	if b.info.section != "" {
 		b.llvmFn.SetSection(b.info.section)
 	}
-	if b.info.exported && strings.HasPrefix(b.Triple, "wasm") {
+	if b.info.isExported() && strings.HasPrefix(b.Triple, "wasm") {
 		// Set the exported name. This is necessary for WebAssembly because
 		// otherwise the function is not exported.
 		functionAttr := b.ctx.CreateStringAttribute("wasm-export-name", b.info.linkName)
@@ -1242,7 +1242,7 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	}
 
 	// Some functions have a pragma controlling the inlining level.
-	switch b.info.inline {
+	switch b.info.inline() {
 	case inlineHint:
 		// Add LLVM inline hint to functions with //go:inline pragma.
 		inline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("inlinehint"), 0)
@@ -1253,7 +1253,7 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		b.llvmFn.AddFunctionAttr(noinline)
 	}
 
-	if b.info.interrupt {
+	if b.info.isInterrupt() {
 		// Mark this function as an interrupt.
 		// This is necessary on MCUs that don't push caller saved registers when
 		// entering an interrupt, such as on AVR.
@@ -1326,7 +1326,7 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	}
 
 	// Load function parameters
-	abi := b.getFunctionABI(b.fn.Signature, b.info.exported)
+	abi := b.getFunctionABI(b.fn.Signature, b.info.isExported())
 	llvmParamIndex := 0
 	if abi.indirectResult {
 		b.indirectReturn = b.llvmFn.Param(llvmParamIndex)
@@ -1376,7 +1376,7 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 	// Load free variables from the context. This is a closure (or bound
 	// method).
 	var context llvm.Value
-	if !b.info.exported {
+	if !b.info.isExported() {
 		context = b.llvmFn.LastParam()
 		context.SetName("context")
 	}
@@ -2429,7 +2429,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		case *ssa.Function:
 			// Regular function call. No context is necessary.
 			context = llvm.Undef(b.dataPtrType)
-			if info.variadic && len(fn.Params) == 0 {
+			if info.isVariadic() && len(fn.Params) == 0 {
 				// This matches Clang, see: https://godbolt.org/z/Gqv49xKMq
 				// Eventually we might be able to eliminate this special case
 				// entirely. For details, see:
@@ -2444,7 +2444,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		default:
 			panic("StaticCallee returned an unexpected value")
 		}
-		exported = info.exported
+		exported = info.isExported()
 	} else if call, ok := instr.Value.(*ssa.Builtin); ok {
 		// Builtin function (append, close, delete, etc.).)
 		var params []llvm.Value
@@ -2515,7 +2515,7 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 		}
 		return b.createConst(expr, pos)
 	case *ssa.Function:
-		if b.getFunctionInfo(expr).exported {
+		if b.getFunctionInfo(expr).isExported() {
 			b.addError(expr.Pos(), "cannot use an exported function as value: "+expr.String())
 			return llvm.Undef(b.getLLVMType(expr.Type()))
 		}

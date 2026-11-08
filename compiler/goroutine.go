@@ -74,7 +74,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 			hasContext = true
 		}
 		funcType, funcPtr = b.getFunction(callee)
-		exported = b.getFunctionInfo(callee).exported
+		exported = b.getFunctionInfo(callee).isExported()
 	} else if instr.Call.IsInvoke() {
 		// This is a method call on an interface value.
 		itf := b.getValue(instr.Call.Value, getPos(instr))
@@ -152,7 +152,7 @@ func (b *builder) getGoroutineCallArgument(value ssa.Value, indirect bool) []llv
 // it needs to start a new goroutine each time the exported function is called.
 func (b *builder) createWasmExport() {
 	pos := b.info.wasmExportPos
-	if b.info.exported {
+	if b.info.isExported() {
 		// //export really shouldn't be used anymore when //go:wasmexport is
 		// available, because //go:wasmexport is much better defined.
 		b.addError(pos, "cannot use //export and //go:wasmexport at the same time")
