@@ -17,7 +17,7 @@ import (
 // cause a panic.
 // The caller should make sure that index is at least as big as arrayLen.
 func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value) {
-	if b.info.nobounds {
+	if b.info.isNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
@@ -45,7 +45,7 @@ func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value) {
 // highLeMax must only be true if high is the length and max is the capacity of
 // the same slice, so high > max cannot happen.
 func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lowType, highType, maxType *types.Basic, highLeMax bool) {
-	if b.info.nobounds {
+	if b.info.isNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
@@ -132,7 +132,7 @@ func (b *builder) createUnsafeSliceStringCheck(name string, ptr, len llvm.Value,
 // createChanBoundsCheck creates a bounds check before creating a new channel to
 // check that the value is not too big for runtime.chanMake.
 func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, bufSizeType *types.Basic, pos token.Pos) {
-	if b.info.nobounds {
+	if b.info.isNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
@@ -213,7 +213,7 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 // createNegativeShiftCheck creates an assertion that panics if the given shift value is negative.
 // This function assumes that the shift value is signed.
 func (b *builder) createNegativeShiftCheck(shift llvm.Value) {
-	if b.info.nobounds {
+	if b.info.isNoBounds() {
 		// Function disabled bounds checking - skip shift check.
 		return
 	}
@@ -227,7 +227,7 @@ func (b *builder) createNegativeShiftCheck(shift llvm.Value) {
 // will be emitted. This follows the Go specification which says that a divide
 // by zero must cause a run time panic.
 func (b *builder) createDivideByZeroCheck(y llvm.Value) {
-	if b.info.nobounds {
+	if b.info.isNoBounds() {
 		return
 	}
 

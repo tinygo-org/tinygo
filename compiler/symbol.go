@@ -25,21 +25,46 @@ import (
 // The linkName value contains a valid link name, even if //go:linkname is not
 // present.
 type functionInfo struct {
-	wasmModule    string     // go:wasm-module
-	wasmName      string     // wasm-export-name or wasm-import-name in the IR
-	wasmExport    string     // go:wasmexport is defined (export is unset, this adds an exported wrapper)
-	wasmExportPos token.Pos  // position of //go:wasmexport comment
-	linkName      string     // go:linkname, go:export - the IR function name
-	section       string     // go:section - object file section name
-	exported      bool       // go:export, CGo
-	interrupt     bool       // go:interrupt
-	nobounds      bool       // go:nobounds
-	noescape      bool       // go:noescape
-	noheap        bool       // go:noheap
-	noruntime     bool       // go:noruntime
-	variadic      bool       // go:variadic (CGo only)
-	inline        inlineType // go:inline
+	wasmModule    string    // go:wasm-module
+	wasmName      string    // wasm-export-name or wasm-import-name in the IR
+	wasmExport    string    // go:wasmexport is defined (export is unset, this adds an exported wrapper)
+	wasmExportPos token.Pos // position of //go:wasmexport comment
+	linkName      string    // go:linkname, go:export - the IR function name
+	section       string    // go:section - object file section name
+	flags         functionFlags
 }
+
+// functionFlags holds the boolean attributes and the inlineType of a function.
+type functionFlags uint
+
+const (
+	funcExported    functionFlags = 1 << iota // go:export, CGo
+	funcInterrupt                             // go:interrupt
+	funcNoBounds                              // go:nobounds
+	funcNoEscape                              // go:noescape
+	funcNoHeap                                // go:noheap
+	funcNoRuntime                             // go:noruntime
+	funcVariadic                              // go:variadic (CGo only)
+	funcInlineShift = iota                    // go:inline, go:noinline
+)
+
+const funcInlineMask functionFlags = 0b11 << funcInlineShift
+
+func (info functionInfo) inline() inlineType {
+	return inlineType((info.flags & funcInlineMask) >> funcInlineShift)
+}
+
+func (info *functionInfo) setInline(inline inlineType) {
+	info.flags = info.flags&^funcInlineMask | functionFlags(inline)<<funcInlineShift
+}
+
+func (info functionInfo) isExported() bool  { return info.flags&funcExported != 0 }
+func (info functionInfo) isInterrupt() bool { return info.flags&funcInterrupt != 0 }
+func (info functionInfo) isNoBounds() bool  { return info.flags&funcNoBounds != 0 }
+func (info functionInfo) isNoEscape() bool  { return info.flags&funcNoEscape != 0 }
+func (info functionInfo) isNoHeap() bool    { return info.flags&funcNoHeap != 0 }
+func (info functionInfo) isNoRuntime() bool { return info.flags&funcNoRuntime != 0 }
+func (info functionInfo) isVariadic() bool  { return info.flags&funcVariadic != 0 }
 
 type inlineType int
 
@@ -80,7 +105,7 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 		return llvmFn.GlobalValueType(), llvmFn
 	}
 
-	abi := c.getFunctionABI(fn.Signature, info.exported)
+	abi := c.getFunctionABI(fn.Signature, info.isExported())
 	retType := abi.resultType
 
 	var paramInfos []paramInfo
@@ -107,7 +132,7 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 
 	// Add an extra parameter as the function context. This context is used in
 	// closures and bound methods, but should be optimized away when not used.
-	if !info.exported {
+	if !info.isExported() {
 		paramInfos = append(paramInfos, paramInfo{llvmType: c.dataPtrType, name: "context", elemSize: 0})
 	}
 
@@ -118,7 +143,7 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 		hasIndirectABI = hasIndirectABI || info.flags&paramIsIndirect != 0
 	}
 
-	fnType := llvm.FunctionType(retType, paramTypes, info.variadic)
+	fnType := llvm.FunctionType(retType, paramTypes, info.isVariadic())
 	llvmFn = llvm.AddFunction(c.mod, info.linkName, fnType)
 	if hasIndirectABI {
 		// Argument promotion only rewrites functions whose uses are all direct
@@ -138,7 +163,7 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 		// check here. For more information:
 		// https://reviews.llvm.org/D48443
 		// https://github.com/WebAssembly/tool-conventions/issues/16
-		if info.variadic && len(fn.Params) == 0 {
+		if info.isVariadic() && len(fn.Params) == 0 {
 			attr := c.ctx.CreateStringAttribute("no-prototype", "")
 			llvmFn.AddFunctionAttr(attr)
 		}
@@ -151,7 +176,7 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 			dereferenceableOrNull := c.ctx.CreateEnumAttribute(dereferenceableOrNullKind, paramInfo.elemSize)
 			llvmFn.AddAttributeAtIndex(i+1, dereferenceableOrNull)
 		}
-		if info.noescape && paramInfo.flags&paramIsGoParam != 0 && paramInfo.llvmType.TypeKind() == llvm.PointerTypeKind {
+		if info.isNoEscape() && paramInfo.flags&paramIsGoParam != 0 && paramInfo.llvmType.TypeKind() == llvm.PointerTypeKind {
 			// Parameters to functions with a //go:noescape parameter should get
 			// the nocapture attribute. However, the context parameter should
 			// not.
@@ -262,7 +287,7 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 
 	// External/exported functions may not retain pointer values.
 	// https://golang.org/cmd/cgo/#hdr-Passing_pointers
-	if info.exported {
+	if info.isExported() {
 		if c.archFamily() == "wasm32" && len(fn.Blocks) == 0 {
 			// We need to add the wasm-import-module and the wasm-import-name
 			// attributes.
@@ -343,17 +368,17 @@ func (c *context) getFunctionInfo(f *ssa.Function) functionInfo {
 	if info.linkName == "runtime.wasmEntryReactor" && c.BuildMode == "c-shared" {
 		info.linkName = "_initialize"
 		info.wasmName = "_initialize"
-		info.exported = true
+		info.flags |= funcExported
 	}
 	if info.linkName == "runtime.wasmEntryCommand" && c.BuildMode == "default" {
 		info.linkName = "_start"
 		info.wasmName = "_start"
-		info.exported = true
+		info.flags |= funcExported
 	}
 	if info.linkName == "runtime.wasmEntryLegacy" && c.BuildMode == "wasi-legacy" {
 		info.linkName = "_start"
 		info.wasmName = "_start"
-		info.exported = true
+		info.flags |= funcExported
 	}
 
 	// Check for //go: pragmas, which may change the link name (among others).
@@ -495,10 +520,10 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 				info.linkName = "llvm.returnaddress.p0"
 			}
 			info.wasmName = info.linkName
-			info.exported = true
+			info.flags |= funcExported
 		case "//go:interrupt":
 			if c.checkDefinition(hasBody, comment, pragma) && c.checkUnsafe(f.Pkg, comment, pragma) {
-				info.interrupt = true
+				info.flags |= funcInterrupt
 			}
 		case "//go:wasm-module":
 			// Alternative comment for setting the import module.
@@ -519,7 +544,7 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 				continue
 			}
 			c.checkWasmImportExport(f, comment.Text)
-			info.exported = true
+			info.flags |= funcExported
 			info.wasmModule = parts[1]
 			info.wasmName = parts[2]
 		case "//go:wasmexport":
@@ -548,10 +573,10 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 			info.wasmExportPos = comment.Slash
 		case "//go:inline":
 			if c.checkDefinition(hasBody, comment, pragma) {
-				info.inline = inlineHint
+				info.setInline(inlineHint)
 			}
 		case "//go:noinline":
-			info.inline = inlineNone
+			info.setInline(inlineNone)
 		case "//go:linkname", "//go:linknamestd":
 			if len(parts) != 3 || parts[1] != f.Name() {
 				continue
@@ -573,7 +598,7 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 			}
 			if c.checkDefinition(hasBody, comment, pragma) && c.checkUnsafe(f.Pkg, comment, pragma) {
 				info.section = parts[1]
-				info.inline = inlineNone
+				info.setInline(inlineNone)
 			}
 		case "//go:nobounds":
 			// Skip bounds checking in this function. Useful for some
@@ -581,7 +606,7 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 			// This is somewhat dangerous and thus only imported in packages
 			// that import unsafe.
 			if c.checkDefinition(hasBody, comment, pragma) && c.checkUnsafe(f.Pkg, comment, pragma) {
-				info.nobounds = true
+				info.flags |= funcNoBounds
 			}
 		case "//go:noescape":
 			// Don't let pointer parameters escape.
@@ -591,15 +616,15 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 				c.addPragmaError(comment, "can only use //go:noescape on declarations")
 				continue
 			}
-			info.noescape = true
+			info.flags |= funcNoEscape
 		case "//go:noheap":
 			// Ensure this function does not allocate on the heap.
 			if c.checkDefinition(hasBody, comment, pragma) {
-				info.noheap = true
+				info.flags |= funcNoHeap
 			}
 		case "//go:noruntime":
 			if c.checkDefinition(hasBody, comment, pragma) {
-				info.noruntime = true
+				info.flags |= funcNoRuntime
 			}
 		case "//go:variadic":
 			// The //go:variadic pragma is emitted by the CGo preprocessing
@@ -608,13 +633,13 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 			// functions.
 			if strings.HasPrefix(f.Name(), "_Cgo_") {
 				// This prefix was created as a result of CGo preprocessing.
-				info.variadic = true
+				info.flags |= funcVariadic
 			}
 		}
 	}
 
 	if c.Nobounds {
-		info.nobounds = true
+		info.flags |= funcNoBounds
 	}
 }
 
