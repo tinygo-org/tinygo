@@ -81,6 +81,7 @@ func TestTimerStress(t *testing.T) {
 		"timer_concurrent_growth.go",
 		"timer_stop_reset_stress.go",
 		"timer_ticker_gc.go",
+		"timer_growth_under_gc.go",
 		"sleepers.go",
 	}
 	coresPrograms := []string{

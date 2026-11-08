@@ -732,6 +732,19 @@ func stackBodySize(size uintptr) uintptr {
 	return (size+header+bytesPerBlock-1)&^(bytesPerBlock-1) - header
 }
 
+// markLiveStack scans the live part of the current goroutine stack now. It is
+// only needed with multiple cores, where later calls on this stack overwrite
+// the registers pushed by scanCurrentStack before finishMark runs.
+func markLiveStack(sp uintptr) {
+	if isOnHeap(sp) {
+		last := blockFromAddr(sp).findHead()
+		end := last.address() + bytesPerBlock - unsafe.Sizeof(objHeader{})
+		if end > sp {
+			scanConservative(sp, end-sp)
+		}
+	}
+}
+
 // finishMark finishes the marking process by scanning all heap objects on scanList.
 func finishMark() {
 	for {

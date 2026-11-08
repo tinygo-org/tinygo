@@ -87,6 +87,10 @@ func markCurrentGoroutineStack(sp uintptr) {
 	libgc_push_all_stack(sp, stackBottom)
 }
 
+// markLiveStack is not needed because markCurrentGoroutineStack already pushes
+// the live part of the stack.
+func markLiveStack(sp uintptr) {}
+
 //go:noinline
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if size == 0 {
