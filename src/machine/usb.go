@@ -1,4 +1,4 @@
-//go:build sam || nrf52840 || rp2040 || rp2350 || stm32f4 || stm32f7 || stm32h7 || mimxrt1062 || (esp32s3 && usbotg)
+//go:build sam || nrf52840 || rp2040 || rp2350 || stm32f4 || stm32f7 || stm32h7 || mimxrt1062 || (esp32s3 && usbotg) || (ra4m1 && serial.usb)
 
 package machine
 
