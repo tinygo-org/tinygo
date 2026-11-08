@@ -31,6 +31,41 @@ func TestTimerStopResetRace(t *testing.T) {
 	runTest("timer_stop_reset_race.go", optionsFromTarget("", sema), t, nil, nil)
 }
 
+func TestAVRGCStackReturn(t *testing.T) {
+	t.Parallel()
+
+	options := optionsFromTarget("simavr", sema)
+	emuCheck(t, options)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := t.TempDir() + "/main.go"
+	err = os.WriteFile(path, []byte(`package main
+
+import "runtime"
+
+func main() {
+	runtime.GC()
+	println("GC returned")
+}
+`), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := &bytes.Buffer{}
+	_, err = buildAndRun(path, config, output, nil, nil, 10*time.Second, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+		cmd.Stdout = output
+		return cmd.Run()
+	})
+	if err != nil {
+		t.Fatalf("GC program failed: %v\n%s", err, output.String())
+	}
+	if !strings.Contains(output.String(), "GC returned") {
+		t.Fatalf("GC did not return:\n%s", output.String())
+	}
+}
+
 func TestGoexitCrash(t *testing.T) {
 	t.Parallel()
 
