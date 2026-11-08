@@ -209,7 +209,7 @@ func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []ll
 // object size and can therefore know how this value is repeated in the object.
 //
 // For details on what's in this value, see src/runtime/gc_precise.go.
-func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
+func (c *context) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
 	if !typeHasPointers(t) {
 		// There are no pointers in this type, so we can simplify the layout.
 		layout := (uint64(1) << 1) | 1
@@ -338,7 +338,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 
 // buildPointerBitmap scans the given LLVM type for pointers and sets bits in a
 // bitmap at the word offset that contains a pointer. This scan is recursive.
-func (c *compilerContext) buildPointerBitmap(
+func (c *context) buildPointerBitmap(
 	dst []byte,
 	ptrAlign uint64,
 	pos token.Pos,
@@ -410,13 +410,13 @@ func (c *compilerContext) buildPointerBitmap(
 // archFamily returns the architecture from the LLVM triple but with some
 // architecture names ("armv6", "thumbv7m", etc) merged into a single
 // architecture name ("arm").
-func (c *compilerContext) archFamily() string {
+func (c *context) archFamily() string {
 	return compileopts.CanonicalArchName(c.Triple)
 }
 
 // isThumb returns whether we're in ARM or in Thumb mode. It panics if the
 // features string is not one for an ARM architecture.
-func (c *compilerContext) isThumb() bool {
+func (c *context) isThumb() bool {
 	var isThumb, isNotThumb bool
 	for feature := range strings.SplitSeq(c.Features, ",") {
 		if feature == "+thumb-mode" {

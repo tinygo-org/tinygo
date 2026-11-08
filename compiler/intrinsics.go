@@ -95,7 +95,7 @@ func (b *builder) createStackSaveImpl() {
 }
 
 // Return the llvm.memset.p0.i8 function declaration.
-func (c *compilerContext) getMemsetFunc() llvm.Value {
+func (c *context) getMemsetFunc() llvm.Value {
 	fnName := "llvm.memset.p0.i" + strconv.Itoa(c.uintptrType.IntTypeWidth())
 	llvmFn := c.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
