@@ -475,6 +475,25 @@ func recoverNilMapAndChan() {
 		default:
 		}
 	})
+	func() {
+		defer func() { println("  recovered closed chan blocking select:", recover() != nil) }()
+		ch := make(chan int, 1)
+		block := make(chan int)
+		close(ch)
+		select {
+		case ch <- 1:
+		case <-block:
+		}
+	}()
+	func() {
+		other := make(chan int, 1)
+		block := make(chan int)
+		select {
+		case other <- 1:
+		case <-block:
+		}
+		println("  select after recover ok")
+	}()
 	recoverMustPanic("close nil chan", func() {
 		var ch chan int
 		close(ch)

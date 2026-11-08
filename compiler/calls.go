@@ -49,7 +49,7 @@ func (b *builder) createRuntimeCallCommon(fnName string, args []llvm.Value, name
 	if isInvoke {
 		// chanSend is the only panic-capable runtime operation that can also
 		// suspend the task.
-		return b.createInvokeWithAnalysis(fnType, llvmFn, args, name, true, fnName == "chanSend")
+		return b.createInvokeWithAnalysis(fnType, llvmFn, args, name, true, fnName == "chanSend" || fnName == "chanSelect")
 	}
 	return b.createCall(fnType, llvmFn, args, name)
 }

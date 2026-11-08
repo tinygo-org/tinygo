@@ -575,6 +575,12 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 				break
 			}
 		} else { // chan send
+			if state.ch.closed {
+				unlockAllStates(states)
+				chanSelectLock.Unlock()
+				interrupt.Restore(mask)
+				runtimePanic(errSendOnClosedChannel)
+			}
 			if sent, receiver := state.ch.trySend(state.value); sent {
 				selectIndex = uint32(i)
 				wake = receiver

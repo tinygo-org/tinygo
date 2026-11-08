@@ -78,6 +78,8 @@ outer recovered: repanic value
   recovered runtime error: assignment to entry in nil map
   recovered: closed chan
   recovered: closed chan select
+  recovered closed chan blocking select: true
+  select after recover ok
   recovered: close nil chan
 
 # recover from hardware signals
