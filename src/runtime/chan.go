@@ -214,26 +214,25 @@ func (ch *channel) bufferPop(value unsafe.Pointer) {
 }
 
 // Try to proceed with this send operation without blocking, and return whether
-// the send succeeded. Schedule a returned task only after releasing all locks.
+// the send succeeded. If the channel is closed, the caller must release all
+// locks and restore interrupts before panicking.
+// Schedule a returned task only after releasing all locks.
 // Interrupts must be disabled and the channel lock must be held.
-func (ch *channel) trySend(value unsafe.Pointer) (sent bool, wake *task.Task) {
-	// To make sure we send values in the correct order, we can only send
-	// directly to a receiver when there are no values in the buffer.
-
+func (ch *channel) trySend(value unsafe.Pointer) (sent bool, wake *task.Task, closed bool) {
 	// Do not allow sending on a closed channel.
 	if ch.closed {
-		// Note: we cannot currently recover from this panic.
-		// There's some state in the select statement especially that would be
-		// corrupted if we allowed recovering from this panic.
-		runtimePanic(errSendOnClosedChannel)
+		return false, nil, true
 	}
+
+	// To make sure we send values in the correct order, we can only send
+	// directly to a receiver when there are no values in the buffer.
 
 	// There is no value in the buffer and we have a receiver available. Copy
 	// the value directly into the receiver.
 	if ch.bufLen == 0 {
 		if receiver := ch.receivers.pop(chanOperationOk); receiver != nil {
 			memcpy(receiver.task.Ptr, value, ch.elementSize)
-			return true, receiver.task
+			return true, receiver.task, false
 		}
 	}
 
@@ -241,9 +240,9 @@ func (ch *channel) trySend(value unsafe.Pointer) (sent bool, wake *task.Task) {
 	// store the value in the buffer and continue.
 	if ch.bufLen < ch.bufCap {
 		ch.bufferPush(value)
-		return true, nil
+		return true, nil, false
 	}
-	return false, nil
+	return false, nil, false
 }
 
 func chanSend(ch *channel, value unsafe.Pointer, op *channelOp) {
@@ -257,7 +256,13 @@ func chanSend(ch *channel, value unsafe.Pointer, op *channelOp) {
 	ch.lock.Lock()
 
 	// See whether we can proceed immediately, and if so, return early.
-	if sent, wake := ch.trySend(value); sent {
+	sent, wake, closed := ch.trySend(value)
+	if closed {
+		ch.lock.Unlock()
+		interrupt.Restore(mask)
+		runtimePanic(errSendOnClosedChannel)
+	}
+	if sent {
 		ch.lock.Unlock()
 		if wake != nil {
 			scheduleTask(wake)
@@ -381,9 +386,13 @@ func chanTrySend(ch *channel, value unsafe.Pointer) bool {
 	mask := interrupt.Disable()
 	ch.lock.Lock()
 
-	sent, wake := ch.trySend(value)
+	sent, wake, closed := ch.trySend(value)
 
 	ch.lock.Unlock()
+	if closed {
+		interrupt.Restore(mask)
+		runtimePanic(errSendOnClosedChannel)
+	}
 	if wake != nil {
 		scheduleTask(wake)
 	}
@@ -575,13 +584,14 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 				break
 			}
 		} else { // chan send
-			if state.ch.closed {
+			sent, receiver, closed := state.ch.trySend(state.value)
+			if closed {
 				unlockAllStates(states)
 				chanSelectLock.Unlock()
 				interrupt.Restore(mask)
 				runtimePanic(errSendOnClosedChannel)
 			}
-			if sent, receiver := state.ch.trySend(state.value); sent {
+			if sent {
 				selectIndex = uint32(i)
 				wake = receiver
 				break

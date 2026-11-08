@@ -55,6 +55,24 @@ func sendPlain() {
 	checkSelectWorks("after plain send")
 }
 
+func reuseAfterRecover() {
+	ch := closedBuffered()
+	try("reuse plain send", func() { ch <- 1 })
+	v, ok := <-ch
+	println("reuse receive:", v, ok)
+	try("reuse select default", func() {
+		select {
+		case ch <- 1:
+		default:
+		}
+	})
+	v, ok = <-ch
+	println("reuse receive:", v, ok)
+	try("reuse close", func() { close(ch) })
+	runtime.GC()
+	checkSelectWorks("after reuse")
+}
+
 func sendSelectDefault() {
 	try("select default", func() {
 		ch := closedBuffered()
@@ -284,6 +302,7 @@ func goroutineStress() {
 
 func main() {
 	sendPlain()
+	reuseAfterRecover()
 	sendSelectDefault()
 	sendSelectBlocking()
 	sendSelectLaterCase()

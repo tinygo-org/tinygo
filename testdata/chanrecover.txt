@@ -1,5 +1,11 @@
 plain send: runtime error: send on closed channel
 after plain send: select ok
+reuse plain send: runtime error: send on closed channel
+reuse receive: 0 false
+reuse select default: runtime error: send on closed channel
+reuse receive: 0 false
+reuse close: runtime error: close of closed channel
+after reuse: select ok
 select default: runtime error: send on closed channel
 after select default: select ok
 select blocking: runtime error: send on closed channel
