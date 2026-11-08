@@ -94,7 +94,7 @@ type context struct {
 	ptrAlign                    int
 	program                     *ssa.Program
 	diagnostics                 []error
-	functionInfos               map[*ssa.Function]functionInfo
+	functionInfos               map[*ssa.Function]*functionInfo
 	globalInfos                 map[*ssa.Global]globalInfo
 	pragmaErrors                map[*ast.Comment]bool
 	callProperties              map[*ssa.Function]functionCallProperties
@@ -123,7 +123,7 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 		ditypes:          make(map[types.Type]llvm.Metadata),
 		machine:          machine,
 		targetData:       machine.CreateTargetData(),
-		functionInfos:    map[*ssa.Function]functionInfo{},
+		functionInfos:    map[*ssa.Function]*functionInfo{},
 		globalInfos:      map[*ssa.Global]globalInfo{},
 		pragmaErrors:     map[*ast.Comment]bool{},
 		callProperties:   map[*ssa.Function]functionCallProperties{},
@@ -193,7 +193,7 @@ type builder struct {
 	fn                 *ssa.Function
 	llvmFnType         llvm.Type
 	llvmFn             llvm.Value
-	info               functionInfo
+	info               *functionInfo
 	locals             map[ssa.Value]llvm.Value // local variables
 	indirectValues     map[ssa.Value]llvm.Value
 	indirectReturn     llvm.Value

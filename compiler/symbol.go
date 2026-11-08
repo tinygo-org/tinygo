@@ -51,7 +51,7 @@ const (
 
 const funcInlineMask functionFlags = 0b11 << funcInlineShift
 
-func (info functionInfo) inline() inlineType {
+func (info *functionInfo) inline() inlineType {
 	return inlineType((info.flags & funcInlineMask) >> funcInlineShift)
 }
 
@@ -59,13 +59,13 @@ func (info *functionInfo) setInline(inline inlineType) {
 	info.flags = info.flags&^funcInlineMask | functionFlags(inline)<<funcInlineShift
 }
 
-func (info functionInfo) isExported() bool  { return info.flags&funcExported != 0 }
-func (info functionInfo) isInterrupt() bool { return info.flags&funcInterrupt != 0 }
-func (info functionInfo) isNoBounds() bool  { return info.flags&funcNoBounds != 0 }
-func (info functionInfo) isNoEscape() bool  { return info.flags&funcNoEscape != 0 }
-func (info functionInfo) isNoHeap() bool    { return info.flags&funcNoHeap != 0 }
-func (info functionInfo) isNoRuntime() bool { return info.flags&funcNoRuntime != 0 }
-func (info functionInfo) isVariadic() bool  { return info.flags&funcVariadic != 0 }
+func (info *functionInfo) isExported() bool  { return info.flags&funcExported != 0 }
+func (info *functionInfo) isInterrupt() bool { return info.flags&funcInterrupt != 0 }
+func (info *functionInfo) isNoBounds() bool  { return info.flags&funcNoBounds != 0 }
+func (info *functionInfo) isNoEscape() bool  { return info.flags&funcNoEscape != 0 }
+func (info *functionInfo) isNoHeap() bool    { return info.flags&funcNoHeap != 0 }
+func (info *functionInfo) isNoRuntime() bool { return info.flags&funcNoRuntime != 0 }
+func (info *functionInfo) isVariadic() bool  { return info.flags&funcVariadic != 0 }
 
 type inlineType int
 
@@ -366,11 +366,11 @@ func (c *context) maybeCreateSyntheticFunction(fn *ssa.Function, llvmFn llvm.Val
 // getFunctionInfo returns information about a function that is not directly
 // present in *ssa.Function, such as the link name and whether it should be
 // exported.
-func (c *context) getFunctionInfo(f *ssa.Function) functionInfo {
+func (c *context) getFunctionInfo(f *ssa.Function) *functionInfo {
 	if info, ok := c.functionInfos[f]; ok {
 		return info
 	}
-	info := functionInfo{
+	info := &functionInfo{
 		// Pick the default linkName.
 		linkName: c.canonicalFunctionName(f),
 	}
@@ -393,7 +393,7 @@ func (c *context) getFunctionInfo(f *ssa.Function) functionInfo {
 	}
 
 	// Check for //go: pragmas, which may change the link name (among others).
-	c.parsePragmas(&info, f)
+	c.parsePragmas(info, f)
 
 	c.functionInfos[f] = info
 	return info
