@@ -598,7 +598,7 @@ func (b *builder) createUnwindReturnOrUnreachable() {
 	}
 }
 
-func (c *compilerContext) expandDirectFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
+func (c *context) expandDirectFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		fieldInfos := c.flattenAggregateType(t, name, goType)
@@ -612,7 +612,7 @@ func (c *compilerContext) expandDirectFormalParamType(t llvm.Type, name string, 
 	return []paramInfo{c.getParamInfo(t, name, goType)}
 }
 
-func (c *compilerContext) storedParamType(t llvm.Type) llvm.Type {
+func (c *context) storedParamType(t llvm.Type) llvm.Type {
 	if c.isIndirectAggregate(t) {
 		return c.dataPtrType
 	}
@@ -692,7 +692,7 @@ func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
 
 // Try to flatten a struct type to a list of types. Returns a 1-element slice
 // with the passed in type if this is not possible.
-func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType types.Type) []paramInfo {
+func (c *context) flattenAggregateType(t llvm.Type, name string, goType types.Type) []paramInfo {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		var paramInfos []paramInfo
@@ -739,7 +739,7 @@ func (c *compilerContext) flattenAggregateType(t llvm.Type, name string, goType 
 // getParamInfo collects information about a parameter. For example, if this
 // parameter is pointer-like, it will also store the element type for the
 // dereferenceable_or_null attribute.
-func (c *compilerContext) getParamInfo(t llvm.Type, name string, goType types.Type) paramInfo {
+func (c *context) getParamInfo(t llvm.Type, name string, goType types.Type) paramInfo {
 	info := paramInfo{
 		llvmType: t,
 		name:     name,
@@ -788,7 +788,7 @@ func extractSubfield(t types.Type, field int) types.Type {
 // non-flattened object.
 //
 // Note: this is an implementation detail, use expandFormalParamOffsets instead.
-func (c *compilerContext) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
+func (c *context) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
 		var fields []uint64

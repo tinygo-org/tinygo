@@ -170,7 +170,7 @@ func (b *builder) createWasmExport() {
 	exportedFn.AddFunctionAttr(b.ctx.CreateStringAttribute("wasm-export-name", b.info.wasmExport))
 
 	// Create a builder for this wrapper function.
-	builder := newBuilder(b.compilerContext, b.ctx.NewBuilder(), b.fn)
+	builder := newBuilder(b.context, b.ctx.NewBuilder(), b.fn)
 	defer builder.Dispose()
 
 	// Define this function as a separate function in DWARF
@@ -311,12 +311,12 @@ func (b *builder) createWasmExport() {
 // to last parameter of the function) is used for this wrapper. If hasContext is
 // false, the parameter bundle is assumed to have no context parameter and undef
 // is passed instead.
-func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, prefix string, hasContext, isWasmExport bool, pos token.Pos) llvm.Value {
+func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, prefix string, hasContext, isWasmExport bool, pos token.Pos) llvm.Value {
 	var wrapper llvm.Value
 
 	b := &builder{
-		compilerContext: c,
-		Builder:         c.ctx.NewBuilder(),
+		context: c,
+		Builder: c.ctx.NewBuilder(),
 	}
 	defer b.Dispose()
 

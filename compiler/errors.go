@@ -11,7 +11,7 @@ import (
 )
 
 // makeError makes it easy to create an error from a token.Pos with a message.
-func (c *compilerContext) makeError(pos token.Pos, msg string) types.Error {
+func (c *context) makeError(pos token.Pos, msg string) types.Error {
 	return types.Error{
 		Fset: c.program.Fset,
 		Pos:  pos,
@@ -20,7 +20,7 @@ func (c *compilerContext) makeError(pos token.Pos, msg string) types.Error {
 }
 
 // addError adds a new compiler diagnostic with the given location and message.
-func (c *compilerContext) addError(pos token.Pos, msg string) {
+func (c *context) addError(pos token.Pos, msg string) {
 	c.diagnostics = append(c.diagnostics, c.makeError(pos, msg))
 }
 
