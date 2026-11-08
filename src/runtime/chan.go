@@ -660,6 +660,10 @@ func chanSelect(recvbuf unsafe.Pointer, states []chanSelectState, ops []channelO
 	// Pull the return values out of t.Data (which contains two bitfields).
 	selectIndex = t.DataUint32() >> 2
 	selectOk = t.DataUint32()&chanOperationMask != chanOperationClosed
+	if !selectOk && states[selectIndex].value != nil {
+		// The channel was closed while this send was waiting.
+		runtimePanic(errSendOnClosedChannel)
+	}
 
 	return selectIndex, selectOk
 }

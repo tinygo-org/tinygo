@@ -25,6 +25,7 @@ func TestBuild(t *testing.T) {
 		"calls.go",
 		"cgo/",
 		"channel.go",
+		"chanrecover.go",
 		"coreassign.go",
 		"embed/",
 		"finalizer.go",
