@@ -1,0 +1,9 @@
+{
+    "inherits": ["arduino-uno-r4"],
+    "build-tags": ["arduino_nano_r4"],
+    "serial": "usb",
+    "flash-command": "dfu-util --device 2341:0074,:0374 -D {bin} -a0 -R",
+    "serial-port": ["2341:0074", "2341:0374"],
+    "flash-1200-bps-reset": "true",
+    "code-model": "small"
+}
