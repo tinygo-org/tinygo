@@ -119,6 +119,11 @@ func (uart *UART) Configure(config UARTConfig) {
 	}
 	uart.rxIELSR.Set(uart.event + eventRXI)
 	uart.errIELSR.Set(uart.event + eventERI)
+
+	// A lower number preempts. SCI has no FIFO, so it must preempt USB.
+	// ARMv7-M ARM B1.5.4.
+	uart.rxIRQ.SetPriority(0x00)
+	uart.errIRQ.SetPriority(0x00)
 	uart.rxIRQ.Enable()
 	uart.errIRQ.Enable()
 
@@ -185,20 +190,39 @@ func (uart *UART) configurePin(p Pin) {
 }
 
 func (uart *UART) handleRXI(interrupt.Interrupt) {
-	uart.Receive(uart.Bus.RDR.Get())
+	// Clear IR before reading so a byte arriving meanwhile raises a new interrupt.
 	uart.rxIELSR.ClearBits(renesas.ICU_IELSR_IR_Msk)
-	uart.rxIELSR.Get() // make sure the IR clear completes before exception return
+	uart.rxIELSR.Get() // make sure the IR clear completes before reading status
+	uart.service()
 }
 
 func (uart *UART) handleERI(interrupt.Interrupt) {
-	ssr := uart.Bus.SSR.Get()
-	if ssr&renesas.SCI2_SSR_RDRF_Msk != 0 {
-		uart.Receive(uart.Bus.RDR.Get())
-	}
-	// Error flags are cleared by writing 0.
-	uart.Bus.SSR.Set(ssr &^ (renesas.SCI2_SSR_ORER_Msk | renesas.SCI2_SSR_FER_Msk | renesas.SCI2_SSR_PER_Msk))
 	uart.errIELSR.ClearBits(renesas.ICU_IELSR_IR_Msk)
 	uart.errIELSR.Get()
+	uart.service()
+}
+
+// service drains the receiver and clears error flags. Bytes with a framing
+// or parity error are dropped. After an overrun RDR is assumed to still hold
+// the older, valid byte.
+func (uart *UART) service() {
+	const errMask = renesas.SCI2_SSR_ORER_Msk | renesas.SCI2_SSR_FER_Msk | renesas.SCI2_SSR_PER_Msk
+	for {
+		ssr := uart.Bus.SSR.Get()
+		if ssr&(renesas.SCI2_SSR_RDRF_Msk|errMask) == 0 {
+			return
+		}
+		if ssr&renesas.SCI2_SSR_RDRF_Msk != 0 {
+			c := uart.Bus.RDR.Get()
+			if ssr&(renesas.SCI2_SSR_FER_Msk|renesas.SCI2_SSR_PER_Msk) == 0 {
+				uart.Buffer.Put(c)
+			}
+		}
+		if ssr&errMask != 0 {
+			// Error flags are cleared by writing 0.
+			uart.Bus.SSR.Set(ssr &^ errMask)
+		}
+	}
 }
 
 func (uart *UART) writeByte(c byte) error {

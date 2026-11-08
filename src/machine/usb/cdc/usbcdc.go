@@ -113,6 +113,9 @@ func (usbcdc *USBCDC) Write(data []byte) (n int, err error) {
 	for len(data) > 0 {
 		tosend := min(len(data), int(usbcdc.tx.Free()))
 		if tosend == 0 {
+			if usbLineInfo.lineState <= 0 {
+				return n, nil
+			}
 			gosched()
 			continue
 		}
