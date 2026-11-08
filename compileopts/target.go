@@ -629,7 +629,9 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 			case "386":
 				// amd64 can _usually_ run 32-bit programs, so skip the emulator in that case.
 				if runtime.GOARCH != "amd64" {
-					spec.Emulator = "qemu-i386 {}"
+					// With guest_base 0, qemu fails the bdwgc mmap hint 0x1000 with EPERM.
+					// See https://github.com/tinygo-org/tinygo/issues/4969.
+					spec.Emulator = "qemu-i386 -B 0x10000000 {}"
 				}
 			case "amd64":
 				spec.Emulator = "qemu-x86_64 {}"
