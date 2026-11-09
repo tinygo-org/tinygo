@@ -437,8 +437,16 @@ func RuneCount(p []byte) int {
 	for ; n < np; n++ {
 		if c := p[n]; c >= RuneSelf {
 			// non-ASCII slow path
-			return n + RuneCountInString(string(p[n:]))
+			return n + runeCountNonASCII(p[n:])
 		}
+	}
+	return n
+}
+
+func runeCountNonASCII(p []byte) (n int) {
+	for i := 0; i < len(p); n++ {
+		_, size := DecodeRune(p[i:])
+		i += size
 	}
 	return n
 }
