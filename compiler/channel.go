@@ -20,9 +20,9 @@ func (b *builder) createMakeChan(expr *ssa.MakeChan) llvm.Value {
 	elementLayout := b.createObjectLayout(elementType, expr.Pos())
 	bufSize := b.getValue(expr.Size, getPos(expr))
 	b.createChanBoundsCheck(elementSize, bufSize, expr.Size.Type().Underlying().(*types.Basic), expr.Pos())
-	if bufSize.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
+	if bufSize.Type().IntTypeWidth() < b.ptrBits {
 		bufSize = b.CreateZExt(bufSize, b.uintptrType, "")
-	} else if bufSize.Type().IntTypeWidth() > b.uintptrType.IntTypeWidth() {
+	} else if bufSize.Type().IntTypeWidth() > b.ptrBits {
 		bufSize = b.CreateTrunc(bufSize, b.uintptrType, "")
 	}
 	return b.createRuntimeCall("chanMake", []llvm.Value{elementSizeValue, bufSize, elementLayout}, "")
@@ -38,7 +38,7 @@ func (b *builder) createChanSend(instr *ssa.Send) {
 	isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
 	var storage valueStorage
 	if isZeroSize {
-		storage.ptr = llvm.ConstNull(b.dataPtrType)
+		storage.ptr = b.dataPtrNull
 	} else {
 		storage = b.getValueStorage(instr.X, "chan.value")
 	}
@@ -88,19 +88,19 @@ func (b *builder) createNonBlockingSelect(expr *ssa.Select) llvm.Value {
 	ch := b.getValue(state.Chan, state.Pos)
 
 	resultType := b.ctx.StructType([]llvm.Type{
-		b.ctx.Int32Type(),
-		b.ctx.Int1Type(),
+		b.i32,
+		b.i1,
 	}, false)
 
 	var selected llvm.Value
-	selectOk := llvm.ConstInt(b.ctx.Int1Type(), 1, false)
+	selectOk := b.i1True
 
 	switch state.Dir {
 	case types.SendOnly:
 		valueType := b.getLLVMType(state.Send.Type())
 		isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
 
-		valuePtr := llvm.ConstNull(b.dataPtrType)
+		valuePtr := b.dataPtrNull
 		if !isZeroSize {
 			valuePtr = b.getSelectSendStorage(state.Send)
 		}
@@ -118,8 +118,8 @@ func (b *builder) createNonBlockingSelect(expr *ssa.Select) llvm.Value {
 		isZeroSize := b.targetData.TypeAllocSize(valueType) == 0
 
 		// getChanSelectResult loads the received value later.
-		recvbuf := llvm.Undef(b.dataPtrType)
-		runtimeRecvbuf := llvm.ConstNull(b.dataPtrType)
+		recvbuf := b.dataPtrUndef
+		runtimeRecvbuf := b.dataPtrNull
 
 		if !isZeroSize {
 			recvbuf, _ = b.createTemporaryAlloca(
@@ -139,7 +139,7 @@ func (b *builder) createNonBlockingSelect(expr *ssa.Select) llvm.Value {
 		selectOk = b.CreateSelect(
 			selected,
 			recvOk,
-			llvm.ConstInt(b.ctx.Int1Type(), 1, false),
+			b.i1True,
 			"select.ok",
 		)
 
@@ -152,9 +152,9 @@ func (b *builder) createNonBlockingSelect(expr *ssa.Select) llvm.Value {
 		panic("unreachable")
 	}
 
-	selectedIndex := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+	selectedIndex := llvm.ConstInt(b.i32, 0, false)
 	defaultIndex := llvm.ConstInt(
-		b.ctx.Int32Type(),
+		b.i32,
 		math.MaxUint32,
 		false,
 	)
@@ -251,14 +251,14 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 	}
 
 	// Create a receive buffer, where the received value will be stored.
-	recvbuf := llvm.Undef(b.dataPtrType)
+	recvbuf := b.dataPtrUndef
 	if recvbufSize != 0 {
-		allocaType := llvm.ArrayType(b.ctx.Int8Type(), int(recvbufSize))
+		allocaType := llvm.ArrayType(b.i8, int(recvbufSize))
 		recvbufAlloca, _ := b.createTemporaryAlloca(allocaType, "select.recvbuf.alloca")
 		recvbufAlloca.SetAlignment(recvbufAlign)
 		recvbuf = b.CreateGEP(allocaType, recvbufAlloca, []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, 0, false),
 		}, "select.recvbuf")
 	}
 
@@ -268,14 +268,14 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 	for i, state := range selectStates {
 		// Set each slice element to the appropriate channel.
 		gep := b.CreateGEP(statesAllocaType, statesAlloca, []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, uint64(i), false),
 		}, "")
 		b.CreateStore(state, gep)
 	}
 	statesPtr := b.CreateGEP(statesAllocaType, statesAlloca, []llvm.Value{
-		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+		llvm.ConstInt(b.i32, 0, false),
+		llvm.ConstInt(b.i32, 0, false),
 	}, "select.states")
 	statesLen := llvm.ConstInt(b.uintptrType, uint64(len(selectStates)), false)
 
@@ -288,8 +288,8 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		opsAlloca, opsSize := b.createTemporaryAlloca(opsAllocaType, "select.block.alloca")
 		opsLen := llvm.ConstInt(b.uintptrType, uint64(len(selectStates)), false)
 		opsPtr := b.CreateGEP(opsAllocaType, opsAlloca, []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, 0, false),
 		}, "select.block")
 
 		results = b.createRuntimeInvoke("chanSelect", []llvm.Value{
@@ -301,8 +301,8 @@ func (b *builder) createSelect(expr *ssa.Select) llvm.Value {
 		// Terminate the lifetime of the operation structures.
 		b.emitLifetimeEnd(opsAlloca, opsSize)
 	} else {
-		opsPtr := llvm.ConstNull(b.dataPtrType)
-		opsLen := llvm.ConstInt(b.uintptrType, 0, false)
+		opsPtr := b.dataPtrNull
+		opsLen := b.uintptrZero
 		results = b.createRuntimeInvoke("chanSelect", []llvm.Value{
 			recvbuf,
 			statesPtr, statesLen, statesLen, // []chanSelectState

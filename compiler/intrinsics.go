@@ -61,13 +61,13 @@ func (b *builder) createMemoryCopyImpl() {
 }
 
 func (b *builder) createMemCopy(kind string, dst, src, len llvm.Value) llvm.Value {
-	fnName := "llvm." + kind + ".p0.p0.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+	fnName := "llvm." + kind + ".p0.p0.i" + strconv.Itoa(b.ptrBits)
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
-		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType, b.dataPtrType, b.uintptrType, b.ctx.Int1Type()}, false)
+		fnType := llvm.FunctionType(b.void, []llvm.Type{b.dataPtrType, b.dataPtrType, b.uintptrType, b.i1}, false)
 		llvmFn = llvm.AddFunction(b.mod, fnName, fnType)
 	}
-	return b.CreateCall(llvmFn.GlobalValueType(), llvmFn, []llvm.Value{dst, src, len, llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
+	return b.CreateCall(llvmFn.GlobalValueType(), llvmFn, []llvm.Value{dst, src, len, b.i1False}, "")
 }
 
 // createMemoryZeroImpl creates calls to llvm.memset.* to zero a block of
@@ -78,9 +78,9 @@ func (b *builder) createMemoryZeroImpl() {
 	llvmFn := b.getMemsetFunc()
 	params := []llvm.Value{
 		b.getValue(b.fn.Params[0], getPos(b.fn)),
-		llvm.ConstInt(b.ctx.Int8Type(), 0, false),
+		llvm.ConstInt(b.i8, 0, false),
 		b.getValue(b.fn.Params[1], getPos(b.fn)),
-		llvm.ConstInt(b.ctx.Int1Type(), 0, false),
+		b.i1False,
 	}
 	b.CreateCall(llvmFn.GlobalValueType(), llvmFn, params, "")
 	b.CreateRetVoid()
@@ -96,10 +96,10 @@ func (b *builder) createStackSaveImpl() {
 
 // Return the llvm.memset.p0.i8 function declaration.
 func (c *context) getMemsetFunc() llvm.Value {
-	fnName := "llvm.memset.p0.i" + strconv.Itoa(c.uintptrType.IntTypeWidth())
+	fnName := "llvm.memset.p0.i" + strconv.Itoa(c.ptrBits)
 	llvmFn := c.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
-		fnType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.dataPtrType, c.ctx.Int8Type(), c.uintptrType, c.ctx.Int1Type()}, false)
+		fnType := llvm.FunctionType(c.void, []llvm.Type{c.dataPtrType, c.i8, c.uintptrType, c.i1}, false)
 		llvmFn = llvm.AddFunction(c.mod, fnName, fnType)
 	}
 	return llvmFn
@@ -121,7 +121,7 @@ func (b *builder) createKeepAliveImpl() {
 	//
 	// It should be portable to basically everything as the "r" register type
 	// exists basically everywhere.
-	asmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType}, false)
+	asmType := llvm.FunctionType(b.void, []llvm.Type{b.dataPtrType}, false)
 	asmFn := llvm.InlineAsm(asmType, "", "r", true, false, 0, false)
 	b.createCall(asmType, asmFn, []llvm.Value{pointerValue}, "")
 
@@ -158,7 +158,7 @@ func (b *builder) createMachineKeepAliveImpl() {
 	pointerValue := b.getValue(b.fn.Params[0], getPos(b.fn))
 
 	// See createKeepAliveImpl for details.
-	asmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType}, false)
+	asmType := llvm.FunctionType(b.void, []llvm.Type{b.dataPtrType}, false)
 	asmFn := llvm.InlineAsm(asmType, "", "r", true, false, 0, false)
 	b.createCall(asmType, asmFn, []llvm.Value{pointerValue}, "")
 
@@ -261,7 +261,7 @@ func (b *builder) defineCryptoIntrinsic() bool {
 	case "boolToUint8":
 		b.createFunctionStart(true)
 		param := b.getValue(b.fn.Params[0], b.fn.Pos())
-		result := b.CreateZExt(param, b.ctx.Int8Type(), "")
+		result := b.CreateZExt(param, b.i8, "")
 		b.CreateRet(result)
 		return true
 	}
@@ -292,13 +292,13 @@ func (b *builder) defineMathBitsIntrinsic() bool {
 			intrinsicName = "llvm.cttz.i" + strconv.Itoa(valueType.IntTypeWidth())
 		}
 		llvmFn := b.mod.NamedFunction(intrinsicName)
-		llvmFnType := llvm.FunctionType(valueType, []llvm.Type{valueType, b.ctx.Int1Type()}, false)
+		llvmFnType := llvm.FunctionType(valueType, []llvm.Type{valueType, b.i1}, false)
 		if llvmFn.IsNil() {
 			llvmFn = llvm.AddFunction(b.mod, intrinsicName, llvmFnType)
 		}
 		result := b.createCall(llvmFnType, llvmFn, []llvm.Value{
 			param,
-			llvm.ConstInt(b.ctx.Int1Type(), 0, false),
+			b.i1False,
 		}, "")
 		result = b.createZExtOrTrunc(result, b.intType)
 		b.CreateRet(result)
@@ -314,13 +314,13 @@ func (b *builder) defineMathBitsIntrinsic() bool {
 		valueBits := valueType.IntTypeWidth()
 		intrinsicName := "llvm.ctlz.i" + strconv.Itoa(valueBits)
 		llvmFn := b.mod.NamedFunction(intrinsicName)
-		llvmFnType := llvm.FunctionType(valueType, []llvm.Type{valueType, b.ctx.Int1Type()}, false)
+		llvmFnType := llvm.FunctionType(valueType, []llvm.Type{valueType, b.i1}, false)
 		if llvmFn.IsNil() {
 			llvmFn = llvm.AddFunction(b.mod, intrinsicName, llvmFnType)
 		}
 		result := b.createCall(llvmFnType, llvmFn, []llvm.Value{
 			param,
-			llvm.ConstInt(b.ctx.Int1Type(), 0, false),
+			b.i1False,
 		}, "")
 		result = b.createZExtOrTrunc(result, b.intType)
 		maxLen := llvm.ConstInt(b.intType, uint64(valueBits), false) // number of bits in the value

@@ -58,7 +58,7 @@ func (b *builder) createAlias(alias llvm.Value) {
 		return
 	}
 	result := b.CreateCall(alias.GlobalValueType(), alias, b.llvmFn.Params(), "")
-	if result.Type().TypeKind() == llvm.VoidTypeKind {
+	if result.Type() == b.void {
 		b.CreateRetVoid()
 	} else {
 		b.CreateRet(result)

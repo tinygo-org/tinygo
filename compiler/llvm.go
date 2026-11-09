@@ -64,10 +64,10 @@ func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value
 	// Allocate memory for the packed data.
 	size := b.targetData.TypeAllocSize(packedType)
 	if size == 0 {
-		return llvm.ConstPointerNull(b.dataPtrType)
+		return b.dataPtrNull
 	} else if len(values) == 1 && values[0].Type().TypeKind() == llvm.PointerTypeKind {
 		return values[0]
-	} else if size <= b.targetData.TypeAllocSize(b.dataPtrType) {
+	} else if size <= uint64(b.ptrBits)/8 {
 		// Packed data fits in a pointer, so store it directly inside the
 		// pointer.
 		if len(values) == 1 && values[0].Type().TypeKind() == llvm.IntegerTypeKind {
@@ -80,18 +80,18 @@ func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value
 		// effectively a bitcast.
 		packedAlloc, _ := b.createTemporaryAlloca(b.dataPtrType, "")
 
-		if size < b.targetData.TypeAllocSize(b.dataPtrType) {
+		if size < uint64(b.ptrBits)/8 {
 			// The alloca is bigger than the value that will be stored in it.
 			// To avoid having some bits undefined, zero the alloca first.
 			// Hopefully this will get optimized away.
-			b.CreateStore(llvm.ConstNull(b.dataPtrType), packedAlloc)
+			b.CreateStore(b.dataPtrNull, packedAlloc)
 		}
 
 		// Store all values in the alloca.
 		for i, value := range values {
 			indices := []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+				llvm.ConstInt(b.i32, 0, false),
+				llvm.ConstInt(b.i32, uint64(i), false),
 			}
 			gep := b.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
 			b.CreateStore(value, gep)
@@ -101,7 +101,7 @@ func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value
 		result := b.CreateLoad(b.dataPtrType, packedAlloc, "")
 
 		// End the lifetime of the alloca, to help the optimizer.
-		packedSize := llvm.ConstInt(b.ctx.Int64Type(), b.targetData.TypeAllocSize(packedAlloc.Type()), false)
+		packedSize := llvm.ConstInt(b.i64, b.targetData.TypeAllocSize(packedAlloc.Type()), false)
 		b.emitLifetimeEnd(packedAlloc, packedSize)
 
 		return result
@@ -138,8 +138,8 @@ func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value
 		// Store all values in the heap pointer.
 		for i, value := range values {
 			indices := []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+				llvm.ConstInt(b.i32, 0, false),
+				llvm.ConstInt(b.i32, uint64(i), false),
 			}
 			gep := b.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
 			b.CreateStore(value, gep)
@@ -163,7 +163,7 @@ func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []ll
 	} else if len(valueTypes) == 1 && valueTypes[0].TypeKind() == llvm.PointerTypeKind {
 		// A single pointer is always stored directly.
 		return []llvm.Value{ptr}
-	} else if size <= b.targetData.TypeAllocSize(b.dataPtrType) {
+	} else if size <= uint64(b.ptrBits)/8 {
 		// Packed data stored directly in pointer.
 		if len(valueTypes) == 1 && valueTypes[0].TypeKind() == llvm.IntegerTypeKind {
 			// Keep this cast in SSA form.
@@ -186,14 +186,14 @@ func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []ll
 			continue
 		}
 		indices := []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, uint64(i), false),
 		}
 		gep := b.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
 		values[i] = b.CreateLoad(valueType, gep, "")
 	}
 	if needsLifetimeEnd {
-		allocSize := llvm.ConstInt(b.ctx.Int64Type(), b.targetData.TypeAllocSize(b.uintptrType), false)
+		allocSize := llvm.ConstInt(b.i64, uint64(b.ptrBits)/8, false)
 		b.emitLifetimeEnd(packedAlloc, allocSize)
 	}
 	return values
@@ -235,9 +235,9 @@ func (c *context) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
 
 	// Create the pointer bitmap.
 	objectSizeBytes := c.targetData.TypeAllocSize(t)
-	pointerAlignment := uint64(c.targetData.PrefTypeAlignment(c.dataPtrType))
-	pointerSize := c.targetData.TypeAllocSize(c.dataPtrType)
-	pointerBits := pointerSize * 8
+	pointerAlignment := uint64(c.ptrAlign)
+	pointerBits := uint64(c.ptrBits)
+	pointerSize := pointerBits / 8
 	bitmapLen := objectSizeBytes / pointerAlignment
 	bitmapBytes := (bitmapLen + 7) / 8
 	bitmap := make([]byte, bitmapBytes, max(bitmapBytes, 8))
@@ -287,7 +287,7 @@ func (c *context) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
 
 	// Create the global initializer.
 	bitmapByteValues := make([]llvm.Value, bitmapBytes)
-	i8 := c.ctx.Int8Type()
+	i8 := c.i8
 	for i, b := range bitmap {
 		bitmapByteValues[i] = llvm.ConstInt(i8, uint64(b), false)
 	}
@@ -302,7 +302,7 @@ func (c *context) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
 	global.SetUnnamedAddr(true)
 	global.SetGlobalConstant(true)
 	global.SetLinkage(llvm.LinkOnceODRLinkage)
-	if c.targetData.PrefTypeAlignment(c.uintptrType) < 2 {
+	if c.ptrAlign < 2 {
 		// AVR doesn't have alignment by default.
 		// The lowest bit must be unset to distinguish this from an inline layout.
 		global.SetAlignment(2)
@@ -456,7 +456,7 @@ func (b *builder) writeStackPointer(sp llvm.Value) {
 	}
 	stackrestore := b.mod.NamedFunction(name)
 	if stackrestore.IsNil() {
-		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType}, false)
+		fnType := llvm.FunctionType(b.void, []llvm.Type{b.dataPtrType}, false)
 		stackrestore = llvm.AddFunction(b.mod, name, fnType)
 	}
 	b.CreateCall(stackrestore.GlobalValueType(), stackrestore, []llvm.Value{sp}, "")

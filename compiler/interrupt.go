@@ -87,7 +87,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	if strings.HasPrefix(b.Triple, "avr") {
 		useFn := b.mod.NamedFunction("runtime/interrupt.use")
 		if useFn.IsNil() {
-			useFnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{interrupt.Type()}, false)
+			useFnType := llvm.FunctionType(b.void, []llvm.Type{interrupt.Type()}, false)
 			useFn = llvm.AddFunction(b.mod, "runtime/interrupt.use", useFnType)
 		}
 		b.CreateCall(useFn.GlobalValueType(), useFn, []llvm.Value{interrupt}, "")

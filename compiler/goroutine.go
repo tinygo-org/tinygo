@@ -122,7 +122,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		// section that contains the stack size (and is modified after
 		// linking).
 		stackSizeFnType, stackSizeFn := b.getFunction(b.program.ImportedPackage("internal/task").Members["getGoroutineStackSize"].(*ssa.Function))
-		stackSize = b.createCall(stackSizeFnType, stackSizeFn, []llvm.Value{callee, llvm.Undef(b.dataPtrType)}, "stacksize")
+		stackSize = b.createCall(stackSizeFnType, stackSizeFn, []llvm.Value{callee, b.dataPtrUndef}, "stacksize")
 		// CreateStackSizeLoads needs a constant callee, so stop SimplifyCFG
 		// from merging calls into one that takes a select or phi.
 		stackSize.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("nomerge"), 0))
@@ -135,7 +135,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		stackSize = llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
 	}
 	fnType, start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
-	b.createCall(fnType, start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.dataPtrType)}, "")
+	b.createCall(fnType, start, []llvm.Value{callee, paramBundle, stackSize, b.dataPtrUndef}, "")
 }
 
 func (b *builder) getGoroutineCallArgument(value ssa.Value, indirect bool) []llvm.Value {
@@ -196,7 +196,7 @@ func (b *builder) createWasmExport() {
 		// When the scheduler has been disabled, this is really trivial: just
 		// call the function.
 		params := exportedFn.Params()
-		params = append(params, llvm.ConstNull(b.dataPtrType)) // context parameter
+		params = append(params, b.dataPtrNull) // context parameter
 		retval := builder.CreateCall(b.llvmFnType, b.llvmFn, params, "")
 		if b.fn.Signature.Results() == nil {
 			builder.CreateRetVoid()
@@ -239,7 +239,7 @@ func (b *builder) createWasmExport() {
 		// space for a return value if needed.
 		stateFields := exportedFnType.ParamTypes()
 		numParams := len(stateFields)
-		stateFields = append(stateFields, b.ctx.Int1Type()) // 'done' field
+		stateFields = append(stateFields, b.i1) // 'done' field
 		if hasReturn {
 			stateFields = append(stateFields, b.llvmFnType.ReturnType())
 		}
@@ -250,16 +250,16 @@ func (b *builder) createWasmExport() {
 
 		// Initialize the 'done' field.
 		doneGEP := builder.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), uint64(numParams), false),
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, uint64(numParams), false),
 		}, "done.gep")
-		builder.CreateStore(llvm.ConstNull(b.ctx.Int1Type()), doneGEP)
+		builder.CreateStore(b.i1False, doneGEP)
 
 		// Store all parameters in the state object.
 		for i, param := range exportedFn.Params() {
 			gep := builder.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+				llvm.ConstInt(b.i32, 0, false),
+				llvm.ConstInt(b.i32, uint64(i), false),
 			}, "")
 			builder.CreateStore(param, gep)
 		}
@@ -268,7 +268,7 @@ func (b *builder) createWasmExport() {
 		wrapper := b.createGoroutineStartWrapper(b.llvmFnType, b.llvmFn, "", false, true, pos)
 		stackSize := llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
 		taskStartFnType, taskStartFn := builder.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
-		builder.createCall(taskStartFnType, taskStartFn, []llvm.Value{wrapper, statePtr, stackSize, llvm.Undef(b.dataPtrType)}, "")
+		builder.createCall(taskStartFnType, taskStartFn, []llvm.Value{wrapper, statePtr, stackSize, b.dataPtrUndef}, "")
 
 		// Run the scheduler.
 		builder.createRuntimeCall("wasmExportRun", []llvm.Value{doneGEP}, "")
@@ -277,8 +277,8 @@ func (b *builder) createWasmExport() {
 		// //go:wasmexport function.
 		if hasReturn {
 			gep := builder.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(numParams)+1, false),
+				llvm.ConstInt(b.i32, 0, false),
+				llvm.ConstInt(b.i32, uint64(numParams)+1, false),
 			}, "")
 			retval := builder.CreateLoad(b.llvmFnType.ReturnType(), gep, "retval")
 			builder.CreateRet(retval)
@@ -339,7 +339,7 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 		}
 
 		// Create the wrapper.
-		wrapperType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.dataPtrType}, false)
+		wrapperType := llvm.FunctionType(c.void, []llvm.Type{c.dataPtrType}, false)
 		wrapper = llvm.AddFunction(c.mod, wrapperName, wrapperType)
 		c.addStandardAttributes(wrapper)
 		wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
@@ -381,7 +381,7 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 
 			params := b.emitPointerUnpack(wrapper.Param(0), paramTypes)
 			if !hasContext {
-				params = append(params, llvm.Undef(c.dataPtrType)) // add dummy context parameter
+				params = append(params, c.dataPtrUndef) // add dummy context parameter
 			}
 
 			// Create the call.
@@ -389,7 +389,7 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 
 			if c.Scheduler == "asyncify" {
 				b.CreateCall(exitGoroutineType, exitGoroutine, []llvm.Value{
-					llvm.Undef(c.dataPtrType),
+					c.dataPtrUndef,
 				}, "")
 			}
 		} else {
@@ -423,14 +423,14 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 			//   }
 
 			returnType := fnType.ReturnType()
-			hasReturn := returnType != b.ctx.VoidType()
+			hasReturn := returnType != b.void
 			statePtr := wrapper.Param(0)
 
 			// Create the state struct (it must match the type in createWasmExport).
 			stateFields := fnType.ParamTypes()
 			numParams := len(stateFields) - 1
-			stateFields = stateFields[:numParams:numParams]     // strip 'context' parameter
-			stateFields = append(stateFields, c.ctx.Int1Type()) // 'done' bool
+			stateFields = stateFields[:numParams:numParams] // strip 'context' parameter
+			stateFields = append(stateFields, c.i1)         // 'done' bool
 			if hasReturn {
 				stateFields = append(stateFields, returnType)
 			}
@@ -441,13 +441,13 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 			var callParams []llvm.Value
 			for i := range numParams {
 				gep := b.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-					llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-					llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+					llvm.ConstInt(b.i32, 0, false),
+					llvm.ConstInt(b.i32, uint64(i), false),
 				}, "")
 				param := b.CreateLoad(stateFields[i], gep, "")
 				callParams = append(callParams, param)
 			}
-			callParams = append(callParams, llvm.ConstNull(c.dataPtrType)) // add 'context' parameter
+			callParams = append(callParams, c.dataPtrNull) // add 'context' parameter
 			result := b.CreateCall(fnType, fn, callParams, "")
 
 			// Store the return value back into the shared state.
@@ -455,8 +455,8 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 			// goroutines can return a value.
 			if hasReturn {
 				gep := b.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-					llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-					llvm.ConstInt(c.ctx.Int32Type(), uint64(numParams)+1, false),
+					llvm.ConstInt(c.i32, 0, false),
+					llvm.ConstInt(c.i32, uint64(numParams)+1, false),
 				}, "result.ptr")
 				b.CreateStore(result, gep)
 			}
@@ -465,10 +465,10 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 			// This is important so the runtime knows the exported function
 			// didn't block.
 			doneGEP := b.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(c.ctx.Int32Type(), uint64(numParams), false),
+				llvm.ConstInt(c.i32, 0, false),
+				llvm.ConstInt(c.i32, uint64(numParams), false),
 			}, "done.gep")
-			b.CreateStore(llvm.ConstInt(b.ctx.Int1Type(), 1, false), doneGEP)
+			b.CreateStore(b.i1True, doneGEP)
 
 			// Call back into the runtime. This will exit the goroutine, switch
 			// back to the scheduler, which will in turn return from the
@@ -495,7 +495,7 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 		// merged into one.
 
 		// Create the wrapper.
-		wrapperType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.dataPtrType}, false)
+		wrapperType := llvm.FunctionType(c.void, []llvm.Type{c.dataPtrType}, false)
 		wrapper = llvm.AddFunction(c.mod, prefix+".gowrapper", wrapperType)
 		c.addStandardAttributes(wrapper)
 		wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
@@ -540,7 +540,7 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 
 		if c.Scheduler == "asyncify" {
 			b.CreateCall(exitGoroutineType, exitGoroutine, []llvm.Value{
-				llvm.Undef(c.dataPtrType),
+				c.dataPtrUndef,
 			}, "")
 		}
 	}
