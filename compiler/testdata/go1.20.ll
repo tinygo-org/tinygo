@@ -14,7 +14,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #2

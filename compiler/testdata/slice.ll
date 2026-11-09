@@ -12,19 +12,19 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.sliceLen(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, ptr %context) unnamed_addr #1 {
+define hidden i32 @main.sliceLen(ptr %ints.data, i32 range(i32 0, 536870912) %ints.len, i32 range(i32 0, 536870912) %ints.cap, ptr %context) unnamed_addr #1 {
 entry:
   ret i32 %ints.len
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.sliceCap(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, ptr %context) unnamed_addr #1 {
+define hidden i32 @main.sliceCap(ptr %ints.data, i32 range(i32 0, 536870912) %ints.len, i32 range(i32 0, 536870912) %ints.cap, ptr %context) unnamed_addr #1 {
 entry:
   ret i32 %ints.cap
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.sliceElement(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, i32 %index, ptr %context) unnamed_addr #1 {
+define hidden i32 @main.sliceElement(ptr %ints.data, i32 range(i32 0, 536870912) %ints.len, i32 range(i32 0, 536870912) %ints.cap, i32 %index, ptr %context) unnamed_addr #1 {
 entry:
   %.not = icmp ult i32 %index, %ints.len
   br i1 %.not, label %lookup.next, label %lookup.throw
@@ -45,7 +45,7 @@ unwind.return:                                    ; preds = %lookup.throw
 declare void @runtime.lookupPanic(ptr) #0
 
 ; Function Attrs: nounwind
-define hidden { ptr, i32, i32 } @main.sliceAppendValues(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, ptr %context) unnamed_addr #1 {
+define hidden { ptr, i32, i32 } @main.sliceAppendValues(ptr %ints.data, i32 range(i32 0, 536870912) %ints.len, i32 range(i32 0, 536870912) %ints.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %varargs = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #6
@@ -72,7 +72,7 @@ declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #2
 declare { ptr, i32, i32 } @runtime.sliceAppend(ptr, ptr readonly captures(none), i32, i32, i32, i32, ptr, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden { ptr, i32, i32 } @main.sliceAppendSlice(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, ptr %added.data, i32 range(i32 0, 1073741824) %added.len, i32 range(i32 0, 1073741824) %added.cap, ptr %context) unnamed_addr #1 {
+define hidden { ptr, i32, i32 } @main.sliceAppendSlice(ptr %ints.data, i32 range(i32 0, 536870912) %ints.len, i32 range(i32 0, 536870912) %ints.cap, ptr %added.data, i32 range(i32 0, 536870912) %added.len, i32 range(i32 0, 536870912) %added.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %append.new = call { ptr, i32, i32 } @runtime.sliceAppend(ptr %ints.data, ptr %added.data, i32 %ints.len, i32 %ints.cap, i32 %added.len, i32 4, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #6
@@ -87,10 +87,10 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.sliceCopy(ptr %dst.data, i32 range(i32 0, 1073741824) %dst.len, i32 range(i32 0, 1073741824) %dst.cap, ptr %src.data, i32 range(i32 0, 1073741824) %src.len, i32 range(i32 0, 1073741824) %src.cap, ptr %context) unnamed_addr #1 {
+define hidden i32 @main.sliceCopy(ptr %dst.data, i32 range(i32 0, 536870912) %dst.len, i32 range(i32 0, 536870912) %dst.cap, ptr %src.data, i32 range(i32 0, 536870912) %src.len, i32 range(i32 0, 536870912) %src.cap, ptr %context) unnamed_addr #1 {
 entry:
   %copy.n = call i32 @llvm.umin.i32(i32 %dst.len, i32 %src.len)
-  %copy.size = shl nuw i32 %copy.n, 2
+  %copy.size = shl nuw nsw i32 %copy.n, 2
   call void @llvm.memmove.p0.p0.i32(ptr align 4 %dst.data, ptr align 4 %src.data, i32 %copy.size, i1 false)
   ret i32 %copy.n
 }
@@ -102,7 +102,7 @@ declare i32 @llvm.umin.i32(i32, i32) #3
 declare void @llvm.memmove.p0.p0.i32(ptr writeonly captures(none), ptr readonly captures(none), i32, i1 immarg) #4
 
 ; Function Attrs: nounwind
-define hidden void @main.sliceFrom(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, i32 %low, ptr %context) unnamed_addr #1 {
+define hidden void @main.sliceFrom(ptr %ints.data, i32 range(i32 0, 536870912) %ints.len, i32 range(i32 0, 536870912) %ints.cap, i32 %low, ptr %context) unnamed_addr #1 {
 entry:
   %slice.lowhigh = icmp ugt i32 %low, %ints.len
   br i1 %slice.lowhigh, label %slice.throw, label %slice.next
@@ -121,7 +121,7 @@ unwind.return:                                    ; preds = %slice.throw
 declare void @runtime.slicePanic(ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.sliceRange(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, i32 %low, i32 %high, ptr %context) unnamed_addr #1 {
+define hidden void @main.sliceRange(ptr %ints.data, i32 range(i32 0, 536870912) %ints.len, i32 range(i32 0, 536870912) %ints.cap, i32 %low, i32 %high, ptr %context) unnamed_addr #1 {
 entry:
   %slice.lowhigh = icmp ugt i32 %low, %high
   %slice.highmax = icmp ugt i32 %high, %ints.cap
@@ -140,7 +140,7 @@ unwind.return:                                    ; preds = %slice.throw
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.sliceRangeMax(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, i32 %low, i32 %high, i32 %max, ptr %context) unnamed_addr #1 {
+define hidden void @main.sliceRangeMax(ptr %ints.data, i32 range(i32 0, 536870912) %ints.len, i32 range(i32 0, 536870912) %ints.cap, i32 %low, i32 %high, i32 %max, ptr %context) unnamed_addr #1 {
 entry:
   %slice.lowhigh = icmp ugt i32 %low, %high
   %slice.highmax = icmp ugt i32 %high, %max
@@ -187,11 +187,11 @@ unwind.return:                                    ; preds = %slice.throw
 define hidden { ptr, i32, i32 } @main.makeInt16Slice(i32 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %slice.maxcap = icmp slt i32 %len, 0
+  %slice.maxcap = icmp ugt i32 %len, 1073741823
   br i1 %slice.maxcap, label %slice.throw, label %slice.next
 
 slice.next:                                       ; preds = %entry
-  %makeslice.cap = shl nuw i32 %len, 1
+  %makeslice.cap = shl nuw nsw i32 %len, 1
   %makeslice.buf = call align 2 ptr @runtime.alloc(i32 %makeslice.cap, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #6
   %0 = insertvalue { ptr, i32, i32 } undef, ptr %makeslice.buf, 0
   %1 = insertvalue { ptr, i32, i32 } %0, i32 %len, 1
@@ -211,11 +211,11 @@ unwind.return:                                    ; preds = %slice.throw
 define hidden { ptr, i32, i32 } @main.makeArraySlice(i32 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %slice.maxcap = icmp ugt i32 %len, 1431655765
+  %slice.maxcap = icmp ugt i32 %len, 715827882
   br i1 %slice.maxcap, label %slice.throw, label %slice.next
 
 slice.next:                                       ; preds = %entry
-  %makeslice.cap = mul i32 %len, 3
+  %makeslice.cap = mul nuw i32 %len, 3
   %makeslice.buf = call align 1 ptr @runtime.alloc(i32 %makeslice.cap, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #6
   %0 = insertvalue { ptr, i32, i32 } undef, ptr %makeslice.buf, 0
   %1 = insertvalue { ptr, i32, i32 } %0, i32 %len, 1
@@ -235,11 +235,11 @@ unwind.return:                                    ; preds = %slice.throw
 define hidden { ptr, i32, i32 } @main.makeInt32Slice(i32 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %slice.maxcap = icmp ugt i32 %len, 1073741823
+  %slice.maxcap = icmp ugt i32 %len, 536870911
   br i1 %slice.maxcap, label %slice.throw, label %slice.next
 
 slice.next:                                       ; preds = %entry
-  %makeslice.cap = shl nuw i32 %len, 2
+  %makeslice.cap = shl nuw nsw i32 %len, 2
   %makeslice.buf = call align 4 ptr @runtime.alloc(i32 %makeslice.cap, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #6
   %0 = insertvalue { ptr, i32, i32 } undef, ptr %makeslice.buf, 0
   %1 = insertvalue { ptr, i32, i32 } %0, i32 %len, 1
@@ -275,7 +275,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden ptr @main.SliceToArray(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden ptr @main.SliceToArray(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   %0 = icmp samesign ult i32 %s.len, 4
   br i1 %0, label %slicetoarray.throw, label %slicetoarray.next
@@ -315,7 +315,7 @@ unwind.return:                                    ; preds = %slicetoarray.throw
 define hidden { ptr, i32, i32 } @main.SliceInt(ptr dereferenceable_or_null(4) %ptr, i32 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = icmp ugt i32 %len, 1073741823
+  %0 = icmp ugt i32 %len, 536870911
   %1 = icmp eq ptr %ptr, null
   %2 = icmp ne i32 %len, 0
   %3 = and i1 %1, %2
@@ -368,7 +368,7 @@ unwind.return:                                    ; preds = %unsafe.Slice.throw
 define hidden { ptr, i32, i32 } @main.SliceUint64(ptr dereferenceable_or_null(4) %ptr, i64 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = icmp ugt i64 %len, 1073741823
+  %0 = icmp ugt i64 %len, 536870911
   %1 = icmp eq ptr %ptr, null
   %2 = icmp ne i64 %len, 0
   %3 = and i1 %1, %2
@@ -395,7 +395,7 @@ unwind.return:                                    ; preds = %unsafe.Slice.throw
 define hidden { ptr, i32, i32 } @main.SliceInt64(ptr dereferenceable_or_null(4) %ptr, i64 %len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = icmp ugt i64 %len, 1073741823
+  %0 = icmp ugt i64 %len, 536870911
   %1 = icmp eq ptr %ptr, null
   %2 = icmp ne i64 %len, 0
   %3 = and i1 %1, %2

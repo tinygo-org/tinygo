@@ -37,7 +37,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.wideArgs(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden i32 @main.wideArgs(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   %0 = add nuw nsw i32 %s.len, %s.cap
   ret i32 %0

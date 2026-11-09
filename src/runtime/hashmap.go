@@ -195,7 +195,7 @@ func hashmapClear(m *hashmap) {
 func hashmapKeyEqualAlg(alg tinygo.HashmapAlgorithm) func(x, y unsafe.Pointer, n uintptr) bool {
 	switch alg {
 	case tinygo.HashmapAlgorithmBinary:
-		return memequal
+		return memCompareBytes
 	case tinygo.HashmapAlgorithmString:
 		return hashmapStringEqual
 	default:
@@ -595,7 +595,7 @@ func hashmapBinaryDelete(m *hashmap, key unsafe.Pointer) {
 }
 
 // Hashmap with compiler-generated key hash/equal functions.
-// Unlike the binary path (which uses hash32/memequal), these use the
+// Unlike the binary path (which uses hash32/memCompareBytes), these use the
 // type-specific keyHash and keyEqual function pointers stored in the hashmap
 // struct. This is used for composite key types (e.g. structs containing
 // strings) where the compiler generates specialized hash/equal functions.
@@ -753,7 +753,11 @@ func hashmapStringDelete(m *hashmap, key string) {
 //go:linkname valueInterfaceUnsafe internal/reflectlite.valueInterfaceUnsafe
 func valueInterfaceUnsafe(v reflectlite.Value) interface{}
 
-func hashmapFloat32Hash(ptr unsafe.Pointer, seed uintptr) uint32 {
+func hashmapNopHash(ptr unsafe.Pointer, size uintptr, seed uintptr) uint32 {
+	return 0
+}
+
+func hashmapFloat32Hash(ptr unsafe.Pointer, size uintptr, seed uintptr) uint32 {
 	if f := *(*float32)(ptr); f != f {
 		// NaN is never equal to itself, so give each one a random hash, as Go does.
 		return fastrand()
@@ -766,7 +770,7 @@ func hashmapFloat32Hash(ptr unsafe.Pointer, seed uintptr) uint32 {
 	return hash32(unsafe.Pointer(&f), 4, seed)
 }
 
-func hashmapFloat64Hash(ptr unsafe.Pointer, seed uintptr) uint32 {
+func hashmapFloat64Hash(ptr unsafe.Pointer, size uintptr, seed uintptr) uint32 {
 	if f := *(*float64)(ptr); f != f {
 		// NaN is never equal to itself, so give each one a random hash, as Go does.
 		return fastrand()
@@ -806,15 +810,15 @@ func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 		// time may become exponential. To fix that, it would be better to
 		// return a random number instead:
 		// https://research.swtch.com/randhash
-		return hashmapFloat32Hash(ptr, seed)
+		return hashmapFloat32Hash(ptr, 4, seed)
 	case reflectlite.Float64:
-		return hashmapFloat64Hash(ptr, seed)
+		return hashmapFloat64Hash(ptr, 8, seed)
 	case reflectlite.Complex64:
 		rptr, iptr := ptr, unsafe.Add(ptr, 4)
-		return hashmapFloat32Hash(rptr, seed) ^ hashmapFloat32Hash(iptr, seed)
+		return hashmapFloat32Hash(rptr, 4, seed) ^ hashmapFloat32Hash(iptr, 4, seed)
 	case reflectlite.Complex128:
 		rptr, iptr := ptr, unsafe.Add(ptr, 8)
-		return hashmapFloat64Hash(rptr, seed) ^ hashmapFloat64Hash(iptr, seed)
+		return hashmapFloat64Hash(rptr, 8, seed) ^ hashmapFloat64Hash(iptr, 8, seed)
 	case reflectlite.String:
 		return hashmapStringHash(x.String(), seed)
 	case reflectlite.Chan, reflectlite.Ptr, reflectlite.UnsafePointer:
