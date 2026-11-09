@@ -29,6 +29,10 @@ spell: ## Spellcheck source tree
 spellfix: ## Same as spell, but fixes what it finds
 	go tool github.com/golangci/misspell/cmd/misspell -w --dict misspell.csv -i 'ackward,devided,extint,rela' $$( $(SPELLDIRSCMD) ) *.go *.md
 
+.PHONY: gen-stdlib
+gen-stdlib: ## Generate standard library packages from upstream Go, see tools/stdedit
+	$(GO) run ./tools/stdedit
+
 .PHONY: llvm-image-tag
 llvm-image-tag: ## Print the tag of the prebuilt LLVM Docker image
 	@sh tools/llvm-image-tag.sh

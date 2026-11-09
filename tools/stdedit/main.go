@@ -1,0 +1,274 @@
+// stdedit generates TinyGo versions of standard library packages by copying
+// them from upstream Go and applying the edits listed in packages.go.
+package main
+
+import (
+	"bytes"
+	"flag"
+	"fmt"
+	"go/ast"
+	"go/build"
+	"go/build/constraint"
+	"go/format"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"io"
+	"maps"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"slices"
+	"strings"
+)
+
+// goToolchain matches compileopts.MinimumGoMinorVersion.
+const goToolchain = "go1.26.10"
+
+func main() {
+	root := flag.String("root", ".", "TinyGo repository root")
+	flag.Parse()
+	if err := run(*root, flag.Args()); err != nil {
+		fmt.Fprintln(os.Stderr, "stdedit:", err)
+		os.Exit(1)
+	}
+}
+
+func run(root string, paths []string) error {
+	cmd := exec.Command("go", "env", "GOROOT", "GOVERSION")
+	cmd.Env = append(os.Environ(), "GOTOOLCHAIN="+goToolchain)
+	cmd.Stderr = os.Stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+	goroot, goversion, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	build.Default.GOROOT = goroot
+	minor := goToolchain[:strings.LastIndex(goToolchain, ".")]
+	tags := build.Default.ReleaseTags
+	build.Default.ReleaseTags = tags[:slices.Index(tags, minor)+1]
+
+	specs := RewriteSpecs
+	if len(paths) > 0 {
+		specs = nil
+		for _, p := range paths {
+			i := slices.IndexFunc(RewriteSpecs, func(s RewriteSpec) bool { return s.Path == p })
+			if i < 0 {
+				return fmt.Errorf("no package %s in packages.go", p)
+			}
+			specs = append(specs, RewriteSpecs[i])
+		}
+	}
+	for _, spec := range specs {
+		dir := filepath.Join(root, "src", filepath.FromSlash(spec.Path))
+		out := filepath.Join(dir, path.Base(spec.Path)+"_generated.go")
+		var buf bytes.Buffer
+		if err := generate(&buf, spec, goversion, out); err != nil {
+			return err
+		}
+		if err := os.WriteFile(out, buf.Bytes(), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func generate(w io.Writer, spec RewriteSpec, goversion, out string) error {
+	p := &Package{Fset: token.NewFileSet(), Path: spec.Path, GoVersion: goversion}
+	var err error
+	if p.Upstream, err = parseUpstream(p.Fset, spec.Path); err != nil {
+		return err
+	}
+	if p.Local, err = parseLocal(p.Fset, filepath.Dir(out), filepath.Base(out)); err != nil {
+		return err
+	}
+	if err := p.Check(); err != nil {
+		return err
+	}
+	if spec.Steps != nil {
+		if err := spec.Steps(p); err != nil {
+			return err
+		}
+	}
+	if err := p.Check(); err != nil {
+		return fmt.Errorf("%s after edits: %w", spec.Path, err)
+	}
+	_, err = p.WriteTo(w)
+	return err
+}
+
+// parseUpstream parses the non-test files of path in GOROOT. A file with
+// //go:build ignore is skipped. Any other //go:build line or a _GOOS or
+// _GOARCH name suffix is an error, because the output is one file for all
+// targets.
+func parseUpstream(fset *token.FileSet, importPath string) ([]*ast.File, error) {
+	dir := filepath.Join(build.Default.GOROOT, "src", filepath.FromSlash(importPath))
+	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		return nil, err
+	}
+	ctx := build.Default
+	ctx.GOOS, ctx.GOARCH = "none", "none"
+	var files []*ast.File
+	for _, name := range names {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, parser.ParseComments)
+		if err != nil {
+			return nil, err
+		}
+		if expr := buildConstraint(f); expr != nil {
+			if expr.String() == "ignore" {
+				continue
+			}
+			return nil, fmt.Errorf("%s/%s has //go:build %s", importPath, filepath.Base(name), expr)
+		}
+		if ok, err := ctx.MatchFile(dir, filepath.Base(name)); err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, fmt.Errorf("%s/%s only builds for some GOOS or GOARCH", importPath, filepath.Base(name))
+		}
+		files = append(files, f)
+	}
+	return files, nil
+}
+
+// buildConstraint returns the //go:build expression of f, or nil.
+func buildConstraint(f *ast.File) constraint.Expr {
+	for _, g := range f.Comments {
+		if g.Pos() >= f.Package {
+			break
+		}
+		for _, c := range g.List {
+			if constraint.IsGoBuild(c.Text) {
+				expr, _ := constraint.Parse(c.Text)
+				return expr
+			}
+		}
+	}
+	return nil
+}
+
+// parseLocal parses the non-test files in dir.
+func parseLocal(fset *token.FileSet, dir, skip string) ([]*ast.File, error) {
+	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		return nil, err
+	}
+	var files []*ast.File
+	for _, name := range names {
+		if filepath.Base(name) == skip || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, parser.ParseComments)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, nil
+}
+
+// WriteTo writes the package to w as one file, importing only what is used
+// and leaving out comments in removed code.
+func (p *Package) WriteTo(w io.Writer) (int64, error) {
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "// Code generated by tools/stdedit from %s %s. DO NOT EDIT.\n\n", p.GoVersion, p.Path)
+
+	first := p.Upstream[0]
+	if len(first.Comments) > 0 && first.Comments[0] != first.Doc && first.Comments[0].End() < first.Package {
+		fmt.Fprintf(&buf, "%s\n", commentText(first.Comments[0]))
+	}
+	for _, f := range p.Upstream {
+		if f.Doc != nil {
+			buf.WriteString(commentText(f.Doc))
+			break
+		}
+	}
+	fmt.Fprintf(&buf, "package %s\n\n", first.Name.Name)
+
+	if err := p.printImports(&buf); err != nil {
+		return 0, err
+	}
+
+	for _, f := range p.Upstream {
+		body := &ast.File{Name: f.Name, Package: f.Package}
+		var importEnds []int
+		for _, d := range f.Decls {
+			if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.IMPORT {
+				p.removed = append(p.removed, span{g.Pos(), g.End()})
+				importEnds = append(importEnds, p.Fset.Position(g.End()).Line)
+				continue
+			}
+			body.Decls = append(body.Decls, d)
+		}
+		for _, g := range f.Comments {
+			if g.Pos() < f.Package || slices.Contains(importEnds, p.Fset.Position(g.Pos()).Line) || p.isRemoved(g) {
+				continue
+			}
+			body.Comments = append(body.Comments, g)
+		}
+		var b bytes.Buffer
+		if err := format.Node(&b, p.Fset, body); err != nil {
+			return 0, err
+		}
+		_, rest, _ := bytes.Cut(b.Bytes(), []byte("\n"))
+		buf.Write(rest)
+	}
+	src, err := format.Source(buf.Bytes())
+	if err != nil {
+		return 0, err
+	}
+	n, err := w.Write(src)
+	return int64(n), err
+}
+
+func (p *Package) printImports(buf *bytes.Buffer) error {
+	used := map[*types.PkgName]bool{}
+	for _, obj := range p.Info.Uses {
+		if pn, ok := obj.(*types.PkgName); ok {
+			used[pn] = true
+		}
+	}
+	paths := map[string]string{}
+	for _, f := range p.Upstream {
+		for _, s := range f.Imports {
+			name := ""
+			if s.Name != nil {
+				name = s.Name.Name
+			}
+			if name != "_" && name != "." && !used[p.Info.PkgNameOf(s)] {
+				continue
+			}
+			ipath := s.Path.Value
+			if old, ok := paths[ipath]; ok && old != name {
+				return fmt.Errorf("%s imported as both %q and %q", ipath, old, name)
+			}
+			paths[ipath] = name
+		}
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+	buf.WriteString("import (\n")
+	for _, ipath := range slices.Sorted(maps.Keys(paths)) {
+		fmt.Fprintf(buf, "\t%s %s\n", paths[ipath], ipath)
+	}
+	buf.WriteString(")\n\n")
+	return nil
+}
+
+func (p *Package) isRemoved(g *ast.CommentGroup) bool {
+	return slices.ContainsFunc(p.removed, func(s span) bool { return g.Pos() >= s.pos && g.End() <= s.end })
+}
+
+func commentText(g *ast.CommentGroup) string {
+	var b strings.Builder
+	for _, c := range g.List {
+		b.WriteString(c.Text)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
