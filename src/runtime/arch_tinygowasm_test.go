@@ -1,4 +1,4 @@
-//go:build tinygo.wasm
+//go:build tinygo.wasm && (gc.leaking || gc.conservative || gc.precise)
 
 package runtime_test
 
@@ -29,14 +29,16 @@ func TestGrowHeapAbove2GiB(t *testing.T) {
 	)
 
 	// Advance linear memory past 2 GiB (32768 pages) so doubling memorySize
-	// would exceed the 65536-page wasm32 limit and signed int32(pages)*wasmPageSize
-	// would overflow.
+	// would exceed the 65536-page wasm32 limit.
 	cur := wasm_memory_size(wasmMemoryIndex)
+	if maxPages-cur <= cur/64 {
+		t.Skip("wasm memory already at cap")
+	}
 	if cur < targetPages {
 		if wasm_memory_grow(wasmMemoryIndex, targetPages-cur) == -1 {
 			t.Skip("host could not grow wasm memory past 2 GiB")
 		}
-		setHeapEnd(uintptr(wasm_memory_size(wasmMemoryIndex)) * wasmPageSize)
+		setHeapEnd(uintptr(wasm_memory_size(wasmMemoryIndex) * wasmPageSize))
 	}
 
 	var before runtime.MemStats

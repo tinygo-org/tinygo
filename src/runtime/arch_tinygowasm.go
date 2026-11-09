@@ -95,7 +95,7 @@ func growHeap() bool {
 	memorySize := wasm_memory_size(wasmMemoryIndex)
 	for growPages := min(memorySize, maxPages-memorySize); growPages > memorySize/64; growPages /= 2 {
 		if wasm_memory_grow(wasmMemoryIndex, growPages) != -1 {
-			setHeapEnd(uintptr(wasm_memory_size(wasmMemoryIndex)) * wasmPageSize)
+			setHeapEnd(uintptr(wasm_memory_size(wasmMemoryIndex) * wasmPageSize))
 			return true
 		}
 	}
