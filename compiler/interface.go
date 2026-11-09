@@ -360,10 +360,9 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 		// Precompute these so we don't have to calculate them at runtime.
 		if types.Comparable(typ) {
 			metabyte |= 1 << 6
-		}
-
-		if isBinaryComparable(typ) {
-			metabyte |= 1 << 7
+			if c.isByteComparable(typ) {
+				metabyte |= 1 << 7
+			}
 		}
 
 		switch typ := typ.(type) {

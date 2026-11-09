@@ -53,13 +53,13 @@ func (b *builder) createRuntimeCallCommon(fnName string, args []llvm.Value, name
 	return b.createCall(fnType, llvmFn, args, name)
 }
 
-func (b *builder) getRuntimeFunction(name string) (llvm.Type, llvm.Value) {
-	member := b.program.ImportedPackage("runtime").Members[name]
+func (c *context) getRuntimeFunction(name string) (llvm.Type, llvm.Value) {
+	member := c.program.ImportedPackage("runtime").Members[name]
 	if member == nil {
 		panic("unknown runtime call: " + name)
 	}
 	fn := member.(*ssa.Function)
-	fnType, llvmFn := b.getFunction(fn)
+	fnType, llvmFn := c.getFunction(fn)
 	if llvmFn.IsNil() {
 		panic("trying to call non-existent function: " + fn.RelString(nil))
 	}

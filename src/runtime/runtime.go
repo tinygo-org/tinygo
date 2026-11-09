@@ -78,18 +78,6 @@ func malloc(size uintptr) unsafe.Pointer
 // parameter to C, for example.
 func exportedFuncPtr(fn func()) uintptr
 
-// Compare two same-size buffers for equality.
-func memequal(x, y unsafe.Pointer, n uintptr) bool {
-	for i := uintptr(0); i < n; i++ {
-		cx := *(*uint8)(unsafe.Add(x, i))
-		cy := *(*uint8)(unsafe.Add(y, i))
-		if cx != cy {
-			return false
-		}
-	}
-	return true
-}
-
 func nanotime() int64 {
 	return ticksToNanoseconds(ticks())
 }
