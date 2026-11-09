@@ -239,9 +239,8 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// archs:
 		//    return (errorFlag != 0) ? -resultCode : resultCode;
 		// At least on QEMU with the O32 ABI, the error code is always positive.
-		zero := llvm.ConstInt(b.uintptrType, 0, false)
-		isError := b.CreateICmp(llvm.IntNE, errorFlag, zero, "")
-		negativeResult := b.CreateSub(zero, resultCode, "")
+		isError := b.CreateICmp(llvm.IntNE, errorFlag, b.uintptrZero, "")
+		negativeResult := b.CreateSub(b.uintptrZero, resultCode, "")
 		result := b.CreateSelect(isError, negativeResult, resultCode, "")
 		return result, nil
 
@@ -266,14 +265,13 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		//         err = -syscallResult
 		//     }
 		//     return syscallResult, 0, err
-		zero := llvm.ConstInt(b.uintptrType, 0, false)
-		inrange1 := b.CreateICmp(llvm.IntSLT, syscallResult, llvm.ConstInt(b.uintptrType, 0, false), "")
+		inrange1 := b.CreateICmp(llvm.IntSLT, syscallResult, b.uintptrZero, "")
 		inrange2 := b.CreateICmp(llvm.IntSGT, syscallResult, llvm.ConstInt(b.uintptrType, 0xfffffffffffff000, true), "") // -4096
 		hasError := b.CreateAnd(inrange1, inrange2, "")
-		errResult := b.CreateSelect(hasError, b.CreateSub(zero, syscallResult, ""), zero, "syscallError")
+		errResult := b.CreateSelect(hasError, b.CreateSub(b.uintptrZero, syscallResult, ""), b.uintptrZero, "syscallError")
 		retval := llvm.Undef(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
 		retval = b.CreateInsertValue(retval, syscallResult, 0, "")
-		retval = b.CreateInsertValue(retval, zero, 1, "")
+		retval = b.CreateInsertValue(retval, b.uintptrZero, 1, "")
 		retval = b.CreateInsertValue(retval, errResult, 2, "")
 		return retval, nil
 	case "windows":
@@ -300,7 +298,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// Prepare some functions that will be called later.
 		setLastError := b.mod.NamedFunction("SetLastError")
 		if setLastError.IsNil() {
-			llvmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.ctx.Int32Type()}, false)
+			llvmType := llvm.FunctionType(b.void, []llvm.Type{b.i32}, false)
 			setLastError = llvm.AddFunction(b.mod, "SetLastError", llvmType)
 			if isI386 {
 				setLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
@@ -308,7 +306,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		}
 		getLastError := b.mod.NamedFunction("GetLastError")
 		if getLastError.IsNil() {
-			llvmType := llvm.FunctionType(b.ctx.Int32Type(), nil, false)
+			llvmType := llvm.FunctionType(b.i32, nil, false)
 			getLastError = llvm.AddFunction(b.mod, "GetLastError", llvmType)
 			if isI386 {
 				getLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
@@ -326,7 +324,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// On windows/386, we also need to save/restore the stack pointer. I'm
 		// not entirely sure why this is needed, but without it these calls
 		// change the stack pointer leading to a crash soon after.
-		setLastErrorCall := b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.ctx.Int32Type())}, "")
+		setLastErrorCall := b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.i32)}, "")
 		var sp llvm.Value
 		if isI386 {
 			setLastErrorCall.SetInstructionCallConv(llvm.X86StdcallCallConv)
@@ -341,7 +339,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		if isI386 {
 			errResult.SetInstructionCallConv(llvm.X86StdcallCallConv)
 		}
-		if b.uintptrType != b.ctx.Int32Type() {
+		if b.uintptrType != b.i32 {
 			errResult = b.CreateZExt(errResult, b.uintptrType, "err.uintptr")
 		}
 
@@ -380,13 +378,13 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 		argsSlice := b.getValue(call.Args[2], getPos(call))
 		argsPtr = b.CreateExtractValue(argsSlice, 0, "args.data")
 	} else {
-		argsPtr = llvm.ConstNull(b.dataPtrType)
+		argsPtr = b.dataPtrNull
 	}
 
 	// Prepare SetLastError and GetLastError.
 	setLastError := b.mod.NamedFunction("SetLastError")
 	if setLastError.IsNil() {
-		llvmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.ctx.Int32Type()}, false)
+		llvmType := llvm.FunctionType(b.void, []llvm.Type{b.i32}, false)
 		setLastError = llvm.AddFunction(b.mod, "SetLastError", llvmType)
 		if isI386 {
 			setLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
@@ -394,7 +392,7 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 	}
 	getLastError := b.mod.NamedFunction("GetLastError")
 	if getLastError.IsNil() {
-		llvmType := llvm.FunctionType(b.ctx.Int32Type(), nil, false)
+		llvmType := llvm.FunctionType(b.i32, nil, false)
 		getLastError = llvm.AddFunction(b.mod, "GetLastError", llvmType)
 		if isI386 {
 			getLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
@@ -427,7 +425,7 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 		var paramTypes []llvm.Type
 		for j := 0; j < i; j++ {
 			gep := b.CreateInBoundsGEP(b.uintptrType, argsPtr, []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(j), false),
+				llvm.ConstInt(b.i32, uint64(j), false),
 			}, "")
 			arg := b.CreateLoad(b.uintptrType, gep, "")
 			params = append(params, arg)
@@ -435,7 +433,7 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 		}
 
 		// SetLastError(0)
-		setCall := b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.ctx.Int32Type())}, "")
+		setCall := b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.i32)}, "")
 		var sp llvm.Value
 		if isI386 {
 			setCall.SetInstructionCallConv(llvm.X86StdcallCallConv)
@@ -455,7 +453,7 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 		if isI386 {
 			errResult.SetInstructionCallConv(llvm.X86StdcallCallConv)
 		}
-		if b.uintptrType != b.ctx.Int32Type() {
+		if b.uintptrType != b.i32 {
 			errResult = b.CreateZExt(errResult, b.uintptrType, "err.uintptr")
 		}
 
@@ -489,7 +487,7 @@ func (b *builder) createRawSyscallNoError(call *ssa.CallCommon) (llvm.Value, err
 	}
 	retval := llvm.ConstNull(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType}, false))
 	retval = b.CreateInsertValue(retval, syscallResult, 0, "")
-	retval = b.CreateInsertValue(retval, llvm.ConstInt(b.uintptrType, 0, false), 1, "")
+	retval = b.CreateInsertValue(retval, b.uintptrZero, 1, "")
 	return retval, nil
 }
 
@@ -602,7 +600,7 @@ func (b *builder) createDarwinImportedFunctionAddr(name string, pos token.Pos) l
 			b.addError(pos, "cgo_import_dynamic remote symbol "+name+" is already a global variable")
 			return llvm.Value{}
 		}
-		llvmFnType := llvm.FunctionType(b.ctx.VoidType(), nil, false)
+		llvmFnType := llvm.FunctionType(b.void, nil, false)
 		llvmFn = llvm.AddFunction(b.mod, name, llvmFnType)
 	}
 	return b.CreatePtrToInt(llvmFn, b.uintptrType, "")

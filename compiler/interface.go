@@ -143,8 +143,8 @@ func (c *context) pkgPathPtr(pkgpath string) llvm.Value {
 		pkgpathGlobal.SetGlobalConstant(true)
 	}
 	pkgPathPtr := llvm.ConstGEP(pkgpathGlobal.GlobalValueType(), pkgpathGlobal, []llvm.Value{
-		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+		llvm.ConstInt(c.i32, 0, false),
+		llvm.ConstInt(c.i32, 0, false),
 	})
 
 	return pkgPathPtr
@@ -199,8 +199,8 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			if typstr := typ.String(); strings.HasPrefix(typstr, "*****") {
 				c.addError(token.NoPos, fmt.Sprintf("too many levels of pointers for typecode: %s", typstr))
 			}
-			return llvm.ConstGEP(c.ctx.Int8Type(), ptr, []llvm.Value{
-				llvm.ConstInt(c.ctx.Int32Type(), 1, false),
+			return llvm.ConstGEP(c.i8, ptr, []llvm.Value{
+				llvm.ConstInt(c.i32, 1, false),
 			})
 		}
 	}
@@ -385,10 +385,10 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 				namedNumMethods |= numMethodHasMethodSet
 			}
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), namedNumMethods, false), // numMethods
-				c.getTypeCode(types.NewPointer(typ)),                     // ptrTo
-				c.getTypeCode(typ.Underlying()),                          // underlying
-				pkgPathPtr,                                               // pkgpath pointer
+				llvm.ConstInt(c.i16, namedNumMethods, false), // numMethods
+				c.getTypeCode(types.NewPointer(typ)),         // ptrTo
+				c.getTypeCode(typ.Underlying()),              // underlying
+				pkgPathPtr,                                   // pkgpath pointer
 			}
 			if len(methods) > 0 {
 				typeFields = append(typeFields, methodSetValue) // methods
@@ -407,15 +407,15 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			}
 
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), uint64(dir), false), // actually channel direction
-				c.getTypeCode(types.NewPointer(typ)),                 // ptrTo
-				c.getTypeCode(typ.Elem()),                            // elementType
+				llvm.ConstInt(c.i16, uint64(dir), false), // actually channel direction
+				c.getTypeCode(types.NewPointer(typ)),     // ptrTo
+				c.getTypeCode(typ.Elem()),                // elementType
 			}
 		case *types.Slice:
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), 0, false), // numMethods
-				c.getTypeCode(types.NewPointer(typ)),       // ptrTo
-				c.getTypeCode(typ.Elem()),                  // elementType
+				llvm.ConstInt(c.i16, 0, false),       // numMethods
+				c.getTypeCode(types.NewPointer(typ)), // ptrTo
+				c.getTypeCode(typ.Elem()),            // elementType
 			}
 		case *types.Pointer:
 			ptrNumMethods := uint64(numMethods)
@@ -426,7 +426,7 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 				ptrNumMethods |= numMethodHasMethodSet
 			}
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), ptrNumMethods, false), // numMethods
+				llvm.ConstInt(c.i16, ptrNumMethods, false), // numMethods
 				c.getTypeCode(typ.Elem()),
 			}
 			if len(methods) > 0 {
@@ -434,7 +434,7 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			}
 		case *types.Array:
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), 0, false),             // numMethods
+				llvm.ConstInt(c.i16, 0, false),                         // numMethods
 				c.getTypeCode(types.NewPointer(typ)),                   // ptrTo
 				c.getTypeCode(typ.Elem()),                              // elementType
 				llvm.ConstInt(c.uintptrType, uint64(typ.Len()), false), // length
@@ -443,11 +443,11 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			}
 		case *types.Map:
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), 0, false), // numMethods
-				c.getTypeCode(types.NewPointer(typ)),       // ptrTo
-				c.getTypeCode(typ.Elem()),                  // elem
-				c.getTypeCode(typ.Key()),                   // key
-				c.getHashmapTypeInfo(typ, token.NoPos),     // hashmapTypeInfo
+				llvm.ConstInt(c.i16, 0, false),         // numMethods
+				c.getTypeCode(types.NewPointer(typ)),   // ptrTo
+				c.getTypeCode(typ.Elem()),              // elem
+				c.getTypeCode(typ.Key()),               // key
+				c.getHashmapTypeInfo(typ, token.NoPos), // hashmapTypeInfo
 			}
 		case *types.Struct:
 			var pkgpath string
@@ -468,12 +468,12 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 				structNumMethods |= numMethodHasMethodSet
 			}
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int16Type(), structNumMethods, false), // numMethods
-				c.getTypeCode(types.NewPointer(typ)),                      // ptrTo
+				llvm.ConstInt(c.i16, structNumMethods, false), // numMethods
+				c.getTypeCode(types.NewPointer(typ)),          // ptrTo
 				pkgPathPtr,
-				llvm.ConstInt(c.ctx.Int32Type(), uint64(size), false),            // size
-				llvm.ConstInt(c.ctx.Int16Type(), uint64(typ.NumFields()), false), // numFields
-				c.createObjectLayout(llvmStructType, token.NoPos),                // layout
+				llvm.ConstInt(c.i32, uint64(size), false),            // size
+				llvm.ConstInt(c.i16, uint64(typ.NumFields()), false), // numFields
+				c.createObjectLayout(llvmStructType, token.NoPos),    // layout
 			}
 			structFieldType := c.getLLVMRuntimeType("structField")
 
@@ -515,8 +515,8 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 				fields = append(fields, llvm.ConstNamedStruct(structFieldType, []llvm.Value{
 					fieldType,
 					llvm.ConstGEP(dataGlobal.GlobalValueType(), dataGlobal, []llvm.Value{
-						llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-						llvm.ConstInt(c.ctx.Int32Type(), 0, false),
+						llvm.ConstInt(c.i32, 0, false),
+						llvm.ConstInt(c.i32, 0, false),
 					}),
 				}))
 			}
@@ -550,22 +550,22 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 				inOut = append(inOut, c.getTypeCode(results.At(i).Type()))
 			}
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.ctx.Int8Type(), uint64(params.Len()), false),
-				llvm.ConstInt(c.ctx.Int16Type(), numOut, false),
+				llvm.ConstInt(c.i8, uint64(params.Len()), false),
+				llvm.ConstInt(c.i16, numOut, false),
 				c.getTypeCode(types.NewPointer(typ)),
 				llvm.ConstArray(c.dataPtrType, inOut),
 			}
 		}
 		// Prepend the common RawType field.
 		typeFields = append([]llvm.Value{
-			llvm.ConstInt(c.ctx.Int8Type(), uint64(metabyte), false),
+			llvm.ConstInt(c.i8, uint64(metabyte), false),
 		}, typeFields...)
 		if hasMethodSet {
 			typeFields = append([]llvm.Value{
 				c.getTypeMethodSet(typ),
 			}, typeFields...)
 		}
-		alignment := max(c.targetData.TypeAllocSize(c.dataPtrType), 4)
+		alignment := max(c.ptrBits/8, 4)
 		globalValue := c.ctx.ConstStruct(typeFields, false)
 		global.SetInitializer(globalValue)
 		if isLocal {
@@ -597,8 +597,8 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 		offset = 1
 	}
 	return llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
-		llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(c.ctx.Int32Type(), offset, false),
+		llvm.ConstInt(c.i32, 0, false),
+		llvm.ConstInt(c.i32, offset, false),
 	})
 }
 
@@ -1086,8 +1086,8 @@ func (c *context) getMethodSignature(method *types.Func) llvm.Value {
 	if signatureGlobal.IsNil() {
 		// TODO: put something useful in these globals, such as the method
 		// signature. Useful to one day implement reflect.Value.Method(n).
-		signatureGlobal = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), globalName)
-		signatureGlobal.SetInitializer(llvm.ConstInt(c.ctx.Int8Type(), 0, false))
+		signatureGlobal = llvm.AddGlobal(c.mod, c.i8, globalName)
+		signatureGlobal.SetInitializer(llvm.ConstInt(c.i8, 0, false))
 		signatureGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
 		signatureGlobal.SetGlobalConstant(true)
 		signatureGlobal.SetAlignment(1)
@@ -1136,7 +1136,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 			globalName := "reflect/types.typeid:" + name
 			assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
 			if assertedTypeCodeGlobal.IsNil() {
-				assertedTypeCodeGlobal = llvm.AddGlobal(b.mod, b.ctx.Int8Type(), globalName)
+				assertedTypeCodeGlobal = llvm.AddGlobal(b.mod, b.i8, globalName)
 				assertedTypeCodeGlobal.SetGlobalConstant(true)
 			}
 			commaOk = b.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
@@ -1200,9 +1200,9 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 		phi := b.CreatePHI(assertedType, "typeassert.value")
 		phi.AddIncoming([]llvm.Value{llvm.ConstNull(assertedType), valueOk}, []llvm.BasicBlock{prevBlock, okBlock})
 
-		tuple := b.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(b.ctx.Int1Type())}, false) // create empty tuple
-		tuple = b.CreateInsertValue(tuple, phi, 0, "")                                                          // insert value
-		tuple = b.CreateInsertValue(tuple, commaOk, 1, "")                                                      // insert 'comma ok' boolean
+		tuple := b.ctx.ConstStruct([]llvm.Value{llvm.Undef(assertedType), llvm.Undef(b.i1)}, false) // create empty tuple
+		tuple = b.CreateInsertValue(tuple, phi, 0, "")                                              // insert value
+		tuple = b.CreateInsertValue(tuple, commaOk, 1, "")                                          // insert 'comma ok' boolean
 		return tuple
 	} else {
 		// Type assert without comma-ok. If it fails, panic.
@@ -1231,7 +1231,7 @@ func (b *builder) getInterfaceAssertBlock() llvm.BasicBlock {
 	if b.hasDeferFrame() {
 		b.createFaultCheckpoint()
 	}
-	b.createRuntimeInvoke("interfaceTypeAssert", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), 0, false)}, "")
+	b.createRuntimeInvoke("interfaceTypeAssert", []llvm.Value{b.i1False}, "")
 	b.createUnwindReturnOrUnreachable()
 	b.inFaultBlock = false
 	b.SetInsertPointAtEnd(savedBlock)
@@ -1266,8 +1266,8 @@ func (c *context) getMethodSetValue(methods []*types.Func) llvm.Value {
 		globalName := "reflect/types.signature:" + name + ":" + s
 		value := c.mod.NamedGlobal(globalName)
 		if value.IsNil() {
-			value = llvm.AddGlobal(c.mod, c.ctx.Int8Type(), globalName)
-			value.SetInitializer(llvm.ConstNull(c.ctx.Int8Type()))
+			value = llvm.AddGlobal(c.mod, c.i8, globalName)
+			value.SetInitializer(llvm.ConstNull(c.i8))
 			value.SetGlobalConstant(true)
 			value.SetLinkage(llvm.LinkOnceODRLinkage)
 			value.SetAlignment(1)
@@ -1342,7 +1342,7 @@ func (b *builder) createInterfaceTypeAssert(intf *types.Interface, actualType ll
 	fnName := s + ".$typeassert"
 	llvmFn := b.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
-		llvmFnType := llvm.FunctionType(b.ctx.Int1Type(), []llvm.Type{b.dataPtrType}, false)
+		llvmFnType := llvm.FunctionType(b.i1, []llvm.Type{b.dataPtrType}, false)
 		llvmFn = llvm.AddFunction(b.mod, fnName, llvmFnType)
 		b.addStandardDeclaredAttributes(llvmFn)
 		methods := b.getMethodsString(intf)
@@ -1385,7 +1385,7 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 			var paramTypes []llvm.Type
 			if internalABI.indirectResult {
 				paramTypes = append(paramTypes, c.dataPtrType)
-				resultType = c.ctx.VoidType()
+				resultType = c.void
 			}
 			paramTypes = append(paramTypes, c.dataPtrType)
 			for _, param := range internalABI.params[1:] {
@@ -1474,7 +1474,7 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 		params = append(params, b.expandFormalParam(receiverValue)...)
 	}
 	params = append(params, wrapper.Params()[resultOffset+1:]...)
-	if llvmFnType.ReturnType().TypeKind() == llvm.VoidTypeKind {
+	if llvmFnType.ReturnType() == b.void {
 		b.CreateCall(llvmFnType, llvmFn, params, "")
 		b.CreateRetVoid()
 	} else {

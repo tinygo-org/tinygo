@@ -69,42 +69,48 @@ type Config struct {
 // must not contain function-dependent data such as an IR builder.
 type context struct {
 	*Config
-	dumpSSA          bool
-	mod              llvm.Module
-	ctx              llvm.Context
-	builder          llvm.Builder // only used for constant operations
-	dibuilder        *llvm.DIBuilder
-	cu               llvm.Metadata
-	difiles          map[string]llvm.Metadata
-	ditypes          map[types.Type]llvm.Metadata
-	llvmTypes        typeutil.Map
-	interfaceTypes   typeutil.Map
-	machine          llvm.TargetMachine
-	targetData       llvm.TargetData
-	intType          llvm.Type
-	dataPtrType      llvm.Type // pointer in address space 0
-	funcPtrType      llvm.Type // pointer in function address space (1 for AVR, 0 elsewhere)
-	funcPtrAddrSpace int
-	uintptrType      llvm.Type
-	program          *ssa.Program
-	diagnostics      []error
-	functionInfos    map[*ssa.Function]functionInfo
-	globalInfos      map[*ssa.Global]globalInfo
-	pragmaErrors     map[*ast.Comment]bool
-	callProperties   map[*ssa.Function]functionCallProperties
-	asyncifyCatchers map[llvm.Type]llvm.Value
-	directCatchers   map[llvm.Value]llvm.Value
-	indirectCatchers map[llvm.Type]llvm.Value
-	asyncifyReplays  map[llvm.Type]llvm.Value
-	functionABIs     map[functionABIKey]functionABI
-	astComments      map[string]*ast.CommentGroup
-	cgoImportDynamic map[string]string // //go:cgo_import_dynamic local name -> remote symbol
-	embedGlobals     map[string][]*loader.EmbedFile
-	pkg              *types.Package
-	loaderPkg        *loader.Package // current package being compiled (for AST access)
-	packageDir       string          // directory for this package
-	runtimePkg       *types.Package
-	localTypeNames   typeutil.Map // *types.Named (synthetic local from generic instantiation) -> string
+	dumpSSA                     bool
+	mod                         llvm.Module
+	ctx                         llvm.Context
+	builder                     llvm.Builder // only used for constant operations
+	dibuilder                   *llvm.DIBuilder
+	cu                          llvm.Metadata
+	difiles                     map[string]llvm.Metadata
+	ditypes                     map[types.Type]llvm.Metadata
+	llvmTypes                   typeutil.Map
+	interfaceTypes              typeutil.Map
+	machine                     llvm.TargetMachine
+	targetData                  llvm.TargetData
+	void, i1, i8, i16, i32, i64 llvm.Type
+	i1False, i1True             llvm.Value
+	intType                     llvm.Type
+	dataPtrType                 llvm.Type // pointer in address space 0
+	dataPtrNull, dataPtrUndef   llvm.Value
+	funcPtrType                 llvm.Type // pointer in function address space (1 for AVR, 0 elsewhere)
+	funcPtrAddrSpace            int
+	uintptrType                 llvm.Type
+	uintptrZero                 llvm.Value
+	ptrBits                     int
+	ptrAlign                    int
+	program                     *ssa.Program
+	diagnostics                 []error
+	functionInfos               map[*ssa.Function]functionInfo
+	globalInfos                 map[*ssa.Global]globalInfo
+	pragmaErrors                map[*ast.Comment]bool
+	callProperties              map[*ssa.Function]functionCallProperties
+	asyncifyCatchers            map[llvm.Type]llvm.Value
+	directCatchers              map[llvm.Value]llvm.Value
+	indirectCatchers            map[llvm.Type]llvm.Value
+	asyncifyReplays             map[llvm.Type]llvm.Value
+	functionABIs                map[functionABIKey]functionABI
+	astComments                 map[string]*ast.CommentGroup
+	cgoImportDynamic            map[string]string // //go:cgo_import_dynamic local name -> remote symbol
+	embedGlobals                map[string][]*loader.EmbedFile
+	pkg                         *types.Package
+	loaderPkg                   *loader.Package // current package being compiled (for AST access)
+	packageDir                  string          // directory for this package
+	runtimePkg                  *types.Package
+	localTypeNames              typeutil.Map // *types.Named (synthetic local from generic instantiation) -> string
 }
 
 // newContext returns a new compiler context ready for use, most
@@ -131,6 +137,14 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 	}
 
 	c.ctx = llvm.NewContext()
+	c.void = c.ctx.VoidType()
+	c.i1 = c.ctx.Int1Type()
+	c.i8 = c.ctx.Int8Type()
+	c.i16 = c.ctx.Int16Type()
+	c.i32 = c.ctx.Int32Type()
+	c.i64 = c.ctx.Int64Type()
+	c.i1False = llvm.ConstNull(c.i1)
+	c.i1True = llvm.ConstAllOnes(c.i1)
 	c.builder = c.ctx.NewBuilder()
 	c.mod = c.ctx.NewModule(moduleName)
 	c.mod.SetTarget(config.Triple)
@@ -139,19 +153,25 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 		c.dibuilder = llvm.NewDIBuilder(c.mod)
 	}
 
-	c.uintptrType = c.ctx.IntType(c.targetData.PointerSize() * 8)
-	if c.targetData.PointerSize() <= 4 {
-		// 8, 16, 32 bits targets
-		c.intType = c.ctx.Int32Type()
-	} else if c.targetData.PointerSize() == 8 {
-		// 64 bits target
-		c.intType = c.ctx.Int64Type()
-	} else {
+	c.dataPtrType = llvm.PointerType(c.i8, 0)
+	c.dataPtrNull = llvm.ConstNull(c.dataPtrType)
+	c.dataPtrUndef = llvm.Undef(c.dataPtrType)
+
+	c.ptrBits = c.targetData.PointerSize() * 8
+	c.ptrAlign = c.targetData.ABITypeAlignment(c.dataPtrType)
+	c.uintptrType = c.ctx.IntType(c.ptrBits)
+	c.uintptrZero = llvm.ConstNull(c.uintptrType)
+
+	switch c.ptrBits {
+	case 8, 16, 32:
+		c.intType = c.i32
+	case 64:
+		c.intType = c.i64
+	default:
 		panic("unknown pointer size")
 	}
-	c.dataPtrType = llvm.PointerType(c.ctx.Int8Type(), 0)
 
-	dummyFuncType := llvm.FunctionType(c.ctx.VoidType(), nil, false)
+	dummyFuncType := llvm.FunctionType(c.void, nil, false)
 	dummyFunc := llvm.AddFunction(c.mod, "tinygo.dummy", dummyFuncType)
 	c.funcPtrAddrSpace = dummyFunc.Type().PointerAddressSpace()
 	c.funcPtrType = dummyFunc.Type()
@@ -367,16 +387,16 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	if c.Debug {
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
-				llvm.ConstInt(c.ctx.Int32Type(), 2, false).ConstantAsMetadata(), // Warning on mismatch
+				llvm.ConstInt(c.i32, 2, false).ConstantAsMetadata(), // Warning on mismatch
 				c.ctx.MDString("Debug Info Version"),
-				llvm.ConstInt(c.ctx.Int32Type(), 3, false).ConstantAsMetadata(), // DWARF version
+				llvm.ConstInt(c.i32, 3, false).ConstantAsMetadata(), // DWARF version
 			}),
 		)
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
-				llvm.ConstInt(c.ctx.Int32Type(), 7, false).ConstantAsMetadata(), // Max on mismatch
+				llvm.ConstInt(c.i32, 7, false).ConstantAsMetadata(), // Max on mismatch
 				c.ctx.MDString("Dwarf Version"),
-				llvm.ConstInt(c.ctx.Int32Type(), 4, false).ConstantAsMetadata(),
+				llvm.ConstInt(c.i32, 4, false).ConstantAsMetadata(),
 			}),
 		)
 		if c.TinyGoVersion != "" {
@@ -396,7 +416,7 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	if c.ABI != "" {
 		c.mod.AddNamedMetadataOperand("llvm.module.flags",
 			c.ctx.MDNode([]llvm.Metadata{
-				llvm.ConstInt(c.ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
+				llvm.ConstInt(c.i32, 1, false).ConstantAsMetadata(), // Error on mismatch
 				c.ctx.MDString("target-abi"),
 				c.ctx.MDString(c.ABI),
 			}),
@@ -445,17 +465,17 @@ func (c *context) makeLLVMType(goType types.Type) llvm.Type {
 	case *types.Basic:
 		switch typ.Kind() {
 		case types.Bool, types.UntypedBool:
-			return c.ctx.Int1Type()
+			return c.i1
 		case types.Int8, types.Uint8:
-			return c.ctx.Int8Type()
+			return c.i8
 		case types.Int16, types.Uint16:
-			return c.ctx.Int16Type()
+			return c.i16
 		case types.Int32, types.Uint32, types.UntypedRune:
-			return c.ctx.Int32Type()
+			return c.i32
 		case types.Int, types.Uint, types.UntypedInt:
 			return c.intType
 		case types.Int64, types.Uint64:
-			return c.ctx.Int64Type()
+			return c.i64
 		case types.Float32:
 			return c.ctx.FloatType()
 		case types.Float64, types.UntypedFloat:
@@ -600,15 +620,15 @@ func (c *context) createDIType(typ types.Type) llvm.Metadata {
 				Elements: []llvm.Metadata{
 					c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
 						Name:         "ptr",
-						SizeInBits:   c.targetData.TypeAllocSize(c.dataPtrType) * 8,
-						AlignInBits:  uint32(c.targetData.ABITypeAlignment(c.dataPtrType)) * 8,
+						SizeInBits:   uint64(c.ptrBits),
+						AlignInBits:  uint32(c.ptrAlign) * 8,
 						OffsetInBits: 0,
 						Type:         c.getDIType(types.NewPointer(types.Typ[types.Byte])),
 					}),
 					c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
 						Name:         "len",
-						SizeInBits:   c.targetData.TypeAllocSize(c.uintptrType) * 8,
-						AlignInBits:  uint32(c.targetData.ABITypeAlignment(c.uintptrType)) * 8,
+						SizeInBits:   uint64(c.ptrBits),
+						AlignInBits:  uint32(c.ptrAlign) * 8,
 						OffsetInBits: c.targetData.ElementOffset(llvmType, 1) * 8,
 						Type:         c.getDIType(types.Typ[types.Uintptr]),
 					}),
@@ -688,15 +708,15 @@ func (c *context) createDIType(typ types.Type) llvm.Metadata {
 				}),
 				c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
 					Name:         "len",
-					SizeInBits:   c.targetData.TypeAllocSize(c.uintptrType) * 8,
-					AlignInBits:  uint32(c.targetData.ABITypeAlignment(c.uintptrType)) * 8,
+					SizeInBits:   uint64(c.ptrBits),
+					AlignInBits:  uint32(c.ptrAlign) * 8,
 					OffsetInBits: c.targetData.ElementOffset(llvmType, 1) * 8,
 					Type:         c.getDIType(types.Typ[types.Uintptr]),
 				}),
 				c.dibuilder.CreateMemberType(llvm.Metadata{}, llvm.DIMemberType{
 					Name:         "cap",
-					SizeInBits:   c.targetData.TypeAllocSize(c.uintptrType) * 8,
-					AlignInBits:  uint32(c.targetData.ABITypeAlignment(c.uintptrType)) * 8,
+					SizeInBits:   uint64(c.ptrBits),
+					AlignInBits:  uint32(c.ptrAlign) * 8,
 					OffsetInBits: c.targetData.ElementOffset(llvmType, 2) * 8,
 					Type:         c.getDIType(types.Typ[types.Uintptr]),
 				}),
@@ -1045,8 +1065,8 @@ func (c *context) createEmbedGlobal(member *ssa.Global, global llvm.Value, files
 		bufferGlobal.SetLinkage(llvm.InternalLinkage)
 		bufferGlobal.SetAlignment(1)
 		slicePtr := llvm.ConstInBoundsGEP(bufferValue.Type(), bufferGlobal, []llvm.Value{
-			llvm.ConstInt(c.uintptrType, 0, false),
-			llvm.ConstInt(c.uintptrType, 0, false),
+			c.uintptrZero,
+			c.uintptrZero,
 		})
 		sliceLen := llvm.ConstInt(c.uintptrType, file.Size, false)
 		sliceObj := c.ctx.ConstStruct([]llvm.Value{slicePtr, sliceLen, sliceLen}, false)
@@ -1143,8 +1163,8 @@ func (c *context) createEmbedGlobal(member *ssa.Global, global llvm.Value, files
 		// Because embed.FS refers to it as *[]embed.file instead of a plain
 		// []embed.file, we have to store this as a global.
 		slicePtr := llvm.ConstInBoundsGEP(sliceDataInitializer.Type(), sliceDataGlobal, []llvm.Value{
-			llvm.ConstInt(c.uintptrType, 0, false),
-			llvm.ConstInt(c.uintptrType, 0, false),
+			c.uintptrZero,
+			c.uintptrZero,
 		})
 		sliceLen := llvm.ConstInt(c.uintptrType, uint64(len(fileStructs)), false)
 		sliceInitializer := c.ctx.ConstStruct([]llvm.Value{slicePtr, sliceLen, sliceLen}, false)
@@ -1181,13 +1201,13 @@ func (c *context) createEmbedGlobal(member *ssa.Global, global llvm.Value, files
 func (c *context) getEmbedFileString(file *loader.EmbedFile) llvm.Value {
 	dataGlobalName := "embed/file_" + file.Hash
 	dataGlobal := c.mod.NamedGlobal(dataGlobalName)
-	dataGlobalType := llvm.ArrayType(c.ctx.Int8Type(), int(file.Size))
+	dataGlobalType := llvm.ArrayType(c.i8, int(file.Size))
 	if dataGlobal.IsNil() {
 		dataGlobal = llvm.AddGlobal(c.mod, dataGlobalType, dataGlobalName)
 	}
 	strPtr := llvm.ConstInBoundsGEP(dataGlobalType, dataGlobal, []llvm.Value{
-		llvm.ConstInt(c.uintptrType, 0, false),
-		llvm.ConstInt(c.uintptrType, 0, false),
+		c.uintptrZero,
+		c.uintptrZero,
 	})
 	strLen := llvm.ConstInt(c.uintptrType, file.Size, false)
 	return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
@@ -1406,7 +1426,7 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// Create a dummy alloca that will be used in runtime.trackPointer.
 		// It is necessary to pass a dummy alloca to runtime.trackPointer
 		// because runtime.trackPointer is replaced by an alloca store.
-		b.stackChainAlloca = b.CreateAlloca(b.ctx.Int8Type(), "stackalloc")
+		b.stackChainAlloca = b.CreateAlloca(b.i8, "stackalloc")
 	}
 }
 
@@ -1887,9 +1907,9 @@ func (b *builder) zeroIndirectStorage(ptr llvm.Value, typ llvm.Type) {
 	memset := b.getMemsetFunc()
 	b.createCall(memset.GlobalValueType(), memset, []llvm.Value{
 		ptr,
-		llvm.ConstInt(b.ctx.Int8Type(), 0, false),
+		llvm.ConstInt(b.i8, 0, false),
 		llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(typ), false),
-		llvm.ConstInt(b.ctx.Int1Type(), 0, false),
+		b.i1False,
 	}, "")
 }
 
@@ -1933,7 +1953,7 @@ func (b *builder) createRuntimeValueResult(valueType llvm.Type, commaOk, zeroAsN
 		commaOk:    commaOk,
 	}
 	if commaOk {
-		result.resultType = b.ctx.StructType([]llvm.Type{valueType, b.ctx.Int1Type()}, false)
+		result.resultType = b.ctx.StructType([]llvm.Type{valueType, b.i1}, false)
 	}
 	if b.isIndirectAggregate(result.resultType) {
 		result.result = b.createIndirectStorage(result.resultType, name+".result")
@@ -1944,7 +1964,7 @@ func (b *builder) createRuntimeValueResult(valueType llvm.Type, commaOk, zeroAsN
 		return result
 	}
 	if zeroAsNull && b.targetData.TypeAllocSize(valueType) == 0 {
-		result.valuePtr = llvm.ConstNull(b.dataPtrType)
+		result.valuePtr = b.dataPtrNull
 		result.zero = true
 		return result
 	}
@@ -2057,10 +2077,10 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 			// LangRef).
 			memset := b.getMemsetFunc()
 			call := b.createCall(memset.GlobalValueType(), memset, []llvm.Value{
-				llvmBuf, // dest
-				llvm.ConstInt(b.ctx.Int8Type(), 0, false), // val
-				llvmLen, // len
-				llvm.ConstInt(b.ctx.Int1Type(), 0, false), // isVolatile
+				llvmBuf,                       // dest
+				llvm.ConstInt(b.i8, 0, false), // val
+				llvmLen,                       // len
+				b.i1False,                     // isVolatile
 			}, "")
 			call.AddCallSiteAttribute(1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elementAlign)))
 
@@ -2079,7 +2099,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		dstLen := b.CreateExtractValue(dst, 1, "copy.dstLen")
 		srcLen := b.CreateExtractValue(src, 1, "copy.srcLen")
 		// Find the minimum of the lengths.
-		minFuncName := "llvm.umin.i" + strconv.Itoa(b.uintptrType.IntTypeWidth())
+		minFuncName := "llvm.umin.i" + strconv.Itoa(b.ptrBits)
 		minFunc := b.mod.NamedFunction(minFuncName)
 		if minFunc.IsNil() {
 			fnType := llvm.FunctionType(b.uintptrType, []llvm.Type{b.uintptrType, b.uintptrType}, false)
@@ -2271,11 +2291,11 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		cplx := argValues[0]
 		return b.CreateExtractValue(cplx, 0, "real"), nil
 	case "recover":
-		useParentFrame := uint64(0)
+		useParentFrame := b.i1False
 		if b.hasDeferFrame() {
 			// recover() should return the panic value of the parent function,
 			// not of the current function.
-			useParentFrame = 1
+			useParentFrame = b.i1True
 		}
 		// Prevent inlining of functions that call recover(), matching the
 		// Go compiler's behavior. If this function were inlined into a
@@ -2283,7 +2303,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		// the inlined code runs in the deferred function's context.
 		noinline := b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0)
 		b.llvmFn.AddFunctionAttr(noinline)
-		return b.createRuntimeCall("_recover", []llvm.Value{llvm.ConstInt(b.ctx.Int1Type(), useParentFrame, false)}, ""), nil
+		return b.createRuntimeCall("_recover", []llvm.Value{useParentFrame}, ""), nil
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?
 		return argValues[0], nil
@@ -2294,7 +2314,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		// Note: the pointer is always of type *i8.
 		ptr := argValues[0]
 		len := argValues[1]
-		return b.CreateGEP(b.ctx.Int8Type(), ptr, []llvm.Value{len}, ""), nil
+		return b.CreateGEP(b.i8, ptr, []llvm.Value{len}, ""), nil
 	case "Alignof": // unsafe.Alignof
 		align := b.targetData.ABITypeAlignment(argValues[0].Type())
 		return llvm.ConstInt(b.uintptrType, uint64(align), false), nil
@@ -2320,16 +2340,10 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		if callName == "Slice" {
 			elementType = b.getLLVMType(argTypes[0].Underlying().(*types.Pointer).Elem())
 		} else {
-			elementType = b.ctx.Int8Type()
+			elementType = b.i8
 		}
 		b.createUnsafeSliceStringCheck("unsafe."+callName, ptr, len, elementType, argTypes[1].Underlying().(*types.Basic))
-		if len.Type().IntTypeWidth() < b.uintptrType.IntTypeWidth() {
-			// Too small, zero-extend len.
-			len = b.CreateZExt(len, b.uintptrType, "")
-		} else if len.Type().IntTypeWidth() > b.uintptrType.IntTypeWidth() {
-			// Too big, truncate len.
-			len = b.CreateTrunc(len, b.uintptrType, "")
-		}
+		len = b.createZExtOrTrunc(len, b.uintptrType)
 		if callName == "Slice" {
 			slice := llvm.Undef(b.ctx.StructType([]llvm.Type{
 				ptr.Type(),
@@ -2388,17 +2402,17 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		case strings.HasPrefix(name, "syscall.rawSyscallNoError") || strings.HasPrefix(name, "golang.org/x/sys/unix.RawSyscallNoError"):
 			return b.createRawSyscallNoError(instr)
 		case name == "runtime.supportsRecover":
-			supportsRecover := uint64(0)
 			if b.supportsRecover() {
-				supportsRecover = 1
+				return b.i1True, nil
+			} else {
+				return b.i1False, nil
 			}
-			return llvm.ConstInt(b.ctx.Int1Type(), supportsRecover, false), nil
 		case name == "runtime.panicStrategy":
 			panicStrategy := map[string]uint64{
 				"print": tinygo.PanicStrategyPrint,
 				"trap":  tinygo.PanicStrategyTrap,
 			}[b.Config.PanicStrategy]
-			return llvm.ConstInt(b.ctx.Int8Type(), panicStrategy, false), nil
+			return llvm.ConstInt(b.i8, panicStrategy, false), nil
 		case name == "runtime/interrupt.New":
 			return b.createInterruptGlobal(instr)
 		case name == "runtime.exportedFuncPtr":
@@ -2428,7 +2442,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		switch value := instr.Value.(type) {
 		case *ssa.Function:
 			// Regular function call. No context is necessary.
-			context = llvm.Undef(b.dataPtrType)
+			context = b.dataPtrUndef
 			if info.isVariadic() && len(fn.Params) == 0 {
 				// This matches Clang, see: https://godbolt.org/z/Gqv49xKMq
 				// Eventually we might be able to eliminate this special case
@@ -2461,7 +2475,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		invokeReceiver = b.CreateExtractValue(itf, 1, "invoke.func.value")
 		callee = b.getInvokeFunction(instr)
 		calleeType = callee.GlobalValueType()
-		context = llvm.Undef(b.dataPtrType)
+		context = b.dataPtrUndef
 	} else {
 		// Function pointer.
 		value := b.getValue(instr.Value, getPos(instr))
@@ -2520,7 +2534,7 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 			return llvm.Undef(b.getLLVMType(expr.Type()))
 		}
 		_, fn := b.getFunction(expr)
-		return b.createFuncValue(fn, llvm.Undef(b.dataPtrType), expr.Signature)
+		return b.createFuncValue(fn, b.dataPtrUndef, expr.Signature)
 	case *ssa.Global:
 		value := b.getGlobal(expr)
 		if value.IsNil() {
@@ -2546,9 +2560,9 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 // can be.
 func (c *context) maxSliceSize(elementType llvm.Type) uint64 {
 	// Calculate ^uintptr(0), which is the max value that fits in uintptr.
-	maxPointerValue := llvm.ConstNot(llvm.ConstInt(c.uintptrType, 0, false)).ZExtValue()
+	maxPointerValue := llvm.ConstAllOnes(c.uintptrType).ZExtValue()
 	// Calculate (^uint(0))/2, which is the max value that fits in an int.
-	maxIntegerValue := llvm.ConstNot(llvm.ConstInt(c.intType, 0, false)).ZExtValue() / 2
+	maxIntegerValue := llvm.ConstAllOnes(c.intType).ZExtValue() / 2
 
 	// Determine the maximum allowed size for a slice. The biggest possible
 	// pointer (starting from 0) would be maxPointerValue*sizeof(elementType) so
@@ -2572,7 +2586,7 @@ const goHeapAddressBits = 48
 // maxSliceAllocationSize determines the maximum length of an allocated slice.
 func (c *context) maxSliceAllocationSize(elementType llvm.Type) uint64 {
 	maxSize := c.maxSliceSize(elementType)
-	if c.uintptrType.IntTypeWidth() <= goHeapAddressBits {
+	if c.ptrBits <= goHeapAddressBits {
 		return maxSize
 	}
 
@@ -2598,7 +2612,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		// Move all "large" allocations to the heap.
 		if expr.Heap || size > b.MaxStackAlloc {
 			// Calculate ^uintptr(0)
-			maxSize := llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)).ZExtValue()
+			maxSize := (uint64(1) << b.ptrBits) - 1
 			if size > maxSize {
 				// Size would be truncated if truncated to uintptr.
 				return llvm.Value{}, b.makeError(expr.Pos(), fmt.Sprintf("value is too big (%v bytes)", size))
@@ -2714,8 +2728,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		b.createNilCheck(expr.X, val, "gep")
 		// Do a GEP on the pointer to get the field address.
 		indices := []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), uint64(expr.Field), false),
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, uint64(expr.Field), false),
 		}
 		elementType := b.getLLVMType(expr.X.Type().Underlying().(*types.Pointer).Elem())
 		return b.CreateInBoundsGEP(elementType, val, indices, ""), nil
@@ -2748,9 +2762,8 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 			// Lookup byte
 			buf := b.CreateExtractValue(collection, 0, "")
-			bufElemType := b.ctx.Int8Type()
-			bufPtr := b.CreateInBoundsGEP(bufElemType, buf, []llvm.Value{index}, "")
-			return b.CreateLoad(bufElemType, bufPtr, ""), nil
+			bufPtr := b.CreateInBoundsGEP(b.i8, buf, []llvm.Value{index}, "")
+			return b.CreateLoad(b.i8, bufPtr, ""), nil
 		case *types.Array: // extract element from array
 			// Extend index to at least uintptr size, because getelementptr
 			// assumes index is a signed integer.
@@ -2764,7 +2777,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			// have to do it using an alloca+gep+load.
 			arrayType := b.getLLVMType(expr.X.Type())
 			storage := b.getValueStorage(expr.X, "index.alloca")
-			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			zero := llvm.ConstInt(b.i32, 0, false)
 			ptr := b.CreateInBoundsGEP(arrayType, storage.ptr, []llvm.Value{zero, index}, "index.gep")
 			result := b.loadFromStorage(ptr, expr.Type(), "index.load")
 			b.endValueStorage(storage)
@@ -2815,7 +2828,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		switch expr.X.Type().Underlying().(type) {
 		case *types.Pointer:
 			indices := []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(b.i32, 0, false),
 				index,
 			}
 			return b.CreateInBoundsGEP(bufType, bufptr, indices, ""), nil
@@ -2889,11 +2902,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		}
 
 		// Create the slice.
-		slice := b.ctx.ConstStruct([]llvm.Value{
-			llvm.Undef(slicePtr.Type()),
-			llvm.Undef(b.uintptrType),
-			llvm.Undef(b.uintptrType),
-		}, false)
+		slice := llvm.Undef(b.getLLVMType(expr.Type()))
 		slice = b.CreateInsertValue(slice, slicePtr, 0, "")
 		slice = b.CreateInsertValue(slice, sliceLen, 1, "")
 		slice = b.CreateInsertValue(slice, sliceCap, 2, "")
@@ -2939,7 +2948,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			low = b.extendInteger(low, lowType, b.uintptrType)
 		} else {
 			lowType = types.Typ[types.Uintptr]
-			low = llvm.ConstInt(b.uintptrType, 0, false)
+			low = b.uintptrZero
 		}
 
 		if expr.High != nil {
@@ -2971,7 +2980,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 				max = llvmLen
 			}
 			indices := []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
+				llvm.ConstInt(b.i32, 0, false),
 				low,
 			}
 
@@ -2980,13 +2989,13 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
-			if b.targetData.TypeAllocSize(low.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+			if low.Type().IntTypeWidth() > b.ptrBits {
 				low = b.CreateTrunc(low, b.uintptrType, "")
 			}
-			if b.targetData.TypeAllocSize(high.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+			if high.Type().IntTypeWidth() > b.ptrBits {
 				high = b.CreateTrunc(high, b.uintptrType, "")
 			}
-			if b.targetData.TypeAllocSize(max.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+			if max.Type().IntTypeWidth() > b.ptrBits {
 				max = b.CreateTrunc(max, b.uintptrType, "")
 			}
 
@@ -2994,11 +3003,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			slicePtr := b.CreateInBoundsGEP(b.getLLVMType(arrayType), value, indices, "slice.ptr")
 			sliceCap := b.CreateSub(max, low, "slice.cap")
 
-			slice := b.ctx.ConstStruct([]llvm.Value{
-				llvm.Undef(slicePtr.Type()),
-				llvm.Undef(b.uintptrType),
-				llvm.Undef(b.uintptrType),
-			}, false)
+			slice := llvm.Undef(b.getLLVMType(expr.Type()))
 			slice = b.CreateInsertValue(slice, slicePtr, 0, "")
 			slice = b.CreateInsertValue(slice, sliceLen, 1, "")
 			slice = b.CreateInsertValue(slice, sliceCap, 2, "")
@@ -3020,13 +3025,13 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
-			if b.targetData.TypeAllocSize(low.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+			if low.Type().IntTypeWidth() > b.ptrBits {
 				low = b.CreateTrunc(low, b.uintptrType, "")
 			}
-			if b.targetData.TypeAllocSize(high.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+			if high.Type().IntTypeWidth() > b.ptrBits {
 				high = b.CreateTrunc(high, b.uintptrType, "")
 			}
-			if b.targetData.TypeAllocSize(max.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+			if max.Type().IntTypeWidth() > b.ptrBits {
 				max = b.CreateTrunc(max, b.uintptrType, "")
 			}
 
@@ -3034,11 +3039,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			newPtr := b.CreateInBoundsGEP(ptrElemType, oldPtr, []llvm.Value{low}, "")
 			newLen := b.CreateSub(high, low, "")
 			newCap := b.CreateSub(max, low, "")
-			slice := b.ctx.ConstStruct([]llvm.Value{
-				llvm.Undef(newPtr.Type()),
-				llvm.Undef(b.uintptrType),
-				llvm.Undef(b.uintptrType),
-			}, false)
+			slice := llvm.Undef(b.getLLVMType(expr.Type()))
 			slice = b.CreateInsertValue(slice, newPtr, 0, "")
 			slice = b.CreateInsertValue(slice, newLen, 1, "")
 			slice = b.CreateInsertValue(slice, newCap, 2, "")
@@ -3064,14 +3065,14 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 			// Truncate ints bigger than uintptr. This is after the bounds
 			// check so it's safe.
-			if b.targetData.TypeAllocSize(low.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+			if low.Type().IntTypeWidth() > b.ptrBits {
 				low = b.CreateTrunc(low, b.uintptrType, "")
 			}
-			if b.targetData.TypeAllocSize(high.Type()) > b.targetData.TypeAllocSize(b.uintptrType) {
+			if high.Type().IntTypeWidth() > b.ptrBits {
 				high = b.CreateTrunc(high, b.uintptrType, "")
 			}
 
-			newPtr := b.CreateInBoundsGEP(b.ctx.Int8Type(), oldPtr, []llvm.Value{low}, "")
+			newPtr := b.CreateInBoundsGEP(b.i8, oldPtr, []llvm.Value{low}, "")
 			newLen := b.CreateSub(high, low, "")
 			str := llvm.Undef(b.getLLVMRuntimeType("_string"))
 			str = b.CreateInsertValue(str, newPtr, 0, "")
@@ -3522,7 +3523,7 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			b.emitLifetimeEnd(xPtr, xSize)
 			b.emitLifetimeEnd(yPtr, ySize)
 		} else {
-			result = llvm.ConstInt(b.ctx.Int1Type(), 1, true)
+			result = b.i1True
 			for i := 0; i < int(typ.Len()); i++ {
 				xField := b.CreateExtractValue(x, i, "")
 				yField := b.CreateExtractValue(y, i, "")
@@ -3546,7 +3547,7 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 		//     Struct values are comparable if all their fields are comparable.
 		//     Two struct values are equal if their corresponding non-blank
 		//     fields are equal.
-		result := llvm.ConstInt(b.ctx.Int1Type(), 1, true)
+		result := b.i1True
 		for i := 0; i < typ.NumFields(); i++ {
 			if typ.Field(i).Name() == "_" {
 				// skip blank fields
@@ -3591,7 +3592,7 @@ func (c *context) createConst(expr *ssa.Const, pos token.Pos) llvm.Value {
 			var strPtr llvm.Value
 			if str != "" {
 				objname := c.pkg.Path() + "$string"
-				globalType := llvm.ArrayType(c.ctx.Int8Type(), len(str))
+				globalType := llvm.ArrayType(c.i8, len(str))
 				global := llvm.AddGlobal(c.mod, globalType, objname)
 				global.SetInitializer(c.ctx.ConstString(str, false))
 				global.SetLinkage(llvm.InternalLinkage)
@@ -3610,10 +3611,10 @@ func (c *context) createConst(expr *ssa.Const, pos token.Pos) llvm.Value {
 					})
 					global.AddMetadata(0, diglobal)
 				}
-				zero := llvm.ConstInt(c.ctx.Int32Type(), 0, false)
+				zero := llvm.ConstInt(c.i32, 0, false)
 				strPtr = llvm.ConstInBoundsGEP(globalType, global, []llvm.Value{zero, zero})
 			} else {
-				strPtr = llvm.ConstNull(c.dataPtrType)
+				strPtr = c.dataPtrNull
 			}
 			strObj := llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
 			return strObj
@@ -3622,7 +3623,7 @@ func (c *context) createConst(expr *ssa.Const, pos token.Pos) llvm.Value {
 				value, _ := constant.Uint64Val(constant.ToInt(expr.Value))
 				return llvm.ConstIntToPtr(llvm.ConstInt(c.uintptrType, value, false), c.dataPtrType)
 			}
-			return llvm.ConstNull(c.dataPtrType)
+			return c.dataPtrNull
 		} else if typ.Info()&types.IsUnsigned != 0 {
 			n, _ := constant.Uint64Val(constant.ToInt(expr.Value))
 			return llvm.ConstInt(llvmType, n, false)
@@ -3665,15 +3666,15 @@ func (c *context) createConst(expr *ssa.Const, pos token.Pos) llvm.Value {
 		}
 		// Create a generic nil interface with no dynamic type (typecode=0).
 		fields := []llvm.Value{
-			llvm.ConstInt(c.uintptrType, 0, false),
-			llvm.ConstPointerNull(c.dataPtrType),
+			c.uintptrZero,
+			c.dataPtrNull,
 		}
 		return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_interface"), fields)
 	case *types.Pointer:
 		if expr.Value != nil {
 			panic("expected nil pointer constant")
 		}
-		return llvm.ConstPointerNull(c.getLLVMType(typ))
+		return c.dataPtrNull
 	case *types.Array:
 		if expr.Value != nil {
 			panic("expected nil array constant")
@@ -3683,14 +3684,11 @@ func (c *context) createConst(expr *ssa.Const, pos token.Pos) llvm.Value {
 		if expr.Value != nil {
 			panic("expected nil slice constant")
 		}
-		llvmPtr := llvm.ConstPointerNull(c.dataPtrType)
-		llvmLen := llvm.ConstInt(c.uintptrType, 0, false)
-		slice := c.ctx.ConstStruct([]llvm.Value{
-			llvmPtr, // backing array
-			llvmLen, // len
-			llvmLen, // cap
+		return c.ctx.ConstStruct([]llvm.Value{
+			c.dataPtrNull, // backing array
+			c.uintptrZero, // len
+			c.uintptrZero, // cap
 		}, false)
-		return slice
 	case *types.Struct:
 		if expr.Value != nil {
 			panic("expected nil struct constant")
@@ -3739,11 +3737,11 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 				// Cast to an i32 value as expected by
 				// runtime.stringFromUnicode.
 				if sizeFrom > 4 {
-					value = b.CreateTrunc(value, b.ctx.Int32Type(), "")
+					value = b.CreateTrunc(value, b.i32, "")
 				} else if sizeFrom < 4 && typeTo.Info()&types.IsUnsigned != 0 {
-					value = b.CreateZExt(value, b.ctx.Int32Type(), "")
+					value = b.CreateZExt(value, b.i32, "")
 				} else if sizeFrom < 4 {
-					value = b.CreateSExt(value, b.ctx.Int32Type(), "")
+					value = b.CreateSExt(value, b.i32, "")
 				}
 				return b.createRuntimeCall("stringFromUnicode", []llvm.Value{value}, ""), nil
 			case *types.Slice:

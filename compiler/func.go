@@ -164,7 +164,7 @@ func ValidateWasmFunctionParameters(mod llvm.Module) error {
 func (c *context) getLLVMResultType(sig *types.Signature) llvm.Type {
 	switch sig.Results().Len() {
 	case 0:
-		return c.ctx.VoidType()
+		return c.void
 	case 1:
 		return c.getLLVMType(sig.Results().At(0).Type())
 	default:
@@ -299,7 +299,7 @@ func (c *context) getLLVMFunctionType(typ *types.Signature) llvm.Type {
 		// memory. Returning void avoids that expansion and cannot be demoted
 		// again. Keep the result pointer first so the context remains last.
 		paramTypes = append(paramTypes, c.dataPtrType)
-		returnType = c.ctx.VoidType()
+		returnType = c.void
 	}
 	for _, param := range abi.params {
 		if param.indirect {

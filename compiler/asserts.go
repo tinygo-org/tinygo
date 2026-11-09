@@ -143,7 +143,7 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 
 	// Calculate (^uintptr(0)) >> 1, which is the max value that fits in an
 	// uintptr if uintptrs were signed.
-	maxBufSize := b.CreateLShr(llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)), llvm.ConstInt(b.uintptrType, 1, false), "")
+	maxBufSize := b.CreateLShr(llvm.ConstAllOnes(b.uintptrType), llvm.ConstInt(b.uintptrType, 1, false), "")
 	if elementSize > maxBufSize.ZExtValue() {
 		b.addError(pos, fmt.Sprintf("channel element type is too big (%v bytes)", elementSize))
 		return
@@ -203,6 +203,7 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 	// We previously used a hack to make sure this wouldn't break escape
 	// analysis, but this is not necessary anymore since
 	// https://reviews.llvm.org/D60047 has been merged.
+	// NOTE: We cannot use b.dataPtrNull here because ptr may be in the function address space.
 	nilptr := llvm.ConstPointerNull(ptr.Type())
 	isnil := b.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
 

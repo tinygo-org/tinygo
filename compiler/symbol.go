@@ -115,7 +115,7 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 			name:     "return",
 			elemSize: c.targetData.TypeAllocSize(retType),
 		})
-		retType = c.ctx.VoidType()
+		retType = c.void
 	}
 	for i, param := range getParams(fn.Signature) {
 		if abi.params[i].indirect {
