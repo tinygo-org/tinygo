@@ -192,9 +192,9 @@ func (b *builder) createWasmExport() {
 	// is initialized).
 	builder.createRuntimeCall("wasmExportCheckRun", nil, "")
 
-	if b.Scheduler == "none" {
-		// When the scheduler has been disabled, this is really trivial: just
-		// call the function.
+	if b.Scheduler == "none" || b.Scheduler == "threads" {
+		// When the scheduler has been disabled (or when every goroutine is a
+		// thread), this is really trivial: just call the function.
 		params := exportedFn.Params()
 		params = append(params, b.dataPtrNull) // context parameter
 		retval := builder.CreateCall(b.llvmFnType, b.llvmFn, params, "")

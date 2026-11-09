@@ -266,7 +266,7 @@ func TestGetListOfPackages(t *testing.T) {
 }
 
 // Flags that wasmtime needs to run a wasip3 component.
-var wasip3WasmtimeFlags = []string{"--wasm", "component-model", "-Sp3", "-Wcomponent-model-async"}
+var wasip3WasmtimeFlags = []string{"--wasm", "component-model", "-Sp3", "-Wcomponent-model-async", "-Wcomponent-model-threading"}
 
 func TestWASIWorkingDirectory(t *testing.T) {
 	for _, target := range []string{"wasip1", "wasip2", "wasip3"} {

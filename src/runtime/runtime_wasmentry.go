@@ -79,6 +79,7 @@ func wasmExportCheckRun() {
 	case mainExited:
 		runtimePanic(errWasmAfterMain)
 	}
+	wasmExportInit()
 }
 
 // Called from within a //go:wasmexport wrapper (the one that's exported from

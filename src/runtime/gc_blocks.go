@@ -61,6 +61,7 @@ var (
 	gcMallocs     uint64         // total number of allocations
 	gcNumGC       uint32         // total number of completed collection cycles
 	gcLock        task.PMutex    // lock to avoid race conditions on multicore systems
+	gcInhibit     uint32         // while nonzero, allocations grow the heap instead of running the GC
 )
 
 // markedTaskQueue holds the tasks that runGC has already marked while scanning
@@ -451,7 +452,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			break
 		}
 
-		if !ranGC {
+		if !ranGC && gcInhibit == 0 {
 			// Run the collector and try again.
 			freeBytes := runGC()
 			ranGC = true

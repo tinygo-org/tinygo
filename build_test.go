@@ -867,7 +867,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("env.go", options, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
 		})
 	}
-	if isWebAssembly {
+	// wasip3 requires the threads scheduler.
+	if isWebAssembly && options.Target != "wasip3" {
 		t.Run("alias.go-scheduler-none", func(t *testing.T) {
 			t.Parallel()
 			options := compileopts.Options(options)
@@ -903,7 +904,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Parallel()
 		runTest("recover.go", options, t, nil, nil)
 	})
-	if isWebAssembly {
+	if isWebAssembly && options.Target != "wasip3" {
 		t.Run("recover-explicit.go", func(t *testing.T) {
 			t.Parallel()
 			options := compileopts.Options(options)
