@@ -3,7 +3,6 @@ package transform_test
 import (
 	"testing"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
@@ -44,7 +43,7 @@ func TestOptimizeStringFromBytesSnapshot(t *testing.T) {
 		{"readOnlyControl", "testdata/stringfrombytes-alias.ll"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.name == "returnCapture" && llvmutil.Version() < 21 {
+			if tc.name == "returnCapture" && llvm.VersionMajor < 21 {
 				t.Skip("requires LLVM 21 capture attributes")
 			}
 			ctx := llvm.NewContext()
