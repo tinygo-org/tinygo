@@ -38,11 +38,8 @@ func main() {
 			riscv.Asm("wfi")
 		}
 
-		// Clear the software interrupt.
-		aclintMSWI.MSIP[hartID].Set(0)
-
-		// Now that we've cleared the software interrupt, we can enable
-		// interrupts as was already done on hart 0.
+		// Leave the start interrupt pending. handleInterrupt clears it and then
+		// handles a GC pause request that may have arrived with it.
 		riscv.MSTATUS.SetBits(riscv.MSTATUS_MIE)
 
 		// Also enable timer interrupts, for sleepTicksMulticore.
