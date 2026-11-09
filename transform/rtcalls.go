@@ -4,6 +4,7 @@ package transform
 // calls.
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
@@ -416,10 +417,8 @@ func (o pointerOrigin) mayAlias(target pointerOrigin) bool {
 		return true
 	}
 	for _, t := range target.allocas {
-		for _, a := range o.allocas {
-			if a == t {
-				return true
-			}
+		if slices.Contains(o.allocas, t) {
+			return true
 		}
 		if o.unknown && allocaEscapes(t, map[llvm.Value]bool{}) {
 			return true

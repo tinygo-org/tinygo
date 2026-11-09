@@ -371,7 +371,7 @@ func TestWasmExportHeapInuse(t *testing.T) {
 
 	before := call("heapInuse")
 	const calls = 1000
-	for i := 0; i < calls; i++ {
+	for range calls {
 		call("noop")
 	}
 	after := call("heapInuse")

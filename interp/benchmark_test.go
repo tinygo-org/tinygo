@@ -85,11 +85,11 @@ exit:
 `, sp, loc, loc, loc, loc, loc, loc)
 
 	s.WriteString("\ndefine void @runtime.initAll() unnamed_addr {\nentry:\n")
-	for i := 0; i < inits; i++ {
+	for i := range inits {
 		fmt.Fprintf(&s, "  call void @pkg%d.init(ptr undef)\n", i)
 	}
 	s.WriteString("  ret void\n}\n")
-	for i := 0; i < inits; i++ {
+	for i := range inits {
 		sp, loc := sub(fmt.Sprintf("pkg%d.init", i), 10+i)
 		fmt.Fprintf(&s, `
 @pkg%d.v = global i64 0
@@ -102,7 +102,7 @@ entry:
 }
 `, i, i, sp, loc, i, loc, loc)
 	}
-	for i := 0; i < funcs; i++ {
+	for i := range funcs {
 		sp, loc := sub(fmt.Sprintf("filler%d", i), 10000+i)
 		fmt.Fprintf(&s, `
 define i64 @filler%d(i64 %%x) !dbg !%d {

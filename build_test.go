@@ -145,7 +145,6 @@ func TestBuild(t *testing.T) {
 			"finalizerlarge.go",
 			"finalizerinvariants.go",
 		} {
-			name := name
 			t.Run(name, func(t *testing.T) {
 				t.Parallel()
 				testOptions := compileopts.Options(options)

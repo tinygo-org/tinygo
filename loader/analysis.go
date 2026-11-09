@@ -274,9 +274,7 @@ func analysisPackageDirs(root string, config *compileopts.Config) ([]string, err
 }
 
 func analysisImportPath(path string) string {
-	if index := strings.Index(path, " ["); index >= 0 {
-		return path[:index]
-	}
+	path, _, _ = strings.Cut(path, " [")
 	return path
 }
 

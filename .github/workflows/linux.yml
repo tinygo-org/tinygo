@@ -299,6 +299,8 @@ jobs:
         run: make ASSERT=1 deadcode
       - name: Check golden IR files are up to date
         run: make ASSERT=1 golden-check
+      - name: Check for go fix changes
+        run: make ASSERT=1 modernize-check
       - name: Check Go code formatting after device generation
         run: make fmt-check
 

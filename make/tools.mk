@@ -20,6 +20,14 @@ deadcode: ## Report unreachable functions in the compiler
 		| grep -v -e 'unreachable func: tinygo_clang_' -e 'unreachable func: refMap.Get' \
 		| awk '{print}; END {exit NR>0}'
 
+.PHONY: modernize
+modernize: ## Apply go fix to the compiler
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) fix -tags "byollvm llvm22 osusergo" $(GOTESTPKGS)
+
+.PHONY: modernize-check
+modernize-check: ## Fail if go fix would change the compiler
+	CGO_CPPFLAGS="$(CGO_CPPFLAGS)" CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) fix -diff -tags "byollvm llvm22 osusergo" $(GOTESTPKGS)
+
 SPELLDIRSCMD=find . -mindepth 1 -maxdepth 1 -type d  | egrep -wv '.git|lib|llvm|src'; find src -mindepth 1 -maxdepth 1 | egrep -wv 'device|internal|net|vendor'; find src/internal -mindepth 1 -maxdepth 1 -type d | egrep -wv src/internal/wasi
 .PHONY: spell
 spell: ## Spellcheck source tree
