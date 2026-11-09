@@ -3,6 +3,16 @@ package main
 // RewriteSpecs lists the packages TinyGo generates from upstream.
 var RewriteSpecs = []RewriteSpec{
 	{
+		Path: "internal/strconv",
+		Steps: Pipeline(
+			// optimize is false, so the pow10 tables are not linked in.
+			Walk(
+				ConstFalse("optimize"),
+			),
+			Prune(),
+		),
+	},
+	{
 		Path: "unicode/utf8",
 		Steps: Pipeline(
 			// ptrSize is 2 on 16-bit targets such as AVR.

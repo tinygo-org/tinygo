@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 )
 
 // ReplaceDecl replaces the top-level declaration of name with src. In a
@@ -36,7 +37,7 @@ func ReplaceDecl(name, src string) Rewrite {
 			p.Fail(fmt.Errorf("replacement for %s defines %s", name, declNames(d)))
 			return false
 		}
-		p.Remove(old)
+		p.Remove(old.Pos(), old.End())
 		if _, ok := old.(ast.Spec); ok {
 			g, ok := d.(*ast.GenDecl)
 			if !ok || g.Tok != c.Parent().(*ast.GenDecl).Tok {
@@ -90,4 +91,46 @@ func InsertFirst(name, src string) Rewrite {
 		fd.Body.List = append(stmts, fd.Body.List...)
 		return true
 	}
+}
+
+// ConstFalse takes the boolean name as false. It drops if name blocks,
+// inlines if !name blocks, and drops the statements after an inlined return.
+func ConstFalse(name string) Rewrite {
+	return func(p *Package, c *Cursor) bool {
+		b, ok := c.Node().(*ast.BlockStmt)
+		if !ok {
+			return false
+		}
+		changed := false
+		var out []ast.Stmt
+		for i, s := range b.List {
+			ifs, ok := s.(*ast.IfStmt)
+			if !ok || ifs.Init != nil || ifs.Else != nil {
+				out = append(out, s)
+				continue
+			}
+			if isIdent(ifs.Cond, name) {
+				p.Remove(ifs.Pos(), ifs.End())
+				changed = true
+				continue
+			}
+			if not, ok := ifs.Cond.(*ast.UnaryExpr); ok && not.Op == token.NOT && isIdent(not.X, name) {
+				out = append(out, ifs.Body.List...)
+				changed = true
+				if _, ok := ifs.Body.List[len(ifs.Body.List)-1].(*ast.ReturnStmt); ok && i+1 < len(b.List) {
+					p.Remove(ifs.End(), b.List[len(b.List)-1].End())
+					break
+				}
+				continue
+			}
+			out = append(out, s)
+		}
+		b.List = out
+		return changed
+	}
+}
+
+func isIdent(e ast.Expr, name string) bool {
+	id, ok := e.(*ast.Ident)
+	return ok && id.Name == name
 }

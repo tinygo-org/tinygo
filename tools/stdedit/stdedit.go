@@ -51,6 +51,7 @@ type Package struct {
 	Upstream  []*ast.File
 	Local     []*ast.File // TinyGo files next to the output
 	Info      *types.Info
+	Types     *types.Package
 
 	removed []span // code whose comments are dropped
 	err     error
@@ -67,9 +68,10 @@ type span struct {
 	pos, end token.Pos
 }
 
-// Remove records that the code in n was removed, so its comments go too.
-func (p *Package) Remove(n ast.Node) {
-	p.removed = append(p.removed, span{n.Pos(), n.End()})
+// Remove records that the code from pos to end was removed, so its comments
+// go too.
+func (p *Package) Remove(pos, end token.Pos) {
+	p.removed = append(p.removed, span{pos, end})
 }
 
 // ParseDecl parses a single top-level declaration. Its positions are all set
@@ -118,23 +120,38 @@ func setPos(n ast.Node, pos token.Pos) {
 // Check type checks the upstream and local files and refreshes p.Info. Unused
 // imports are not errors, the output only imports what it uses.
 func (p *Package) Check() error {
+	unused, err := p.check()
+	if err == nil && len(unused) > 0 {
+		err = unused[0]
+	}
+	return err
+}
+
+// check is Check, but returns the declared and not used errors separately.
+func (p *Package) check() ([]types.Error, error) {
 	p.Info = &types.Info{
 		Defs:      map[*ast.Ident]types.Object{},
 		Uses:      map[*ast.Ident]types.Object{},
 		Implicits: map[ast.Node]types.Object{},
 	}
+	var unused []types.Error
 	var firstErr error
 	conf := types.Config{
 		GoVersion: p.GoVersion,
 		Importer:  importer.ForCompiler(p.Fset, "source", nil),
 		Error: func(err error) {
-			if !strings.Contains(err.(types.Error).Msg, "imported and not used") && firstErr == nil {
+			te := err.(types.Error)
+			switch {
+			case strings.Contains(te.Msg, "imported and not used"):
+			case strings.HasPrefix(te.Msg, "declared and not used"):
+				unused = append(unused, te)
+			case firstErr == nil:
 				firstErr = err
 			}
 		},
 	}
-	conf.Check(p.Path, p.Fset, append(slices.Clone(p.Upstream), p.Local...), p.Info)
-	return firstErr
+	p.Types, _ = conf.Check(p.Path, p.Fset, append(slices.Clone(p.Upstream), p.Local...), p.Info)
+	return unused, firstErr
 }
 
 // Pipeline runs passes in order. Each pass sees the result of the one before.

@@ -138,6 +138,7 @@ func TestErrors(t *testing.T) {
 		{"bad source", Walk(ReplaceDecl("A", "const A =")), "expected"},
 		{"wrong name", Walk(ReplaceDecl("A", "const B = 1")), "replacement for A defines [B]"},
 		{"pipeline stops", Pipeline(Walk(InsertFirst("Missing", "")), func(*Package) error { ran = true; return nil }), "step 1: no change"},
+		{"keep missing", Prune("Missing"), "prune: keep Missing not found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newPackage(t, "package p\n\nconst A = 1\n")
@@ -186,5 +187,68 @@ func TestParseUpstream(t *testing.T) {
 				t.Errorf("got %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestPrune(t *testing.T) {
+	src := `package p
+
+import "strings"
+
+// Exported is kept.
+func Exported() int { return used() }
+
+func used() int { return 2 }
+
+// About unused, after a blank line.
+
+// unused is removed with this comment.
+func unused() string { return strings.ToUpper("a") } // trailing
+
+type t struct{}
+
+// m is kept because t is.
+func (t) m() {}
+
+func fromLocal() {}
+
+func kept() {}
+`
+	p := newPackage(t, src, "package p\n\nvar _ = t{}\n\nfunc init() { fromLocal() }\n")
+	got := generateTest(t, p, Prune("kept"))
+	for _, s := range []string{"unused", "strings", "trailing"} {
+		if strings.Contains(got, s) {
+			t.Errorf("kept %q:\n%s", s, got)
+		}
+	}
+	for _, s := range []string{"Exported is kept", "func used", "m is kept", "func fromLocal", "func kept"} {
+		if !strings.Contains(got, s) {
+			t.Errorf("missing %q:\n%s", s, got)
+		}
+	}
+}
+
+func TestConstFalse(t *testing.T) {
+	src := `package p
+
+const optimize = true
+
+func F(x int) int {
+	n := x * 2
+	if optimize {
+		// fast path
+		return n
+	}
+	if !optimize {
+		return x
+	}
+	return 0
+}
+`
+	p := newPackage(t, src)
+	got := generateTest(t, p, Pipeline(Walk(ConstFalse("optimize")), Prune()))
+	want := "func F(x int) int {\n\n\treturn x\n\n}"
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
 }
