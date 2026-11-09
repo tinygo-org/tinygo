@@ -13,7 +13,12 @@ import (
 // loads some information from the environment while doing that. For example, it
 // uses the currently active GOPATH (from the goenv package) to determine the Go
 // version to use.
+// The options must provide a semaphore with positive capacity.
 func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
+	if cap(options.Semaphore) == 0 {
+		return nil, errors.New("cannot run 0 jobs at a time")
+	}
+
 	spec, err := compileopts.LoadTarget(options)
 	if err != nil {
 		return nil, err

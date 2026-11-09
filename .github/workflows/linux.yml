@@ -12,23 +12,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  go-mod-tidy:
-    # Check that go.sum is up to date.
+  lint:
     runs-on: ubuntu-slim
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: true
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      # go mod tidy needs src/net/http/response.go for golang.org/x/net.
+      # The other submodules do not affect go.mod or go.sum.
+      - name: Checkout net submodule
+        run: git submodule update --init --depth 1 src/net
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: stable
           cache: true
-      - name: Run go mod tidy
-        run: go mod tidy
+      - name: Check commit authors
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          commits=$(git log --format='%h %ae %ce' "origin/$BASE_REF..HEAD")
+          if printf '%s\n' "$commits" | grep -iE 'noreply@anthropic\.com|copilot@users\.noreply\.github\.com'; then
+            echo "::error::Commits must not be authored or committed by Claude or Copilot."
+            exit 1
+          fi
       - name: Check go.mod and go.sum are up to date
-        run: git diff --exit-code
+        if: ${{ !cancelled() }}
+        run: |
+          go mod tidy
+          git diff --exit-code
+      - name: Run linter
+        if: ${{ !cancelled() }}
+        run: make lint
+      - name: Run spellcheck
+        if: ${{ !cancelled() }}
+        run: make spell
+      - name: Check Go code formatting
+        if: ${{ !cancelled() }}
+        run: make fmt-check
 
   build-linux:
     # Build Linux binaries, ready for release.
@@ -50,8 +73,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Extract TinyGo version
         id: version
         run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
@@ -130,10 +152,6 @@ jobs:
           gem install --version 4.0.7 public_suffix
           gem install --version 2.7.6 dotenv
           gem install --no-document fpm
-      - name: Run linter
-        run: make lint
-      - name: Run spellcheck
-        run: make spell
       - name: Build TinyGo release
         run: |
           make release deb -j3 STATIC=1
@@ -158,8 +176,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -203,8 +219,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -227,8 +241,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install apt dependencies
         run: |
           echo "Show cpuinfo; sometimes useful when troubleshooting"
@@ -279,11 +292,13 @@ jobs:
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
-      - run: make gen-device -j4
+      - uses: ./.github/actions/gen-device
       - name: Test TinyGo
         run: make ASSERT=1 test
-      - name: Check Go code formatting
-        run: make fmt-check lint
+      - name: Check for unreachable functions
+        run: make ASSERT=1 deadcode
+      - name: Check Go code formatting after device generation
+        run: make fmt-check
 
   assert-build-linux:
     # Build TinyGo with LLVM assertions enabled and publish it for the jobs
@@ -293,8 +308,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -317,7 +331,6 @@ jobs:
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
-      - run: make gen-device -j4
       - name: Build TinyGo release tarball
         run: |
           make release ASSERT=1 -j4
@@ -336,8 +349,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -363,12 +374,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
-      - name: Install apt dependencies
+      - name: Update apt package lists
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends \
+      - name: Resolve apt package versions
+        run: |
+          mkdir -p .apt-cache/archives
+          sudo apt-get --print-uris --yes --no-install-recommends install \
+              libgcrypt20 \
+              libpixman-1-0 \
+              libsdl2-2.0-0 \
+              libslirp0 \
+              qemu-system-arm \
+              qemu-system-riscv32 \
+              qemu-user \
+              simavr | tee apt-package-uris.txt
+      - name: Cache apt packages
+        uses: actions/cache@v5
+        with:
+          path: .apt-cache/archives
+          key: apt-debs-noble-${{ hashFiles('apt-package-uris.txt') }}
+      - name: Install apt dependencies
+        run: |
+          mkdir -p .apt-cache/archives/partial
+          sudo apt-get \
+              -o Dir::Cache::archives="$GITHUB_WORKSPACE/.apt-cache/archives" \
+              install --no-install-recommends \
               libgcrypt20 \
               libpixman-1-0 \
               libsdl2-2.0-0 \

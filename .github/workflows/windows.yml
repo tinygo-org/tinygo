@@ -19,14 +19,15 @@ jobs:
     steps:
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
-        shell: bash
+        # Only PowerShell gets scoop's exit status, see https://github.com/ScoopInstaller/Scoop/issues/3936
+        shell: pwsh
         run: |
           scoop config use_external_7zip true
           scoop install ninja binaryen
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Extract TinyGo version
         id: version
         shell: bash
@@ -35,7 +36,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: '1.27.1'
-          cache: true
+          cache: false
       - name: Restore cached LLVM source
         uses: actions/cache/restore@v5
         id: cache-llvm-source
@@ -116,10 +117,12 @@ jobs:
     steps:
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
-        shell: bash
+        # Only PowerShell gets scoop's exit status, see https://github.com/ScoopInstaller/Scoop/issues/3936
+        shell: pwsh
         run: |
           scoop config use_external_7zip true
           scoop install binaryen
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install Go
@@ -163,10 +166,12 @@ jobs:
     steps:
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
-        shell: bash
+        # Only PowerShell gets scoop's exit status, see https://github.com/ScoopInstaller/Scoop/issues/3936
+        shell: pwsh
         run: |
           scoop config use_external_7zip true
           scoop install binaryen wasmtime@48.0.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Checkout
         uses: actions/checkout@v6
       - name: Install Go

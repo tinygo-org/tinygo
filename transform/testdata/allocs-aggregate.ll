@@ -319,3 +319,136 @@ define [0 x ptr] @emptyPointerArray() {
   %empty = extractvalue %mixed %result, 3
   ret [0 x ptr] %empty
 }
+
+define i32 @walk(ptr %p, i32 %depth) {
+entry:
+  %done = icmp eq i32 %depth, 0
+  br i1 %done, label %end, label %recurse
+recurse:
+  %next = sub i32 %depth, 1
+  %result = call i32 @walk(ptr %p, i32 %next)
+  ret i32 %result
+end:
+  %value = load i32, ptr %p
+  ret i32 %value
+}
+
+define i32 @walkMutualA(ptr %p, i32 %depth) {
+entry:
+  %done = icmp eq i32 %depth, 0
+  br i1 %done, label %end, label %recurse
+recurse:
+  %next = sub i32 %depth, 1
+  %result = call i32 @walkMutualB(ptr %p, i32 %next)
+  ret i32 %result
+end:
+  %value = load i32, ptr %p
+  ret i32 %value
+}
+
+define i32 @walkMutualB(ptr %p, i32 %depth) {
+  %result = call i32 @walkMutualA(ptr %p, i32 %depth)
+  ret i32 %result
+}
+
+define void @walkDiscard(ptr %p, i1 %again) {
+entry:
+  br i1 %again, label %recurse, label %end
+recurse:
+  call void @walkDiscard(ptr %p, i1 false)
+  br label %end
+end:
+  store i32 42, ptr %p
+  ret void
+}
+
+define void @walkCapture(ptr %p, i1 %again) {
+entry:
+  br i1 %again, label %recurse, label %end
+recurse:
+  call void @walkCapture(ptr %p, i1 false)
+  br label %end
+end:
+  store ptr %p, ptr @pointerSink
+  ret void
+}
+
+define void @walkSwap(ptr %p, ptr %q, i1 %again) {
+entry:
+  br i1 %again, label %recurse, label %end
+recurse:
+  call void @walkSwap(ptr %q, ptr %p, i1 false)
+  br label %end
+end:
+  store ptr %q, ptr @pointerSink
+  ret void
+}
+
+define i32 @recursiveLoad() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %result = call i32 @walk(ptr %p, i32 32)
+  ret i32 %result
+}
+
+define i32 @mutualRecursiveLoad() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %result = call i32 @walkMutualA(ptr %p, i32 32)
+  ret i32 %result
+}
+
+define void @recursiveDiscard() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  call void @walkDiscard(ptr %p, i1 true)
+  ret void
+}
+
+define void @recursiveCapture() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  call void @walkCapture(ptr %p, i1 true)
+  ret void
+}
+
+define void @recursiveSwap() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  call void @walkSwap(ptr %p, ptr null, i1 true)
+  ret void
+}
+
+define i32 @sharedReturnLoad() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %first = call %inner @forward(ptr %p)
+  %second = call %inner @forward(ptr %p)
+  %firstPointer = extractvalue %inner %first, 0
+  %secondPointer = extractvalue %inner %second, 0
+  %a = load i32, ptr %firstPointer
+  %b = load i32, ptr %secondPointer
+  %sum = add i32 %a, %b
+  ret i32 %sum
+}
+
+define %inner @sharedReturnEscape() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %escaped = call %inner @forward(ptr %p)
+  %loaded = call %inner @forward(ptr %p)
+  %pointer = extractvalue %inner %loaded, 0
+  %value = load i32, ptr %pointer
+  ret %inner %escaped
+}
+
+define void @walkSharedCaptureA(ptr %p) {
+  store ptr %p, ptr @pointerSink
+  call void @walkSharedCaptureB(ptr %p)
+  ret void
+}
+
+define void @walkSharedCaptureB(ptr %p) {
+  call void @walkSharedCaptureA(ptr %p)
+  call void @walkSharedCaptureA(ptr %p)
+  ret void
+}
+
+define void @sharedCapture() {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  call void @walkSharedCaptureA(ptr %p)
+  ret void
+}

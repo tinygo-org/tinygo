@@ -24,7 +24,7 @@ target triple = "wasm32-unknown-wasi"
 @"main$string.13" = internal unnamed_addr constant [3 x i8] c"abc", align 1
 @"main$string.14" = internal unnamed_addr constant [3 x i8] c"abc", align 1
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -128,7 +128,7 @@ entry:
   ret i1 %8
 }
 
-declare %runtime._string @runtime.stringFromBytes(ptr nocapture readonly dereferenceable_or_null(1), i32, i32, ptr) #0
+declare %runtime._string @runtime.stringFromBytes(ptr readonly captures(none) dereferenceable_or_null(1), i32, i32, ptr) #0
 
 ; Function Attrs: noinline nounwind
 define hidden { ptr, i32, i32 } @main.mutateBytes(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #2 {
@@ -416,7 +416,7 @@ entry:
   ret %runtime._string %0
 }
 
-declare %runtime._string @runtime.stringFromRunes(ptr nocapture readonly, i32, i32, ptr) #0
+declare %runtime._string @runtime.stringFromRunes(ptr readonly captures(none), i32, i32, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i1 @main.byteSliceStringCompareLess(ptr %a.data, i32 %a.len, i32 %a.cap, ptr %b.data, i32 %b.len, i32 %b.cap, ptr %context) unnamed_addr #1 {

@@ -38,7 +38,9 @@ import (
 	"unsafe"
 )
 
-const gcDebug = false
+const gcDebug = false        // verbose tracing, includes gcStats
+const gcStats = false        // one summary line per GC, heap growth and out of memory
+const gcDebugVerbose = false // dump heap state after every collection
 const needsStaticHeap = true
 
 // Some globals + constants for the entire GC.
@@ -458,23 +460,34 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 				// Ensure there is at least 33% headroom.
 				// This percentage was arbitrarily chosen, and may need to
 				// be tuned in the future.
-				growHeap()
+				if growHeap() && (gcStats || gcDebug) {
+					print("gc: grew heap=", uint(heapEnd-heapStart), "\n")
+				}
 			}
 			continue
 		}
 
 		if gcDebug && !grewHeap {
 			println("grow heap for request:", uint(neededBlocks))
-			dumpFreeRangeCounts()
+		}
+		if gcDebugVerbose && !grewHeap {
+			freeRangeStats(true)
 		}
 		if growHeap() {
 			grewHeap = true
+			if gcStats || gcDebug {
+				print("gc: grew heap=", uint(heapEnd-heapStart), "\n")
+			}
 			continue
 		}
 
 		// Unfortunately the heap could not be increased. This
 		// happens on baremetal systems for example (where all
 		// available RAM has already been dedicated to the heap).
+		if gcStats || gcDebug {
+			free, largest := freeRangeStats(false)
+			print("gc: oom need=", uint(neededBlocks), " free=", uint(free), " largest=", uint(largest), "\n")
+		}
 		runtimeFatal("out of memory")
 	}
 
@@ -653,8 +666,7 @@ func runGC() (freeBytes uintptr) {
 	// the next collection cycle. This also rebuilds the free ranges list.
 	freeBytes = sweep()
 
-	// Show how much has been sweeped, for debugging.
-	if gcDebug {
+	if gcDebugVerbose {
 		dumpHeap()
 	}
 
@@ -662,6 +674,15 @@ func runGC() (freeBytes uintptr) {
 	// collections triggered by an allocation are counted too. Every caller
 	// holds gcLock, the same lock ReadMemStats reads it under.
 	gcNumGC++
+
+	if gcStats || gcDebug {
+		free, largest := freeRangeStats(false)
+		print("gc: n=", gcNumGC, " free=", uint(free), " largest=", uint(largest))
+		if free != 0 {
+			print(" frag=", fragmentation(free, largest))
+		}
+		println()
+	}
 
 	return
 }
@@ -815,22 +836,39 @@ func sweep() uintptr {
 		}
 	}
 
-	if gcDebug {
+	if gcDebugVerbose {
 		println("free ranges after sweep:")
-		dumpFreeRangeCounts()
+		freeRangeStats(true)
 	}
 
 	return freeBlocks * bytesPerBlock
 }
 
-func dumpFreeRangeCounts() {
+// freeRangeStats returns the total number of free blocks and the length of the
+// longest free range. If dump is set it also prints each range length with its
+// count, and the fragmentation.
+func freeRangeStats(dump bool) (free, largest uintptr) {
 	for rangeWithLength := freeRanges; rangeWithLength != nil; rangeWithLength = rangeWithLength.nextLen {
-		totalRanges := uintptr(1)
+		count := uintptr(1)
 		for nextWithLen := rangeWithLength.nextWithLen; nextWithLen != nil; nextWithLen = nextWithLen.next {
-			totalRanges++
+			count++
 		}
-		println("-", uint(rangeWithLength.len), "x", uint(totalRanges))
+		if dump {
+			println("-", uint(rangeWithLength.len), "x", uint(count))
+		}
+		free += rangeWithLength.len * count
+		largest = rangeWithLength.len
 	}
+	if dump && free != 0 {
+		println("fragmentation:", fragmentation(free, largest), "%")
+	}
+	return
+}
+
+// fragmentation returns the percentage of free blocks outside the longest
+// free range.
+func fragmentation(free, largest uintptr) uint {
+	return uint(100 - largest*100/free)
 }
 
 // dumpHeap can be used for debugging purposes. It dumps the state of each heap

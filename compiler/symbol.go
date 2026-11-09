@@ -72,8 +72,8 @@ const (
 )
 
 // getFunction returns the LLVM function for the given *ssa.Function, creating
-// it if needed. It can later be filled with compilerContext.createFunction().
-func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
+// it if needed. It can later be filled with context.createFunction().
+func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 	info := c.getFunctionInfo(fn)
 	llvmFn := c.mod.NamedFunction(info.linkName)
 	if !llvmFn.IsNil() {
@@ -289,7 +289,7 @@ func (c *compilerContext) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) 
 
 // If this is a synthetic function (such as a generic function or a wrapper),
 // create it now.
-func (c *compilerContext) maybeCreateSyntheticFunction(fn *ssa.Function, llvmFn llvm.Value) {
+func (c *context) maybeCreateSyntheticFunction(fn *ssa.Function, llvmFn llvm.Value) {
 	// Synthetic functions are functions that do not appear in the source code,
 	// they are artificially constructed. Usually they are wrapper functions
 	// that are not referenced anywhere except in a SSA call instruction so
@@ -330,7 +330,7 @@ func (c *compilerContext) maybeCreateSyntheticFunction(fn *ssa.Function, llvmFn 
 // getFunctionInfo returns information about a function that is not directly
 // present in *ssa.Function, such as the link name and whether it should be
 // exported.
-func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
+func (c *context) getFunctionInfo(f *ssa.Function) functionInfo {
 	if info, ok := c.functionInfos[f]; ok {
 		return info
 	}
@@ -363,21 +363,44 @@ func (c *compilerContext) getFunctionInfo(f *ssa.Function) functionInfo {
 	return info
 }
 
-func (c *compilerContext) canonicalFunctionName(f *ssa.Function) string {
+func (c *context) canonicalFunctionName(f *ssa.Function) string {
 	typeArgs := f.TypeArgs()
-	if len(typeArgs) == 0 {
-		return f.RelString(nil)
+	name := f.RelString(nil)
+	if len(typeArgs) != 0 {
+		parts := make([]string, len(typeArgs))
+		for i, ta := range typeArgs {
+			parts[i], _ = c.getTypeCodeName(ta)
+		}
+		name = f.Origin().RelString(nil) + "[" + strings.Join(parts, ",") + "]"
 	}
-	parts := make([]string, len(typeArgs))
-	for i, ta := range typeArgs {
-		parts[i], _ = c.getTypeCodeName(ta)
+	return name + methodPackageQualifier(f)
+}
+
+// methodPackageQualifier adds the declaring package to an unexported method
+// promoted from another package, since RelString names it like the type's own.
+func methodPackageQualifier(f *ssa.Function) string {
+	recv := f.Signature.Recv()
+	if recv == nil {
+		return ""
 	}
-	return f.Origin().RelString(nil) + "[" + strings.Join(parts, ",") + "]"
+	obj, ok := f.Object().(*types.Func)
+	if !ok || obj == nil || obj.Exported() || obj.Pkg() == nil {
+		return ""
+	}
+	t := recv.Type()
+	if ptr, ok := t.(*types.Pointer); ok {
+		t = ptr.Elem()
+	}
+	named, ok := types.Unalias(t).(*types.Named)
+	if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() == obj.Pkg().Path() {
+		return ""
+	}
+	return "$" + obj.Pkg().Path()
 }
 
 // parsePragmas is used by getFunctionInfo to parse function pragmas such as
 // //export or //go:noinline.
-func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
+func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 	syntax := f.Syntax()
 	if f.Origin() != nil {
 		syntax = f.Origin().Syntax()
@@ -466,7 +489,7 @@ func (c *compilerContext) parsePragmas(info *functionInfo, f *ssa.Function) {
 			}
 
 			info.linkName = parts[1]
-			if info.linkName == "llvm.returnaddress" && llvmutil.Version() >= 23 {
+			if info.linkName == "llvm.returnaddress" && llvm.VersionMajor >= 23 {
 				// LLVM 23 requires the pointer-type suffix on this
 				// intrinsic's mangled name.
 				info.linkName = "llvm.returnaddress.p0"
@@ -609,7 +632,7 @@ var flagPragmas = map[string]bool{
 
 // addPragmaError reports an error once per pragma, even when each generic
 // instantiation parses the same pragma.
-func (c *compilerContext) addPragmaError(comment *ast.Comment, msg string) {
+func (c *context) addPragmaError(comment *ast.Comment, msg string) {
 	if c.pragmaErrors[comment] {
 		return
 	}
@@ -619,7 +642,7 @@ func (c *compilerContext) addPragmaError(comment *ast.Comment, msg string) {
 
 // checkDefinition reports an error if the pragma is not on a function
 // definition.
-func (c *compilerContext) checkDefinition(hasBody bool, comment *ast.Comment, pragma string) bool {
+func (c *context) checkDefinition(hasBody bool, comment *ast.Comment, pragma string) bool {
 	if !hasBody {
 		c.addPragmaError(comment, "can only use "+pragma+" on definitions")
 		return false
@@ -628,7 +651,7 @@ func (c *compilerContext) checkDefinition(hasBody bool, comment *ast.Comment, pr
 }
 
 // checkUnsafe reports an error if the package does not import unsafe.
-func (c *compilerContext) checkUnsafe(pkg *ssa.Package, comment *ast.Comment, pragma string) bool {
+func (c *context) checkUnsafe(pkg *ssa.Package, comment *ast.Comment, pragma string) bool {
 	if !slices.Contains(pkg.Pkg.Imports(), types.Unsafe) {
 		c.addPragmaError(comment, "can only use "+pragma+" in packages that import unsafe")
 		return false
@@ -641,7 +664,7 @@ func (c *compilerContext) checkUnsafe(pkg *ssa.Package, comment *ast.Comment, pr
 //
 // The list of allowed types is based on this proposal:
 // https://github.com/golang/go/issues/59149
-func (c *compilerContext) checkWasmImportExport(f *ssa.Function, pragma string) {
+func (c *context) checkWasmImportExport(f *ssa.Function, pragma string) {
 	if c.pkg.Path() == "runtime" || c.pkg.Path() == "syscall/js" || c.pkg.Path() == "syscall" || c.pkg.Path() == "crypto/internal/sysrand" {
 		// The runtime is a special case. Allow all kinds of parameters
 		// (importantly, including pointers).
@@ -671,7 +694,7 @@ func (c *compilerContext) checkWasmImportExport(f *ssa.Function, pragma string) 
 //
 // This previously reflected the additional restrictions documented here:
 // https://github.com/golang/go/issues/59149
-func (c *compilerContext) isValidWasmType(typ types.Type, site wasmSite) bool {
+func (c *context) isValidWasmType(typ types.Type, site wasmSite) bool {
 	switch typ := typ.Underlying().(type) {
 	case *types.Basic:
 		switch typ.Kind() {
@@ -747,7 +770,7 @@ func getParams(sig *types.Signature) []*types.Var {
 
 // addStandardDeclaredAttributes adds attributes that are set for any function,
 // whether declared or defined.
-func (c *compilerContext) addStandardDeclaredAttributes(llvmFn llvm.Value) {
+func (c *context) addStandardDeclaredAttributes(llvmFn llvm.Value) {
 	if c.SizeLevel >= 1 {
 		// Set the "optsize" attribute to make slightly smaller binaries at the
 		// cost of minimal performance loss (-Os in Clang).
@@ -774,7 +797,7 @@ func (c *compilerContext) addStandardDeclaredAttributes(llvmFn llvm.Value) {
 // every function defined by TinyGo (even thunks/wrappers), possibly depending
 // on the architecture. It does not set attributes only set for declared
 // functions, use addStandardDeclaredAttributes for this.
-func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
+func (c *context) addStandardDefinedAttributes(llvmFn llvm.Value) {
 	// TinyGo does not currently raise exceptions, so set the 'nounwind' flag.
 	// This behavior matches Clang when compiling C source files.
 	// It reduces binary size on Linux a little bit on non-x86_64 targets by
@@ -787,10 +810,23 @@ func (c *compilerContext) addStandardDefinedAttributes(llvmFn llvm.Value) {
 		// For details, see: https://llvm.org/docs/LangRef.html#function-attributes
 		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("uwtable"), 1))
 	}
+	if c.hasFramePointers() {
+		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("frame-pointer", "all"))
+	}
+}
+
+// hasFramePointers reports whether functions keep a frame pointer, so that
+// perf and other frame pointer unwinders can walk native Linux stacks.
+func (c *context) hasFramePointers() bool {
+	parts := strings.Split(c.Triple, "-")
+	if len(parts) < 3 || parts[2] != "linux" {
+		return false
+	}
+	return parts[0] == "x86_64" || parts[0] == "aarch64"
 }
 
 // addStandardAttributes adds all attributes added to defined functions.
-func (c *compilerContext) addStandardAttributes(llvmFn llvm.Value) {
+func (c *context) addStandardAttributes(llvmFn llvm.Value) {
 	c.addStandardDeclaredAttributes(llvmFn)
 	c.addStandardDefinedAttributes(llvmFn)
 }
@@ -810,7 +846,7 @@ type globalInfo struct {
 // functions in the package currently being compiled — functions imported from
 // other packages have their file-level pragmas processed when those packages
 // are compiled.
-func (c *compilerContext) fileForFunc(f *ssa.Function) *ast.File {
+func (c *context) fileForFunc(f *ssa.Function) *ast.File {
 	if c.loaderPkg == nil || f.Pkg == nil || f.Pkg.Pkg != c.loaderPkg.Pkg {
 		return nil
 	}
@@ -838,7 +874,7 @@ func (c *compilerContext) fileForFunc(f *ssa.Function) *ast.File {
 // comments on globals (required for //go:extern pragmas) and free-standing
 // file-level //go:cgo_import_dynamic directives, which are not attached to any
 // declaration and apply to the whole package.
-func (c *compilerContext) loadASTComments(pkg *loader.Package) {
+func (c *context) loadASTComments(pkg *loader.Package) {
 	for _, file := range pkg.Files {
 		// Collect //go:cgo_import_dynamic local [remote ["library"]] directives.
 		// The remote symbol defaults to local. The library operand is ignored.
@@ -889,7 +925,7 @@ func (c *compilerContext) loadASTComments(pkg *loader.Package) {
 
 // getGlobal returns a LLVM IR global value for a Go SSA global. It is added to
 // the LLVM IR if it has not been added already.
-func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
+func (c *context) getGlobal(g *ssa.Global) llvm.Value {
 	info := c.getGlobalInfo(g)
 	llvmGlobal := c.mod.NamedGlobal(info.linkName)
 	if llvmGlobal.IsNil() {
@@ -928,7 +964,7 @@ func (c *compilerContext) getGlobal(g *ssa.Global) llvm.Value {
 }
 
 // getGlobalInfo returns some information about a specific global.
-func (c *compilerContext) getGlobalInfo(g *ssa.Global) globalInfo {
+func (c *context) getGlobalInfo(g *ssa.Global) globalInfo {
 	if info, ok := c.globalInfos[g]; ok {
 		return info
 	}
@@ -947,7 +983,7 @@ func (c *compilerContext) getGlobalInfo(g *ssa.Global) globalInfo {
 
 // Parse //go: pragma comments from the source. In particular, it parses the
 // //go:extern and //go:linkname pragmas on globals.
-func (info *globalInfo) parsePragmas(doc *ast.CommentGroup, c *compilerContext, g *ssa.Global) {
+func (info *globalInfo) parsePragmas(doc *ast.CommentGroup, c *context, g *ssa.Global) {
 	for _, comment := range doc.List {
 		if !strings.HasPrefix(comment.Text, "//go:") {
 			continue

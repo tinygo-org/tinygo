@@ -247,7 +247,7 @@ func run() {
 func scheduler(_ bool) {
 	for mainExited.Load() == 0 {
 		var now timeUnit
-		if sleepQueue != nil || timerQueue != nil {
+		if sleepQueue != nil || timerQueuePeek() != nil {
 			now = ticks()
 
 			// Check whether the first task in the sleep queue is ready to run.
@@ -274,12 +274,10 @@ func scheduler(_ bool) {
 			}
 
 			// Check whether a timer has expired that needs to be run.
-			if timerQueue != nil && now >= timerQueue.whenTicks() {
-				delay := ticksToNanoseconds(now - timerQueue.whenTicks())
+			if next := timerQueuePeek(); next != nil && now >= next.whenTicks() {
+				delay := ticksToNanoseconds(now - next.whenTicks())
 				// Pop timer from queue.
-				tn := timerQueue
-				timerQueue = tn.next
-				tn.next = nil
+				tn := timerQueuePop()
 
 				// Mark the timer as firing, so that a concurrent Stop or Reset
 				// (via removeTimer) can prevent a periodic timer from re-adding
@@ -324,12 +322,12 @@ func scheduler(_ bool) {
 			// positive.
 			timeLeft = timeUnit(sleepingTask.Data) - now
 		}
-		if timerQueue != nil {
+		if next := timerQueuePeek(); next != nil {
 			// If the timer queue needs to run earlier, reduce the time we are
 			// going to sleep.
 			// Like with sleepQueue, we already know there is no timer ready to
 			// run since we already checked above.
-			timeLeftForTimer := timerQueue.whenTicks() - now
+			timeLeftForTimer := next.whenTicks() - now
 			if sleepQueue == nil || timeLeftForTimer < timeLeft {
 				timeLeft = timeLeftForTimer
 			}

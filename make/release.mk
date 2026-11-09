@@ -127,8 +127,8 @@ endif
 	@cp -rp lib/xtensa/include                                      build/release/tinygo/lib/xtensa
 	@cp -rp ${LLVM_PROJECTDIR}/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp ${LLVM_PROJECTDIR}/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins
-	@cp -rp src                          build/release/tinygo/src
-	@cp -rp targets                      build/release/tinygo/targets
+	@cp -rp src                          build/release/tinygo/
+	@cp -rp targets                      build/release/tinygo/
 
 release:
 	tar -czf build/release.tar.gz -C build/release tinygo

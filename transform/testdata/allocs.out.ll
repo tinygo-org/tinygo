@@ -108,6 +108,6 @@ define { i32, { ptr, ptr } } @wrapInAggregate(ptr %p) {
 
 declare ptr @escapeIntPtr(ptr)
 
-declare ptr @noescapeIntPtr(ptr nocapture)
+declare ptr @noescapeIntPtr(ptr captures(none))
 
-declare ptr @escapeIntPtrSometimes(ptr nocapture, ptr)
+declare ptr @escapeIntPtrSometimes(ptr captures(none), ptr)

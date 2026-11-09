@@ -4,16 +4,14 @@ package transform_test
 
 import (
 	"flag"
-	"go/token"
 	"go/types"
 	"os"
-	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
+	"github.com/tinygo-org/tinygo/internal/ir"
 	"github.com/tinygo-org/tinygo/loader"
 	"tinygo.org/x/go-llvm"
 )
@@ -75,7 +73,7 @@ func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Modu
 	actual = actual[strings.Index(actual, "\ntarget datalayout = ")+1:]
 
 	if *update {
-		err := os.WriteFile(pathPrefix+".out.ll", []byte(normalizeIR(actual)), 0666)
+		err := ir.WriteGolden(pathPrefix+".out.ll", actual)
 		if err != nil {
 			t.Error("failed to write out new output:", err)
 		}
@@ -88,122 +86,10 @@ func testTransform(t *testing.T, pathPrefix string, transform func(mod llvm.Modu
 
 		// See whether the transform output matches with the expected output IR.
 		expected := string(out)
-		if !fuzzyEqualIR(expected, actual) {
-			t.Logf("output does not match expected output:\n%s", actual)
-			t.Fail()
+		if diff := ir.Diff(expected, actual); diff != "" {
+			t.Errorf("output does not match expected output (re-run with -update to regenerate):\n%s", diff)
 		}
 	}
-}
-
-// fuzzyEqualIR returns true if the two LLVM IR strings passed in are roughly
-// equal. That means, only relevant lines are compared (excluding comments
-// etc.).
-func fuzzyEqualIR(s1, s2 string) bool {
-	s1 = normalizeIR(s1)
-	s2 = normalizeIR(s2)
-
-	lines1 := filterIrrelevantIRLines(strings.Split(s1, "\n"))
-	lines2 := filterIrrelevantIRLines(strings.Split(s2, "\n"))
-	if len(lines1) != len(lines2) {
-		return false
-	}
-	for i, line1 := range lines1 {
-		line2 := lines2[i]
-		if line1 != line2 {
-			return false
-		}
-	}
-
-	return true
-}
-
-func normalizeIR(s string) string {
-	// Golden files are written using the pre-LLVM21 'nocapture' spelling,
-	// which LLVM printed before any co-occurring attribute such as
-	// 'readonly' (e.g. "ptr nocapture readonly"). LLVM 21+ prints the
-	// equivalent 'captures(none)' instead, and after such attributes (e.g.
-	// "ptr readonly captures(none)"). Normalize both name and position back
-	// to the old spelling.
-	s = normalizeCapturesAttr(s)
-
-	// LLVM 21+ also added an explicit 'nocreateundeforpoison' attribute to
-	// certain intrinsic declarations (e.g. llvm.umin) that were implicitly
-	// assumed not to create undef/poison before. It's unrelated to the
-	// escape-analysis behavior under test, so ignore it for comparison.
-	s = strings.ReplaceAll(s, "nocreateundeforpoison ", "")
-
-	// LLVM 22 dropped the (redundant) i64 size argument from
-	// llvm.lifetime.start/end. Normalize away that argument so golden files
-	// written against the two-argument form still match.
-	s = lifetimeSizeArgRe.ReplaceAllString(s, "$1")
-
-	return s
-}
-
-// capturesNoneAttrRe matches a co-occurring attribute directly followed by
-// 'captures(none)', which is how LLVM 21+ orders these two attributes when
-// printing IR (the pre-LLVM21 'nocapture' attribute printed the other way
-// around).
-var capturesNoneAttrRe = regexp.MustCompile(`\b(readonly|readnone|writeonly|nonnull)\s+captures\(none\)`)
-
-// lifetimeSizeArgRe matches the i64 size argument of an
-// llvm.lifetime.start/end call or declaration, which LLVM 22 removed.
-var lifetimeSizeArgRe = regexp.MustCompile(`(@llvm\.lifetime\.(?:start|end)\.p0\()i64(?: immarg| \d+), `)
-
-// nosyncAttrRe matches the standalone 'nosync' function attribute, which
-// LLVM 23 started inferring for llvm.memcpy/llvm.memmove declarations.
-var nosyncAttrRe = regexp.MustCompile(`\bnosync\s+`)
-
-// guidAttachmentRe matches the inline '!guid !N' metadata LLVM 23 attaches
-// to every GlobalValue once a pass builds a module summary. A global's
-// attachment is comma separated, a function's is space separated.
-var guidAttachmentRe = regexp.MustCompile(`,?\s*!guid\s+!\d+`)
-
-// guidMetadataRe matches the standalone metadata node backing a '!guid'
-// attachment.
-var guidMetadataRe = regexp.MustCompile(`(?m)^!\d+ = !\{i64 -?\d+\}\n?`)
-
-// targetMemAttrRe matches the target_mem entries of a memory() attribute.
-// Older LLVM numbered them target_mem0/target_mem1; LLVM 23 emits one
-// unnumbered target_mem instead.
-var targetMemAttrRe = regexp.MustCompile(`(,\s*target_mem\d*: none)+`)
-
-// nofreeNocaptureRe matches LLVM 23's added 'nofree' on a parameter that's
-// already 'nocapture'.
-var nofreeNocaptureRe = regexp.MustCompile(`\bnofree\s+nocapture\b`)
-
-// normalizeCapturesAttr rewrites LLVM 21+'s 'captures(none)' attribute back
-// to the pre-LLVM21 'nocapture' spelling, and drops LLVM 23's added
-// 'nosync' attribute and '!guid' metadata, so golden files keep matching
-// across versions.
-func normalizeCapturesAttr(s string) string {
-	s = capturesNoneAttrRe.ReplaceAllString(s, "nocapture $1")
-	s = strings.ReplaceAll(s, "captures(none)", "nocapture")
-	s = nosyncAttrRe.ReplaceAllString(s, "")
-	s = guidAttachmentRe.ReplaceAllString(s, "")
-	s = guidMetadataRe.ReplaceAllString(s, "")
-	s = targetMemAttrRe.ReplaceAllString(s, "")
-	s = nofreeNocaptureRe.ReplaceAllString(s, "nocapture")
-	return s
-}
-
-// filterIrrelevantIRLines removes lines from the input slice of strings that
-// are not relevant in comparing IR. For example, empty lines and comments are
-// stripped out.
-func filterIrrelevantIRLines(lines []string) []string {
-	var out []string
-	for _, line := range lines {
-		line = strings.Split(line, ";")[0]  // strip out comments/info
-		line = strings.TrimRight(line, " ") // remove trailing spaces from comments
-		if line == "" {
-			continue
-		}
-		if strings.HasPrefix(line, "source_filename = ") {
-			continue
-		}
-		out = append(out, line)
-	}
-	return out
 }
 
 // compileGoFileForTesting compiles the given Go file to run tests against.
@@ -262,33 +148,4 @@ func compileGoFileForTesting(t *testing.T, filename string) llvm.Module {
 		t.FailNow()
 	}
 	return mod
-}
-
-// getPosition returns the position information for the given value, as far as
-// it is available.
-func getPosition(val llvm.Value) token.Position {
-	if !val.IsAInstruction().IsNil() {
-		loc := val.InstructionDebugLoc()
-		if loc.IsNil() {
-			return token.Position{}
-		}
-		file := loc.LocationScope().ScopeFile()
-		return token.Position{
-			Filename: filepath.Join(file.FileDirectory(), file.FileFilename()),
-			Line:     int(loc.LocationLine()),
-			Column:   int(loc.LocationColumn()),
-		}
-	} else if !val.IsAFunction().IsNil() {
-		loc := val.Subprogram()
-		if loc.IsNil() {
-			return token.Position{}
-		}
-		file := loc.ScopeFile()
-		return token.Position{
-			Filename: filepath.Join(file.FileDirectory(), file.FileFilename()),
-			Line:     int(loc.SubprogramLine()),
-		}
-	} else {
-		return token.Position{}
-	}
 }

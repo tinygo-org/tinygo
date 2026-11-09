@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -18,7 +19,7 @@ import (
 var commands = map[string][]string{}
 
 func init() {
-	llvmMajor, _, _ := strings.Cut(llvm.Version, ".")
+	llvmMajor := strconv.Itoa(llvm.VersionMajor)
 	commands["clang"] = []string{"clang-" + llvmMajor}
 	commands["ld.lld"] = []string{"ld.lld-" + llvmMajor, "ld.lld"}
 	commands["wasm-ld"] = []string{"wasm-ld-" + llvmMajor, "wasm-ld"}

@@ -23,15 +23,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         id: setup-go
         uses: actions/setup-go@v6
         with:
           # Keep the go.mod go version in sync with MinimumGoMinorVersion in compileopts/config.go
           go-version-file: go.mod
-          cache: true
+          cache: false
       - name: Install LLVM
         run: |
           echo 'deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-${{ env.LLVM }} main' | sudo tee /etc/apt/sources.list.d/llvm.list
@@ -68,7 +67,7 @@ jobs:
       - name: Build TinyGo
         run: go install -tags=llvm${{ env.LLVM }}
       - run: tinygo version
-      - run: make gen-device -j4
+      - uses: ./.github/actions/gen-device
       - run: go test -tags=llvm${{ env.LLVM }} -short -skip=TestErrors
       - run: go test -tags=llvm${{ env.LLVM }} -run TestTrimPath -target=darwin/amd64
       - run: make smoketest-quick XTENSA=0

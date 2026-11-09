@@ -415,15 +415,19 @@ func hashmapCopy(m *hashmap, sizeBits uint8) hashmap {
 	bucketBufSize := hashmapBucketSize(m)
 	n.buckets = alloc(bucketBufSize*numBuckets, hashmapType(m).bucketLayout)
 
-	// use a hashmap iterator to go through the old map
-	var it hashmapIterator
-
-	var key = alloc(m.keySize, hashmapType(m).keyLayout)
-	var value = alloc(m.valueSize, hashmapType(m).valueLayout)
-
-	for hashmapNext(m, &it, key, value) {
-		h := n.keyHash(key, uintptr(n.keySize), n.seed)
-		hashmapSet(&n, key, value, h)
+	oldNumBuckets := uintptr(1) << m.bucketBits
+	for i := range oldNumBuckets {
+		for b := hashmapBucketAddr(m, m.buckets, i); b != nil; b = b.next {
+			for j := range uint8(8) {
+				if b.tophash[j] == 0 {
+					continue
+				}
+				key := hashmapSlotKeyData(m, hashmapSlotKey(m, b, j))
+				value := hashmapSlotValueData(m, hashmapSlotValue(m, b, j))
+				h := n.keyHash(key, uintptr(n.keySize), n.seed)
+				hashmapSet(&n, key, value, h)
+			}
+		}
 	}
 
 	return n

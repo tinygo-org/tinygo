@@ -25,6 +25,7 @@ func TestBuild(t *testing.T) {
 		"calls.go",
 		"cgo/",
 		"channel.go",
+		"chanrecover.go",
 		"coreassign.go",
 		"embed/",
 		"finalizer.go",
@@ -51,6 +52,7 @@ func TestBuild(t *testing.T) {
 		"math.go",
 		"oldgo/",
 		"print.go",
+		"promoted.go",
 		"reflect.go",
 		"signal.go",
 		"signalnotify.go",
@@ -268,7 +270,14 @@ func TestBuild(t *testing.T) {
 
 		t.Run("EmulatedRISCV", func(t *testing.T) {
 			t.Parallel()
-			runPlatTests(optionsFromTarget("riscv-qemu", sema), tests, t)
+			for _, scheduler := range []string{"cores", "tasks"} {
+				t.Run(scheduler, func(t *testing.T) {
+					t.Parallel()
+					opts := optionsFromTarget("riscv-qemu", sema)
+					opts.Scheduler = scheduler
+					runPlatTests(opts, tests, t)
+				})
+			}
 		})
 
 		t.Run("AVR", func(t *testing.T) {
@@ -297,6 +306,14 @@ func TestBuild(t *testing.T) {
 			runGCLivenessTest(options, t)
 			t.Run("cgo-realloc", func(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
+			})
+
+			// Test that -gc=leaking reuses the stacks of exited goroutines.
+			t.Run("goroutines-leaking", func(t *testing.T) {
+				t.Parallel()
+				optionsLeaking := optionsFromTarget("wasip1", sema)
+				optionsLeaking.GC = "leaking"
+				runTest("goroutines-leaking.go", optionsLeaking, t, nil, nil)
 			})
 
 			// Test with -gc=boehm.
@@ -337,6 +354,18 @@ func TestBuild(t *testing.T) {
 			emuCheck(t, options)
 			runTest("cgo/", options, t, nil, nil)
 		})
+		t.Run("glibc", func(t *testing.T) {
+			// Link against the system glibc, dynamically, instead of the
+			// musl that TinyGo builds. This needs the glibc development
+			// files (crt1.o, libc.so and the headers).
+			t.Parallel()
+			if _, err := compileopts.GlibcLibDir(runtime.GOARCH); err != nil {
+				t.Skip(err)
+			}
+			options := optionsFromTarget("", sema)
+			options.Libc = "glibc"
+			runTest("glibc/", options, t, nil, nil)
+		})
 	} else if runtime.GOOS == "windows" {
 		if runtime.GOARCH != "386" {
 			t.Run("Windows386", func(t *testing.T) {
@@ -375,6 +404,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Fatal("failed to load target spec:", err)
 	}
 
+	scheduler := options.Scheduler
+	if scheduler == "" {
+		scheduler = spec.Scheduler
+	}
+
 	// FIXME: this should really be:
 	// isWebAssembly := strings.HasPrefix(spec.Triple, "wasm")
 	isWASI := strings.HasPrefix(options.Target, "wasi")
@@ -386,12 +420,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	}
 
 	for _, name := range tests {
-		if name == "goroutines.go" && (spec.Scheduler == "threads" || spec.Scheduler == "cores") {
+		if name == "goroutines.go" && (scheduler == "threads" || scheduler == "cores") {
 			// This test intentionally checks concurrent scheduling by comparing
 			// output order, so only run it with non-threaded schedulers.
 			continue
 		}
-		if name == "coreassign.go" && spec.Scheduler != "cores" {
+		if name == "coreassign.go" && scheduler != "cores" {
 			// Core assignment needs the cores scheduler.
 			continue
 		}
@@ -437,6 +471,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 
 			case "gc.go":
 				// Does not pass due to high mark false positive rate.
+				continue
+
+			case "chanrecover.go":
+				// runtime.GC in testdata/chanrecover.go crashes in the AVR stack scanner.
 				continue
 
 			case "buildinfo.go", "json.go", "stdlib.go", "testing.go":
@@ -497,7 +535,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			t.Parallel()
 			testOptions := compileopts.Options(options)
 			switch name {
-			case "finalizerinvariants.go", "finalizerlarge.go", "interface.go", "interface-blank.go":
+			case "chanrecover.go", "finalizerinvariants.go", "finalizerlarge.go", "interface.go", "interface-blank.go":
 				testOptions.Tags = append(append([]string(nil), options.Tags...), "runtime_asserts")
 			}
 			if testOptions.Target == "simavr" && (name == "math.go" || name == "string.go") {
@@ -525,6 +563,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Run("filesystem.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("filesystem.go", options, t, nil, nil)
+		})
+	}
+	if options.Target == "wasm" || isBaremetal {
+		t.Run("devnull.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("devnull.go", options, t, nil, nil)
 		})
 	}
 	if options.Target == "" || options.Target == "wasm" || isWASI {

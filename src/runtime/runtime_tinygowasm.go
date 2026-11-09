@@ -91,6 +91,11 @@ func mainReturnExit() {
 	syscall_Exit(0)
 }
 
+// flushStdio flushes the C stdio buffers without exiting.
+func flushStdio() {
+	__stdio_exit()
+}
+
 // TinyGo does not yet support any form of parallelism on WebAssembly, so these
 // can be left empty.
 

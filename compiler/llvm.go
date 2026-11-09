@@ -199,22 +199,6 @@ func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []ll
 	return values
 }
 
-// makeGlobalArray creates a new LLVM global with the given name and integers as
-// contents, and returns the global and initializer type.
-// Note that it is left with the default linkage etc., you should set
-// linkage/constant/etc properties yourself.
-func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType llvm.Type) (llvm.Type, llvm.Value) {
-	globalType := llvm.ArrayType(elementType, len(buf))
-	global := llvm.AddGlobal(c.mod, globalType, name)
-	value := llvm.Undef(globalType)
-	for i := range buf {
-		ch := uint64(buf[i])
-		value = c.builder.CreateInsertValue(value, llvm.ConstInt(elementType, ch, false), i, "")
-	}
-	global.SetInitializer(value)
-	return globalType, global
-}
-
 // createObjectLayout returns a LLVM value (of type i8*) that describes where
 // there are pointers in the type t. If all the data fits in a word, it is
 // returned as a word. Otherwise it will store the data in a global.
@@ -225,7 +209,7 @@ func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType l
 // object size and can therefore know how this value is repeated in the object.
 //
 // For details on what's in this value, see src/runtime/gc_precise.go.
-func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
+func (c *context) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
 	if !typeHasPointers(t) {
 		// There are no pointers in this type, so we can simplify the layout.
 		layout := (uint64(1) << 1) | 1
@@ -354,7 +338,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 
 // buildPointerBitmap scans the given LLVM type for pointers and sets bits in a
 // bitmap at the word offset that contains a pointer. This scan is recursive.
-func (c *compilerContext) buildPointerBitmap(
+func (c *context) buildPointerBitmap(
 	dst []byte,
 	ptrAlign uint64,
 	pos token.Pos,
@@ -426,13 +410,13 @@ func (c *compilerContext) buildPointerBitmap(
 // archFamily returns the architecture from the LLVM triple but with some
 // architecture names ("armv6", "thumbv7m", etc) merged into a single
 // architecture name ("arm").
-func (c *compilerContext) archFamily() string {
+func (c *context) archFamily() string {
 	return compileopts.CanonicalArchName(c.Triple)
 }
 
 // isThumb returns whether we're in ARM or in Thumb mode. It panics if the
 // features string is not one for an ARM architecture.
-func (c *compilerContext) isThumb() bool {
+func (c *context) isThumb() bool {
 	var isThumb, isNotThumb bool
 	for feature := range strings.SplitSeq(c.Features, ",") {
 		if feature == "+thumb-mode" {
@@ -452,7 +436,7 @@ func (c *compilerContext) isThumb() bool {
 // pointer as an *i8.
 func (b *builder) readStackPointer() llvm.Value {
 	name := "llvm.stacksave.p0"
-	if llvmutil.Version() < 18 {
+	if llvm.VersionMajor < 18 {
 		name = "llvm.stacksave" // backwards compatibility with LLVM 17 and below
 	}
 	stacksave := b.mod.NamedFunction(name)
@@ -467,7 +451,7 @@ func (b *builder) readStackPointer() llvm.Value {
 // pointer.
 func (b *builder) writeStackPointer(sp llvm.Value) {
 	name := "llvm.stackrestore.p0"
-	if llvmutil.Version() < 18 {
+	if llvm.VersionMajor < 18 {
 		name = "llvm.stackrestore" // backwards compatibility with LLVM 17 and below
 	}
 	stackrestore := b.mod.NamedFunction(name)
@@ -489,13 +473,4 @@ func (b *builder) createZExtOrTrunc(value llvm.Value, t llvm.Type) llvm.Value {
 		value = b.CreateZExt(value, t, "")
 	}
 	return value
-}
-
-// Reverse a slice of bytes. From the wiki:
-// https://github.com/golang/go/wiki/SliceTricks#reversing
-func reverseBytes(buf []byte) {
-	for i := len(buf)/2 - 1; i >= 0; i-- {
-		opp := len(buf) - 1 - i
-		buf[i], buf[opp] = buf[opp], buf[i]
-	}
 }

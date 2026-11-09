@@ -1,4 +1,12 @@
 recovered init: 42
+init recovery: 0 41
+init recovery: 1 42
+init recovery: 2 42
+init recovery: 3 42
+init recovery: 4 42
+init recovery: 5 41
+init recovery: 6 42
+init recovery: 7 41
 # simple recover
 running panic...
 recovering...
@@ -70,7 +78,10 @@ outer recovered: repanic value
   recovered runtime error: assignment to entry in nil map
   recovered: closed chan
   recovered: closed chan select
+  recovered closed chan blocking select: true
+  select after recover ok
   recovered: close nil chan
+  closed send recovery: ok
 
 # recover from hardware signals
   recovered: divide by zero

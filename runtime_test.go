@@ -13,6 +13,7 @@ import (
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 	"github.com/tinygo-org/tinygo/builder"
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 // TestTimerStopResetRace checks that stopping or resetting a timer while its
@@ -28,6 +29,41 @@ func TestTimerStopResetRace(t *testing.T) {
 		t.Skipf("host GOOS %s does not use the threads scheduler", runtime.GOOS)
 	}
 	runTest("timer_stop_reset_race.go", optionsFromTarget("", sema), t, nil, nil)
+}
+
+func TestAVRGCStackReturn(t *testing.T) {
+	t.Parallel()
+
+	options := optionsFromTarget("simavr", sema)
+	emuCheck(t, options)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := t.TempDir() + "/main.go"
+	err = os.WriteFile(path, []byte(`package main
+
+import "runtime"
+
+func main() {
+	runtime.GC()
+	println("GC returned")
+}
+`), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := &bytes.Buffer{}
+	_, err = buildAndRun(path, config, output, nil, nil, 10*time.Second, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+		cmd.Stdout = output
+		return cmd.Run()
+	})
+	if err != nil {
+		t.Fatalf("GC program failed: %v\n%s", err, output.String())
+	}
+	if !strings.Contains(output.String(), "GC returned") {
+		t.Fatalf("GC did not return:\n%s", output.String())
+	}
 }
 
 func TestGoexitCrash(t *testing.T) {
@@ -55,7 +91,7 @@ func TestGoexitCrash(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			output := &bytes.Buffer{}
-			_, err = buildAndRun("testdata/goexit.go", config, output, []string{tc.name}, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+			_, err = buildAndRun("testdata/goexit.go", config, output, []string{tc.name}, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 				cmd.Stdout = nil
 				cmd.Stderr = nil
 				data, err := cmd.CombinedOutput()
@@ -128,7 +164,7 @@ func TestRuntimeFatal(t *testing.T) {
 	}
 
 	output := &bytes.Buffer{}
-	_, err = buildAndRun("testdata/runtimefatal.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun("testdata/runtimefatal.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		data, err := cmd.CombinedOutput()
@@ -157,7 +193,7 @@ func TestStdin(t *testing.T) {
 	}
 
 	output := &bytes.Buffer{}
-	_, err = buildAndRun(TESTDATA+"/stdin.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun(TESTDATA+"/stdin.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 		cmd.Stdin = strings.NewReader("hello\nworld\n")
 		return cmd.Run()
 	})
@@ -165,4 +201,72 @@ func TestStdin(t *testing.T) {
 		t.Error("failed to run:", err)
 	}
 	checkOutput(t, TESTDATA+"/stdin.txt", output.Bytes())
+}
+
+func TestRuntimeGOROOT(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name        string
+		environment []string
+		want        string
+	}{
+		{"startup environment", []string{"GOROOT=/startup"}, "/startup"},
+		{"empty startup environment", []string{"GOROOT="}, goenv.Get("GOROOT")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options := optionsFromTarget(*testTarget, sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			output := &bytes.Buffer{}
+			_, err = buildAndRun("testdata/runtimegoroot.go", config, output, nil, test.environment, time.Minute, func(cmd *exec.Cmd, _ *builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := test.want + "\n" + test.want + "\n"
+			if output.String() != want {
+				t.Fatalf("unexpected output:\n%s\nwant:\n%s", output.String(), want)
+			}
+		})
+	}
+}
+
+func TestRuntimeGODEBUG(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name        string
+		program     string
+		environment []string
+		want        string
+	}{
+		{"compiled default", "testdata/runtimegodebug.go", nil, "true \"\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
+		{"environment override", "testdata/runtimegodebug.go", []string{"GODEBUG=tarinsecurepath=1"}, "true \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\ntrue \"tarinsecurepath=1\"\ntrue \"\"\ntrue \"\"\n"},
+		{"setting compiled default", "testdata/runtimegodebugsetting.go", nil, "true\nfalse\ntrue\ntrue\n"},
+		{"setting environment override", "testdata/runtimegodebugsetting.go", []string{"GODEBUG=tarinsecurepath=1"}, "false\nfalse\ntrue\ntrue\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			options := optionsFromTarget(*testTarget, sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			output := &bytes.Buffer{}
+			_, err = buildAndRun(test.program, config, output, nil, test.environment, time.Minute, func(cmd *exec.Cmd, _ *builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if output.String() != test.want {
+				t.Fatalf("unexpected output:\n%s\nwant:\n%s", output.String(), test.want)
+			}
+		})
+	}
 }

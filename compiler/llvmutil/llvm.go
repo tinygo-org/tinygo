@@ -9,7 +9,6 @@ package llvmutil
 
 import (
 	"encoding/binary"
-	"strconv"
 	"strings"
 
 	"tinygo.org/x/go-llvm"
@@ -48,27 +47,6 @@ func CreateTemporaryAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type, n
 	return
 }
 
-// CreateInstructionAlloca creates an alloca in the entry block, and places lifetime control intrinsics around the instruction
-func CreateInstructionAlloca(builder llvm.Builder, mod llvm.Module, t llvm.Type, inst llvm.Value, name string) llvm.Value {
-	ctx := mod.Context()
-	targetData := llvm.NewTargetData(mod.DataLayout())
-	defer targetData.Dispose()
-
-	alloca := CreateEntryBlockAlloca(builder, t, name)
-	builder.SetInsertPointBefore(inst)
-	size := llvm.ConstInt(ctx.Int64Type(), targetData.TypeAllocSize(t), false)
-	fnType, fn := getLifetimeStartFunc(mod)
-	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, alloca), "")
-	if next := llvm.NextInstruction(inst); !next.IsNil() {
-		builder.SetInsertPointBefore(next)
-	} else {
-		builder.SetInsertPointAtEnd(inst.InstructionParent())
-	}
-	fnType, fn = getLifetimeEndFunc(mod)
-	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, alloca), "")
-	return alloca
-}
-
 // EmitLifetimeEnd signals the end of an (alloca) lifetime by calling the
 // llvm.lifetime.end intrinsic. It is commonly used together with
 // createTemporaryAlloca.
@@ -82,7 +60,7 @@ func EmitLifetimeEnd(builder llvm.Builder, mod llvm.Module, ptr, size llvm.Value
 // already required to match the alloca size) i64 size argument, so the
 // intrinsic now only takes the pointer.
 func lifetimeCallArgs(size, ptr llvm.Value) []llvm.Value {
-	if Version() >= 22 {
+	if llvm.VersionMajor >= 22 {
 		return []llvm.Value{ptr}
 	}
 	return []llvm.Value{size, ptr}
@@ -91,7 +69,7 @@ func lifetimeCallArgs(size, ptr llvm.Value) []llvm.Value {
 // lifetimeFuncType returns the function type of the llvm.lifetime.start/end
 // intrinsics, which lost their i64 size parameter in LLVM 22.
 func lifetimeFuncType(ctx llvm.Context, ptrType llvm.Type) llvm.Type {
-	if Version() >= 22 {
+	if llvm.VersionMajor >= 22 {
 		return llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
 	}
 	return llvm.FunctionType(ctx.VoidType(), []llvm.Type{ctx.Int64Type(), ptrType}, false)
@@ -123,78 +101,6 @@ func getLifetimeEndFunc(mod llvm.Module) (llvm.Type, llvm.Value) {
 		fn = llvm.AddFunction(mod, fnName, fnType)
 	}
 	return fnType, fn
-}
-
-// SplitBasicBlock splits a LLVM basic block into two parts. All instructions
-// after afterInst are moved into a new basic block (created right after the
-// current one) with the given name.
-func SplitBasicBlock(builder llvm.Builder, afterInst llvm.Value, insertAfter llvm.BasicBlock, name string) llvm.BasicBlock {
-	oldBlock := afterInst.InstructionParent()
-	newBlock := afterInst.Type().Context().InsertBasicBlock(insertAfter, name)
-	var nextInstructions []llvm.Value // values to move
-
-	// Collect to-be-moved instructions.
-	inst := afterInst
-	for {
-		inst = llvm.NextInstruction(inst)
-		if inst.IsNil() {
-			break
-		}
-		nextInstructions = append(nextInstructions, inst)
-	}
-
-	// Move instructions.
-	builder.SetInsertPointAtEnd(newBlock)
-	for _, inst := range nextInstructions {
-		inst.RemoveFromParentAsInstruction()
-		builder.Insert(inst)
-	}
-
-	// Find PHI nodes to update.
-	var phiNodes []llvm.Value // PHI nodes to update
-	for bb := insertAfter.Parent().FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-		for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
-			if inst.IsAPHINode().IsNil() {
-				continue
-			}
-			needsUpdate := false
-			incomingCount := inst.IncomingCount()
-			for i := range incomingCount {
-				if inst.IncomingBlock(i) == oldBlock {
-					needsUpdate = true
-					break
-				}
-			}
-			if !needsUpdate {
-				// PHI node has no incoming edge from the old block.
-				continue
-			}
-			phiNodes = append(phiNodes, inst)
-		}
-	}
-
-	// Update PHI nodes.
-	for _, phi := range phiNodes {
-		builder.SetInsertPointBefore(phi)
-		newPhi := builder.CreatePHI(phi.Type(), "")
-		incomingCount := phi.IncomingCount()
-		incomingVals := make([]llvm.Value, incomingCount)
-		incomingBlocks := make([]llvm.BasicBlock, incomingCount)
-		for i := range incomingCount {
-			value := phi.IncomingValue(i)
-			block := phi.IncomingBlock(i)
-			if block == oldBlock {
-				block = newBlock
-			}
-			incomingVals[i] = value
-			incomingBlocks[i] = block
-		}
-		newPhi.AddIncoming(incomingVals, incomingBlocks)
-		phi.ReplaceAllUsesWith(newPhi)
-		phi.EraseFromParentAsInstruction()
-	}
-
-	return newBlock
 }
 
 // AppendToGlobal appends the given values to a global array like llvm.used. The global might
@@ -285,16 +191,6 @@ func RemoveGlobalReferences(mod llvm.Module, targetGlobal, referenceGlobal strin
 	})
 }
 
-// Version returns the LLVM major version.
-func Version() int {
-	majorStr, _, _ := strings.Cut(llvm.Version, ".")
-	major, err := strconv.Atoi(majorStr)
-	if err != nil {
-		panic("unexpected error while parsing LLVM version: " + err.Error()) // should not happen
-	}
-	return major
-}
-
 // NoCaptureAttrName returns the name of the LLVM attribute kind that marks a
 // pointer parameter as guaranteed not to escape by capture.
 //
@@ -304,7 +200,7 @@ func Version() int {
 // both, but its own optimizer still emits 'nocapture', so the cutoff for
 // reading/writing the new name is LLVM 21.
 func NoCaptureAttrName() string {
-	if Version() >= 21 {
+	if llvm.VersionMajor >= 21 {
 		return "captures"
 	}
 	return "nocapture"
@@ -317,7 +213,7 @@ func IsNoCapture(attr llvm.Attribute) bool {
 	if attr.IsNil() {
 		return false
 	}
-	if Version() >= 21 {
+	if llvm.VersionMajor >= 21 {
 		// captures(none) is encoded as the value 0; any other value permits
 		// some form of capture.
 		return attr.GetEnumValue() == 0

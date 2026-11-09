@@ -68,7 +68,7 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 	return hashmap, nil
 }
 
-func (c *compilerContext) getHashmapTypeInfo(mapType *types.Map, pos token.Pos) llvm.Value {
+func (c *context) getHashmapTypeInfo(mapType *types.Map, pos token.Pos) llvm.Value {
 	llvmKeyType := c.getLLVMType(mapType.Key().Underlying())
 	llvmValueType := c.getLLVMType(mapType.Elem().Underlying())
 	keySize := c.targetData.TypeAllocSize(llvmKeyType)

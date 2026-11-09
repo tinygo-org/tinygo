@@ -1,0 +1,15 @@
+own: 2
+promoted: 1
+own ptr: 2
+promoted ptr: 1
+embedded ptr own: 2
+embedded ptr promoted: 1
+embedded ptr promoted ptr: 1
+two levels main: 2
+two levels inner: 1
+two levels inner ptr: 1
+both inner: 1
+both inner2: 3
+generic own: 2
+generic promoted: 1
+generic string promoted: 1

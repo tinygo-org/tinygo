@@ -1,6 +1,9 @@
 package main
 
-import "unsafe"
+import (
+	"reflect"
+	"unsafe"
+)
 
 type MySlice [32]byte
 
@@ -25,6 +28,7 @@ func main() {
 
 	// creating a slice of uncommon base type
 	assert(len(make([]struct{}, makeInt(4))) == 4)
+	assert(reflect.SliceOf(reflect.TypeOf(MySlice{})).Kind() == reflect.Slice)
 
 	// creating a slice with uncommon len, cap types
 	assert(len(make([]int, makeInt(2), makeInt(3))) == 2)
@@ -153,6 +157,13 @@ func main() {
 	slice3[0] = 9
 	slice3[1] = 15
 	println("unsafe.Slice array:", len(slice3), cap(slice3), slice3[0], slice3[1], slice3[2])
+
+	var zero struct{}
+	zeroSlice := unsafe.Slice(&zero, 40000)
+	reflected := reflect.SliceAt(reflect.TypeOf(zero), unsafe.Pointer(&zero), len(zeroSlice))
+	assert(reflected.Len() == len(zeroSlice))
+	assert(reflected.Cap() == cap(zeroSlice))
+	assert(!reflected.IsNil())
 
 	// Verify the fix in https://github.com/tinygo-org/tinygo/pull/119
 	var unnamed [32]byte

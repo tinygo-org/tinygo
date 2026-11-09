@@ -163,7 +163,21 @@ func FormatAllocCover(pos token.Position) string {
 // valueEscapesAt returns the instruction where the given value may escape and a
 // nil llvm.Value if it definitely doesn't. The value must be an instruction.
 func valueEscapesAt(value llvm.Value) llvm.Value {
-	return valueEscapesAtImpl(value, false, nil).escapeAt
+	analysis := escapeAnalysis{
+		visiting: make(map[llvm.Value]struct{}),
+		results:  make(map[escapeKey]escapeResult),
+	}
+	return analysis.valueEscapesAt(value, false).escapeAt
+}
+
+type escapeKey struct {
+	value       llvm.Value
+	allowReturn bool
+}
+
+type escapeAnalysis struct {
+	visiting map[llvm.Value]struct{}
+	results  map[escapeKey]escapeResult
 }
 
 type escapeResult struct {
@@ -185,19 +199,24 @@ func (r *escapeResult) merge(other escapeResult) bool {
 	return true
 }
 
-func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) escapeResult {
-	if visiting == nil {
-		visiting = make(map[llvm.Value]struct{})
-	}
-	if _, ok := visiting[value]; ok {
+func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (result escapeResult) {
+	if _, ok := a.visiting[value]; ok {
 		// Recursive call graph while following returned parameters. Treat this
 		// as escaping to keep the analysis conservative and bounded.
 		return escapeResult{escapeAt: value}
 	}
-	visiting[value] = struct{}{}
-	defer delete(visiting, value)
+	key := escapeKey{value, allowReturn}
+	// Only results that do not escape are ever reused, since any escape ends
+	// the analysis.
+	if result, ok := a.results[key]; ok {
+		return result
+	}
+	a.visiting[value] = struct{}{}
+	defer func() {
+		delete(a.visiting, value)
+		a.results[key] = result
+	}()
 
-	var result escapeResult
 	uses := getUses(value)
 	for _, use := range uses {
 		if use.IsAInstruction().IsNil() {
@@ -205,27 +224,27 @@ func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Va
 		}
 		switch use.InstructionOpcode() {
 		case llvm.GetElementPtr:
-			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 				return result
 			}
 		case llvm.BitCast:
 			// A bitcast escapes if the casted-to value escapes.
-			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 				return result
 			}
 		case llvm.InsertValue:
-			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 				return result
 			}
 		case llvm.ExtractValue:
 			if typeHasPointers(use.Type()) {
-				if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+				if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 					return result
 				}
 			}
 		case llvm.Select:
 			// A select escapes if the selected value escapes.
-			if !result.merge(valueEscapesAtImpl(use, allowReturn, visiting)) {
+			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 				return result
 			}
 		case llvm.Load:
@@ -237,7 +256,7 @@ func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Va
 				return escapeResult{escapeAt: use}
 			}
 		case llvm.Call:
-			if !result.merge(callValueEscapesAt(use, value, allowReturn, visiting)) {
+			if !result.merge(a.callValueEscapesAt(use, value, allowReturn)) {
 				return result
 			}
 		case llvm.ICmp:
@@ -261,7 +280,7 @@ func valueEscapesAtImpl(value llvm.Value, allowReturn bool, visiting map[llvm.Va
 // callValueEscapesAt returns whether value escapes through this call. It also
 // handles calls that return value unchanged, as long as the called function does
 // not otherwise capture the parameter and the returned alias does not escape.
-func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[llvm.Value]struct{}) escapeResult {
+func (a *escapeAnalysis) callValueEscapesAt(call, value llvm.Value, allowReturn bool) escapeResult {
 	called := call.CalledValue()
 	if called.IsAFunction().IsNil() {
 		return escapeResult{escapeAt: call}
@@ -287,7 +306,11 @@ func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[l
 		if called.IsDeclaration() {
 			return escapeResult{escapeAt: call}
 		}
-		if !result.merge(valueEscapesAtImpl(called.Param(i), true, visiting)) {
+		if _, recursive := a.visiting[called.Param(i)]; recursive && !typeHasPointers(call.Type()) {
+			// valueEscapesAt is already checking this parameter's other uses.
+			continue
+		}
+		if !result.merge(a.valueEscapesAt(called.Param(i), true)) {
 			return result
 		}
 	}
@@ -300,7 +323,7 @@ func callValueEscapesAt(call, value llvm.Value, allowReturn bool, visiting map[l
 		return escapeResult{}
 	}
 	if result.returned {
-		return valueEscapesAtImpl(call, allowReturn, visiting)
+		return a.valueEscapesAt(call, allowReturn)
 	}
 	return escapeResult{}
 }

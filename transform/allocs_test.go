@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
@@ -19,6 +18,49 @@ func TestAllocs(t *testing.T) {
 	testTransform(t, "testdata/allocs", func(mod llvm.Module) {
 		transform.OptimizeAllocs(mod, nil, 256, nil)
 	})
+}
+
+func TestAllocsSharedCalls(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("shared-calls")
+	defer mod.Dispose()
+	mod.SetDataLayout("e-p:64:64")
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	intType := ctx.Int32Type()
+	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+	walkType := llvm.FunctionType(intType, []llvm.Type{ptrType}, false)
+	next := llvm.AddFunction(mod, "leaf", walkType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(next, "entry"))
+	builder.CreateRet(builder.CreateLoad(intType, next.Param(0), "value"))
+	for i := range 32 {
+		fn := llvm.AddFunction(mod, fmt.Sprintf("walk%d", i), walkType)
+		builder.SetInsertPointAtEnd(ctx.AddBasicBlock(fn, "entry"))
+		first := builder.CreateCall(walkType, next, []llvm.Value{fn.Param(0)}, "first")
+		second := builder.CreateCall(walkType, next, []llvm.Value{fn.Param(0)}, "second")
+		builder.CreateRet(builder.CreateAdd(first, second, "sum"))
+		next = fn
+	}
+
+	allocType := llvm.FunctionType(ptrType, []llvm.Type{intType, ptrType}, false)
+	alloc := llvm.AddFunction(mod, "runtime.alloc", allocType)
+	root := llvm.AddFunction(mod, "root", llvm.FunctionType(intType, nil, false))
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(root, "entry"))
+	ptr := builder.CreateCall(allocType, alloc, []llvm.Value{llvm.ConstInt(intType, 4, false), llvm.ConstNull(ptrType)}, "ptr")
+	value := builder.CreateCall(walkType, next, []llvm.Value{ptr}, "value")
+	builder.CreateRet(value)
+
+	transform.OptimizeAllocs(mod, nil, 256, nil)
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	if root.EntryBasicBlock().FirstInstruction().IsAAllocaInst().IsNil() || !alloc.FirstUse().IsNil() {
+		t.Fatalf("shared call paths did not permit stack allocation:\n%s", root.String())
+	}
 }
 
 func TestAllocsAggregateEdges(t *testing.T) {
@@ -67,6 +109,14 @@ func TestAllocsAggregateEdges(t *testing.T) {
 		"aggregateSelectLoad": false,
 		"pointerSelectLoad":   false,
 		"recursiveReturn":     true,
+		"recursiveLoad":       false,
+		"mutualRecursiveLoad": false,
+		"recursiveDiscard":    false,
+		"recursiveCapture":    true,
+		"recursiveSwap":       true,
+		"sharedReturnLoad":    false,
+		"sharedReturnEscape":  true,
+		"sharedCapture":       true,
 		"duplicateArguments":  true,
 		"nonEscapingScalar":   false,
 		"nonEscapingLoad":     false,
@@ -113,7 +163,7 @@ func TestAllocsRuntimePhi(t *testing.T) {
 	po := llvm.NewPassBuilderOptions()
 	defer po.Dispose()
 	passes := "globalopt,ipsccp,instcombine,adce,function-attrs"
-	if llvmutil.Version() >= 18 {
+	if llvm.VersionMajor >= 18 {
 		passes = "globalopt,ipsccp,instcombine<no-verify-fixpoint>,adce,function-attrs"
 	}
 	if err := mod.RunPasses(passes, llvm.TargetMachine{}, po); err != nil {

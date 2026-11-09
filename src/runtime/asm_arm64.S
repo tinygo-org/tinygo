@@ -44,5 +44,6 @@ tinygo_longjmp:
     // Note: the code we jump to assumes x0 is set to a non-zero value if we
     // jump from here (which is conveniently already the case).
     ldp x1, x2, [x0] // jumpSP, jumpPC
+    ldr x29, [x0, #16] // frame pointer
     mov sp, x1
     br  x2

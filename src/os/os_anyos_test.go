@@ -48,10 +48,6 @@ func TestMkdir(t *testing.T) {
 }
 
 func TestStatBadDir(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Log("TODO: TestStatBadDir: IsNotExist fails on Windows, skipping")
-		return
-	}
 	dir := TempDir()
 	badDir := filepath.Join(dir, "not-exist/really-not-exist")
 	_, err := Stat(badDir)
@@ -216,9 +212,7 @@ func TestRenameOverwriteDest(t *testing.T) {
 	if err == nil {
 		t.Errorf("from file %q still exists", from)
 	}
-	if runtime.GOOS == "windows" {
-		t.Log("TODO: TestRenameOverwriteDest: IsNotExist fails on Windows, skipping")
-	} else if err != nil && !IsNotExist(err) {
+	if err != nil && !IsNotExist(err) {
 		t.Fatalf("stat from: %v", err)
 	}
 	toFi, err := Stat(to)
@@ -308,7 +302,7 @@ func TestUserConfigDir(t *testing.T) {
 
 func TestDirFS(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Log("TODO: implement Readdir for Windows")
+		t.Log("TODO: implement ReadAt for Windows")
 		return
 	}
 	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {

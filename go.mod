@@ -1,6 +1,6 @@
 module github.com/tinygo-org/tinygo
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/aykevl/go-wasm v0.0.2-0.20250317121156-42b86c494139
@@ -14,13 +14,13 @@ require (
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3
 	github.com/tetratelabs/wazero v1.9.0
 	go.bug.st/serial v1.8.0
-	golang.org/x/mod v0.37.0
-	golang.org/x/net v0.56.0
-	golang.org/x/sys v0.47.0
-	golang.org/x/tools v0.47.0
+	golang.org/x/mod v0.41.0
+	golang.org/x/net v0.59.0
+	golang.org/x/sys v0.48.0
+	golang.org/x/tools v0.50.0
 	gopkg.in/yaml.v2 v2.4.0
 	tinygo.org/x/espflasher v0.9.2
-	tinygo.org/x/go-llvm v0.0.0-20261023230756-8136c9aa7bda
+	tinygo.org/x/go-llvm v0.0.0-20261107095043-be64e5d735f4
 )
 
 require (
@@ -48,12 +48,14 @@ require (
 	github.com/urfave/cli/v3 v3.0.0-beta1 // indirect
 	go.bytecodealliance.org v0.6.2 // indirect
 	go.bytecodealliance.org/cm v0.2.2 // indirect
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260908163034-4bcc4b2ee518 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )
 
 tool (
 	github.com/golangci/misspell/cmd/misspell
 	github.com/mgechev/revive
 	go.bytecodealliance.org/cmd/wit-bindgen-go
+	golang.org/x/tools/cmd/deadcode
 )

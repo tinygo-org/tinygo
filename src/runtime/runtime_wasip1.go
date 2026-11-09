@@ -17,6 +17,9 @@ func __wasm_call_ctors()
 //	wasmtime run ./program.wasm arg1 arg2
 func init() {
 	__wasm_call_ctors()
+	if godebugEnvEnabled() {
+		godebugStartup = startupEnv("GODEBUG")
+	}
 }
 
 var args []string

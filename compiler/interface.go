@@ -126,7 +126,7 @@ func (b *builder) extractValuePointerFromInterface(itf llvm.Value) llvm.Value {
 	return b.CreateExtractValue(itf, 1, "typeassert.value.ptr")
 }
 
-func (c *compilerContext) pkgPathPtr(pkgpath string) llvm.Value {
+func (c *context) pkgPathPtr(pkgpath string) llvm.Value {
 	pkgpathName := "reflect/types.type.pkgpath.empty"
 	if pkgpath != "" {
 		pkgpathName = "reflect/types.type.pkgpath:" + pkgpath
@@ -164,7 +164,7 @@ func isGenericMethod(fn *types.Func) bool {
 // A type code is a pointer to a constant global that describes the type.
 // This function returns a pointer to the 'kind' field (which might not be the
 // first field in the struct).
-func (c *compilerContext) getTypeCode(typ types.Type) llvm.Value {
+func (c *context) getTypeCode(typ types.Type) llvm.Value {
 	// Resolve alias types: alias types are resolved at compile time.
 	typ = types.Unalias(typ)
 
@@ -642,7 +642,7 @@ var basicTypeNames = [...]string{
 // Synthetic locals (TypeName.Parent() == nil), produced by generic
 // instantiation, are pre-registered by scanLocalTypes because their
 // names must agree across packages that materialize the same instance.
-func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bool) {
+func (c *context) getTypeCodeName(t types.Type) (name string, isLocal bool) {
 	switch t := types.Unalias(t).(type) {
 	case *types.Named:
 		tn := t.Obj()
@@ -791,7 +791,7 @@ func (c *compilerContext) getTypeCodeName(t types.Type) (name string, isLocal bo
 // not handled here: they are nameable only inside their declaring
 // package, and getTypeCodeName derives a stable per-declaration name
 // for them directly from their source position.
-func (c *compilerContext) scanLocalTypes(ssaPkg *ssa.Package) {
+func (c *context) scanLocalTypes(ssaPkg *ssa.Package) {
 	// Locate every generic instance reachable from this package
 	// (including instances declared in imported packages and any
 	// function reached through an instance subtree).
@@ -880,7 +880,7 @@ func (c *compilerContext) scanLocalTypes(ssaPkg *ssa.Package) {
 // c.localTypeNames is left alone, so a synthetic type reachable from
 // several instances keeps the name assigned by the first (in
 // scanLocalTypes' deterministic order).
-func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
+func (c *context) registerSyntheticLocalTypes(fn *ssa.Function) {
 	var found []*types.Named
 	seen := map[types.Type]struct{}{}
 	var visit func(t types.Type)
@@ -993,7 +993,7 @@ func (c *compilerContext) registerSyntheticLocalTypes(fn *ssa.Function) {
 
 // getTypeMethodSet returns a reference (GEP) to a global method set. This
 // method set should be unreferenced after the interface lowering pass.
-func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
+func (c *context) getTypeMethodSet(typ types.Type) llvm.Value {
 	typeName, _ := c.getTypeCodeName(typ)
 	globalName := typeName + "$methodset"
 	global := c.mod.NamedGlobal(globalName)
@@ -1035,7 +1035,7 @@ func (c *compilerContext) getTypeMethodSet(typ types.Type) llvm.Value {
 
 // getMethodSignatureName returns a unique name (that can be used as the name of
 // a global) for the given method.
-func (c *compilerContext) getMethodSignatureName(method *types.Func) string {
+func (c *context) getMethodSignatureName(method *types.Func) string {
 	name := method.Name()
 	var prefix string
 	if token.IsExported(method.Name()) {
@@ -1050,7 +1050,7 @@ func (c *compilerContext) getMethodSignatureName(method *types.Func) string {
 // getMethodSignature returns a global variable which is a reference to an
 // external *i8 indicating the indicating the signature of this method. It is
 // used during the interface lowering pass.
-func (c *compilerContext) getMethodSignature(method *types.Func) llvm.Value {
+func (c *context) getMethodSignature(method *types.Func) llvm.Value {
 	globalName := c.getMethodSignatureName(method)
 	signatureGlobal := c.mod.NamedGlobal(globalName)
 	if signatureGlobal.IsNil() {
@@ -1082,8 +1082,7 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 	if intf, ok := expr.AssertedType.Underlying().(*types.Interface); ok {
 		if intf.Empty() {
 			// intf is the empty interface => no methods
-			// This type assertion always succeeds, so we can just set commaOk to true.
-			commaOk = llvm.ConstInt(b.ctx.Int1Type(), 1, true)
+			commaOk = b.CreateIsNotNull(actualTypeNum, "typeassert.ok")
 		} else {
 			// Type assert on an interface type with methods.
 			// Create a call to a declared-but-not-defined function that will
@@ -1092,18 +1091,29 @@ func (b *builder) createTypeAssert(expr *ssa.TypeAssert) llvm.Value {
 			commaOk = b.createInterfaceTypeAssert(intf, actualTypeNum)
 		}
 	} else {
-		name, _ := b.getTypeCodeName(expr.AssertedType)
-		globalName := "reflect/types.typeid:" + name
-		assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
-		if assertedTypeCodeGlobal.IsNil() {
-			// Create a new typecode global.
-			assertedTypeCodeGlobal = llvm.AddGlobal(b.mod, b.ctx.Int8Type(), globalName)
-			assertedTypeCodeGlobal.SetGlobalConstant(true)
+		baseType := types.Unalias(expr.AssertedType)
+		for {
+			ptr, ok := baseType.(*types.Pointer)
+			if !ok {
+				break
+			}
+			baseType = types.Unalias(ptr.Elem())
 		}
-		// Type assert on concrete type.
-		// Call runtime.typeAssert, which will be lowered to a simple icmp or
-		// const false in the interface lowering pass.
-		commaOk = b.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
+		// getTypeCode emits pointer descriptors with basic, named, and interface types.
+		switch baseType.(type) {
+		case *types.Basic, *types.Named, *types.Interface:
+			name, _ := b.getTypeCodeName(expr.AssertedType)
+			globalName := "reflect/types.typeid:" + name
+			assertedTypeCodeGlobal := b.mod.NamedGlobal(globalName)
+			if assertedTypeCodeGlobal.IsNil() {
+				assertedTypeCodeGlobal = llvm.AddGlobal(b.mod, b.ctx.Int8Type(), globalName)
+				assertedTypeCodeGlobal.SetGlobalConstant(true)
+			}
+			commaOk = b.createRuntimeCall("typeAssert", []llvm.Value{actualTypeNum, assertedTypeCodeGlobal}, "typecode")
+		default:
+			assertedTypeCode := b.getTypeCode(expr.AssertedType)
+			commaOk = b.CreateICmp(llvm.IntEQ, actualTypeNum, assertedTypeCode, "typecode")
+		}
 	}
 
 	// Add 2 new basic blocks (that should get optimized away): one for the
@@ -1200,7 +1210,7 @@ func (b *builder) getInterfaceAssertBlock() llvm.BasicBlock {
 
 // getMethodsString returns a string to be used in the "tinygo-methods" string
 // attribute for interface functions.
-func (c *compilerContext) getMethodsString(itf *types.Interface) string {
+func (c *context) getMethodsString(itf *types.Interface) string {
 	methods := make([]string, itf.NumMethods())
 	for i := range methods {
 		methods[i] = c.getMethodSignatureName(itf.Method(i))
@@ -1210,7 +1220,7 @@ func (c *compilerContext) getMethodsString(itf *types.Interface) string {
 
 // getMethodSetValue creates the method set struct value for a list of methods.
 // The struct contains a length and a sorted array of method signature pointers.
-func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
+func (c *context) getMethodSetValue(methods []*types.Func) llvm.Value {
 	// Create a sorted list of method signature global names.
 	type methodRef struct {
 		name  string
@@ -1265,7 +1275,7 @@ func (c *compilerContext) getMethodSetValue(methods []*types.Func) llvm.Value {
 // getInvokeFunction returns the thunk to call the given interface method. The
 // thunk is declared, not defined: it will be defined by the interface lowering
 // pass.
-func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
+func (c *context) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 	fnName := c.getInvokeFunctionName(instr)
 	llvmFn := c.mod.NamedFunction(fnName)
 	if llvmFn.IsNil() {
@@ -1288,7 +1298,7 @@ func (c *compilerContext) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 	return llvmFn
 }
 
-func (c *compilerContext) getInvokeFunctionName(instr *ssa.CallCommon) string {
+func (c *context) getInvokeFunctionName(instr *ssa.CallCommon) string {
 	s, _ := c.getTypeCodeName(instr.Value.Type().Underlying())
 	return s + "." + instr.Method.Name() + "$invoke"
 }
@@ -1316,7 +1326,7 @@ func (b *builder) createInterfaceTypeAssert(intf *types.Interface, actualType ll
 // value, dereferences or unpacks it if necessary, and calls the real method.
 // If the method to wrap has a pointer receiver, no wrapping is necessary and
 // the function is returned directly.
-func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Type, llvmFn llvm.Value) llvm.Value {
+func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Type, llvmFn llvm.Value) llvm.Value {
 	wrapperName := llvmFn.Name() + "$invoke"
 	wrapper := c.mod.NamedFunction(wrapperName)
 	if !wrapper.IsNil() {
@@ -1409,8 +1419,8 @@ func (c *compilerContext) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType
 
 	// Create a new builder just to create this wrapper.
 	b := builder{
-		compilerContext: c,
-		Builder:         c.ctx.NewBuilder(),
+		context: c,
+		Builder: c.ctx.NewBuilder(),
 	}
 	defer b.Builder.Dispose()
 

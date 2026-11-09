@@ -10,7 +10,7 @@ target triple = "wasm32-unknown-wasi"
 @main.a = hidden global { ptr, i32, i32 } zeroinitializer, align 4
 @main.b = hidden global [2 x ptr] zeroinitializer, align 4
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {

@@ -30,11 +30,65 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/diagnostics"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/internal/diff"
 )
 
 const TESTDATA = "testdata"
 
 var testTarget = flag.String("target", "", "override test target")
+
+func TestBuildAndRunBuildErrorReturnsNil(t *testing.T) {
+	config := &compileopts.Config{
+		Options: &compileopts.Options{Semaphore: sema},
+		Target:  &compileopts.TargetSpec{Libc: "unknown"},
+	}
+	result, err := buildAndRun("", config, io.Discard, nil, nil, 0, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+		t.Fatal("run callback called after a build error")
+		return nil
+	})
+	if err == nil || err.Error() != "unknown libc: unknown" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result on build error, got %+v", result)
+	}
+}
+
+func TestFlashRejectsUnsupportedFirmwareExtension(t *testing.T) {
+	err := Flash("testdata/print.go", "", "firmware.bin", &compileopts.Options{Target: "pico", Semaphore: sema})
+	want := "target pico does not support firmware output extension .bin; use .elf, .hex, or .uf2"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Flash() error = %v, want %q", err, want)
+	}
+}
+
+func TestValidateSupportedFirmwareOutput(t *testing.T) {
+	config, err := builder.NewConfig(&compileopts.Options{Target: "pico", Opt: "z", Semaphore: sema})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := config.ValidateOutputExtension(".uf2"); err != nil {
+		t.Fatalf("ValidateOutputExtension() rejected supported UF2 output: %v", err)
+	}
+	if err := validateOutputFormat("firmware.uf2", ".uf2"); err != nil {
+		t.Fatalf("validateOutputFormat() rejected supported UF2 output: %v", err)
+	}
+}
+
+func TestBuildOutputDirectoryWithFirmwareSuffix(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "output.bin")
+	if err := os.Mkdir(outputDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	config, err := builder.NewConfig(&compileopts.Options{Target: "pico", Opt: "z", Semaphore: sema})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = Build("does/not/exist", outputDir, config)
+	if err == nil || strings.Contains(err.Error(), "does not support firmware output extension") {
+		t.Fatalf("Build() error = %v, want a package-loading error rather than an extension error", err)
+	}
+}
 
 var supportedLinuxArches = map[string]string{
 	"AMD64Linux": "linux/amd64",
@@ -109,7 +163,7 @@ func TestParseGoLinkFlag(t *testing.T) {
 }
 
 func TestTrimPath(t *testing.T) {
-	t.Setenv("CGO_CFLAGS", "-iquoteinclude -includestdint.h -imacros relative.h")
+	t.Parallel()
 	root := t.TempDir()
 	var binaries [][]byte
 	options := optionsFromTarget(*testTarget, sema)
@@ -127,7 +181,7 @@ func TestTrimPath(t *testing.T) {
 		outpath := filepath.Join(root, name+".out")
 		cache := filepath.Join(root, "cache-"+name)
 		cmd := trimPathCommand(t, dir, "build", "-trimpath", "-p=4", "-o", outpath, ".")
-		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+cache, "HOME="+cache, "LocalAppData="+cache)
+		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+cache, "HOME="+cache, "LocalAppData="+cache, "CGO_CFLAGS=-iquoteinclude -includestdint.h -imacros relative.h")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("build failed: %v\n%s", err, output)
 		}
@@ -146,6 +200,23 @@ func TestTrimPath(t *testing.T) {
 	if !bytes.Equal(binaries[0], binaries[1]) {
 		t.Error("trimmed binaries built in different directories are not identical")
 	}
+	t.Run("cache-prefix-overlap", func(t *testing.T) {
+		dir := filepath.Join(root, "b")
+		cache := filepath.Join(root, "bc")
+		outpath := filepath.Join(root, "b.out")
+		cmd := trimPathCommand(t, dir, "build", "-trimpath", "-p=4", "-o", outpath, ".")
+		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+cache, "HOME="+cache, "LocalAppData="+cache)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("build failed: %v\n%s", err, output)
+		}
+		binary, err := os.ReadFile(outpath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(binaries[1], binary) {
+			t.Error("trimmed binary changed when only the cache directory changed")
+		}
+	})
 	if config.GOOS() != "darwin" {
 		files := trimPathDWARFFiles(t, filepath.Join(root, "a.out"), config.GOOS())
 		headerPath := "/_/example.com/dependency@v1.2.3/include/shared.h"
@@ -176,6 +247,7 @@ func TestTrimPath(t *testing.T) {
 			args = append(args, "-trimpath")
 		}
 		cmd := trimPathCommand(t, dir, append(args, ".")...)
+		cmd.Env = append(cmd.Env, "CGO_CFLAGS=-iquoteinclude -includestdint.h -imacros relative.h")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("build failed: %v\n%s", err, output)
 		}
@@ -191,6 +263,7 @@ func TestTrimPath(t *testing.T) {
 }
 
 func TestTrimPathStackSizes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	source := `package main
 func main() {
@@ -325,6 +398,7 @@ func trimPathDWARFFiles(t *testing.T, filename, goos string) []string {
 }
 
 func TestTrimPathTestPackages(t *testing.T) {
+	t.Parallel()
 	options := optionsFromTarget(*testTarget, sema)
 	config, err := builder.NewConfig(&options)
 	if err != nil {
@@ -463,7 +537,7 @@ func runTestWithConfig(name string, t *testing.T, options compileopts.Options, c
 
 	// Build the test binary.
 	stdout := &bytes.Buffer{}
-	_, err = buildAndRun(pkgName, config, stdout, cmdArgs, environmentVars, 2*time.Minute, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun(pkgName, config, stdout, cmdArgs, environmentVars, 2*time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 		if config.EmulatorName() == "simavr" {
 			// simavr before v1.8 wrote firmware output to stderr and loader logs
 			// to stdout, but PR #490 swapped these streams:
@@ -567,7 +641,7 @@ func checkOutputData(t *testing.T, expectedOutput, actual []byte) {
 
 	if !bytes.Equal(actual, expectedOutput) {
 		t.Errorf("output did not match (expected %d bytes, got %d bytes):", len(expectedOutput), len(actual))
-		t.Error(string(Diff("expected", expectedOutput, "actual", actual)))
+		t.Error(string(diff.Diff("expected", expectedOutput, "actual", actual)))
 	}
 }
 

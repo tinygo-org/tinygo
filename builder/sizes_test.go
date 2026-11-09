@@ -1,19 +1,20 @@
 package builder
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/internal/diff"
 	"github.com/tinygo-org/tinygo/interp"
 )
 
@@ -90,11 +91,28 @@ func TestBinarySize(t *testing.T) {
 		{target: "pico2", path: "./testdata/size-contains", opt: "z"},
 		{target: "pico2", path: "./testdata/size-os", opt: "z"},
 		{target: "pico2", path: "./testdata/size-os", opt: "2"},
+		{target: "pico2", path: "./testdata/size-timer", opt: "z"},
+		{target: "pico2", path: "./testdata/size-timer", opt: "2"},
 
 		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "z"},
 		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "2"},
 		{target: "riscv-qemu", path: "./testdata/size-corpus", opt: "z"},
 		{target: "riscv-qemu", path: "./testdata/size-corpus", opt: "2"},
+
+		{target: "cortex-m-qemu", path: "./testdata/size-init-recover", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-recover", opt: "2"},
+		{target: "pico2", path: "./testdata/size-init-regexp", opt: "z"},
+		{target: "pico2", path: "./testdata/size-init-regexp", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-crc", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-crc", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-map", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-map", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-errors", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-errors", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-config", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-config", opt: "2"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-strings", opt: "z"},
+		{target: "cortex-m-qemu", path: "./testdata/size-init-strings", opt: "2"},
 
 		// TODO: also check wasm. Right now this is difficult, because
 		// wasm binaries are run through wasm-opt and therefore the
@@ -105,10 +123,10 @@ func TestBinarySize(t *testing.T) {
 	checkGolden(t, "testdata/binary-size.txt", output)
 }
 
-func checkGolden(t *testing.T, path, actual string) {
+func checkGolden(t *testing.T, path string, actual []byte) {
 	t.Helper()
 	if *flagUpdate {
-		if err := os.WriteFile(path, []byte(actual), 0o666); err != nil {
+		if err := os.WriteFile(path, actual, 0o666); err != nil {
 			t.Fatal("failed to write updated golden file:", err)
 		}
 		return
@@ -117,8 +135,8 @@ func checkGolden(t *testing.T, path, actual string) {
 	if err != nil {
 		t.Fatal("failed to read golden file:", err)
 	}
-	if actual != string(expected) {
-		t.Errorf("%s does not match expected output (re-run with -update to regenerate):\nexpected:\n%sactual:\n%s", path, expected, actual)
+	if !bytes.Equal(actual, expected) {
+		t.Errorf("%s does not match expected output (re-run with -update to regenerate):\n%s", path, string(diff.Diff("expected", expected, "actual", actual)))
 	}
 }
 
@@ -168,36 +186,16 @@ func measureBinarySize(tc sizeTest, tmpdir string) (*programSize, error) {
 	return size, nil
 }
 
-func formatSizeTable(tests []sizeTest, sizes []*programSize) string {
-	targetWidth := len("target")
-	packageWidth := len("package")
-	optWidth := len("opt")
-	codeWidth := len("code")
-	rodataWidth := len("rodata")
-	dataWidth := len("data")
-	bssWidth := len("bss")
-	for i, tc := range tests {
-		targetWidth = max(targetWidth, len(tc.target))
-		packageWidth = max(packageWidth, len(tc.path))
-		optWidth = max(optWidth, len(tc.opt))
-		codeWidth = max(codeWidth, len(strconv.FormatUint(sizes[i].Code, 10)))
-		rodataWidth = max(rodataWidth, len(strconv.FormatUint(sizes[i].ROData, 10)))
-		dataWidth = max(dataWidth, len(strconv.FormatUint(sizes[i].Data, 10)))
-		bssWidth = max(bssWidth, len(strconv.FormatUint(sizes[i].BSS, 10)))
-	}
-
-	var output strings.Builder
-	fmt.Fprintf(&output, "%-*s %-*s %-*s %*s %*s %*s %*s\n",
-		targetWidth, "target", packageWidth, "package", optWidth, "opt",
-		codeWidth, "code", rodataWidth, "rodata", dataWidth, "data", bssWidth, "bss")
+func formatSizeTable(tests []sizeTest, sizes []*programSize) []byte {
+	var output bytes.Buffer
+	fmt.Fprintf(&output, "%-24s %-40s %-3s %8s %8s %8s %8s\n",
+		"target", "package", "opt", "code", "rodata", "data", "bss")
 	for i, tc := range tests {
 		size := sizes[i]
-		fmt.Fprintf(&output, "%-*s %-*s %-*s %*d %*d %*d %*d\n",
-			targetWidth, tc.target, packageWidth, tc.path, optWidth, tc.opt,
-			codeWidth, size.Code, rodataWidth, size.ROData,
-			dataWidth, size.Data, bssWidth, size.BSS)
+		fmt.Fprintf(&output, "%-24s %-40s %-3s %8d %8d %8d %8d\n",
+			tc.target, tc.path, tc.opt, size.Code, size.ROData, size.Data, size.BSS)
 	}
-	return output.String()
+	return output.Bytes()
 }
 
 // Check that the -size=full flag attributes binary size to the correct package.
@@ -300,7 +298,7 @@ func TestSizePackagePath(t *testing.T) {
 	}
 }
 
-func buildBinary(t *testing.T, targetString, pkgName string, trimPath bool) BuildResult {
+func buildBinary(t *testing.T, targetString, pkgName string, trimPath bool) *BuildResult {
 	t.Helper()
 	result, err := buildBinaryInDir(targetString, pkgName, "z", t.TempDir(), trimPath)
 	if err != nil {
@@ -309,7 +307,7 @@ func buildBinary(t *testing.T, targetString, pkgName string, trimPath bool) Buil
 	return result
 }
 
-func buildBinaryInDir(targetString, pkgName, opt, tmpdir string, trimPath bool) (BuildResult, error) {
+func buildBinaryInDir(targetString, pkgName, opt, tmpdir string, trimPath bool) (*BuildResult, error) {
 	options := compileopts.Options{
 		Target:                  targetString,
 		Opt:                     opt,
@@ -319,10 +317,12 @@ func buildBinaryInDir(targetString, pkgName, opt, tmpdir string, trimPath bool) 
 		Debug:                   true,
 		VerifyIR:                true,
 		TrimPath:                trimPath,
+		// The GOROOT string is stored in data, so its length must not depend on the host.
+		GlobalValues: map[string]map[string]string{"runtime": {"goroot": "/usr/local/go"}},
 	}
 	target, err := compileopts.LoadTarget(&options)
 	if err != nil {
-		return BuildResult{}, fmt.Errorf("could not load target: %w", err)
+		return nil, fmt.Errorf("could not load target: %w", err)
 	}
 	config := &compileopts.Config{
 		Options: &options,
@@ -330,7 +330,7 @@ func buildBinaryInDir(targetString, pkgName, opt, tmpdir string, trimPath bool) 
 	}
 	result, err := Build(pkgName, "", tmpdir, config)
 	if err != nil {
-		return BuildResult{}, fmt.Errorf("could not build: %w", err)
+		return nil, fmt.Errorf("could not build: %w", err)
 	}
 	return result, nil
 }

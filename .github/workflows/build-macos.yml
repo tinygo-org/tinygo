@@ -34,8 +34,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Extract TinyGo version
         id: version
         run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
@@ -47,8 +46,6 @@ jobs:
       - uses: ./.github/actions/setup-llvm-macos
         with:
           os: ${{ matrix.os }}
-      - name: make gen-device
-        run: make -j3 gen-device
       - name: Build TinyGo release tarball
         run: make release -j3
       - name: Make release artifact
@@ -73,8 +70,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE=1 brew install qemu binaryen
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -84,8 +80,9 @@ jobs:
         with:
           os: macos-15
           save-cache: "false"
-      - name: make gen-device
-        run: make -j3 gen-device
+      - uses: ./.github/actions/gen-device
+        with:
+          jobs: "3"
       - name: Test TinyGo
         run: make test GOTESTFLAGS="-short"
 
@@ -228,9 +225,3 @@ jobs:
           tinygo build -o "$RUNNER_TEMP/alias" testdata/alias.go
           "$RUNNER_TEMP/alias" | diff - testdata/alias.txt
           tinygo build -target=wasm-unknown -o "$RUNNER_TEMP/alias.wasm" testdata/alias.go
-      - name: Build TinyGo (default LLVM)
-        if: matrix.version == 20
-        run: go install
-      - name: Check binary
-        if: matrix.version == 20
-        run: tinygo version

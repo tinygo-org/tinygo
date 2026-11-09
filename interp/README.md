@@ -46,6 +46,12 @@ The interpreter runs an instruction just like it would if it were executed
 time. As indicated above, some instructions need to be executed at runtime
 instead.
 
+Functions with supported defer frames must be evaluated completely. If part of
+the call requires runtime execution, the interpreter rolls back the whole call.
+During interpretation, `recover()` returns a nil interface. Calls that panic
+remain at runtime, along with their enclosing defer frames. The interpreter
+does not execute panic unwinding.
+
 ## Functions with no runtime uses (experiment)
 
 Experimental: this directive may change or be removed in a future release.
