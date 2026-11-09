@@ -272,10 +272,6 @@ func receive(ch <-chan int) {
 
 func sender(ch chan int) {
 	for i := 1; i <= 8; i++ {
-		if i == 4 {
-			time.Sleep(time.Millisecond)
-			println("slept")
-		}
 		ch <- i
 	}
 	close(ch)
