@@ -144,14 +144,19 @@ func assignCore(core int) {
 	task.PauseLocked()
 }
 
-// reserveTimerRoom makes sure the timer queue can take one more node without
-// allocating. Allocating with the lock held can start a GC that waits for a core
-// spinning on the lock with interrupts off. The lock is released while
-// allocating. Call with the scheduler lock held.
+// reserveTimerRoom makes sure the timer queue can take one more node, plus one
+// re-added node for each core running a timer callback, without allocating.
+// Allocating with the lock held can start a GC that waits for a core spinning on
+// the lock with interrupts off. The lock is released while allocating. Call with
+// the scheduler lock held.
 func reserveTimerRoom() {
-	for timerQueueFull() {
-		n := 8
-		if timerQueue != nil {
+	for {
+		need := timerQueueRoom(numCPU)
+		if !timerQueueFull(need) {
+			return
+		}
+		n := 2*need + 1
+		if timerQueue != nil && 2*cap(timerQueue.nodes)+1 > n {
 			n = 2*cap(timerQueue.nodes) + 1
 		}
 		schedulerLock.Unlock()
@@ -173,7 +178,6 @@ func addTimer(tn *timerNode) {
 // were stopped or reset while the callback was running.
 func reAddTimer(tn *timerNode) {
 	schedulerLock.Lock()
-	reserveTimerRoom()
 
 	// Remove the timer from the firing list before re-adding it to the queue,
 	// so that another core popping it off the queue can't insert it into the

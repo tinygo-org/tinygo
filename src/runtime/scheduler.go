@@ -119,9 +119,18 @@ func timerQueuePeek() *timerNode {
 	return timerQueue.peek()
 }
 
-// timerQueueFull reports whether the next add would have to grow the queue.
-func timerQueueFull() bool {
-	return timerQueue == nil || len(timerQueue.nodes) == cap(timerQueue.nodes)
+// timerQueueRoom returns the capacity needed to add one more node while
+// leaving room for extra nodes that are currently not in the queue.
+func timerQueueRoom(extra int) int {
+	if timerQueue == nil {
+		return 1 + extra
+	}
+	return len(timerQueue.nodes) + 1 + extra
+}
+
+// timerQueueFull reports whether the queue has less capacity than need.
+func timerQueueFull(need int) bool {
+	return timerQueue == nil || cap(timerQueue.nodes) < need
 }
 
 // timerQueueGrow installs h, an empty heap with spare capacity allocated by the
