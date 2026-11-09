@@ -1,7 +1,7 @@
 {
-	"llvm-target":   "wasm32-unknown-wasi",
+	"llvm-target":   "wasm32-unknown-wasip3",
 	"cpu":           "generic",
-	"features":      "+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types",
+	"features":      "+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,+atomics,-multivalue,-reference-types",
 	"build-tags":    ["tinygo.wasm", "wasip3", "wasip1"],
 	"buildmode":     "c-shared",
 	"goos":          "wasip3",
@@ -10,24 +10,30 @@
 	"libc":          "wasi-libc",
 	"rtlib":         "compiler-rt",
 	"gc":            "precise",
-	"scheduler":     "asyncify",
+	"scheduler":     "threads",
+	"panic-unwind":  "explicit",
 	"default-stack-size": 65536,
 	"cflags": [
 		"-mbulk-memory",
 		"-mnontrapping-fptoint",
 		"-mno-multivalue",
 		"-mno-reference-types",
-		"-msign-ext"
+		"-msign-ext",
+		"-matomics"
 	],
 	"ldflags": [
 		"--stack-first",
+		"--cooperative-threading",
 		"--no-demangle",
 		"--no-entry"
 	],
 	"extra-files": [
-		"src/runtime/asm_tinygowasm.S"
+		"src/runtime/asm_tinygowasm_wasip3.S",
+		"src/runtime/runtime_wasip3.c",
+		"src/internal/task/task_threads_wasip3.c",
+		"src/internal/futex/futex_wasip3.c"
 	],
-	"emulator": "wasmtime run --wasm component-model -Sp3 -Wcomponent-model-async -Sinherit-network -Sallow-ip-name-lookup --dir={tmpDir}::/tmp {}",
+	"emulator": "wasmtime run --wasm component-model -Sp3 -Wcomponent-model-async -Wcomponent-model-threading -Sinherit-network -Sallow-ip-name-lookup --dir={tmpDir}::/tmp {}",
 	"wit-package": "{root}/lib/wasi-libc/wasi/p3/wit/",
 	"wit-world": "wasi:cli/command@0.3.0"
 }

@@ -25,7 +25,8 @@ func generateWasiVersionHeader(includeDir, preview string) error {
 			continue
 		}
 		name := strings.Fields(line)[1]
-		if name == define {
+		// wasip3 is built with cooperative threads.
+		if name == define || (name == "__wasi_cooperative_threads__" && preview == "3") {
 			lines[i] = "#define " + name
 		} else {
 			lines[i] = "/* #undef " + name + " */"
@@ -87,12 +88,26 @@ func newWasiLibc(preview, name string) Library {
 
 				"pthread.h": {},
 			}
+			if preview == "3" {
+				// Cooperative threads are supported.
+				delete(omitHeaders, "pthread.h")
+			}
 			if preview == "1" {
 				// netdb.h is not implemented for wasip1.
 				omitHeaders["netdb.h"] = struct{}{}
 			}
 
+			// Generic bits headers that aren't supported on WASI or that are
+			// replaced by WASI specific ones. See libc-top-half/CMakeLists.txt.
+			omitGenericBits := map[string]struct{}{
+				"errno.h": {}, "dirent.h": {}, "fcntl.h": {}, "ioctl.h": {},
+				"ipc.h": {}, "kd.h": {}, "limits.h": {}, "link.h": {},
+				"msg.h": {}, "ptrace.h": {}, "sem.h": {}, "shm.h": {},
+				"soundcard.h": {}, "statfs.h": {}, "termios.h": {}, "vt.h": {},
+			}
+
 			for _, glob := range [][2]string{
+				{"libc-top-half/musl/arch/generic/bits/*.h", "bits"},
 				{"libc-bottom-half/headers/public/*.h", ""},
 				{"libc-bottom-half/headers/public/wasi/*.h", "wasi"},
 				{"libc-top-half/musl/arch/generic/bits/*.h", "bits"},
@@ -108,6 +123,11 @@ func newWasiLibc(preview, name string) Library {
 					name := filepath.Base(match)
 					if _, ok := omitHeaders[name]; ok {
 						continue
+					}
+					if strings.Contains(match, "/arch/generic/") {
+						if _, ok := omitGenericBits[name]; ok {
+							continue
+						}
 					}
 					data, err := os.ReadFile(match)
 					if err != nil {
@@ -136,7 +156,7 @@ func newWasiLibc(preview, name string) Library {
 				"-nostdlibinc",
 				"-mnontrapping-fptoint", "-msign-ext", "-mbulk-memory",
 				"-Wno-null-pointer-arithmetic", "-Wno-unused-parameter", "-Wno-sign-compare", "-Wno-unused-variable", "-Wno-unused-function", "-Wno-ignored-attributes", "-Wno-missing-braces", "-Wno-ignored-pragmas", "-Wno-unused-but-set-variable", "-Wno-unknown-warning-option",
-				"-Wno-parentheses", "-Wno-shift-op-parentheses", "-Wno-bitwise-op-parentheses", "-Wno-logical-op-parentheses", "-Wno-string-plus-int", "-Wno-dangling-else", "-Wno-unknown-pragmas",
+				"-Wno-unused-command-line-argument", "-Wno-parentheses", "-Wno-shift-op-parentheses", "-Wno-bitwise-op-parentheses", "-Wno-logical-op-parentheses", "-Wno-string-plus-int", "-Wno-dangling-else", "-Wno-unknown-pragmas",
 				"-DNDEBUG",
 				"-D__wasilibc_printscan_no_long_double",
 				"-D__wasilibc_printscan_full_support_option=\"long double support is disabled\"",
@@ -147,6 +167,15 @@ func newWasiLibc(preview, name string) Library {
 				"-I" + libcDir + "/libc-top-half/musl/arch/wasm32",
 				"-I" + libcDir + "/libc-top-half/musl/arch/generic",
 				"-I" + libcDir + "/libc-top-half/headers/private",
+			}
+			if preview == "3" {
+				// Cooperative threads, see ENABLE_COOP_THREADS in the
+				// wasi-libc CMakeLists.txt.
+				flags = append(flags, "-mthread-model", "posix", "-pthread", "-ftls-model=local-exec",
+					"-I"+libcDir+"/libc-bottom-half/cloudlibc/src",
+					"-I"+libcDir+"/libc-bottom-half/headers/private")
+			} else {
+				flags = append(flags, "-mthread-model", "single")
 			}
 			if preview != "1" {
 				// wasi-libc needs -fdefer-ts. See CMakeLists.txt in wasi-libc.
@@ -175,10 +204,13 @@ func newWasiLibc(preview, name string) Library {
 			// wasip1 and wasip2 have socket sources with the same symbol names.
 			// Compile only one set for each preview.
 			cloudlibcSockSrcExclude := []string{}
-			// wasip3_tls.c is only built when the compiler has libcall thread
-			// context support, which stores the stack pointer in a component
-			// context slot. TinyGo uses a normal stack pointer global instead.
-			bottomHalfSrcExclude := []string{"wasip3_tls.c"}
+			// wasip3_tls.c needs libcall thread context support, which stores
+			// the stack pointer in a component context slot. Only the wasip3
+			// target uses it.
+			bottomHalfSrcExclude := []string{}
+			if preview != "3" {
+				bottomHalfSrcExclude = append(bottomHalfSrcExclude, "wasip3_tls.c")
+			}
 			wasip3Sources := []string{"wasip3.c", "wasip3_block_on.c", "wasip3_stdio.c"}
 			wasip2Sources := []string{"wasip2.c", "wasip2_stdio.c"}
 			switch preview {
@@ -232,7 +264,6 @@ func newWasiLibc(preview, name string) Library {
 				{glob: "libc-top-half/musl/src/multibyte/*.c"},
 				{glob: "libc-top-half/musl/src/stdio/*.c", exclude: []string{
 					"vfwscanf.c", "vfwprintf.c", // long double is unsupported
-					"__lockfile.c", "flockfile.c", "funlockfile.c", "ftrylockfile.c",
 					"rename.c",
 					"tmpnam.c", "tmpfile.c", "tempnam.c",
 					"popen.c", "pclose.c",
@@ -247,6 +278,53 @@ func newWasiLibc(preview, name string) Library {
 				{glob: "libc-bottom-half/cloudlibc/src/libc/sys/*/*.c", exclude: cloudlibcSockSrcExclude},
 				{glob: "libc-bottom-half/sources/math/*.c"},
 				{glob: "libc-bottom-half/sources/*.c", exclude: bottomHalfSrcExclude},
+			}
+
+			var threadSources []string
+			stdioLockSources := []string{"__lockfile.c", "flockfile.c", "funlockfile.c", "ftrylockfile.c"}
+			if preview == "3" {
+				for _, name := range []string{
+					"__lock.c", "__timedwait.c", "__wait.c", "default_attr.c", "lock_ptc.c", "mtx_destroy.c",
+					"mtx_init.c", "mtx_lock.c", "mtx_timedlock.c", "mtx_trylock.c", "pthread_attr_destroy.c",
+					"pthread_attr_get.c", "pthread_attr_init.c", "pthread_attr_setdetachstate.c",
+					"pthread_attr_setguardsize.c", "pthread_attr_setschedparam.c", "pthread_attr_setstack.c",
+					"pthread_attr_setstacksize.c", "pthread_barrier_destroy.c", "pthread_barrier_init.c",
+					"pthread_barrier_wait.c", "pthread_barrierattr_destroy.c", "pthread_barrierattr_init.c",
+					"pthread_barrierattr_setpshared.c", "pthread_cancel.c", "pthread_cleanup_push.c",
+					"pthread_cond_broadcast.c", "pthread_cond_destroy.c", "pthread_cond_init.c",
+					"pthread_cond_signal.c", "pthread_cond_timedwait.c", "pthread_cond_wait.c",
+					"pthread_condattr_destroy.c", "pthread_condattr_init.c", "pthread_condattr_setclock.c",
+					"pthread_condattr_setpshared.c", "pthread_equal.c", "pthread_getattr_np.c",
+					"pthread_getcpuclockid.c", "pthread_getschedparam.c", "pthread_getspecific.c",
+					"pthread_key_create.c", "pthread_mutex_consistent.c", "pthread_mutex_destroy.c",
+					"pthread_mutex_getprioceiling.c", "pthread_mutex_init.c", "pthread_mutex_lock.c",
+					"pthread_mutex_setprioceiling.c", "pthread_mutex_timedlock.c", "pthread_mutex_trylock.c",
+					"pthread_mutex_unlock.c", "pthread_mutexattr_destroy.c", "pthread_mutexattr_init.c",
+					"pthread_mutexattr_setprotocol.c", "pthread_mutexattr_setpshared.c",
+					"pthread_mutexattr_setrobust.c", "pthread_mutexattr_settype.c", "pthread_once.c",
+					"pthread_rwlock_destroy.c", "pthread_rwlock_init.c", "pthread_rwlock_rdlock.c",
+					"pthread_rwlock_timedrdlock.c", "pthread_rwlock_timedwrlock.c",
+					"pthread_rwlock_tryrdlock.c", "pthread_rwlock_trywrlock.c", "pthread_rwlock_unlock.c",
+					"pthread_rwlock_wrlock.c", "pthread_rwlockattr_destroy.c", "pthread_rwlockattr_init.c",
+					"pthread_rwlockattr_setpshared.c", "pthread_self.c", "pthread_setcancelstate.c",
+					"pthread_setcanceltype.c", "pthread_setconcurrency.c", "pthread_setschedparam.c",
+					"pthread_setschedprio.c", "pthread_setspecific.c", "pthread_spin_destroy.c",
+					"pthread_spin_init.c", "pthread_spin_lock.c", "pthread_spin_trylock.c",
+					"pthread_spin_unlock.c", "pthread_testcancel.c", "sem_destroy.c", "sem_getvalue.c",
+					"sem_init.c", "sem_open.c", "sem_post.c", "sem_timedwait.c", "sem_trywait.c",
+					"sem_wait.c", "thrd_join.c", "thrd_yield.c",
+				} {
+					threadSources = append(threadSources, "libc-top-half/musl/src/thread/common/"+name)
+				}
+				globs = append(globs,
+					filePattern{glob: "libc-top-half/musl/src/thread/coop-threads/*.c", exclude: []string{"__lock.c"}},
+				)
+			} else {
+				for i := range globs {
+					if globs[i].glob == "libc-top-half/musl/src/stdio/*.c" {
+						globs[i].exclude = append(globs[i].exclude, stdioLockSources...)
+					}
+				}
 			}
 
 			// We're using the Boehm GC, so we need a heap implementation in the libc.
@@ -334,6 +412,14 @@ func newWasiLibc(preview, name string) Library {
 			}
 			// See lib/wasi-libc-lockfile-stub.c.
 			sources = append(sources, "../wasi-libc-lockfile-stub.c")
+			sources = append(sources, threadSources...)
+			if preview == "3" {
+				sources = append(sources,
+					"libc-top-half/musl/src/env/__init_tls.c",
+					"libc-top-half/musl/src/thread/coop-threads/__wasi_coop_thread_start.s",
+					"libc-bottom-half/sources/__wasm_task_hook.S",
+				)
+			}
 			if preview == "2" || preview == "3" {
 				// See lib/wasi-libc-wasip2-stub.c and lib/wasi-libc-wasip3-stub.c.
 				sources = append(sources, "../wasi-libc-wasip"+preview+"-stub.c")

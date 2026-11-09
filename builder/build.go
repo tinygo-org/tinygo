@@ -196,13 +196,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
 		lib := libWasiLibc
-		switch {
-		case slices.Contains(config.BuildTags(), "wasip2"):
+		switch config.WasiLibcName() {
+		case "wasi-libc-wasip2":
 			if llvm.VersionMajor < 22 {
 				return nil, fmt.Errorf("target wasip2 requires clang 22 or newer, but TinyGo uses LLVM %s", llvm.Version)
 			}
 			lib = libWasiLibcWasip2
-		case slices.Contains(config.BuildTags(), "wasip3"):
+		case "wasi-libc-wasip3":
 			lib = libWasiLibcWasip3
 		}
 		libcJob, unlock, err := lib.load(config, tmpdir)

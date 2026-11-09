@@ -31,7 +31,7 @@ func wasip3_list_string_free(ptr *wasip3ListString)
 //
 //go:wasmexport wasi:cli/run@0.3.0#run
 func wasiCliRun() bool {
-	initAll()
+	initAllOnce()
 	callMain()
 	return false
 }
@@ -53,13 +53,24 @@ func os_runtime_args() []string {
 	return args
 }
 
-//export cabi_realloc
-func cabi_realloc(ptr, oldsize, align, newsize unsafe.Pointer) unsafe.Pointer {
+// cabi_realloc_go is called by the cabi_realloc trampoline in
+// asm_tinygowasm_wasip3.S, which switches to a stack that is large enough.
+//
+// The host calls cabi_realloc while it lowers values into memory, in the
+// middle of an import call. It must not start a garbage collection then: the
+// stack pointer is not in the stack of the thread that made the call, and the
+// GC would scan the wrong range. So the heap grows instead.
+//
+//export cabi_realloc_go
+func cabi_realloc_go(ptr, oldsize, align, newsize unsafe.Pointer) unsafe.Pointer {
+	gcInhibit++
 	// Use libc_realloc (not the GC-internal realloc) so this allocation is
 	// tracked in the same allocs map as malloc/free: wasi-libc's own C code
 	// takes ownership of buffers allocated here during canonical-ABI lifting
 	// and later frees them with a plain free().
-	return libc_realloc(ptr, uintptr(newsize))
+	p := libc_realloc(ptr, uintptr(newsize))
+	gcInhibit--
+	return p
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
