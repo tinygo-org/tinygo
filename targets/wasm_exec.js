@@ -498,6 +498,7 @@
 				globalThis,
 				this,
 			];
+			this._predefinedValueCount = this._values.length; // releaseBridge never releases these
 			this._goRefCounts = []; // number of references that Go has to a JS value, indexed by reference id
 			this._ids = new Map();  // mapping from JS values to reference ids
 			this._idPool = [];      // unused ids that have been garbage collected
@@ -535,6 +536,28 @@
 				return this.exitCode;
 			} else {
 				this._inst.exports._initialize();
+			}
+		}
+
+		// releaseBridge releases every JS value that Go has a reference to,
+		// except the predefined ones. Call it once the host is done with the
+		// instance: a stopped program never runs finalizers, so values held
+		// by its goroutines would otherwise stay pinned for as long as the
+		// module object is kept alive. Using the instance afterwards is
+		// undefined.
+		releaseBridge() {
+			if (!this._values) {
+				return;
+			}
+			this._idPool = [];
+			for (let id = this._predefinedValueCount; id < this._values.length; id++) {
+				const v = this._values[id];
+				if (v !== null && v !== undefined) {
+					this._ids.delete(v);
+				}
+				this._values[id] = null;
+				this._goRefCounts[id] = 0;
+				this._idPool.push(id);
 			}
 		}
 
