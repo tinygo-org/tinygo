@@ -47,12 +47,17 @@ func mallocEnd(addr uintptr) uintptr
 func AdoptThread() {
 	sp := uintptr(stacksave())
 	size := mainStackSize()
-	// The task hook of wasi-libc allocates the stack with malloc, so the stack
-	// ends where the allocation ends. The stack pointer can be at that end.
-	top := mallocEnd(sp - 1)
-	if top < sp || top-sp > size {
-		// This is not such a stack.
-		top = (sp + 15) &^ 15
+	// The task hook of wasi-libc uses the main stack when it is free, and
+	// otherwise a malloc block. The stack pointer can be at the block end.
+	var top uintptr
+	if high := uintptr(unsafe.Pointer(&stackHighSymbol)); sp <= high && sp >= high-size {
+		top = high
+	} else {
+		top = mallocEnd(sp - 1)
+		if top < sp || top-sp > size {
+			// This is not such a stack.
+			top = (sp + 16) &^ 15
+		}
 	}
 	t := &Task{}
 	t.state.id = atomic.AddUintptr(&goroutineID, 1)
