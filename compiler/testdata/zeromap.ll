@@ -265,7 +265,7 @@ entry:
   ret void
 }
 
-declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, ptr) #0
+declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), ptr) #0
 
 ; Function Attrs: noinline nounwind
 define hidden i32 @main.testBinaryGet(ptr dereferenceable_or_null(52) %m, i32 %key, ptr %context) unnamed_addr #2 {
@@ -282,7 +282,7 @@ entry:
   ret i32 %1
 }
 
-declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, i32, ptr) #0
+declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), i32, ptr) #0
 
 ; Function Attrs: noinline nounwind
 define hidden void @main.testBinaryDelete(ptr dereferenceable_or_null(52) %m, i32 %key, ptr %context) unnamed_addr #2 {
@@ -295,7 +295,7 @@ entry:
   ret void
 }
 
-declare void @runtime.hashmapBinaryDelete(ptr dereferenceable_or_null(52), ptr nocapture, ptr) #0
+declare void @runtime.hashmapBinaryDelete(ptr dereferenceable_or_null(52), ptr captures(none), ptr) #0
 
 ; Function Attrs: noinline nounwind
 define hidden void @main.testStringSet(ptr dereferenceable_or_null(52) %m, ptr readonly %key.data, i32 %key.len, i32 %value, ptr %context) unnamed_addr #2 {
@@ -308,7 +308,7 @@ entry:
   ret void
 }
 
-declare void @runtime.hashmapStringSet(ptr dereferenceable_or_null(52), ptr readonly, i32, ptr nocapture, ptr) #0
+declare void @runtime.hashmapStringSet(ptr dereferenceable_or_null(52), ptr readonly, i32, ptr captures(none), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.main(ptr %context) unnamed_addr #1 {
