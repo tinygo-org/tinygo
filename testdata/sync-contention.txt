@@ -1,0 +1,7 @@
+mutex: true
+rwmutex: true
+cond: true
+once: true
+pingpong: true
+fan-in: true
+select: true
