@@ -41,6 +41,11 @@ func main() {
 	if small {
 		goroutines, depth, bufSize = 8, 16, 4<<10
 	}
+	// Each wasip3 goroutine is a wasmtime fiber, and wasmtime allows 64 live
+	// fibers by default.
+	if runtime.GOOS == "wasip3" {
+		goroutines = 48
+	}
 	release := make(chan struct{})
 	var parked, done sync.WaitGroup
 	for i := 0; i < goroutines; i++ {

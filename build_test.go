@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -200,6 +201,7 @@ func TestBuild(t *testing.T) {
 		"go1.21.go",
 		"go1.22/",
 		"go1.23/",
+		"goroutine-waves.go",
 		"goroutines.go",
 		"init.go",
 		"init_multi.go",
@@ -229,6 +231,7 @@ func TestBuild(t *testing.T) {
 		"stringfrombytes.go",
 		"stringfrombytes_stress.go",
 		"structs.go",
+		"sync-contention.go",
 		"testing.go",
 		"timer_node_reuse_gc.go",
 		"timers.go",
@@ -257,7 +260,7 @@ func TestBuild(t *testing.T) {
 		runPlatTests(hostOptions, tests, t)
 		for _, name := range gcStackNativeTests {
 			t.Run(name, func(t *testing.T) {
-				if runtime.GOOS == "windows" && (name == "gcstacks-stale.go" || name == "gcstacks-blocked.go") {
+				if runtime.GOOS == "windows" && (name == "gcstacks-stale.go" || name == "gcstacks-sleepers.go" || name == "gcstacks-blocked.go") {
 					t.Skip("boehm scans whole goroutine stacks with the tasks scheduler")
 				}
 				t.Parallel()
@@ -556,6 +559,7 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasip3", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasip3", sema), t)
+			runGCStackTests(t, optionsFromTarget("wasip3", sema))
 		})
 	}
 
@@ -631,6 +635,7 @@ var gcStackNativeTests = []string{
 	"gcstacks-exit.go",
 	"gcstacks-panics.go",
 	"gcstacks-queues.go",
+	"gcstacks-sleepers.go",
 	"gcstacks-stale.go",
 }
 
@@ -650,6 +655,9 @@ func runGCStackTests(t *testing.T, options compileopts.Options) {
 	t.Helper()
 	for _, name := range gcStackTests {
 		t.Run(name, func(t *testing.T) {
+			if options.Target == "wasip3" && (name == "gcstacks-blocked.go" || name == "gcstacks-soak.go") {
+				t.Skip("each goroutine is a thread, which the GC cannot free while it is blocked")
+			}
 			t.Parallel()
 			runTest(name, options, t, nil, nil)
 		})
@@ -665,8 +673,41 @@ func runGCStackTests(t *testing.T, options compileopts.Options) {
 
 	// This one measures time, so it does not run in parallel with the others.
 	t.Run("gcstacks-scale.go", func(t *testing.T) {
-		runTest("gcstacks-scale.go", options, t, nil, nil)
+		scaleOptions := options
+		if options.Target == "wasip3" {
+			scaleOptions = wasip3MoreFibers(t, options)
+		}
+		runTest("gcstacks-scale.go", scaleOptions, t, nil, nil)
 	})
+}
+
+// wasip3MoreFibers returns options for a target that inherits wasip3 and
+// raises the wasmtime fiber limit. Each blocked wasip3 goroutine is a fiber,
+// and wasmtime 51 allows 64 live fibers by default.
+func wasip3MoreFibers(t *testing.T, options compileopts.Options) compileopts.Options {
+	t.Helper()
+	help, err := exec.Command("wasmtime", "run", "-S", "help").CombinedOutput()
+	if err != nil || !bytes.Contains(help, []byte("max-fibers")) {
+		// Older wasmtime versions have no fiber limit.
+		return options
+	}
+	spec, err := compileopts.LoadTarget(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := json.Marshal(map[string]any{
+		"inherits": []string{"wasip3"},
+		"emulator": strings.Replace(spec.Emulator, " -Sp3 ", " -Sp3 -Smax-fibers=4000 ", 1),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "wasip3-fibers.json")
+	if err := os.WriteFile(path, target, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	options.Target = path
+	return options
 }
 
 // runGCStackSizeTests runs the stack scanning test with goroutine stack sizes
