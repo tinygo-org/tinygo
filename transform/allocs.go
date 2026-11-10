@@ -85,20 +85,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 			continue
 		}
 
-		// In general the pattern is:
-		//     %0 = call i8* @runtime.alloc(i32 %size, i8* null)
-		//     %1 = bitcast i8* %0 to type*
-		//     (use %1 only)
-		// But the bitcast might sometimes be dropped when allocating an *i8.
-		// The 'bitcast' variable below is thus usually a bitcast of the
-		// heapalloc but not always.
-		bitcast := heapalloc // instruction that creates the value
-		if uses := getUses(heapalloc); len(uses) == 1 && !uses[0].IsABitCastInst().IsNil() {
-			// getting only bitcast use
-			bitcast = uses[0]
-		}
-
-		if at := valueEscapesAt(bitcast); !at.IsNil() {
+		if at := valueEscapesAt(heapalloc); !at.IsNil() {
 			if logAllocs {
 				atPos := getPosition(at)
 				msg := "escapes at unknown line"
@@ -123,7 +110,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 
 		// Insert alloca in the entry block. Do it here so that mem2reg can
 		// promote it to a SSA value.
-		fn := bitcast.InstructionParent().Parent()
+		fn := heapalloc.InstructionParent().Parent()
 		builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
 		allocaType := llvm.ArrayType(mod.Context().Int8Type(), int(size))
 		alloca := builder.CreateAlloca(allocaType, "stackalloc")
@@ -131,15 +118,12 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 
 		// Zero the allocation inside the block where the value was originally allocated.
 		zero := llvm.ConstNull(alloca.AllocatedType())
-		builder.SetInsertPointBefore(bitcast)
+		builder.SetInsertPointBefore(heapalloc)
 		store := builder.CreateStore(zero, alloca)
 		store.SetAlignment(alignment)
 
-		// Replace heap alloc bitcast with stack alloc bitcast.
-		bitcast.ReplaceAllUsesWith(alloca)
-		if heapalloc != bitcast {
-			bitcast.EraseFromParentAsInstruction()
-		}
+		// Replace heap alloc with stack alloc.
+		heapalloc.ReplaceAllUsesWith(alloca)
 		heapalloc.EraseFromParentAsInstruction()
 	}
 }
