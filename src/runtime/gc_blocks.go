@@ -340,9 +340,12 @@ func initHeap() {
 
 // setHeapEnd is called to expand the heap. The heap can only grow, not shrink.
 // Also, the heap should grow substantially each time otherwise growing the heap
-// will be expensive.
+// will be expensive. The caller holds gcLock, except on unicore targets where
+// it is a no-op.
 func setHeapEnd(newHeapEnd uintptr) {
 	if gcAsserts && newHeapEnd <= heapEnd {
+		// Printing the message can allocate, so do not hold the lock.
+		gcLock.Unlock()
 		runtimeFatal("gc: setHeapEnd didn't grow the heap")
 	}
 
@@ -366,6 +369,7 @@ func setHeapEnd(newHeapEnd uintptr) {
 	// should be used to avoid corruption.
 	// This assert checks whether that's true.
 	if gcAsserts && uintptr(metadataStart) < uintptr(oldMetadataStart)+oldMetadataSize {
+		gcLock.Unlock()
 		runtimeFatal("gc: heap did not grow enough at once")
 	}
 
@@ -488,6 +492,8 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			free, largest := freeRangeStats(false)
 			print("gc: oom need=", uint(neededBlocks), " free=", uint(free), " largest=", uint(largest), "\n")
 		}
+		// Printing the message can allocate, so do not hold the lock.
+		gcLock.Unlock()
 		runtimeFatal("out of memory")
 	}
 
