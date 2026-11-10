@@ -27,6 +27,10 @@ struct waiter {
 // Threads only switch inside the calls below, so no locking is needed.
 static struct waiter *waiters;
 
+// Tell the GC where the stack of a thread that is about to suspend ends, so it
+// does not scan the unused part. Zero means the thread is not suspended here.
+void tinygo_task_set_suspended_sp(uintptr_t sp);
+
 static void remove_waiter(struct waiter *w) {
     if (w->prev) {
         w->prev->next = w->next;
@@ -51,8 +55,10 @@ void tinygo_futex_wait(uint32_t *addr, uint32_t cmp) {
         waiters->prev = &w;
     }
     waiters = &w;
+    tinygo_task_set_suspended_sp((uintptr_t)__builtin_frame_address(0));
     wasip3_thread_suspend();
     __atomic_signal_fence(__ATOMIC_SEQ_CST);
+    tinygo_task_set_suspended_sp(0);
     if (!w.woken) {
         // Spurious wakeup.
         remove_waiter(&w);
@@ -67,7 +73,9 @@ void tinygo_futex_wait_timeout(uint32_t *addr, uint32_t cmp, uint64_t timeout) {
     uint64_t nsec = (uint64_t)at.tv_nsec + timeout % 1000000000;
     at.tv_sec += timeout / 1000000000 + nsec / 1000000000;
     at.tv_nsec = nsec % 1000000000;
+    tinygo_task_set_suspended_sp((uintptr_t)__builtin_frame_address(0));
     __timedwait((volatile int*)addr, cmp, CLOCK_MONOTONIC, &at, 1);
+    tinygo_task_set_suspended_sp(0);
 }
 
 static void wake(uint32_t *addr, bool all) {

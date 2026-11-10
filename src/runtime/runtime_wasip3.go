@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"internal/task"
 	"unsafe"
 )
 
@@ -96,7 +97,9 @@ func sleepTicks(d timeUnit) {
 		sec:  int64(d) / 1e9,
 		nsec: int32(int64(d) % 1e9),
 	}
+	task.MarkSuspended(true)
 	libc_nanosleep(&req, nil)
+	task.MarkSuspended(false)
 }
 
 // monotonic_clock_mark_t monotonic_clock_now(void);
