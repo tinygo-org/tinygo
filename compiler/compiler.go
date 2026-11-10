@@ -956,33 +956,33 @@ func (c *context) createPackage(irbuilder llvm.Builder, pkg *ssa.Package) {
 			// Named type. We should make sure all methods are created.
 			// This includes both functions with pointer receivers and those
 			// without.
-			methods := getAllMethods(pkg.Prog, member.Type())
-			methods = append(methods, getAllMethods(pkg.Prog, types.NewPointer(member.Type()))...)
-			for _, method := range methods {
-				// Parse this method.
-				fn := pkg.Prog.MethodValue(method)
-				if fn == nil {
-					continue // probably a generic method
+			for _, typ := range []types.Type{member.Type(), types.NewPointer(member.Type())} {
+				for method := range pkg.Prog.MethodSets.MethodSet(typ).Methods() {
+					// Parse this method.
+					fn := pkg.Prog.MethodValue(method)
+					if fn == nil {
+						continue // probably a generic method
+					}
+					if member.Type().String() != member.String() {
+						// This is a member on a type alias. Do not build such a
+						// function.
+						continue
+					}
+					if fn.Blocks == nil {
+						continue // external function
+					}
+					if fn.Synthetic != "" && fn.Synthetic != "package initializer" {
+						// This function is a kind of wrapper function (created by
+						// the ssa package, not appearing in the source code) that
+						// is created by the getFunction method as needed.
+						// Therefore, don't build it here to avoid "function
+						// redeclared" errors.
+						continue
+					}
+					// Create the function definition.
+					b := newBuilder(c, irbuilder, fn)
+					b.createFunction()
 				}
-				if member.Type().String() != member.String() {
-					// This is a member on a type alias. Do not build such a
-					// function.
-					continue
-				}
-				if fn.Blocks == nil {
-					continue // external function
-				}
-				if fn.Synthetic != "" && fn.Synthetic != "package initializer" {
-					// This function is a kind of wrapper function (created by
-					// the ssa package, not appearing in the source code) that
-					// is created by the getFunction method as needed.
-					// Therefore, don't build it here to avoid "function
-					// redeclared" errors.
-					continue
-				}
-				// Create the function definition.
-				b := newBuilder(c, irbuilder, fn)
-				b.createFunction()
 			}
 		case *ssa.Global:
 			// Global variable.

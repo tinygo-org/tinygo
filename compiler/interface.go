@@ -544,11 +544,11 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 				numOut |= 0x8000
 			}
 			inOut := make([]llvm.Value, 0, params.Len()+results.Len())
-			for i := 0; i < params.Len(); i++ {
-				inOut = append(inOut, c.getTypeCode(params.At(i).Type()))
+			for v := range params.Variables() {
+				inOut = append(inOut, c.getTypeCode(v.Type()))
 			}
-			for i := 0; i < results.Len(); i++ {
-				inOut = append(inOut, c.getTypeCode(results.At(i).Type()))
+			for v := range results.Variables() {
+				inOut = append(inOut, c.getTypeCode(v.Type()))
 			}
 			typeFields = []llvm.Value{
 				llvm.ConstInt(c.i8, uint64(params.Len()), false),
