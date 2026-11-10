@@ -21,10 +21,65 @@ var stackHighSymbol [0]byte
 //go:extern __stack_low
 var stackLowSymbol [0]byte
 
-// Code that runs before task.Init, or in a task that was started by the host
-// instead of a thread (such as cabi_realloc), is part of the main thread.
+// Tasks that the host started after the first one. They share the main thread's
+// TLS, so each is found by its stack. No lock is needed.
+var adoptedTasks *Task
+
+// Code that runs before task.Init is part of the main thread. A task that the
+// host started is the one whose stack has the stack pointer.
 func currentFallback() *Task {
+	if adoptedTasks != nil {
+		sp := uintptr(stacksave())
+		for t := adoptedTasks; t != nil; t = t.state.adoptNext {
+			if sp < t.state.stackTop && sp >= t.state.stackTop-t.state.stackSize {
+				return t
+			}
+		}
+	}
 	return &mainTask
+}
+
+// mallocEnd is implemented by the runtime.
+func mallocEnd(addr uintptr) uintptr
+
+// AdoptThread makes a task of the calling host task. The first one is the main
+// task. It must run first in the export, because the GC needs the stack.
+func AdoptThread() {
+	sp := uintptr(stacksave())
+	size := mainStackSize()
+	// The task hook of wasi-libc allocates the stack with malloc, so the stack
+	// ends where the allocation ends. The stack pointer can be at that end.
+	top := mallocEnd(sp - 1)
+	if top < sp || top-sp > size {
+		// This is not such a stack.
+		top = (sp + 15) &^ 15
+	}
+	t := &Task{}
+	t.state.id = atomic.AddUintptr(&goroutineID, 1)
+	t.state.stackTop = top
+	t.state.stackSize = size
+	activeTaskLock.Lock()
+	t.state.QueueNext = activeTasks
+	activeTasks = t
+	activeTaskCount++
+	t.state.adoptNext = adoptedTasks
+	adoptedTasks = t
+	activeTaskLock.Unlock()
+}
+
+// ReleaseThread ends the task that AdoptThread made, when the export returns.
+func ReleaseThread() {
+	t := Current()
+	if t == &mainTask {
+		return
+	}
+	for q := &adoptedTasks; *q != nil; q = &(*q).state.adoptNext {
+		if *q == t {
+			*q = t.state.adoptNext
+			break
+		}
+	}
+	exit(t)
 }
 
 // mainStackTop returns the highest address of the stack of the main thread. The
@@ -54,6 +109,15 @@ func stacksave() unsafe.Pointer
 func GCStopWorldAndScan() {
 	current := Current()
 
+	// The GC can start before a stack has a task, such as in the task hook.
+	// Current is then the main task, which is suspended and must be scanned.
+	sp := uintptr(stacksave())
+	inCurrent := current.state.stackTop != 0 && sp <= current.state.stackTop &&
+		(current.state.stackSize == 0 || current.state.stackTop-sp <= current.state.stackSize)
+	if !inCurrent && current == &mainTask && current.state.stackTop != 0 {
+		current = nil
+	}
+
 	// Don't allow threads to start or exit during the scan.
 	activeTaskLock.Lock()
 
@@ -78,12 +142,14 @@ func GCStopWorldAndScan() {
 	}
 
 	// Scan the stack of the current thread.
-	top := current.state.stackTop
-	if top == 0 {
-		// The GC was started before task.Init.
-		top = uintptr(unsafe.Pointer(&stackHighSymbol))
+	if current != nil {
+		top := current.state.stackTop
+		if top == 0 {
+			// The GC was started before task.Init.
+			top = uintptr(unsafe.Pointer(&stackHighSymbol))
+		}
+		markRoots(sp&^3, top&^3)
 	}
-	markRoots(uintptr(stacksave())&^3, top&^3)
 
 	// Scan all globals (implemented in the runtime).
 	gcScanGlobals()

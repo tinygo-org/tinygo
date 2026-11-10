@@ -23,5 +23,16 @@ func initAllOnce() {
 }
 
 func wasmExportInit() {
+	first := !initAllDone
 	initAllOnce()
+	if !first {
+		// The first export is the main task. The others run at the same time
+		// as an export that is blocked, each on its own stack.
+		task.AdoptThread()
+	}
+}
+
+// wasmExportReturn runs when an export returns.
+func wasmExportReturn() {
+	task.ReleaseThread()
 }
