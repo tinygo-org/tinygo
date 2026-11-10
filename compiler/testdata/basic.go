@@ -115,3 +115,34 @@ type T2 [2]*T2
 
 var a T1
 var b T2
+
+// Zero-length array fields do not count towards the fields of an expanded
+// parameter.
+type zeroArrayFields struct {
+	a [0]int
+	b int32
+	c [0]byte
+	d int32
+	e int32
+	f [0]struct{}
+}
+
+type zeroArrayTooMany struct {
+	a [0]int
+	b int32
+	c int32
+	d int32
+	e int32
+}
+
+func zeroArrayParam(s zeroArrayFields) int32 {
+	return s.b + s.d + s.e
+}
+
+func zeroArrayParamTooMany(s zeroArrayTooMany) int32 {
+	return s.b + s.e
+}
+
+func callZeroArrayParams() int32 {
+	return zeroArrayParam(zeroArrayFields{b: 1, d: 2, e: 3}) + zeroArrayParamTooMany(zeroArrayTooMany{b: 4, e: 5})
+}

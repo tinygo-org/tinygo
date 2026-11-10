@@ -5,6 +5,7 @@ target triple = "wasm32-unknown-wasi"
 
 %main.kv = type { float, i32, i32, i32 }
 %main.kv.0 = type { i8, i32, i32, i32 }
+%main.zeroArrayTooMany = type { [0 x i32], i32, i32, i32, i32 }
 
 @main.kvGlobal = hidden global %main.kv zeroinitializer, align 4
 @main.a = hidden global { ptr, i32, i32 } zeroinitializer, align 4
@@ -318,6 +319,135 @@ entry:
 define internal void @"main.foo$1"(%main.kv.0 %b, ptr %context) unnamed_addr #1 {
 entry:
   ret void
+}
+
+; Function Attrs: nounwind
+define hidden i32 @main.zeroArrayParam(i32 %s.b, i32 %s.d, i32 %s.e, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %s = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
+  call void @runtime.trackPointer(ptr nonnull %s, ptr nonnull %stackalloc, ptr undef) #3
+  store i32 %s.b, ptr %s, align 4
+  %s.repack7 = getelementptr inbounds nuw i8, ptr %s, i32 4
+  store i32 %s.d, ptr %s.repack7, align 4
+  %s.repack9 = getelementptr inbounds nuw i8, ptr %s, i32 8
+  store i32 %s.e, ptr %s.repack9, align 4
+  br i1 false, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  br i1 false, label %deref.throw, label %deref.next1
+
+deref.next1:                                      ; preds = %deref.next
+  br i1 false, label %deref.throw, label %deref.next2
+
+deref.next2:                                      ; preds = %deref.next1
+  %0 = getelementptr inbounds nuw i8, ptr %s, i32 8
+  %1 = load i32, ptr %s, align 4
+  %2 = getelementptr inbounds nuw i8, ptr %s, i32 4
+  %3 = load i32, ptr %2, align 4
+  %4 = add i32 %1, %3
+  %5 = load i32, ptr %0, align 4
+  %6 = add i32 %4, %5
+  ret i32 %6
+
+deref.throw:                                      ; preds = %deref.next1, %deref.next, %entry
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i32 undef
+}
+
+; Function Attrs: nounwind
+define hidden i32 @main.zeroArrayParamTooMany(%main.zeroArrayTooMany %s, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %s1 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
+  call void @runtime.trackPointer(ptr nonnull %s1, ptr nonnull %stackalloc, ptr undef) #3
+  %s.elt4 = extractvalue %main.zeroArrayTooMany %s, 1
+  store i32 %s.elt4, ptr %s1, align 4
+  %s1.repack5 = getelementptr inbounds nuw i8, ptr %s1, i32 4
+  %s.elt6 = extractvalue %main.zeroArrayTooMany %s, 2
+  store i32 %s.elt6, ptr %s1.repack5, align 4
+  %s1.repack7 = getelementptr inbounds nuw i8, ptr %s1, i32 8
+  %s.elt8 = extractvalue %main.zeroArrayTooMany %s, 3
+  store i32 %s.elt8, ptr %s1.repack7, align 4
+  %s1.repack9 = getelementptr inbounds nuw i8, ptr %s1, i32 12
+  %s.elt10 = extractvalue %main.zeroArrayTooMany %s, 4
+  store i32 %s.elt10, ptr %s1.repack9, align 4
+  br i1 false, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  br i1 false, label %deref.throw, label %deref.next2
+
+deref.next2:                                      ; preds = %deref.next
+  %0 = getelementptr inbounds nuw i8, ptr %s1, i32 12
+  %1 = load i32, ptr %s1, align 4
+  %2 = load i32, ptr %0, align 4
+  %3 = add i32 %1, %2
+  ret i32 %3
+
+deref.throw:                                      ; preds = %deref.next, %entry
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i32 undef
+}
+
+; Function Attrs: nounwind
+define hidden i32 @main.callZeroArrayParams(ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  %complit = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
+  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #3
+  %0 = getelementptr inbounds nuw i8, ptr %complit, i32 4
+  %1 = getelementptr inbounds nuw i8, ptr %complit, i32 8
+  br i1 false, label %store.throw, label %store.next
+
+store.next:                                       ; preds = %entry
+  store i32 1, ptr %complit, align 4
+  br i1 false, label %store.throw, label %store.next1
+
+store.next1:                                      ; preds = %store.next
+  store i32 2, ptr %0, align 4
+  br i1 false, label %store.throw, label %store.next2
+
+store.next2:                                      ; preds = %store.next1
+  store i32 3, ptr %1, align 4
+  %.unpack7 = load i32, ptr %complit, align 4
+  %.elt10 = getelementptr inbounds nuw i8, ptr %complit, i32 4
+  %.unpack11 = load i32, ptr %.elt10, align 4
+  %2 = call i32 @main.zeroArrayParam(i32 %.unpack7, i32 %.unpack11, i32 3, ptr undef)
+  %complit3 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #3
+  call void @runtime.trackPointer(ptr nonnull %complit3, ptr nonnull %stackalloc, ptr undef) #3
+  br i1 false, label %store.throw, label %store.next4
+
+store.next4:                                      ; preds = %store.next2
+  store i32 4, ptr %complit3, align 4
+  br i1 false, label %store.throw, label %store.next5
+
+store.next5:                                      ; preds = %store.next4
+  %3 = getelementptr inbounds nuw i8, ptr %complit3, i32 12
+  store i32 5, ptr %3, align 4
+  %.unpack17 = load i32, ptr %complit3, align 4
+  %4 = insertvalue %main.zeroArrayTooMany poison, i32 %.unpack17, 1
+  %.elt18 = getelementptr inbounds nuw i8, ptr %complit3, i32 4
+  %.unpack19 = load i32, ptr %.elt18, align 4
+  %5 = insertvalue %main.zeroArrayTooMany %4, i32 %.unpack19, 2
+  %.elt20 = getelementptr inbounds nuw i8, ptr %complit3, i32 8
+  %.unpack21 = load i32, ptr %.elt20, align 4
+  %6 = insertvalue %main.zeroArrayTooMany %5, i32 %.unpack21, 3
+  %.elt22 = getelementptr inbounds nuw i8, ptr %complit3, i32 12
+  %.unpack23 = load i32, ptr %.elt22, align 4
+  %7 = insertvalue %main.zeroArrayTooMany %6, i32 %.unpack23, 4
+  %8 = call i32 @main.zeroArrayParamTooMany(%main.zeroArrayTooMany %7, ptr undef)
+  %9 = add i32 %2, %8
+  ret i32 %9
+
+store.throw:                                      ; preds = %store.next4, %store.next2, %store.next1, %store.next, %entry
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %store.throw
+  ret i32 undef
 }
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }

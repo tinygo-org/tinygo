@@ -593,10 +593,9 @@ func (b *builder) createUnwindReturnOrUnreachable() {
 func (c *context) expandDirectFormalParamType(t llvm.Type, name string, goType types.Type) []paramInfo {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		fieldInfos := c.flattenAggregateType(t, name, goType)
-		if len(fieldInfos) <= maxFieldsPerParam {
+		if c.flattenedFieldCount(t) <= maxFieldsPerParam {
 			// managed to expand this parameter
-			return fieldInfos
+			return c.flattenAggregateType(t, name, goType)
 		}
 		// failed to expand this parameter: too many fields
 	}
@@ -665,10 +664,9 @@ func (b *builder) expandFormalParamOffsets(t llvm.Type) []uint64 {
 func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
 	switch v.Type().TypeKind() {
 	case llvm.StructTypeKind:
-		fieldInfos := b.flattenAggregateType(v.Type(), "", nil)
-		if len(fieldInfos) <= maxFieldsPerParam {
+		if count := b.flattenedFieldCount(v.Type()); count <= maxFieldsPerParam {
 			fields := b.flattenAggregate(v)
-			if len(fields) != len(fieldInfos) {
+			if len(fields) != count {
 				panic("type and value param lowering don't match")
 			}
 			return fields
@@ -680,6 +678,28 @@ func (b *builder) expandFormalParam(v llvm.Value) []llvm.Value {
 		// TODO: split small arrays
 		return []llvm.Value{v}
 	}
+}
+
+// flattenedFieldCount returns the number of values flattenAggregateType returns
+// for t. It stops counting once the count exceeds maxFieldsPerParam.
+func (c *context) flattenedFieldCount(t llvm.Type) int {
+	return c.flattenedFieldCount0(t, 0)
+}
+
+func (c *context) flattenedFieldCount0(t llvm.Type, count int) int {
+	if t.TypeKind() != llvm.StructTypeKind {
+		return count + 1
+	}
+	for _, field := range t.StructElementTypes() {
+		if count > maxFieldsPerParam {
+			break
+		}
+		if c.targetData.TypeAllocSize(field) == 0 {
+			continue
+		}
+		count = c.flattenedFieldCount0(field, count)
+	}
+	return count
 }
 
 // Try to flatten a struct type to a list of types. Returns a 1-element slice
@@ -837,8 +857,7 @@ func (b *builder) collapseFormalParam(t llvm.Type, fields []llvm.Value) llvm.Val
 func (b *builder) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value) (llvm.Value, []llvm.Value) {
 	switch t.TypeKind() {
 	case llvm.StructTypeKind:
-		flattened := b.flattenAggregateType(t, "", nil)
-		if len(flattened) <= maxFieldsPerParam {
+		if b.flattenedFieldCount(t) <= maxFieldsPerParam {
 			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
 				if b.targetData.TypeAllocSize(subtyp) == 0 {
