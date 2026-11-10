@@ -1,4 +1,4 @@
-//go:build rp2040 || nrf || sam
+//go:build rp2040 || nrf || (sam && !atsam3x)
 
 package machine
 
