@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1437,9 +1438,9 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 	if abi.indirectResult {
 		resultOffset = 1
 	}
-	paramTypes := append([]llvm.Type{}, llvmFnType.ParamTypes()[:resultOffset]...)
-	paramTypes = append(paramTypes, c.dataPtrType)
-	paramTypes = append(paramTypes, llvmFnType.ParamTypes()[resultOffset+len(expandedReceiverType):]...)
+	fnParamTypes := llvmFnType.ParamTypes()
+	paramTypes := append(slices.Clone(fnParamTypes[:resultOffset]), c.dataPtrType)
+	paramTypes = append(paramTypes, fnParamTypes[resultOffset+len(expandedReceiverType):]...)
 	wrapFnType := llvm.FunctionType(llvmFnType.ReturnType(), paramTypes, false)
 	wrapper = llvm.AddFunction(c.mod, wrapperName, wrapFnType)
 	c.addStandardAttributes(wrapper)
@@ -1465,15 +1466,16 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 	block := b.ctx.AddBasicBlock(wrapper, "entry")
 	b.SetInsertPointAtEnd(block)
 
-	params := append([]llvm.Value{}, wrapper.Params()[:resultOffset]...)
-	receiverParam := wrapper.Param(resultOffset)
+	wrapperParams := wrapper.Params()
+	params := append([]llvm.Value{}, wrapperParams[:resultOffset]...)
+	receiverParam := wrapperParams[resultOffset]
 	if receiverIndirect {
 		params = append(params, receiverParam)
 	} else {
 		receiverValue := b.emitPointerUnpack(receiverParam, []llvm.Type{receiverType})[0]
 		params = append(params, b.expandFormalParam(receiverValue)...)
 	}
-	params = append(params, wrapper.Params()[resultOffset+1:]...)
+	params = append(params, wrapperParams[resultOffset+1:]...)
 	if llvmFnType.ReturnType() == b.void {
 		b.CreateCall(llvmFnType, llvmFn, params, "")
 		b.CreateRetVoid()

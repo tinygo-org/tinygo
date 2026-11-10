@@ -163,17 +163,13 @@ func (b *builder) createAsyncifyNoSuspendInvoke(fnType llvm.Type, fn llvm.Value,
 	builder := b.ctx.NewBuilder()
 	entry := b.ctx.AddBasicBlock(wrapper, "entry")
 	builder.SetInsertPointAtEnd(entry)
+	wrapperParams := wrapper.Params()
 	target := fn
-	paramOffset := 0
 	if !direct {
-		target = wrapper.Param(0)
-		paramOffset = 1
+		target = wrapperParams[0]
+		wrapperParams = wrapperParams[1:]
 	}
-	callArgs := make([]llvm.Value, len(fnType.ParamTypes()))
-	for i := range callArgs {
-		callArgs[i] = wrapper.Param(i + paramOffset)
-	}
-	result := builder.CreateCall(fnType, target, callArgs, "")
+	result := builder.CreateCall(fnType, target, wrapperParams, "")
 	unwindType, unwindLLVMFn := b.getRuntimeFunction("unwindPending")
 	unwinding := builder.CreateCall(unwindType, unwindLLVMFn, []llvm.Value{b.dataPtrUndef}, "")
 	replay := b.createAsyncifyPanicReplay(wrapperType)
@@ -235,12 +231,8 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	builder := b.ctx.NewBuilder()
 	entry := b.ctx.AddBasicBlock(targetWrapper, "entry")
 	builder.SetInsertPointAtEnd(entry)
-	target := targetWrapper.Param(0)
-	callArgs := make([]llvm.Value, len(fnType.ParamTypes()))
-	for i := range callArgs {
-		callArgs[i] = targetWrapper.Param(i + 1)
-	}
-	result := builder.CreateCall(fnType, target, callArgs, "")
+	targetParams := targetWrapper.Params()
+	result := builder.CreateCall(fnType, targetParams[0], targetParams[1:], "")
 	if fnType.ReturnType() == b.void {
 		builder.CreateRetVoid()
 	} else {
@@ -335,8 +327,9 @@ func (b *builder) createAsyncifyPanicReplay(catcherType llvm.Type) llvm.Value {
 
 	startType, startFn := b.getRuntimeFunction("asyncifyStartRewindImport")
 	builder.CreateCall(startType, startFn, []llvm.Value{data}, "")
-	args := make([]llvm.Value, len(catcherType.ParamTypes()))
-	for i, typ := range catcherType.ParamTypes() {
+	paramTypes := catcherType.ParamTypes()
+	args := make([]llvm.Value, len(paramTypes))
+	for i, typ := range paramTypes {
 		args[i] = llvm.Undef(typ)
 	}
 	builder.CreateCall(catcherType, targetPointer, args, "")
