@@ -855,9 +855,8 @@ func (c *context) attachDebugInfoDeclarationRaw(f *ssa.Function, llvmFn llvm.Val
 
 func (c *context) attachDebugInfoRawWithDefinition(f *ssa.Function, llvmFn llvm.Value, suffix, filename string, line int, isDefinition bool) llvm.Metadata {
 	// Debug info for this function.
-	params := getParams(f.Signature)
-	diparams := make([]llvm.Metadata, 0, len(params))
-	for _, param := range params {
+	diparams := make([]llvm.Metadata, 0, f.Signature.Params().Len()+1)
+	for _, param := range getParams(f.Signature) {
 		diparams = append(diparams, c.getDIType(param.Type()))
 	}
 	diFuncType := c.dibuilder.CreateSubroutineType(llvm.DISubroutineType{

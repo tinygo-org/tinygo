@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"iter"
 	"slices"
 	"strconv"
 	"strings"
@@ -789,18 +790,25 @@ const (
 	siteIndirect // pointer or field
 )
 
-// getParams returns the function parameters, including the receiver at the
-// start. This is an alternative to the Params member of *ssa.Function, which is
-// not yet populated when the package has not yet been built.
-func getParams(sig *types.Signature) []*types.Var {
-	params := []*types.Var{}
-	if sig.Recv() != nil {
-		params = append(params, sig.Recv())
+// getParams iterates over the function parameters, including the receiver at
+// the start. This is an alternative to the Params member of *ssa.Function, which
+// is not yet populated when the package has not yet been built.
+func getParams(sig *types.Signature) iter.Seq2[int, *types.Var] {
+	return func(yield func(int, *types.Var) bool) {
+		i := 0
+		if recv := sig.Recv(); recv != nil {
+			if !yield(i, recv) {
+				return
+			}
+			i++
+		}
+		for v := range sig.Params().Variables() {
+			if !yield(i, v) {
+				return
+			}
+			i++
+		}
 	}
-	for v := range sig.Params().Variables() {
-		params = append(params, v)
-	}
-	return params
 }
 
 // addStandardDeclaredAttributes adds attributes that are set for any function,
