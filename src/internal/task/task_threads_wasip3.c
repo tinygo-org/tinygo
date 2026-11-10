@@ -14,6 +14,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <wasi/api.h>
 
 // Futex that does not allocate, see src/internal/futex/futex_wasip3.c.
 void tinygo_futex_wait(uint32_t *addr, uint32_t cmp);
@@ -121,6 +122,10 @@ static void* worker_main(void *arg) {
     // Notify the caller that the thread has successfully started and
     // initialized.
     sem_post(&state->startlock);
+
+    // pthread_create switches to this thread. Let the creator continue first,
+    // like it does on the other schedulers.
+    wasip3_thread_yield();
 
     run_job(w);
     worker_loop(w, false);

@@ -64,6 +64,10 @@ func GCStopWorldAndScan() {
 			if t.state.stackTop > t.state.stackSize {
 				low = t.state.stackTop - t.state.stackSize
 			}
+			// A thread that suspended in a futex knows where its stack ends.
+			if sp := t.state.stackBottom; sp > low && sp <= t.state.stackTop {
+				low = sp
+			}
 			// The range must be aligned to a pointer.
 			low = (low + 3) &^ 3
 			top := t.state.stackTop &^ 3
@@ -115,5 +119,22 @@ func start(fn uintptr, args unsafe.Pointer, stackSize uintptr) {
 	errCode := tinygo_task_start(fn, args, t, &t.state.thread, &t.state.stackTop, stackSize)
 	if errCode != 0 {
 		runtimeFatal("could not start thread")
+	}
+}
+
+//export tinygo_task_set_suspended_sp
+func setSuspendedSP(sp uintptr) {
+	Current().state.stackBottom = sp
+}
+
+// MarkSuspended records the caller's stack pointer before a blocking call, so
+// the GC skips the unused stack. Call it with false when the call returns.
+//
+//go:noinline
+func MarkSuspended(suspended bool) {
+	if suspended {
+		Current().state.stackBottom = uintptr(stacksave())
+	} else {
+		Current().state.stackBottom = 0
 	}
 }
