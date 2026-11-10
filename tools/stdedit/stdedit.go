@@ -17,6 +17,7 @@ import (
 // RewriteSpec describes how to generate one TinyGo package from upstream.
 type RewriteSpec struct {
 	Path  string // import path in GOROOT
+	Dir   string // output directory in the TinyGo repository, default src/Path
 	Steps Pass
 }
 

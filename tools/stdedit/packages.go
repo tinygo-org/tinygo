@@ -3,6 +3,13 @@ package main
 // RewriteSpecs lists the packages TinyGo generates from upstream.
 var RewriteSpecs = []RewriteSpec{
 	{
+		Path: "internal/diff",
+		// tinygo fix shows its changes with Diff, but cannot import a GOROOT
+		// internal package.
+		Dir:   "internal/diff",
+		Steps: Extract("Diff"),
+	},
+	{
 		Path: "internal/strconv",
 		Steps: Pipeline(
 			// optimize is false, so the pow10 tables are not linked in.

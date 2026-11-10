@@ -62,6 +62,9 @@ func run(root string, paths []string) error {
 	}
 	for _, spec := range specs {
 		dir := filepath.Join(root, "src", filepath.FromSlash(spec.Path))
+		if spec.Dir != "" {
+			dir = filepath.Join(root, filepath.FromSlash(spec.Dir))
+		}
 		out := filepath.Join(dir, path.Base(spec.Path)+"_generated.go")
 		var buf bytes.Buffer
 		if err := generate(&buf, spec, goversion, out); err != nil {

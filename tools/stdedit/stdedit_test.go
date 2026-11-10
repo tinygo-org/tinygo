@@ -228,6 +228,31 @@ func kept() {}
 	}
 }
 
+func TestExtract(t *testing.T) {
+	src := `package p
+
+// F is extracted.
+func F() int { return used() }
+
+func used() int { return 2 }
+
+// G is exported but not extracted.
+func G() int { return 3 }
+`
+	p := newPackage(t, src)
+	got := generateTest(t, p, Extract("F"))
+	for _, s := range []string{"G is exported", "func G"} {
+		if strings.Contains(got, s) {
+			t.Errorf("kept %q:\n%s", s, got)
+		}
+	}
+	for _, s := range []string{"F is extracted", "func used"} {
+		if !strings.Contains(got, s) {
+			t.Errorf("missing %q:\n%s", s, got)
+		}
+	}
+}
+
 func TestConstFalse(t *testing.T) {
 	src := `package p
 
