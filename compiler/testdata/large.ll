@@ -489,9 +489,9 @@ declare i1 @runtime.memequal(ptr, ptr, i32, ptr) #0
 
 declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr) #0
 
-declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, ptr) #0
+declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), ptr) #0
 
-declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr nocapture, ptr nocapture, i32, ptr) #0
+declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), i32, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i8 @main.useLargeChannel(ptr dereferenceable_or_null(40) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
