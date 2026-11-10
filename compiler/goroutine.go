@@ -198,6 +198,9 @@ func (b *builder) createWasmExport() {
 		params := exportedFn.Params()
 		params = append(params, b.dataPtrNull) // context parameter
 		retval := builder.CreateCall(b.llvmFnType, b.llvmFn, params, "")
+		if b.Scheduler == "threads" {
+			builder.createRuntimeCall("wasmExportReturn", nil, "")
+		}
 		if b.fn.Signature.Results() == nil {
 			builder.CreateRetVoid()
 		} else {

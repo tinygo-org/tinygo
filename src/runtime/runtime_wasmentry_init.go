@@ -8,3 +8,7 @@ const initInRun = false
 
 // wasmExportInit runs before every //go:wasmexport function.
 func wasmExportInit() {}
+
+// wasmExportReturn runs after every //go:wasmexport function that does not use
+// a scheduler loop.
+func wasmExportReturn() {}

@@ -94,3 +94,18 @@ func libc_realloc(oldPtr unsafe.Pointer, size uintptr) unsafe.Pointer {
 	}
 	return ptr
 }
+
+// mallocEnd returns the end of the malloc allocation that contains addr, or
+// zero if there is none. The wasip3 task hook allocates task stacks this way.
+//
+//go:linkname mallocEnd internal/task.mallocEnd
+func mallocEnd(addr uintptr) uintptr {
+	allocsLock.Lock()
+	defer allocsLock.Unlock()
+	for ptr, size := range allocs {
+		if addr >= ptr && addr < ptr+size {
+			return ptr + size
+		}
+	}
+	return 0
+}

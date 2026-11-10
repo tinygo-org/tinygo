@@ -33,6 +33,9 @@ type state struct {
 	// Next task in the activeTasks queue.
 	QueueNext *Task
 
+	// Next task in the list of tasks started by the host (wasip3).
+	adoptNext *Task
+
 	// Arguments of the goroutine. In wasip3 the C code that starts the thread
 	// keeps this pointer in a WebAssembly local, which the GC cannot see. Keep
 	// it reachable through the task instead.

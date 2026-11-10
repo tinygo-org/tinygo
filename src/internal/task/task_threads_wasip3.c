@@ -178,7 +178,9 @@ int tinygo_task_start(uintptr_t fn, void *args, void *task, pthread_t *thread, u
 
 // Return the current task (for task.Current()).
 void* tinygo_task_current(void) {
-    return current_task;
+    // The main thread and the tasks that the host starts share one thread
+    // local storage. Go finds those by their stack.
+    return self_worker ? current_task : NULL;
 }
 
 // Called when a goroutine ends with Goexit, which cannot return to the start
