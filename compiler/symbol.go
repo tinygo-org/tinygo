@@ -1070,13 +1070,3 @@ func (info *globalInfo) parsePragmas(doc *ast.CommentGroup, c *context, g *ssa.G
 		}
 	}
 }
-
-// Get all methods of a type.
-func getAllMethods(prog *ssa.Program, typ types.Type) []*types.Selection {
-	ms := prog.MethodSets.MethodSet(typ)
-	methods := make([]*types.Selection, ms.Len())
-	for i := 0; i < ms.Len(); i++ {
-		methods[i] = ms.At(i)
-	}
-	return methods
-}
