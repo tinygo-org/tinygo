@@ -1,0 +1,16 @@
+mutate: 99 1
+record: 2 77 0 -1 r r!
+sorted: 1 9 33 41
+choose: 4 12
+swap: 9 1
+deferred: 1 1
+closure: 44 44 5
+channel: 6 88
+goroutine: 66 7
+map: 33 16 1
+interface: 22 9 true
+range: 10 18
+method: 8 3
+method: 4 3
+method: 10 3
+method value: 5 4

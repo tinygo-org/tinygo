@@ -20,6 +20,7 @@ func TestBuild(t *testing.T) {
 	t.Parallel()
 
 	tests := []string{
+		"aggregate.go",
 		"alias.go",
 		"atomic.go",
 		"binop.go",
@@ -566,7 +567,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// Needs more RAM than AVR has.
 				continue
 
-			case "map_bigkey.go":
+			case "aggregate.go", "map_bigkey.go":
 				// Compiler generates many large stack temporaries for [256]byte
 				// map keys, overflowing the goroutine stack (384 bytes).
 				continue
