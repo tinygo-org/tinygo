@@ -80,7 +80,7 @@ func reflectValueEqual(x, y reflectlite.Value) bool {
 		return true
 	case reflectlite.Struct:
 		for i := 0; i < x.NumField(); i++ {
-			if x.RawType().Field(i).Name == "_" {
+			if reflectlite.StructFieldName(x.RawType(), i) == "_" {
 				continue
 			}
 			if !reflectValueEqual(x.Field(i), y.Field(i)) {
