@@ -1,0 +1,4 @@
+{
+	"inherits": ["esp32s3"],
+	"build-tags": ["feather_esp32s3_tft"]
+}
