@@ -197,7 +197,15 @@ jobs:
           tar -C ~/lib -xf tinygo${{ needs.build-linux.outputs.version }}.linux-amd64.tar.gz
           ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
       - run: make tinygo-test-wasip1-fast
+      - name: Check for clang 22 or newer
+        id: clang
+        run: |
+          major=$(tinygo version | sed -n 's/.*LLVM version \([0-9]*\)\..*/\1/p')
+          if [ "${major:-0}" -ge 22 ]; then
+            echo "wasip2=true" >> "$GITHUB_OUTPUT"
+          fi
       - run: make tinygo-test-wasip2-fast
+        if: steps.clang.outputs.wasip2 == 'true'
       - run: make tinygo-test-wasm
   smoketest-linux:
     # Build a binary for every supported board, using the binaries built in the
