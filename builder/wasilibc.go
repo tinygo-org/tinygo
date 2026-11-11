@@ -94,6 +94,7 @@ func newWasiLibc(preview, name string) Library {
 			for _, glob := range [][2]string{
 				{"libc-bottom-half/headers/public/*.h", ""},
 				{"libc-bottom-half/headers/public/wasi/*.h", "wasi"},
+				{"libc-top-half/musl/arch/generic/bits/*.h", "bits"},
 				{"libc-top-half/musl/arch/wasm32/bits/*.h", "bits"},
 				{"libc-top-half/musl/include/*.h", ""},
 				{"libc-top-half/musl/include/netinet/*.h", "netinet"},
@@ -169,7 +170,7 @@ func newWasiLibc(preview, name string) Library {
 			// Compile only one set for each preview.
 			cloudlibcSockSrcExclude := []string{}
 			bottomHalfSrcExclude := []string{
-				"wasip3.c", "wasip3_block_on.c", "wasip3_stdio.c", // wasip3-only, not yet supported
+				"wasip3.c", "wasip3_block_on.c", "wasip3_stdio.c", "wasip3_tls.c", // wasip3-only, not yet supported
 			}
 			switch preview {
 			case "1":
@@ -316,6 +317,8 @@ func newWasiLibc(preview, name string) Library {
 				"libc-top-half/musl/src/network/inet_legacy.c",
 				"libc-top-half/musl/src/network/inet_ntoa.c",
 			}
+			// See lib/wasi-libc-lockfile-stub.c.
+			sources = append(sources, "../wasi-libc-lockfile-stub.c")
 			if preview == "2" {
 				// See lib/wasi-libc-wasip2-stub.c.
 				sources = append(sources, "../wasi-libc-wasip2-stub.c")
