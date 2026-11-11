@@ -33,9 +33,9 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          commits=$(git log --format='%h %ae %ce' "origin/$BASE_REF..HEAD")
+          commits=$(git log --format='%h %ae %ce %(trailers:key=Co-authored-by,valueonly,separator=%x20)' "origin/$BASE_REF..HEAD")
           if printf '%s\n' "$commits" | grep -iE 'noreply@anthropic\.com|copilot@users\.noreply\.github\.com'; then
-            echo "::error::Commits must not be authored or committed by Claude or Copilot."
+            echo "::error::Commits must not be authored, committed or co-authored by Claude or Copilot."
             exit 1
           fi
       - name: Check go.mod and go.sum are up to date
