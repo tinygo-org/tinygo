@@ -72,7 +72,6 @@ type context struct {
 	dumpSSA                     bool
 	mod                         llvm.Module
 	ctx                         llvm.Context
-	builder                     llvm.Builder // only used for constant operations
 	dibuilder                   *llvm.DIBuilder
 	cu                          llvm.Metadata
 	difiles                     map[string]llvm.Metadata
@@ -146,7 +145,6 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 	c.i64 = c.ctx.Int64Type()
 	c.i1False = llvm.ConstNull(c.i1)
 	c.i1True = llvm.ConstAllOnes(c.i1)
-	c.builder = c.ctx.NewBuilder()
 	c.mod = c.ctx.NewModule(moduleName)
 	c.mod.SetTarget(config.Triple)
 	c.mod.SetDataLayout(c.targetData.String())
@@ -180,12 +178,6 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 	dummyFunc.EraseFromParentAsFunction()
 
 	return c
-}
-
-// Dispose everything related to the context, _except_ for the IR module (and
-// the associated context).
-func (c *context) dispose() {
-	c.builder.Dispose()
 }
 
 // builder contains all information relevant to build a single function.
@@ -348,7 +340,6 @@ func Sizes(machine llvm.TargetMachine) types.Sizes {
 // concurrently, the entire SSA program must be built before compilation starts.
 func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package, machine llvm.TargetMachine, config *Config, dumpSSA bool) (llvm.Module, []error) {
 	c := newContext(moduleName, machine, config, dumpSSA)
-	defer c.dispose()
 	c.packageDir = pkg.OriginalDir()
 	c.embedGlobals = pkg.EmbedGlobals
 	c.pkg = pkg.Pkg
@@ -1129,16 +1120,21 @@ func (c *context) createEmbedGlobal(member *ssa.Global, global llvm.Value, files
 		// Make the backing array for the []files slice. This is a LLVM global.
 		embedFileStructType := typ.Field(0).Type().(*types.Pointer).Elem().(*types.Slice).Elem()
 		llvmEmbedFileStructType := c.getLLVMType(embedFileStructType)
-		var fileStructs []llvm.Value
-		for _, file := range allFiles {
-			fileStruct := llvm.ConstNull(llvmEmbedFileStructType)
-			name := c.createConst(ssa.NewConst(constant.MakeString(file.Name), types.Typ[types.String]), getPos(member))
-			fileStruct = c.builder.CreateInsertValue(fileStruct, name, 0, "") // "name" field
+		llvmEmbedFileFieldTypes := llvmEmbedFileStructType.StructElementTypes()
+		llvmEmbedFileFieldZeros := make([]llvm.Value, len(llvmEmbedFileFieldTypes))
+		for i, t := range llvmEmbedFileFieldTypes {
+			llvmEmbedFileFieldZeros[i] = llvm.ConstNull(t)
+		}
+		llvmEmbedFieldScratch := make([]llvm.Value, len(llvmEmbedFileFieldZeros))
+		fileStructs := make([]llvm.Value, len(allFiles))
+		for i, file := range allFiles {
+			// TODO: actually include the file hash instead of doing this
+			copy(llvmEmbedFieldScratch, llvmEmbedFileFieldZeros)
+			llvmEmbedFieldScratch[0] = c.createConst(ssa.NewConst(constant.MakeString(file.Name), types.Typ[types.String]), getPos(member))
 			if file.Hash != "" {
-				data := c.getEmbedFileString(file)
-				fileStruct = c.builder.CreateInsertValue(fileStruct, data, 1, "") // "data" field
+				llvmEmbedFieldScratch[1] = c.getEmbedFileString(file) // "data" field
 			}
-			fileStructs = append(fileStructs, fileStruct)
+			fileStructs[i] = llvm.ConstNamedStruct(llvmEmbedFileStructType, llvmEmbedFieldScratch)
 		}
 		sliceDataInitializer := llvm.ConstArray(llvmEmbedFileStructType, fileStructs)
 		sliceDataGlobal := llvm.AddGlobal(c.mod, sliceDataInitializer.Type(), c.pkg.Path()+"$embedfsfiles")
@@ -1189,11 +1185,11 @@ func (c *context) createEmbedGlobal(member *ssa.Global, global llvm.Value, files
 
 		// Define the embed.FS struct. It has only one field: the files (as a
 		// *[]embed.file).
-		globalInitializer := llvm.ConstNull(c.getLLVMType(member.Type().(*types.Pointer).Elem()))
-		globalInitializer = c.builder.CreateInsertValue(globalInitializer, sliceGlobal, 0, "")
-		global.SetInitializer(globalInitializer)
+		embedFSType := c.getLLVMType(member.Type().(*types.Pointer).Elem())
+		initializer := llvm.ConstNamedStruct(embedFSType, []llvm.Value{sliceGlobal})
+		global.SetInitializer(initializer)
 		global.SetVisibility(llvm.HiddenVisibility)
-		global.SetAlignment(c.targetData.ABITypeAlignment(globalInitializer.Type()))
+		global.SetAlignment(c.targetData.ABITypeAlignment(embedFSType))
 	}
 }
 
@@ -3637,17 +3633,11 @@ func (c *context) createConst(expr *ssa.Const, pos token.Pos) llvm.Value {
 		} else if typ.Kind() == types.Complex64 {
 			r := c.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float32]), pos)
 			i := c.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float32]), pos)
-			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.FloatType(), c.ctx.FloatType()}, false))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
-			return cplx
+			return c.ctx.ConstStruct([]llvm.Value{r, i}, false)
 		} else if typ.Kind() == types.Complex128 {
 			r := c.createConst(ssa.NewConst(constant.Real(expr.Value), types.Typ[types.Float64]), pos)
 			i := c.createConst(ssa.NewConst(constant.Imag(expr.Value), types.Typ[types.Float64]), pos)
-			cplx := llvm.Undef(c.ctx.StructType([]llvm.Type{c.ctx.DoubleType(), c.ctx.DoubleType()}, false))
-			cplx = c.builder.CreateInsertValue(cplx, r, 0, "")
-			cplx = c.builder.CreateInsertValue(cplx, i, 1, "")
-			return cplx
+			return c.ctx.ConstStruct([]llvm.Value{r, i}, false)
 		} else {
 			panic("unknown constant of basic type: " + expr.String())
 		}
