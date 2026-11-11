@@ -28,6 +28,11 @@ func currentCPU() uint32
 // NumCores returns number of cores available on the device.
 func NumCores() int { return 2 }
 
+// CPUFrequency returns the CPU frequency set by the runtime at boot.
+func CPUFrequency() uint32 {
+	return 240e6 // 240MHz
+}
+
 // GetCPUFrequency returns the current CPU frequency of the chip.
 func GetCPUFrequency() (uint32, error) {
 	switch esp.SYSTEM.GetSYSCLK_CONF_SOC_CLK_SEL() {

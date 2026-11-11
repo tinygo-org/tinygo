@@ -9,12 +9,6 @@
 
 package machine
 
-// CPUFrequency returns the current CPU frequency for ESP32-S3-BOX-3.
-// Returns 240MHz (max speed for ESP32-S3 with PSRAM)
-func CPUFrequency() uint32 {
-	return 240_000_000 // 240MHz
-}
-
 const (
 	// GPIO pins available on ESP32-S3-BOX-3
 	// Based on ESP-BOX-3 BSP pin definitions
