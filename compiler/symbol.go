@@ -183,8 +183,7 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 			// not.
 			// (It may be safe to add the nocapture parameter to the context
 			// parameter, but I'd like to stay on the safe side here).
-			nocapture := c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0)
-			llvmFn.AddAttributeAtIndex(i+1, nocapture)
+			llvmFn.AddAttributeAtIndex(i+1, c.nocapture)
 		}
 		if paramInfo.flags&paramIsReadonly != 0 && paramInfo.llvmType.TypeKind() == llvm.PointerTypeKind {
 			// Readonly pointer parameters (like strings) benefit from being marked as readonly.
@@ -202,9 +201,9 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 		// Mark it as noreturn so LLVM can optimize away code.
 		llvmFn.AddFunctionAttr(c.ctx.CreateEnumAttribute(llvm.AttributeKindID("noreturn"), 0))
 	case "internal/abi.NoEscape":
-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(1, c.nocapture)
 	case "machine.keepAliveNoEscape", "machine.unsafeNoEscape":
-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(1, c.nocapture)
 	case "runtime.alloc", "runtime.alloc_noheap", "runtime.alloc_zero":
 		// Tell the optimizer that runtime.alloc is an allocator, meaning that it
 		// returns values that are never null and never alias to an existing value.
@@ -226,54 +225,54 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 	case "runtime.sliceAppend":
 		// Appending a slice will only read the to-be-appended slice, it won't
 		// be modified.
-		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(2, c.nocapture)
 		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
 	case "runtime.stringFromBytes":
-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(1, c.nocapture)
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
 	case "runtime.stringFromRunes":
-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(1, c.nocapture)
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
 	case "runtime.hashmapSet":
 		// The key (param 2) and value (param 3) pointers are only read via
 		// memcpy/hash/equal and are never captured. The indirect calls
 		// through m.keyHash and m.keyEqual function pointers prevent LLVM's
 		// functionattrs pass from inferring this automatically.
-		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
-		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(2, c.nocapture)
+		llvmFn.AddAttributeAtIndex(3, c.nocapture)
 	case "runtime.hashmapStringGet":
 		// The map (param 1) and key data (param 2) are only read, and never
 		// captured. Only the value (param 4) is written. The key comparison is
 		// an indirect call to hashmapStringEqual, so LLVM cannot see this.
 		for _, index := range []int{1, 2} {
-			llvmFn.AddAttributeAtIndex(index, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+			llvmFn.AddAttributeAtIndex(index, c.nocapture)
 			llvmFn.AddAttributeAtIndex(index, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
 		}
-		llvmFn.AddAttributeAtIndex(4, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(4, c.nocapture)
 		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute(llvmutil.WritesArgsOnlyAttrName, ""))
 	case "runtime.hashmapGet":
 		// The key (param 2) is read-only and never captured.
 		// The value (param 3) is written to (receives the result) but never captured.
-		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
-		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(2, c.nocapture)
+		llvmFn.AddAttributeAtIndex(3, c.nocapture)
 	case "runtime.hashmapDelete":
 		// The key (param 2) is read-only and never captured.
-		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(2, c.nocapture)
 	case "runtime.hashmapBinarySet", "runtime.hashmapGenericSet":
-		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
-		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(2, c.nocapture)
+		llvmFn.AddAttributeAtIndex(3, c.nocapture)
 	case "runtime.hashmapStringSet":
-		llvmFn.AddAttributeAtIndex(4, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(4, c.nocapture)
 	case "runtime.hashmapBinaryGet", "runtime.hashmapGenericGet":
-		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
-		llvmFn.AddAttributeAtIndex(3, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(2, c.nocapture)
+		llvmFn.AddAttributeAtIndex(3, c.nocapture)
 	case "runtime.hashmapBinaryDelete", "runtime.hashmapGenericDelete":
-		llvmFn.AddAttributeAtIndex(2, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(2, c.nocapture)
 	case "runtime.trackPointer":
 		// This function is necessary for tracking pointers on the stack in a
 		// portable way (see gc_stack_portable.go). Indicate to the optimizer
 		// that the only thing we'll do is read the pointer.
-		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0))
+		llvmFn.AddAttributeAtIndex(1, c.nocapture)
 		llvmFn.AddAttributeAtIndex(1, c.ctx.CreateEnumAttribute(llvm.AttributeKindID("readonly"), 0))
 	case "__mulsi3", "__divmodsi4", "__udivmodsi4":
 		if strings.Split(c.Triple, "-")[0] == "avr" {
@@ -308,11 +307,9 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 
 			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-name", info.wasmName))
 		}
-		nocaptureKind := llvm.AttributeKindID(llvmutil.NoCaptureAttrName())
-		nocapture := c.ctx.CreateEnumAttribute(nocaptureKind, 0)
 		for i, typ := range paramTypes {
 			if typ.TypeKind() == llvm.PointerTypeKind {
-				llvmFn.AddAttributeAtIndex(i+1, nocapture)
+				llvmFn.AddAttributeAtIndex(i+1, c.nocapture)
 			}
 		}
 	}
