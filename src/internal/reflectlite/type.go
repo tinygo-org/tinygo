@@ -658,6 +658,13 @@ func (t *RawType) Field(i int) StructField {
 	}
 }
 
+// StructFieldName returns the name of field i of struct type t.
+func StructFieldName(t *RawType, i int) string {
+	_, field := t.rawFieldDescriptor(i)
+	_, name, _ := field.decode()
+	return name
+}
+
 // structFieldTag reads the tag that follows the NUL after name.
 func structFieldTag(name string, flagsByte uint8) StructTag {
 	if flagsByte&structFieldFlagHasTag != 0 {
