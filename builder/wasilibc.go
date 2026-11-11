@@ -128,7 +128,7 @@ func newWasiLibc(preview, name string) Library {
 		},
 		cflags: func(target, headerPath string) []string {
 			libcDir := filepath.Join(goenv.Get("TINYGOROOT"), "lib/wasi-libc")
-			return []string{
+			flags := []string{
 				"-Werror",
 				"-Wall",
 				"-std=gnu11",
@@ -147,6 +147,11 @@ func newWasiLibc(preview, name string) Library {
 				"-I" + libcDir + "/libc-top-half/musl/arch/generic",
 				"-I" + libcDir + "/libc-top-half/headers/private",
 			}
+			if preview != "1" {
+				// wasi-libc needs -fdefer-ts. See CMakeLists.txt in wasi-libc.
+				flags = append(flags, "-fdefer-ts")
+			}
+			return flags
 		},
 		cflagsForFile: func(path string) []string {
 			if strings.HasPrefix(path, "libc-bottom-half"+string(os.PathSeparator)) {

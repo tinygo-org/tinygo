@@ -1,5 +1,5 @@
 {
-	"llvm-target":   "wasm32-unknown-wasi",
+	"llvm-target":   "wasm32-unknown-wasip2",
 	"cpu":           "generic",
 	"features":      "+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types",
 	"build-tags":    ["tinygo.wasm", "wasip2"],

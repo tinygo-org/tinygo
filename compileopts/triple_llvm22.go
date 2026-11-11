@@ -8,5 +8,8 @@ import "strings"
 // LLVM 22 deprecated the "wasm32-unknown-wasi" triple in favor of
 // "wasm32-unknown-wasip1", so we substitute it here to avoid warnings.
 func ClangTriple(triple string) string {
-	return strings.Replace(triple, "wasm32-unknown-wasi", "wasm32-unknown-wasip1", 1)
+	if rest, ok := strings.CutSuffix(triple, "wasm32-unknown-wasi"); ok {
+		return rest + "wasm32-unknown-wasip1"
+	}
+	return triple
 }
