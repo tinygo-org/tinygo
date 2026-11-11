@@ -35,3 +35,5 @@ cortex-m-qemu            ./testdata/size-init-config              z       3272  
 cortex-m-qemu            ./testdata/size-init-config              2       7850      334        4     4180
 cortex-m-qemu            ./testdata/size-init-strings             z      27106     2046      128     4176
 cortex-m-qemu            ./testdata/size-init-strings             2      31200     1616      100     4180
+cortex-m-qemu            ./testdata/size-fmt                      z      28513     8383     1460     4184
+cortex-m-qemu            ./testdata/size-fmt                      2      15547     1733       68     4208
