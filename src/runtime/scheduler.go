@@ -80,13 +80,18 @@ func (h *timerHeap) removeAt(i int) *timerNode {
 	return tn
 }
 
+// before reports whether tn goes before other in the heap.
+func (tn *timerNode) before(other *timerNode) bool {
+	return tn.timer.when < other.timer.when || tn.timer.when == other.timer.when && tn.seq < other.seq
+}
+
 // fix places tn, which is not in the slice yet, at the hole at index i.
 // It moves up towards the root first and then down.
 func (h *timerHeap) fix(i int, tn *timerNode) {
 	nodes := h.nodes
 	for i > 0 {
 		p := nodes[(i-1)/2]
-		if tn.timer.when > p.timer.when || tn.timer.when == p.timer.when && tn.seq > p.seq {
+		if p.before(tn) {
 			break
 		}
 		nodes[i] = p
@@ -94,10 +99,10 @@ func (h *timerHeap) fix(i int, tn *timerNode) {
 		i = (i - 1) / 2
 	}
 	for c := 2*i + 1; c < len(nodes); c = 2*i + 1 {
-		if c+1 < len(nodes) && (nodes[c+1].timer.when < nodes[c].timer.when || nodes[c+1].timer.when == nodes[c].timer.when && nodes[c+1].seq < nodes[c].seq) {
+		if c+1 < len(nodes) && nodes[c+1].before(nodes[c]) {
 			c++
 		}
-		if nodes[c].timer.when > tn.timer.when || nodes[c].timer.when == tn.timer.when && nodes[c].seq > tn.seq {
+		if tn.before(nodes[c]) {
 			break
 		}
 		nodes[i] = nodes[c]
