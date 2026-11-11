@@ -1120,7 +1120,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			if witPackage != "" && witWorld != "" {
 
 				// wasm-tools component embed -w wasi:cli/command
-				// 		$$(tinygo env TINYGOROOT)/lib/wasi-cli/wit/ main.wasm -o embedded.wasm
+				// 		$$(tinygo env TINYGOROOT)/lib/wasi-libc/wasi/p2/wit/ main.wasm -o embedded.wasm
 				componentEmbedInputFile := result.Binary
 				result.Binary = result.Executable + ".wasm-component-embed"
 				args := []string{

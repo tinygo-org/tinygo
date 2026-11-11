@@ -21,7 +21,6 @@ build/release: tinygo gen-device $(if $(filter 1,$(USE_SYSTEM_BINARYEN)),,binary
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-bottom-half
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/arch
 	@mkdir -p build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
-	@mkdir -p build/release/tinygo/lib/wasi-cli/
 	@mkdir -p build/release/tinygo/lib/wasi-libc/wasi/p2
 	@mkdir -p build/release/tinygo/lib/xtensa
 	@echo copying source files
@@ -125,7 +124,6 @@ endif
 	@cp -rp lib/wasi-libc/libc-top-half/musl/src/unistd             build/release/tinygo/lib/wasi-libc/libc-top-half/musl/src
 	@cp -rp lib/wasi-libc/libc-top-half/sources                     build/release/tinygo/lib/wasi-libc/libc-top-half
 	@cp -rp lib/wasi-libc-wasip2-stub.c                             build/release/tinygo/lib
-	@cp -rp lib/wasi-cli/wit                                        build/release/tinygo/lib/wasi-cli/wit
 	@cp -rp lib/wasi-libc-lockfile-stub.c                           build/release/tinygo/lib
 	@cp -rp lib/wasi-libc/wasi/p2/wit                                build/release/tinygo/lib/wasi-libc/wasi/p2
 	@cp -rp lib/xtensa/include                                      build/release/tinygo/lib/xtensa
