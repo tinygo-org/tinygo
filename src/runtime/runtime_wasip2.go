@@ -5,9 +5,9 @@ package runtime
 import (
 	"unsafe"
 
-	"internal/wasi/cli/v0.2.0/environment"
-	wasiclirun "internal/wasi/cli/v0.2.0/run"
-	monotonicclock "internal/wasi/clocks/v0.2.0/monotonic-clock"
+	"internal/wasi/cli/v0.2.12/environment"
+	wasiclirun "internal/wasi/cli/v0.2.12/run"
+	monotonicclock "internal/wasi/clocks/v0.2.12/monotonic-clock"
 
 	"internal/cm"
 )

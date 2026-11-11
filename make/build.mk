@@ -17,7 +17,7 @@ WASM_TOOLS_MODULE=go.bytecodealliance.org
 .PHONY: wasi-syscall
 wasi-syscall: wasi-cm
 	rm -rf ./src/internal/wasi/*
-	go tool $(WASM_TOOLS_MODULE)/cmd/wit-bindgen-go generate --versioned -o ./src/internal -p internal --cm internal/cm ./lib/wasi-cli/wit
+	go tool $(WASM_TOOLS_MODULE)/cmd/wit-bindgen-go generate --versioned -o ./src/internal -p internal --cm internal/cm -w wasi:cli/command@0.2.12 ./lib/wasi-libc/wasi/p2/wit
 
 # Copy package cm into src/internal/cm
 .PHONY: wasi-cm
