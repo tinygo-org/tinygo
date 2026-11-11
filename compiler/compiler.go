@@ -90,6 +90,7 @@ type context struct {
 	funcPtrAddrSpace            int
 	uintptrType                 llvm.Type
 	uintptrZero                 llvm.Value
+	nocapture                   llvm.Attribute // captures(none)
 	ptrBits                     int
 	ptrAlign                    int
 	program                     *ssa.Program
@@ -156,6 +157,7 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 	c.dataPtrType = llvm.PointerType(c.i8, 0)
 	c.dataPtrNull = llvm.ConstNull(c.dataPtrType)
 	c.dataPtrUndef = llvm.Undef(c.dataPtrType)
+	c.nocapture = c.ctx.CreateEnumAttribute(llvm.AttributeKindID(llvmutil.NoCaptureAttrName()), 0)
 
 	c.ptrBits = c.targetData.PointerSize() * 8
 	c.ptrAlign = c.targetData.ABITypeAlignment(c.dataPtrType)
