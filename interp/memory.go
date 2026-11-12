@@ -1130,7 +1130,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 					// Indexing into a struct field.
 					offsetInBytes := r.targetData.ElementOffset(elementType, int(index))
 					totalOffset += offsetInBytes
-					elementType = elementType.StructElementTypes()[index]
+					elementType = elementType.StructTypeAtIndex(int(index))
 				default:
 					// Indexing into an array.
 					elementType = elementType.ElementType()
