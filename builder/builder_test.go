@@ -1,12 +1,14 @@
 package builder
 
 import (
+	"debug/elf"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
@@ -361,6 +363,46 @@ func checkFeatureFlags(t *testing.T, targetFeatures, clangFeatures string) {
 	if len(conflicts) > 0 {
 		t.Errorf("target disables features that Clang enables: %s",
 			strings.Join(conflicts, "; "))
+	}
+}
+
+func TestBuildStripAll(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("requires Linux ELF target")
+	}
+
+	tmpDir := t.TempDir()
+	srcPath := filepath.Join(tmpDir, "main.go")
+	if err := os.WriteFile(srcPath, []byte("package main\nfunc main() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	options := &compileopts.Options{
+		GOOS:          runtime.GOOS,
+		GOARCH:        runtime.GOARCH,
+		Opt:           "z",
+		InterpTimeout: time.Minute,
+		Semaphore:     sema,
+	}
+	config, err := NewConfig(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Target.LDFlags = append(config.Target.LDFlags, "--strip-all")
+
+	result, err := Build(srcPath, ".elf", tmpDir, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := elf.Open(result.Binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	if f.Section(".symtab") != nil {
+		t.Fatal(".symtab section still present despite --strip-all")
 	}
 }
 
