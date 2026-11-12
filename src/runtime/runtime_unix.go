@@ -326,7 +326,7 @@ func allocateHeap() {
 	// first touched.
 	heapMaxSize = 1 * 1024 * 1024 * 1024 // 1GB for the entire heap
 	for {
-		addr := mmap(nil, heapMaxSize, flag_PROT_READ|flag_PROT_WRITE, flag_MAP_PRIVATE|flag_MAP_ANONYMOUS, -1, 0)
+		addr := mmap(nil, heapMaxSize, flag_PROT_READ|flag_PROT_WRITE, flag_MAP_PRIVATE|flag_MAP_ANONYMOUS|flag_MAP_NORESERVE, -1, 0)
 		if addr == unsafe.Pointer(^uintptr(0)) {
 			// Heap was too big to be mapped by mmap. Reduce the maximum size.
 			// We might want to make this a bit smarter than simply halving the
