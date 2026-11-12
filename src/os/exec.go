@@ -5,6 +5,9 @@ import (
 	"syscall"
 )
 
+// Errors StartProcess returns for a ProcAttr that it cannot honour. On a
+// hosted OS only ErrNotImplementedSys is reachable. The other two stay because
+// they are part of the exported API of this package.
 var (
 	ErrNotImplementedDir   = errors.New("directory setting not implemented")
 	ErrNotImplementedSys   = errors.New("sys setting not implemented")
@@ -36,56 +39,18 @@ type ProcAttr struct {
 // ErrProcessDone indicates a Process has finished.
 var ErrProcessDone = errors.New("os: process already finished")
 
-type ProcessState struct {
-}
-
-func (p *ProcessState) String() string {
-	return "" // TODO
-}
-func (p *ProcessState) Success() bool {
-	return false // TODO
-}
-
-// Sys returns system-dependent exit information about
-// the process. Convert it to the appropriate underlying
-// type, such as syscall.WaitStatus on Unix, to access its contents.
-func (p *ProcessState) Sys() interface{} {
-	return nil // TODO
-}
-
-func (p *ProcessState) Exited() bool {
-	return false // TODO
-}
-
-// ExitCode returns the exit code of the exited process, or -1
-// if the process hasn't exited or was terminated by a signal.
-func (p *ProcessState) ExitCode() int {
-	return -1 // TODO
-}
-
 type Process struct {
 	Pid int
+
+	// done reports whether Wait reaped this process. A signal to a reaped pid
+	// is unsafe, because the number can belong to an unrelated process.
+	done int32
 }
 
 // StartProcess starts a new process with the program, arguments and attributes specified by name, argv and attr.
 // Arguments to the process (os.Args) are passed via argv.
 func StartProcess(name string, argv []string, attr *ProcAttr) (*Process, error) {
 	return startProcess(name, argv, attr)
-}
-
-func (p *Process) Wait() (*ProcessState, error) {
-	if p.Pid == -1 {
-		return nil, syscall.EINVAL
-	}
-	return nil, ErrNotImplemented
-}
-
-func (p *Process) Kill() error {
-	return ErrNotImplemented
-}
-
-func (p *Process) Signal(sig Signal) error {
-	return ErrNotImplemented
 }
 
 func Ignore(sig ...Signal) {
