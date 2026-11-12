@@ -436,3 +436,25 @@ func TestRecordedPath(t *testing.T) {
 		t.Fatalf("GOPATH DebugPrefixMap() = %q, want %q", got, want)
 	}
 }
+
+func TestListGorootMergeLinksMissingOverrideDir(t *testing.T) {
+	goroot := t.TempDir()
+	tinygoroot := t.TempDir()
+
+	goFile := filepath.Join(goroot, "src", "net", "net.go")
+	if err := os.MkdirAll(filepath.Dir(goFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(goFile, []byte("package net\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	merges, err := listGorootMergeLinks(goroot, tinygoroot, map[string]bool{"net": true})
+	if err != nil {
+		t.Fatalf("listGorootMergeLinks failed: %v", err)
+	}
+	wantKey := filepath.Join("src", "net", "net.go")
+	if got := merges[wantKey]; got != goFile {
+		t.Errorf("merges[%q] = %q, want %q", wantKey, got, goFile)
+	}
+}
