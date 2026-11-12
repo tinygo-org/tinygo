@@ -3,6 +3,7 @@ package main
 import (
 	"runtime"
 	"sync"
+	"sync/atomic"
 )
 
 // Deep calls leave pointers to large buffers in the unused part of a goroutine
@@ -17,7 +18,7 @@ var (
 	bufSize    = 16 << 10
 )
 
-var sink byte
+var sink atomic.Uint32
 
 //go:noinline
 func deepAlloc(n int) {
@@ -26,7 +27,7 @@ func deepAlloc(n int) {
 	if n > 0 {
 		deepAlloc(n - 1)
 	}
-	sink += buf[0]
+	sink.Add(uint32(buf[0]))
 }
 
 func heapInuse() uint64 {

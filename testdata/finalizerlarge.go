@@ -11,7 +11,7 @@ type largeFinalizerObject struct {
 	data [128]byte
 }
 
-var largeFinalizerRan bool
+var largeFinalizerRan atomic.Bool
 var largeFinalizerSink int
 var runnerCallbackDone, runnerPayloadDone atomic.Uint32
 var finalizerLargeMode string
@@ -71,7 +71,7 @@ func registerLargeFinalizer() {
 				panic("finalizer closure data was collected")
 			}
 		}
-		largeFinalizerRan = true
+		largeFinalizerRan.Store(true)
 	})
 }
 
@@ -86,12 +86,12 @@ func main() {
 		return
 	}
 	registerLargeFinalizer()
-	for i := 0; i < 100 && !largeFinalizerRan; i++ {
+	for i := 0; i < 100 && !largeFinalizerRan.Load(); i++ {
 		largeFinalizerSink += scrubLargeFinalizerStack(40)
 		runtime.GC()
 		runtime.Gosched()
 	}
-	if !largeFinalizerRan {
+	if !largeFinalizerRan.Load() {
 		panic("large object finalizer did not run")
 	}
 	if mode == "runner-payload" {
