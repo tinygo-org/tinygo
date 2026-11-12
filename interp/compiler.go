@@ -307,7 +307,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 						// struct field index for when the GEP must be done at
 						// runtime.
 						inst.operands = append(inst.operands, literalValue{elementOffset}, literalValue{^uint64(index)})
-						elementType = elementType.StructElementTypes()[index]
+						elementType = elementType.StructTypeAtIndex(int(index))
 					case llvm.ArrayTypeKind:
 						elementType = elementType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(elementType)
@@ -335,7 +335,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					switch indexingType.TypeKind() {
 					case llvm.StructTypeKind:
 						offset += r.targetData.ElementOffset(indexingType, int(index))
-						indexingType = indexingType.StructElementTypes()[index]
+						indexingType = indexingType.StructTypeAtIndex(int(index))
 					case llvm.ArrayTypeKind:
 						indexingType = indexingType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(indexingType)
@@ -360,7 +360,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					switch indexingType.TypeKind() {
 					case llvm.StructTypeKind:
 						offset += r.targetData.ElementOffset(indexingType, int(index))
-						indexingType = indexingType.StructElementTypes()[index]
+						indexingType = indexingType.StructTypeAtIndex(int(index))
 					case llvm.ArrayTypeKind:
 						indexingType = indexingType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(indexingType)
