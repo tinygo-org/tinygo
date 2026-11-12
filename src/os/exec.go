@@ -2,7 +2,9 @@ package os
 
 import (
 	"errors"
+	"internal/itoa"
 	"syscall"
+	"time"
 )
 
 var (
@@ -37,30 +39,76 @@ type ProcAttr struct {
 var ErrProcessDone = errors.New("os: process already finished")
 
 type ProcessState struct {
+	pid    int
+	status syscall.WaitStatus
+	rusage *syscall.Rusage
+}
+
+func (p *ProcessState) Pid() int {
+	return p.pid
 }
 
 func (p *ProcessState) String() string {
-	return "" // TODO
+	if p == nil {
+		return "<nil>"
+	}
+	status := p.Sys().(syscall.WaitStatus)
+	res := ""
+	switch {
+	case status.Exited():
+		code := status.ExitStatus()
+		res = "exit status " + itoa.Itoa(code)
+	case status.Signaled():
+		res = "signal: " + status.Signal().String()
+	case status.Stopped():
+		res = "stop signal: " + status.StopSignal().String()
+		if status.StopSignal() == syscall.SIGTRAP && status.TrapCause() != 0 {
+			res += " (trap " + itoa.Itoa(status.TrapCause()) + ")"
+		}
+	case status.Continued():
+		res = "continued"
+	}
+	if status.CoreDump() {
+		res += " (core dumped)"
+	}
+	return res
 }
+
 func (p *ProcessState) Success() bool {
-	return false // TODO
+	return p.status.ExitStatus() == 0
 }
 
 // Sys returns system-dependent exit information about
 // the process. Convert it to the appropriate underlying
 // type, such as syscall.WaitStatus on Unix, to access its contents.
 func (p *ProcessState) Sys() interface{} {
-	return nil // TODO
+	return p.status
+}
+
+func (p *ProcessState) SysUsage() interface{} {
+	return p.rusage
+}
+
+func (p *ProcessState) UserTime() time.Duration {
+	return p.userTime()
+}
+
+func (p *ProcessState) SystemTime() time.Duration {
+	return p.systemTime()
 }
 
 func (p *ProcessState) Exited() bool {
-	return false // TODO
+	return p.status.Exited()
 }
 
 // ExitCode returns the exit code of the exited process, or -1
 // if the process hasn't exited or was terminated by a signal.
 func (p *ProcessState) ExitCode() int {
-	return -1 // TODO
+	// Return -1 if the process hasn't exited or was terminated by a signal.
+	if !p.Exited() {
+		return -1
+	}
+	return p.status.ExitStatus()
 }
 
 type Process struct {
@@ -77,15 +125,15 @@ func (p *Process) Wait() (*ProcessState, error) {
 	if p.Pid == -1 {
 		return nil, syscall.EINVAL
 	}
-	return nil, ErrNotImplemented
+	return p.wait()
 }
 
 func (p *Process) Kill() error {
-	return ErrNotImplemented
+	return p.Signal(Kill)
 }
 
 func (p *Process) Signal(sig Signal) error {
-	return ErrNotImplemented
+	return p.signal(sig)
 }
 
 func Ignore(sig ...Signal) {

@@ -17,3 +17,15 @@ func syscall_runtime_BeforeExec() {
 //go:linkname syscall_runtime_AfterExec syscall.runtime_AfterExec
 func syscall_runtime_AfterExec() {
 }
+
+//go:linkname syscall_runtime_BeforeFork syscall.runtime_BeforeFork
+func syscall_runtime_BeforeFork() {
+}
+
+//go:linkname syscall_runtime_AfterFork syscall.runtime_AfterFork
+func syscall_runtime_AfterFork() {
+}
+
+//go:linkname syscall_runtime_AfterForkInChild syscall.runtime_AfterForkInChild
+func syscall_runtime_AfterForkInChild() {
+}
