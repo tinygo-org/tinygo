@@ -140,9 +140,15 @@ func Get(name string) string {
 		}
 		return gomips
 	case "GOROOT":
+		if dir := os.Getenv("GOROOT"); dir != "" {
+			return dir
+		}
 		readGoEnvVars()
 		return goEnvVars.GOROOT
 	case "GOPATH":
+		if dir := os.Getenv("GOPATH"); dir != "" {
+			return dir
+		}
 		readGoEnvVars()
 		return goEnvVars.GOPATH
 	case "GOCACHE":

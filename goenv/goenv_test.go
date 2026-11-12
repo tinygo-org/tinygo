@@ -40,3 +40,18 @@ func TestSplitFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestGetEnvOverrides(t *testing.T) {
+	wantGoroot := t.TempDir()
+	wantGopath := t.TempDir()
+	t.Setenv("GOROOT", wantGoroot)
+	t.Setenv("GOPATH", wantGopath)
+	t.Setenv("PATH", "")
+
+	if got := Get("GOROOT"); got != wantGoroot {
+		t.Errorf("Get(\"GOROOT\") = %q, want %q", got, wantGoroot)
+	}
+	if got := Get("GOPATH"); got != wantGopath {
+		t.Errorf("Get(\"GOPATH\") = %q, want %q", got, wantGopath)
+	}
+}
