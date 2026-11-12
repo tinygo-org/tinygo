@@ -82,6 +82,16 @@ func _Cgo_staticfunc!symbols.go(x _Cgo_int)
 
 var _Cgo_staticfunc!symbols.go$funcaddr unsafe.Pointer
 
+//export arrayParam
+func _Cgo_arrayParam(a *_Cgo_int)
+
+var _Cgo_arrayParam$funcaddr unsafe.Pointer
+
+//export incompleteArrayParam
+func _Cgo_incompleteArrayParam(a *_Cgo_int)
+
+var _Cgo_incompleteArrayParam$funcaddr unsafe.Pointer
+
 //export notEscapingFunction
 //go:noescape
 func _Cgo_notEscapingFunction(a *_Cgo_int)
