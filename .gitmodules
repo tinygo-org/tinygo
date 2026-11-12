@@ -35,9 +35,6 @@
 [submodule "src/net"]
 	path = src/net
 	url = https://github.com/tinygo-org/net.git
-[submodule "lib/wasi-cli"]
-	path = lib/wasi-cli
-	url = https://github.com/WebAssembly/wasi-cli
 [submodule "lib/bdwgc"]
 	path = lib/bdwgc
 	url = https://github.com/ivmai/bdwgc.git

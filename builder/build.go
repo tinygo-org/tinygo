@@ -194,7 +194,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
-		libcJob, unlock, err := libWasiLibc.load(config, tmpdir)
+		lib := libWasiLibc
+		if slices.Contains(config.BuildTags(), "wasip2") {
+			if llvm.VersionMajor < 22 {
+				return nil, fmt.Errorf("target wasip2 requires clang 22 or newer, but TinyGo uses LLVM %s", llvm.Version)
+			}
+			lib = libWasiLibcWasip2
+		}
+		libcJob, unlock, err := lib.load(config, tmpdir)
 		if err != nil {
 			return nil, err
 		}
@@ -1113,7 +1120,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			if witPackage != "" && witWorld != "" {
 
 				// wasm-tools component embed -w wasi:cli/command
-				// 		$$(tinygo env TINYGOROOT)/lib/wasi-cli/wit/ main.wasm -o embedded.wasm
+				// 		$$(tinygo env TINYGOROOT)/lib/wasi-libc/wasi/p2/wit/ main.wasm -o embedded.wasm
 				componentEmbedInputFile := result.Binary
 				result.Binary = result.Executable + ".wasm-component-embed"
 				args := []string{
