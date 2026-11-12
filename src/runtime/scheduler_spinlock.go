@@ -10,18 +10,17 @@ import "runtime/interrupt"
 // by the GC while holding the lock.
 type schedulerSpinLock struct {
 	spinLock
-	state [numCPU]interrupt.State
+	state interrupt.State
 }
 
 func (l *schedulerSpinLock) Lock() {
-	core := currentCPU()
 	state := interrupt.Disable()
 	l.spinLock.Lock()
-	l.state[core] = state
+	l.state = state
 }
 
 func (l *schedulerSpinLock) Unlock() {
-	state := l.state[currentCPU()]
+	state := l.state
 	l.spinLock.Unlock()
 	interrupt.Restore(state)
 }
@@ -29,7 +28,7 @@ func (l *schedulerSpinLock) Unlock() {
 // unlockMasked releases the lock and leaves interrupts off. Pass the returned
 // state to lockMasked.
 func (l *schedulerSpinLock) unlockMasked() interrupt.State {
-	state := l.state[currentCPU()]
+	state := l.state
 	l.spinLock.Unlock()
 	return state
 }
@@ -38,5 +37,5 @@ func (l *schedulerSpinLock) unlockMasked() interrupt.State {
 // that Unlock will restore.
 func (l *schedulerSpinLock) lockMasked(state interrupt.State) {
 	l.spinLock.Lock()
-	l.state[currentCPU()] = state
+	l.state = state
 }
