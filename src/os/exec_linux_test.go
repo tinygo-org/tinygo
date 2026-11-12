@@ -1,78 +1,127 @@
-//go:build linux && !baremetal && !tinygo.wasm
+//go:build !baremetal && !tinygo.wasm
 
 package os_test
 
 import (
 	"errors"
+	"io"
 	. "os"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"testing"
 )
 
-// Test the functionality of the forkExec function, which is used to fork and exec a new process.
-// This test is not run on Windows, as forkExec is not supported on Windows.
-// This test is not run on Plan 9, as forkExec is not supported on Plan 9.
 func TestForkExec(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Logf("skipping test on %s", runtime.GOOS)
 		return
 	}
 
-	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{})
-	if !errors.Is(err, nil) {
-		t.Fatalf("forkExec failed: %v", err)
+	proc, err := StartProcess("/bin/true", []string{"true"}, &ProcAttr{})
+	if err != nil {
+		t.Fatalf("StartProcess failed: %v", err)
+	}
+	if proc == nil || proc.Pid <= 0 {
+		t.Fatalf("invalid process: %+v", proc)
 	}
 
-	if proc == nil {
-		t.Fatalf("proc is nil")
+	pid := proc.Pid
+	state, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("Wait failed: %v", err)
 	}
-
-	if proc.Pid == 0 {
-		t.Fatalf("forkExec failed: new process has pid 0")
+	if !state.Exited() || !state.Success() || state.ExitCode() != 0 {
+		t.Errorf("unexpected state: exited=%v success=%v code=%d str=%q", state.Exited(), state.Success(), state.ExitCode(), state.String())
+	}
+	if state.Pid() != pid {
+		t.Errorf("state.Pid() = %d, want %d", state.Pid(), pid)
 	}
 }
 
 func TestForkExecErrNotExist(t *testing.T) {
 	proc, err := StartProcess("invalid", []string{"invalid"}, &ProcAttr{})
 	if !errors.Is(err, ErrNotExist) {
-		t.Fatalf("wanted ErrNotExist, got %s\n", err)
+		t.Fatalf("wanted ErrNotExist, got %v", err)
 	}
-
 	if proc != nil {
-		t.Fatalf("wanted nil, got %v\n", proc)
+		t.Fatalf("wanted nil, got %v", proc)
 	}
 }
 
 func TestForkExecProcDir(t *testing.T) {
-	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{Dir: "dir"})
-	if !errors.Is(err, ErrNotImplementedDir) {
-		t.Fatalf("wanted ErrNotImplementedDir, got %v\n", err)
+	dir := t.TempDir()
+	proc, err := StartProcess("/bin/true", []string{"true"}, &ProcAttr{Dir: dir})
+	if err != nil {
+		t.Fatalf("StartProcess with Dir failed: %v", err)
+	}
+	state, err := proc.Wait()
+	if err != nil || !state.Success() {
+		t.Fatalf("Wait failed: state=%v err=%v", state, err)
 	}
 
+	missing := filepath.Join(dir, "does-not-exist")
+	proc, err = StartProcess("/bin/true", []string{"true"}, &ProcAttr{Dir: missing})
+	if !errors.Is(err, ErrNotExist) {
+		t.Fatalf("wanted ErrNotExist for missing Dir, got %v", err)
+	}
 	if proc != nil {
-		t.Fatalf("wanted nil, got %v\n", proc)
+		t.Fatalf("wanted nil proc, got %v", proc)
 	}
 }
 
 func TestForkExecProcSys(t *testing.T) {
-	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{Sys: &syscall.SysProcAttr{}})
-	if !errors.Is(err, ErrNotImplementedSys) {
-		t.Fatalf("wanted ErrNotImplementedSys, got %v\n", err)
+	proc, err := StartProcess("/bin/true", []string{"true"}, &ProcAttr{Sys: &syscall.SysProcAttr{}})
+	if err != nil {
+		t.Fatalf("StartProcess with Sys failed: %v", err)
 	}
-
-	if proc != nil {
-		t.Fatalf("wanted nil, got %v\n", proc)
+	state, err := proc.Wait()
+	if err != nil || !state.Success() {
+		t.Fatalf("Wait failed: state=%v err=%v", state, err)
 	}
 }
 
 func TestForkExecProcFiles(t *testing.T) {
-	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{Files: []*File{}})
-	if !errors.Is(err, ErrNotImplementedFiles) {
-		t.Fatalf("wanted ErrNotImplementedFiles, got %v\n", err)
+	r, w, err := Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	proc, err := StartProcess("/bin/echo", []string{"echo", "hello", "world"}, &ProcAttr{
+		Files: []*File{nil, w, nil},
+	})
+	w.Close()
+	if err != nil {
+		t.Fatalf("StartProcess with Files failed: %v", err)
 	}
 
-	if proc != nil {
-		t.Fatalf("wanted nil, got %v\n", proc)
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := proc.Wait()
+	if err != nil || !state.Success() {
+		t.Fatalf("Wait failed: state=%v err=%v", state, err)
+	}
+	if string(out) != "hello world\n" {
+		t.Errorf("pipe output = %q, want %q", string(out), "hello world\n")
+	}
+}
+
+func TestProcessSignalKill(t *testing.T) {
+	proc, err := StartProcess("/bin/sleep", []string{"sleep", "60"}, &ProcAttr{})
+	if err != nil {
+		t.Fatalf("StartProcess failed: %v", err)
+	}
+	if err := proc.Kill(); err != nil {
+		t.Fatalf("Kill failed: %v", err)
+	}
+	state, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("Wait failed: %v", err)
+	}
+	if state.Success() || state.ExitCode() != -1 {
+		t.Errorf("killed process state: success=%v code=%d str=%q", state.Success(), state.ExitCode(), state.String())
 	}
 }
