@@ -27,6 +27,7 @@ func TestCGoCompilerFlags(t *testing.T) {
 #cgo CPPFLAGS: -Ipkginc -DSHARED_DIRECTIVE=1
 #cgo CFLAGS: -DC_DIRECTIVE=1
 #cgo CXXFLAGS: -std=c++17 -DCXX_DIRECTIVE=1
+#cgo LDFLAGS: -ldirective
 #include "order.h"
 #if ORDER != 1
 #error wrong include order
@@ -50,6 +51,7 @@ import "C"
 	t.Setenv("CGO_CPPFLAGS", "-DSHARED_ENV=1")
 	t.Setenv("CGO_CFLAGS", envInc+" -DC_ENV=1")
 	t.Setenv("CGO_CXXFLAGS", "-DCXX_ENV=1")
+	t.Setenv("CGO_LDFLAGS", "-lenv")
 	p := &Package{
 		PackageJSON: PackageJSON{Dir: dir, ImportPath: "probe", CgoFiles: []string{"probe.go"}},
 		FileHashes:  make(map[string][]byte),
@@ -78,6 +80,9 @@ import "C"
 		if len(test.flags) < len(test.want) || !slices.Equal(test.flags[len(test.flags)-len(test.want):], test.want) {
 			t.Errorf("flags %q do not end with %q", test.flags, test.want)
 		}
+	}
+	if want := []string{"-lenv", "-ldirective"}; !slices.Equal(p.program.LDFlags, want) {
+		t.Errorf("LDFlags = %q, want %q", p.program.LDFlags, want)
 	}
 }
 
