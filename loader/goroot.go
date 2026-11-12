@@ -241,6 +241,7 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 		// since TinyGo targets never use FIPS jitter entropy.
 		"crypto/internal/entropy/":        true,
 		"crypto/internal/entropy/v1.0.0/": false,
+		"crypto/internal/hmacdrbg/":       false,
 		"crypto/rand/":                    false,
 		"crypto/tls/":                     false,
 		"crypto/x509/":                    true,

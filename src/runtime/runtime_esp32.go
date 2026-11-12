@@ -56,6 +56,9 @@ func main() {
 	// Initialize main system timer used for time.Now.
 	initTimer()
 
+	// Seed crypto/rand while no peripheral uses the SAR ADC or I2S0 yet.
+	collectEntropy()
+
 	// Set up the Xtensa interrupt vector table. This zeroes INTENABLE, so it
 	// must run before any peripheral (UART, timer, etc) enables its own CPU
 	// interrupt line - otherwise that enable would be wiped out here.
@@ -119,3 +122,6 @@ func interruptInit() {
 	// Synchronize pipeline after writing special registers.
 	device.Asm("rsync")
 }
+
+// collectEntropy is implemented in src/machine/machine_esp32_rng.go.
+func collectEntropy()

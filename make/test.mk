@@ -27,6 +27,7 @@ TEST_PACKAGES_FAST = \
 	crypto/ecdsa \
 	crypto/elliptic \
 	crypto/hmac \
+	crypto/internal/hmacdrbg \
 	crypto/md5 \
 	crypto/sha1 \
 	crypto/sha256 \
