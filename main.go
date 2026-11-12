@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -222,7 +224,7 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, options *compileopts.Options, outpath string) (bool, error) {
+func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, options *compileopts.Options, outpath, port string) (bool, error) {
 	optionsCopy := *options
 	options = &optionsCopy
 	options.TestConfig.CompileTestBinary = true
@@ -265,6 +267,10 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 	}
 	if testConfig.Shuffle != "" {
 		flags = append(flags, "-test.shuffle="+testConfig.Shuffle)
+	}
+
+	if isBaremetalConfig(config) && config.Target.Emulator == "" && !testConfig.CompileOnly {
+		return flashTest(pkgName, stdout, options, flags, outpath, port)
 	}
 
 	logToStdout := testConfig.Verbose || testConfig.BenchRegexp != ""
@@ -339,6 +345,40 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 		fmt.Fprintf(w, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
 	}
 	return passed, err
+}
+
+func isBaremetalConfig(config *compileopts.Config) bool {
+	return slices.Contains(config.BuildTags(), "baremetal")
+}
+
+// flashTest builds the test binary, flashes it to the board, and optionally
+// opens the serial monitor. A board has no exit status, so the result is read
+// from the serial output.
+func flashTest(pkgName string, stdout io.Writer, options *compileopts.Options, flags []string, outpath, port string) (bool, error) {
+	globals := map[string]map[string]string{}
+	for pkg, vals := range options.GlobalValues {
+		globals[pkg] = maps.Clone(vals)
+	}
+	if globals["runtime"] == nil {
+		globals["runtime"] = map[string]string{}
+	}
+	if len(flags) != 0 {
+		globals["runtime"]["osArgs"] = strings.Join(flags, "\x00")
+	}
+	options.GlobalValues = globals
+
+	err := Flash(pkgName, port, outpath, options)
+	if nofiles, ok := errors.AsType[*loader.NoTestFilesError](err); ok {
+		fmt.Fprintf(stdout, "?   \t%s\t[no test files]\n", nofiles.ImportPath)
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !options.Monitor {
+		fmt.Fprintln(stdout, "flashed test binary, use -monitor to see the results")
+	}
+	return true, nil
 }
 
 func dirsToModuleRootRel(maindir, modroot string) []string {
@@ -1851,18 +1891,18 @@ func main() {
 		flag.BoolVar(&flagTest, "test", false, "supply -test flag to go list")
 	}
 	var outpath string
-	if command == "help" || command == "build" || command == "test" || command == "flash" {
+	if command == "help" || command == "build" || command == "test" || command == "bench" || command == "flash" {
 		flag.StringVar(&outpath, "o", "", "output filename (firmware extensions depend on target)")
 	}
 
 	var witPackage, witWorld string
-	if command == "help" || command == "build" || command == "test" || command == "run" {
+	if command == "help" || command == "build" || command == "test" || command == "bench" || command == "run" {
 		flag.StringVar(&witPackage, "wit-package", "", "wit package for wasm component embedding")
 		flag.StringVar(&witWorld, "wit-world", "", "wit world for wasm component embedding")
 	}
 
 	var testConfig compileopts.TestConfig
-	if command == "help" || command == "test" {
+	if command == "help" || command == "test" || command == "bench" {
 		flag.BoolVar(&testConfig.CompileOnly, "c", false, "compile the test binary but do not run it")
 		flag.BoolVar(&testConfig.Verbose, "v", false, "verbose: print additional output")
 		flag.BoolVar(&testConfig.Short, "short", false, "short: run smaller test suite to save time")
@@ -2048,7 +2088,10 @@ func main() {
 		pkgName := filepath.ToSlash(flag.Arg(0))
 		err := Run(pkgName, options, flag.Args()[1:])
 		printBuildOutput(err, *flagJSON)
-	case "test":
+	case "test", "bench":
+		if command == "bench" && options.TestConfig.BenchRegexp == "" {
+			options.TestConfig.BenchRegexp = ".*"
+		}
 		var pkgNames []string
 		for i := 0; i < flag.NArg(); i++ {
 			pkgNames = append(pkgNames, filepath.ToSlash(flag.Arg(i)))
@@ -2101,7 +2144,7 @@ func main() {
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
 				stderr := (*testStderr)(buf)
-				passed, err := Test(pkg.ImportPath, pkg.Standard, stdout, stderr, options, outpath)
+				passed, err := Test(pkg.ImportPath, pkg.Standard, stdout, stderr, options, outpath, *port)
 				if err != nil {
 					wd, getwdErr := os.Getwd()
 					if getwdErr != nil {
