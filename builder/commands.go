@@ -63,6 +63,9 @@ func init() {
 		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld")
 		commands["lldb"] = append(commands["lldb"], prefix+"lldb")
 	}
+	if runtime.GOOS != "windows" {
+		commands["clang"] = append(commands["clang"], "clang")
+	}
 }
 
 // LookupCommand looks up the executable name for a given LLVM tool such as
