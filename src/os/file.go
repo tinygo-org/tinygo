@@ -118,7 +118,7 @@ func (f *File) Read(b []byte) (n int, err error) {
 	if f.handle == nil {
 		err = ErrClosed
 	} else {
-		n, err = f.handle.Read(b)
+		n, err = f.read(b)
 	}
 	// TODO: want to always wrap, like upstream, but ReadFile() compares against exactly io.EOF?
 	if err != nil && err != io.EOF {
@@ -165,7 +165,7 @@ func (f *File) Write(b []byte) (n int, err error) {
 	if f.handle == nil {
 		err = ErrClosed
 	} else {
-		n, err = f.handle.Write(b)
+		n, err = f.write(b)
 	}
 	if err != nil {
 		err = &PathError{Op: "write", Path: f.name, Err: err}
@@ -254,13 +254,11 @@ func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 	return
 }
 
-func (f *File) SyscallConn() (conn syscall.RawConn, err error) {
+func (f *File) SyscallConn() (syscall.RawConn, error) {
 	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		err = ErrNotImplemented
+		return nil, ErrClosed
 	}
-	return
+	return f.syscallConn()
 }
 
 // SetDeadline sets the read and write deadlines for a File.
@@ -277,12 +275,18 @@ func (f *File) SetDeadline(t time.Time) error {
 // SetReadDeadline sets the deadline for future Read calls and any
 // currently-blocked Read call.
 func (f *File) SetReadDeadline(t time.Time) error {
+	if f.handle == nil {
+		return ErrClosed
+	}
 	return f.setReadDeadline(t)
 }
 
 // SetWriteDeadline sets the deadline for any future Write calls and any
 // currently-blocked Write call.
 func (f *File) SetWriteDeadline(t time.Time) error {
+	if f.handle == nil {
+		return ErrClosed
+	}
 	return f.setWriteDeadline(t)
 }
 
