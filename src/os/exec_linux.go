@@ -57,21 +57,47 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		attr = new(ProcAttr)
 	}
 
+	// The pipe closes on exec, so the parent reads EOF when exec succeeds.
+	var pipe [2]int
+	if err := syscall.Pipe2(pipe[:], syscall.O_CLOEXEC); err != nil {
+		return 0, err
+	}
+
 	p, err := fork()
+	if err != nil {
+		syscall.Close(pipe[0])
+		syscall.Close(pipe[1])
+		return 0, err
+	}
+
+	if p == 0 {
+		syscall.Close(pipe[0])
+		errno, _ := execve(argv0, argv, attr.Env).(syscall.Errno)
+		buf := [4]byte{byte(errno), byte(errno >> 8), byte(errno >> 16), byte(errno >> 24)}
+		syscall.Write(pipe[1], buf[:])
+		syscall.Syscall(syscall.SYS_EXIT_GROUP, 127, 0, 0)
+	}
+
 	pid = int(p)
+	syscall.Close(pipe[1])
+	defer syscall.Close(pipe[0])
 
-	if err != nil {
-		return 0, err
+	var buf [4]byte
+	n, err := syscall.Read(pipe[0], buf[:])
+	for err == syscall.EINTR {
+		n, err = syscall.Read(pipe[0], buf[:])
+	}
+	if n == 0 {
+		return pid, nil
 	}
 
-	// else code runs in child, which then should exec the new process
-	err = execve(argv0, argv, attr.Env)
-	if err != nil {
-		// exec failed
-		return 0, err
+	// exec failed in the child, so reap it and return its error
+	var ws syscall.WaitStatus
+	syscall.Wait4(pid, &ws, 0, nil)
+	if n == len(buf) {
+		return 0, syscall.Errno(uint32(buf[0]) | uint32(buf[1])<<8 | uint32(buf[2])<<16 | uint32(buf[3])<<24)
 	}
-	// 3. TODO: use pipes to communicate back child status
-	return pid, nil
+	return 0, syscall.EPIPE
 }
 
 // In Golang, the idiomatic way to create a new process is to use the StartProcess function.
