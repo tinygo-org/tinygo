@@ -1023,11 +1023,11 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			if config.Options.PrintCommands != nil {
 				config.Options.PrintCommands(config.Target.Linker, ldflags...)
 			}
-			var linkEnv []string
+			env := os.Environ()
 			if config.TrimPath() && config.LinkerFlavor() == "darwin" {
-				linkEnv = append(linkEnv, "ZERO_AR_DATE=1")
+				env = append(env, "ZERO_AR_DATE=1")
 			}
-			err = link(config.Target.Linker, ldflags, linkEnv...)
+			err = link(&Linker{Name: config.Target.Linker, Flags: ldflags, Env: env})
 			if err != nil {
 				return err
 			}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/scanner"
 	"go/token"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -55,35 +56,52 @@ func runCCompiler(flags ...string) error {
 	return cmd.Run()
 }
 
-// link invokes a linker with the given name and flags.
-func link(linker string, flags []string, env ...string) error {
+// Linker describes a run of ld.lld or wasm-ld.
+type Linker struct {
+	Name  string   // ld.lld or wasm-ld
+	Flags []string // command line flags
+	Env   []string // passed to exec.Cmd.Env
+}
+
+// Cmd returns the command that runs the linker.
+func (l *Linker) Cmd(stdin io.Reader, stdout, stderr io.Writer) (*exec.Cmd, error) {
 	// We only support LLD.
-	if linker != "ld.lld" && linker != "wasm-ld" {
-		return fmt.Errorf("unexpected: linker %s should be ld.lld or wasm-ld", linker)
+	if l.Name != "ld.lld" && l.Name != "wasm-ld" {
+		return nil, fmt.Errorf("unexpected: linker %s should be ld.lld or wasm-ld", l.Name)
 	}
 
 	var cmd *exec.Cmd
 	if hasBuiltinTools {
-		cmd = exec.Command(os.Args[0], append([]string{linker}, flags...)...)
+		cmd = exec.Command(os.Args[0], append([]string{l.Name}, l.Flags...)...)
 	} else {
-		name, err := LookupCommand(linker)
+		name, err := LookupCommand(l.Name)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		cmd = exec.Command(name, flags...)
+		cmd = exec.Command(name, l.Flags...)
 	}
-	var buf bytes.Buffer
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = &buf
-	cmd.Env = append(os.Environ(), env...)
-	err := cmd.Run()
+	cmd.Env = l.Env
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	return cmd, nil
+}
+
+// link runs the linker and converts its error output into errors.
+func link(l *Linker) error {
+	var stderr bytes.Buffer
+	cmd, err := l.Cmd(nil, os.Stdout, &stderr)
 	if err != nil {
-		if buf.Len() == 0 {
+		return err
+	}
+	err = cmd.Run()
+	if err != nil {
+		if stderr.Len() == 0 {
 			// The linker failed but there was no output.
 			// Therefore, show some output anyway.
 			return fmt.Errorf("failed to run linker: %w", err)
 		}
-		return parseLLDErrors(buf.String())
+		return parseLLDErrors(stderr.String())
 	}
 	return nil
 }

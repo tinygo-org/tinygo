@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -52,7 +53,7 @@ func makeDarwinLibSystemJob(config *compileopts.Config, tmpdir string) *compileJ
 			if config.Options.PrintCommands != nil {
 				config.Options.PrintCommands("ld.lld", flags...)
 			}
-			return link("ld.lld", flags)
+			return link(&Linker{Name: "ld.lld", Flags: flags, Env: os.Environ()})
 		},
 	}
 }

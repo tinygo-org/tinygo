@@ -165,7 +165,7 @@ func makeMinGWExtraLibs(tmpdir, goarch string) []*compileJob {
 						return err
 					}
 				}
-				return link("ld.lld", []string{"-m", emulation, "-o", outpath, defpath})
+				return link(&Linker{Name: "ld.lld", Flags: []string{"-m", emulation, "-o", outpath, defpath}, Env: os.Environ()})
 			},
 		}
 		jobs = append(jobs, job)
