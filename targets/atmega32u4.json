@@ -3,9 +3,9 @@
 	"cpu": "atmega32u4",
 	"build-tags": ["atmega32u4", "avr5"],
 	"serial": "none",
-	"linkerscript": "src/device/avr/atmega32u4.ld",
+	"linkerscript": "src/device/avr/ATmega32U4.ld",
 	"extra-files": [
 		"targets/avr.S",
-		"src/device/avr/atmega32u4.s"
+		"src/device/avr/ATmega32U4.s"
 	]
 }
