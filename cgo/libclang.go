@@ -686,7 +686,7 @@ func (f *cgoFile) makeDecayingASTType(typ C.CXType, pos token.Pos) ast.Expr {
 	//   void bar(char *buf[4]);
 	// so not all array dimensions should be stripped, just the first one.
 	// TODO: there are more kinds of decaying types.
-	if underlyingType.kind == C.CXType_ConstantArray {
+	if underlyingType.kind == C.CXType_ConstantArray || underlyingType.kind == C.CXType_IncompleteArray {
 		// Apply type decaying.
 		pointeeType := C.clang_getElementType(underlyingType)
 		return &ast.StarExpr{
