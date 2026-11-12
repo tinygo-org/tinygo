@@ -58,6 +58,7 @@ func TestCompiler(t *testing.T) {
 		{"zeromap.go", "", ""},
 		{"generics.go", "", ""},
 		{"large.go", "", ""},
+		{"memcmp.go", "", ""},
 		{"go1.20.go", "", ""},
 		{"go1.21.go", "", ""},
 	}

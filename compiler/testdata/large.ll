@@ -458,7 +458,7 @@ declare void @llvm.memset.p0.i32(ptr writeonly captures(none), i8, i32, i1 immar
 define hidden i8 @main.useLargeMap(ptr readonly dereferenceable_or_null(1025) %key, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call ptr @runtime.hashmapMakeGeneric(i32 1025, i32 1025, i32 1, ptr nonnull @"runtime.hashmapType:[1025]byte:[1025]byte", ptr null, ptr nonnull @runtime.hash32, ptr null, ptr nonnull @runtime.memequal, ptr undef) #13
+  %0 = call ptr @runtime.hashmapMakeGeneric(i32 1025, i32 1025, i32 1, ptr nonnull @"runtime.hashmapType:[1025]byte:[1025]byte", ptr null, ptr nonnull @runtime.hash32, ptr null, ptr nonnull @runtime.memCompareBytes, ptr undef) #13
   call void @runtime.trackPointer(ptr %0, ptr nonnull %stackalloc, ptr undef) #13
   call void @runtime.hashmapBinarySet(ptr %0, ptr %key, ptr %value, ptr undef) #13
   %result = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
@@ -485,7 +485,7 @@ if.then:                                          ; preds = %entry
 
 declare i32 @runtime.hash32(ptr, i32, i32, ptr) #0
 
-declare i1 @runtime.memequal(ptr, ptr, i32, ptr) #0
+declare i1 @runtime.memCompareBytes(ptr, ptr, i32, ptr) #0
 
 declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr) #0
 
@@ -675,8 +675,8 @@ entry:
   %stackalloc = alloca i8, align 1
   %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
   call void @runtime.trackPointer(ptr nonnull %"main.largeValue{}:main.largeValue", ptr nonnull %stackalloc, ptr undef) #13
-  %arraycmp = call i1 @runtime.memequal(ptr %value, ptr nonnull %"main.largeValue{}:main.largeValue", i32 1025, ptr undef) #13
-  ret i1 %arraycmp
+  %0 = call i1 @runtime.memCompareBytes(ptr dereferenceable(1025) %value, ptr dereferenceable(1025) %"main.largeValue{}:main.largeValue", i32 1025, ptr undef) #13
+  ret i1 %0
 }
 
 ; Function Attrs: nounwind

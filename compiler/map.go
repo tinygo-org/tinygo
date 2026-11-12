@@ -12,8 +12,6 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-const hashArrayUnrollLimit = 4
-
 const (
 	hashmapBucketSlots  = 8
 	hashmapMaxKeySize   = 128
@@ -44,22 +42,12 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 		}
 	}
 
-	// Resolve hash and equal functions for this key type. For string and
-	// binary key types, reference the corresponding runtime functions
-	// directly. For composite types, generate type-specific functions.
-	var hashFn, equalFn llvm.Value
-	if t, ok := keyType.(*types.Basic); ok && t.Info()&types.IsString != 0 {
-		hashFn = b.getRuntimeFunctionValue("hashmapStringPtrHash", hashmapKeyHashSignature())
-		equalFn = b.getRuntimeFunctionValue("hashmapStringEqual", hashmapKeyEqualSignature())
-	} else if isBinaryComparable(keyType) {
-		hashFn = b.getRuntimeFunctionValue("hash32", hashmapKeyHashSignature())
-		equalFn = b.getRuntimeFunctionValue("memequal", hashmapKeyEqualSignature())
-	} else {
-		fn := b.getOrGenerateKeyHashFunc(keyType)
-		hashFn = b.createFuncValue(fn, b.dataPtrNull, hashmapKeyHashSignature())
-		fn = b.getOrGenerateKeyEqualFunc(keyType)
-		equalFn = b.createFuncValue(fn, b.dataPtrNull, hashmapKeyEqualSignature())
-	}
+	// Resolve hash and equal functions for this key type.
+	pattern := b.memCmpPattern(keyType)
+	hashFn := b.memHashFunc(pattern)
+	equalFn := b.memCmpFunc(pattern)
+	hashFn = b.ctx.ConstStruct([]llvm.Value{b.dataPtrNull, hashFn}, false)
+	equalFn = b.ctx.ConstStruct([]llvm.Value{b.dataPtrNull, equalFn}, false)
 
 	hashmap := b.createRuntimeCall("hashmapMakeGeneric", []llvm.Value{
 		llvmKeySize, llvmValueSize, sizeHint,
@@ -129,17 +117,6 @@ func (c *context) getHashmapTypeInfo(mapType *types.Map, pos token.Pos) llvm.Val
 	return mapLayout
 }
 
-// getRuntimeFunctionValue returns a TinyGo function value (with nil context)
-// for the named runtime function.
-func (b *builder) getRuntimeFunctionValue(name string, sig *types.Signature) llvm.Value {
-	member := b.program.ImportedPackage("runtime").Members[name]
-	if member == nil {
-		panic("unknown runtime function: " + name)
-	}
-	_, llvmFn := b.getFunction(member.(*ssa.Function))
-	return b.createFuncValue(llvmFn, b.dataPtrNull, sig)
-}
-
 // createMapLookup returns the value in a map. It calls a runtime function
 // depending on the map key type to load the map value and its comma-ok value.
 func (b *builder) createMapLookup(keyType, valueType types.Type, m llvm.Value, key ssa.Value, commaOk bool, pos token.Pos) (llvm.Value, error) {
@@ -172,14 +149,10 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m llvm.Value, k
 		// compiler-generated hash/equal.
 		mapKey := b.getValueStorage(key, "hashmap.key")
 		params := []llvm.Value{m, mapKey.ptr, mapValueAlloca, mapValueSize}
-		fnName := "hashmapBinaryGet"
-		if !isBinaryComparable(keyType) {
-			fnName = "hashmapGenericGet"
-		}
-		if fnName == "hashmapGenericGet" {
-			commaOkValue = b.createRuntimeInvoke(fnName, params, "")
+		if b.isByteComparable(keyType) {
+			commaOkValue = b.createRuntimeCall("hashmapBinaryGet", params, "")
 		} else {
-			commaOkValue = b.createRuntimeCall(fnName, params, "")
+			commaOkValue = b.createRuntimeInvoke("hashmapGenericGet", params, "")
 		}
 		b.endValueStorage(mapKey)
 	}
@@ -201,7 +174,7 @@ func (b *builder) createMapUpdate(keyType types.Type, m llvm.Value, key, value s
 		// Key stored at actual type.
 		keyStorage := b.getValueStorage(key, "hashmap.key")
 		fnName := "hashmapBinarySet"
-		if !isBinaryComparable(keyType) {
+		if !b.isByteComparable(keyType) {
 			fnName = "hashmapGenericSet"
 		}
 		params := []llvm.Value{m, keyStorage.ptr, storedValue.ptr}
@@ -224,15 +197,11 @@ func (b *builder) createMapDelete(keyType types.Type, m, key llvm.Value, pos tok
 		// Key stored at actual type.
 		keyAlloca, keySize := b.createTemporaryAlloca(key.Type(), "hashmap.key")
 		b.CreateStore(key, keyAlloca)
-		fnName := "hashmapBinaryDelete"
-		if !isBinaryComparable(keyType) {
-			fnName = "hashmapGenericDelete"
-		}
 		params := []llvm.Value{m, keyAlloca}
-		if fnName == "hashmapGenericDelete" {
-			b.createRuntimeInvoke(fnName, params, "")
+		if b.isByteComparable(keyType) {
+			b.createRuntimeCall("hashmapBinaryDelete", params, "")
 		} else {
-			b.createRuntimeCall(fnName, params, "")
+			b.createRuntimeInvoke("hashmapGenericDelete", params, "")
 		}
 		b.emitLifetimeEnd(keyAlloca, keySize)
 		return nil
@@ -277,62 +246,6 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 	return tuple
 }
 
-// isBinaryComparable reports whether keyType can be compared with
-// runtime.memequal.
-func isBinaryComparable(keyType types.Type) bool {
-	switch keyType := keyType.Underlying().(type) {
-	case *types.Basic:
-		return keyType.Info()&(types.IsBoolean|types.IsInteger) != 0 || keyType.Kind() == types.UnsafePointer
-	case *types.Pointer:
-		return true
-	case *types.Array:
-		return isBinaryComparable(keyType.Elem())
-	default:
-		return false
-	}
-}
-
-// hashmapKeyHashSignature returns the Go type signature for hashmap key hash
-// functions: func(key unsafe.Pointer, size, seed uintptr) uint32
-func hashmapKeyHashSignature() *types.Signature {
-	return types.NewSignatureType(nil, nil, nil,
-		types.NewTuple(
-			types.NewVar(token.NoPos, nil, "key", types.Typ[types.UnsafePointer]),
-			types.NewVar(token.NoPos, nil, "size", types.Typ[types.Uintptr]),
-			types.NewVar(token.NoPos, nil, "seed", types.Typ[types.Uintptr]),
-		),
-		types.NewTuple(
-			types.NewVar(token.NoPos, nil, "", types.Typ[types.Uint32]),
-		),
-		false,
-	)
-}
-
-// hashmapKeyEqualSignature returns the Go type signature for hashmap key equal
-// functions: func(x, y unsafe.Pointer, n uintptr) bool
-func hashmapKeyEqualSignature() *types.Signature {
-	return types.NewSignatureType(nil, nil, nil,
-		types.NewTuple(
-			types.NewVar(token.NoPos, nil, "x", types.Typ[types.UnsafePointer]),
-			types.NewVar(token.NoPos, nil, "y", types.Typ[types.UnsafePointer]),
-			types.NewVar(token.NoPos, nil, "n", types.Typ[types.Uintptr]),
-		),
-		types.NewTuple(
-			types.NewVar(token.NoPos, nil, "", types.Typ[types.Bool]),
-		),
-		false,
-	)
-}
-
-// hashmapKeyFuncName returns a canonical name for a generated hash or equal
-// function based on the key type's underlying structure. Named types are
-// replaced with their underlying types so that structurally identical key
-// types (e.g., struct{i1; str1} and struct{i2; str2} where both i1, i2 are
-// int and str1, str2 are string) share the same generated function.
-func hashmapKeyFuncName(prefix string, keyType types.Type) string {
-	return prefix + "." + hashmapCanonicalTypeName(keyType)
-}
-
 // hashmapCanonicalTypeName returns a string representation of the hash/equal
 // operations needed for a type, stripping named types where the operation does
 // not depend on the name. Pointer and channel names do not include the element
@@ -371,323 +284,4 @@ func hashmapCanonicalTypeName(t types.Type) string {
 		return fmt.Sprintf("[%d]%s", t.Len(), hashmapCanonicalTypeName(t.Elem()))
 	}
 	return t.String()
-}
-
-// getOrGenerateKeyHashFunc returns an LLVM function that computes the hash
-// of a key of the given type. The function is generated on first call and
-// cached in the module.
-func (b *builder) getOrGenerateKeyHashFunc(keyType types.Type) llvm.Value {
-	name := hashmapKeyFuncName("hashmapKeyHash", keyType)
-	if fn := b.mod.NamedFunction(name); !fn.IsNil() {
-		return fn
-	}
-
-	// Create the LLVM function type:
-	// (key ptr, size uintptr, seed uintptr, context ptr) -> i32
-	fnType := llvm.FunctionType(b.i32, []llvm.Type{
-		b.dataPtrType, b.uintptrType, b.uintptrType, b.dataPtrType,
-	}, false)
-	fn := llvm.AddFunction(b.mod, name, fnType)
-	fn.SetLinkage(llvm.LinkOnceODRLinkage)
-	fn.SetUnnamedAddr(true)
-	b.addStandardAttributes(fn)
-
-	// Generate the function body.
-	savedBlock := b.GetInsertBlock()
-	defer b.SetInsertPointAtEnd(savedBlock)
-
-	entry := b.ctx.AddBasicBlock(fn, "entry")
-	b.SetInsertPointAtEnd(entry)
-
-	keyPtr := fn.Param(0)
-	seed := fn.Param(2)
-	llvmKeyType := b.getLLVMType(keyType)
-	hash := b.generateKeyHash(keyType, llvmKeyType, keyPtr, seed)
-	b.CreateRet(hash)
-
-	return fn
-}
-
-// getOrGenerateKeyEqualFunc returns an LLVM function that compares two keys
-// of the given type for equality. The function is generated on first call
-// and cached in the module.
-func (b *builder) getOrGenerateKeyEqualFunc(keyType types.Type) llvm.Value {
-	name := hashmapKeyFuncName("hashmapKeyEqual", keyType)
-	if fn := b.mod.NamedFunction(name); !fn.IsNil() {
-		return fn
-	}
-
-	// Create the LLVM function type:
-	// (x ptr, y ptr, n uintptr, context ptr) -> i1
-	fnType := llvm.FunctionType(b.i1, []llvm.Type{
-		b.dataPtrType, b.dataPtrType, b.uintptrType, b.dataPtrType,
-	}, false)
-	fn := llvm.AddFunction(b.mod, name, fnType)
-	fn.SetLinkage(llvm.LinkOnceODRLinkage)
-	fn.SetUnnamedAddr(true)
-	b.addStandardAttributes(fn)
-
-	// Generate the function body.
-	savedBlock := b.GetInsertBlock()
-	defer b.SetInsertPointAtEnd(savedBlock)
-
-	entry := b.ctx.AddBasicBlock(fn, "entry")
-	b.SetInsertPointAtEnd(entry)
-
-	xPtr := fn.Param(0)
-	yPtr := fn.Param(1)
-	llvmKeyType := b.getLLVMType(keyType)
-	result := b.generateKeyEqual(keyType, llvmKeyType, xPtr, yPtr, fn)
-	b.CreateRet(result)
-
-	return fn
-}
-
-// generateKeyHash generates IR that hashes a key value. Returns the i32 hash.
-func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, keyPtr llvm.Value, seed llvm.Value) llvm.Value {
-	switch keyType := keyType.Underlying().(type) {
-	case *types.Basic:
-		if keyType.Info()&types.IsString != 0 {
-			// Hash the string contents. The size parameter is unused by
-			// hashmapStringPtrHash (it dereferences the string header to
-			// get the actual length), but we pass it for signature
-			// consistency with other hash functions.
-			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-			return b.createRuntimeCall("hashmapStringPtrHash", []llvm.Value{keyPtr, size, seed}, "hash")
-		}
-		if keyType.Info()&types.IsFloat != 0 {
-			// Float hash: normalizes -0 to +0 before hashing.
-			if keyType.Kind() == types.Float32 {
-				return b.createRuntimeCall("hashmapFloat32Hash", []llvm.Value{keyPtr, seed}, "hash")
-			}
-			return b.createRuntimeCall("hashmapFloat64Hash", []llvm.Value{keyPtr, seed}, "hash")
-		}
-		if keyType.Info()&types.IsComplex != 0 {
-			// Complex hash: hash real and imaginary parts as floats.
-			if keyType.Kind() == types.Complex64 {
-				realPtr := keyPtr
-				imagPtr := b.CreateInBoundsGEP(b.i8, keyPtr, []llvm.Value{
-					llvm.ConstInt(b.uintptrType, 4, false),
-				}, "")
-				realHash := b.createRuntimeCall("hashmapFloat32Hash", []llvm.Value{realPtr, seed}, "hash.real")
-				imagHash := b.createRuntimeCall("hashmapFloat32Hash", []llvm.Value{imagPtr, seed}, "hash.imag")
-				return b.CreateXor(realHash, imagHash, "")
-			}
-			realPtr := keyPtr
-			imagPtr := b.CreateInBoundsGEP(b.i8, keyPtr, []llvm.Value{
-				llvm.ConstInt(b.uintptrType, 8, false),
-			}, "")
-			realHash := b.createRuntimeCall("hashmapFloat64Hash", []llvm.Value{realPtr, seed}, "hash.real")
-			imagHash := b.createRuntimeCall("hashmapFloat64Hash", []llvm.Value{imagPtr, seed}, "hash.imag")
-			return b.CreateXor(realHash, imagHash, "")
-		}
-		// Integer/boolean: hash the raw bytes.
-		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-		return b.createRuntimeCall("hash32", []llvm.Value{keyPtr, size, seed}, "hash")
-	case *types.Pointer, *types.Chan:
-		// Pointers and channels: hash as raw pointer-sized bytes.
-		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-		return b.createRuntimeCall("hash32", []llvm.Value{keyPtr, size, seed}, "hash")
-	case *types.Interface:
-		// Interface: use runtime reflection-based hash.
-		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-		return b.createRuntimeCall("hashmapInterfacePtrHash", []llvm.Value{keyPtr, size, seed}, "hash")
-	case *types.Struct:
-		hash := llvm.ConstInt(b.i32, 0, false)
-		multiplier := llvm.ConstInt(b.i32, 31, false)
-		zero := llvm.ConstInt(b.i32, 0, false)
-		for i := 0; i < keyType.NumFields(); i++ {
-			if keyType.Field(i).Name() == "_" {
-				continue // blank fields are ignored in Go equality
-			}
-			fieldType := keyType.Field(i).Type()
-			llvmFieldType := b.getLLVMType(fieldType)
-			if b.targetData.TypeAllocSize(llvmFieldType) == 0 {
-				continue // skip zero-sized fields
-			}
-			idx := llvm.ConstInt(b.i32, uint64(i), false)
-			fieldPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, idx}, "")
-			fieldHash := b.generateKeyHash(fieldType, llvmFieldType, fieldPtr, seed)
-			hash = b.CreateXor(b.CreateMul(hash, multiplier, ""), fieldHash, "")
-		}
-		return hash
-	case *types.Array:
-		elemType := keyType.Elem()
-		llvmElemType := b.getLLVMType(elemType)
-		arrayLen := keyType.Len()
-		if isBinaryComparable(elemType) {
-			// All elements are binary-comparable; hash the entire array as raw bytes.
-			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-			return b.createRuntimeCall("hash32", []llvm.Value{keyPtr, size, seed}, "hash")
-		}
-		if arrayLen == 0 {
-			return llvm.ConstInt(b.i32, 0, false)
-		}
-		multiplier := llvm.ConstInt(b.i32, 31, false)
-		if arrayLen <= hashArrayUnrollLimit {
-			hash := llvm.ConstInt(b.i32, 0, false)
-			zero := llvm.ConstInt(b.i32, 0, false)
-			for i := 0; i < int(arrayLen); i++ {
-				idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
-				elemPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, idx}, "")
-				elemHash := b.generateKeyHash(elemType, llvmElemType, elemPtr, seed)
-				hash = b.CreateXor(b.CreateMul(hash, multiplier, ""), elemHash, "")
-			}
-			return hash
-		}
-		initHash := llvm.ConstInt(b.i32, 0, false)
-		zero := llvm.ConstInt(b.i32, 0, false)
-
-		loopEntry := b.GetInsertBlock()
-		loopBody := b.ctx.AddBasicBlock(loopEntry.Parent(), "hash.array.body")
-		loopDone := b.ctx.AddBasicBlock(loopEntry.Parent(), "hash.array.done")
-
-		b.CreateBr(loopBody)
-		b.SetInsertPointAtEnd(loopBody)
-
-		phiI := b.CreatePHI(b.uintptrType, "i")
-		phiHash := b.CreatePHI(b.i32, "hash.acc")
-
-		elemPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, phiI}, "")
-		elemHash := b.generateKeyHash(elemType, llvmElemType, elemPtr, seed)
-		newHash := b.CreateXor(b.CreateMul(phiHash, multiplier, ""), elemHash, "")
-		nextI := b.CreateAdd(phiI, llvm.ConstInt(b.uintptrType, 1, false), "")
-		cond := b.CreateICmp(llvm.IntULT, nextI, llvm.ConstInt(b.uintptrType, uint64(arrayLen), false), "")
-		b.CreateCondBr(cond, loopBody, loopDone)
-
-		bodyEnd := b.GetInsertBlock()
-		phiI.AddIncoming([]llvm.Value{b.uintptrZero, nextI},
-			[]llvm.BasicBlock{loopEntry, bodyEnd})
-		phiHash.AddIncoming([]llvm.Value{initHash, newHash},
-			[]llvm.BasicBlock{loopEntry, bodyEnd})
-
-		b.SetInsertPointAtEnd(loopDone)
-		return newHash
-	default:
-		panic(fmt.Sprintf("unhandled key type for hash generation: %T", keyType))
-	}
-}
-
-// generateKeyEqual generates IR that compares two key values for equality.
-// Returns an i1 result.
-func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xPtr, yPtr llvm.Value, fn llvm.Value) llvm.Value {
-	switch keyType := keyType.Underlying().(type) {
-	case *types.Basic:
-		if keyType.Info()&types.IsString != 0 {
-			// Compare strings: load both string headers and compare.
-			xStr := b.CreateLoad(llvmKeyType, xPtr, "x.str")
-			yStr := b.CreateLoad(llvmKeyType, yPtr, "y.str")
-			return b.createRuntimeCall("stringEqual", []llvm.Value{xStr, yStr}, "eq")
-		}
-		if keyType.Info()&types.IsFloat != 0 {
-			// Float equality: fcmp oeq handles -0==+0 (true) and NaN==NaN (false).
-			xVal := b.CreateLoad(llvmKeyType, xPtr, "x.float")
-			yVal := b.CreateLoad(llvmKeyType, yPtr, "y.float")
-			return b.CreateFCmp(llvm.FloatOEQ, xVal, yVal, "eq")
-		}
-		if keyType.Info()&types.IsComplex != 0 {
-			// Complex equality: both real and imaginary parts must be equal.
-			var floatType llvm.Type
-			if keyType.Kind() == types.Complex64 {
-				floatType = b.ctx.FloatType()
-			} else {
-				floatType = b.ctx.DoubleType()
-			}
-			floatSize := b.targetData.TypeAllocSize(floatType)
-			imagOffset := llvm.ConstInt(b.uintptrType, floatSize, false)
-			// Real parts
-			xReal := b.CreateLoad(floatType, xPtr, "x.real")
-			yReal := b.CreateLoad(floatType, yPtr, "y.real")
-			realEq := b.CreateFCmp(llvm.FloatOEQ, xReal, yReal, "eq.real")
-			// Imaginary parts
-			xImagPtr := b.CreateInBoundsGEP(b.i8, xPtr, []llvm.Value{imagOffset}, "")
-			yImagPtr := b.CreateInBoundsGEP(b.i8, yPtr, []llvm.Value{imagOffset}, "")
-			xImag := b.CreateLoad(floatType, xImagPtr, "x.imag")
-			yImag := b.CreateLoad(floatType, yImagPtr, "y.imag")
-			imagEq := b.CreateFCmp(llvm.FloatOEQ, xImag, yImag, "eq.imag")
-			return b.CreateAnd(realEq, imagEq, "")
-		}
-		// Integer/boolean: compare raw bytes.
-		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-		return b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "eq")
-	case *types.Pointer, *types.Chan:
-		// Pointers and channels: compare as raw pointer-sized bytes.
-		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-		return b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "eq")
-	case *types.Interface:
-		// Interface: use runtime interface equality.
-		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-		return b.createRuntimeCall("hashmapInterfaceEqual", []llvm.Value{xPtr, yPtr, size}, "eq")
-	case *types.Struct:
-		result := b.i1True // start with true
-		zero := llvm.ConstInt(b.i32, 0, false)
-		for i := 0; i < keyType.NumFields(); i++ {
-			if keyType.Field(i).Name() == "_" {
-				continue // blank fields are ignored in Go equality
-			}
-			fieldType := keyType.Field(i).Type()
-			llvmFieldType := b.getLLVMType(fieldType)
-			if b.targetData.TypeAllocSize(llvmFieldType) == 0 {
-				continue // skip zero-sized fields
-			}
-			idx := llvm.ConstInt(b.i32, uint64(i), false)
-			xFieldPtr := b.CreateInBoundsGEP(llvmKeyType, xPtr, []llvm.Value{zero, idx}, "")
-			yFieldPtr := b.CreateInBoundsGEP(llvmKeyType, yPtr, []llvm.Value{zero, idx}, "")
-			fieldEq := b.generateKeyEqual(fieldType, llvmFieldType, xFieldPtr, yFieldPtr, fn)
-			result = b.CreateAnd(result, fieldEq, "")
-		}
-		return result
-	case *types.Array:
-		elemType := keyType.Elem()
-		llvmElemType := b.getLLVMType(elemType)
-		arrayLen := keyType.Len()
-		if isBinaryComparable(elemType) {
-			// All elements are binary-comparable; compare the entire array.
-			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
-			return b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "eq")
-		}
-		if arrayLen == 0 {
-			return b.i1True
-		}
-		if arrayLen <= hashArrayUnrollLimit {
-			result := b.i1True
-			zero := llvm.ConstInt(b.i32, 0, false)
-			for i := 0; i < int(arrayLen); i++ {
-				idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
-				xElemPtr := b.CreateInBoundsGEP(llvmKeyType, xPtr, []llvm.Value{zero, idx}, "")
-				yElemPtr := b.CreateInBoundsGEP(llvmKeyType, yPtr, []llvm.Value{zero, idx}, "")
-				elemEq := b.generateKeyEqual(elemType, llvmElemType, xElemPtr, yElemPtr, fn)
-				result = b.CreateAnd(result, elemEq, "")
-			}
-			return result
-		}
-		zero := llvm.ConstInt(b.i32, 0, false)
-
-		loopEntry := b.GetInsertBlock()
-		loopBody := b.ctx.AddBasicBlock(loopEntry.Parent(), "eq.array.body")
-		loopDone := b.ctx.AddBasicBlock(loopEntry.Parent(), "eq.array.done")
-
-		b.CreateBr(loopBody)
-		b.SetInsertPointAtEnd(loopBody)
-
-		phiI := b.CreatePHI(b.uintptrType, "i")
-
-		xElemPtr := b.CreateInBoundsGEP(llvmKeyType, xPtr, []llvm.Value{zero, phiI}, "")
-		yElemPtr := b.CreateInBoundsGEP(llvmKeyType, yPtr, []llvm.Value{zero, phiI}, "")
-		elemEq := b.generateKeyEqual(elemType, llvmElemType, xElemPtr, yElemPtr, fn)
-
-		nextI := b.CreateAdd(phiI, llvm.ConstInt(b.uintptrType, 1, false), "")
-		atEnd := b.CreateICmp(llvm.IntUGE, nextI, llvm.ConstInt(b.uintptrType, uint64(arrayLen), false), "")
-		exitLoop := b.CreateOr(atEnd, b.CreateNot(elemEq, ""), "")
-		b.CreateCondBr(exitLoop, loopDone, loopBody)
-
-		bodyEnd := b.GetInsertBlock()
-		phiI.AddIncoming([]llvm.Value{b.uintptrZero, nextI},
-			[]llvm.BasicBlock{loopEntry, bodyEnd})
-
-		b.SetInsertPointAtEnd(loopDone)
-		return elemEq
-	default:
-		panic(fmt.Sprintf("unhandled key type for equal generation: %T", keyType))
-	}
 }
