@@ -68,6 +68,7 @@ func TestBuild(t *testing.T) {
 		"stringfrombytes_stress.go",
 		"structs.go",
 		"testing.go",
+		"timer_node_reuse_gc.go",
 		"timers.go",
 		"typealias.go",
 		"zeroalloc.go",
@@ -515,6 +516,13 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// This test intentionally checks concurrent scheduling by comparing
 			// output order, so only run it with non-threaded schedulers.
 			continue
+		}
+		if name == "timer_node_reuse_gc.go" {
+			// Other targets are too slow or lack 64-bit atomics.
+			isHost := options.Target == "" && options.GOOS == goenv.Get("GOOS") && options.GOARCH == goenv.Get("GOARCH")
+			if !isHost && options.Target != "wasip1" && options.Target != "riscv-qemu" {
+				continue
+			}
 		}
 		if name == "coreassign.go" && scheduler != "cores" {
 			// Core assignment needs the cores scheduler.
