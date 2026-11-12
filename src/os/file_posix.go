@@ -6,11 +6,6 @@ import (
 
 //TODO: re-implement the ErrNoDeadline error in the correct code path
 
-// Chtimes is a stub, not yet implemented
-func Chtimes(name string, atime time.Time, mtime time.Time) error {
-	return ErrNotImplemented
-}
-
 // setDeadline sets the read and write deadline.
 func (f *File) setDeadline(t time.Time) error {
 	if t.IsZero() {
