@@ -22,6 +22,8 @@ func TestParse(t *testing.T) {
 		{"go2.0", 2, 0, 0, false},
 		{"go2.0.15", 2, 0, 15, false},
 		{"go1.28-devel_a532f497dc Tue Sep 22 15:23:53 2026 -0700", 1, 28, 0, false},
+		{"go1.26.3\ntime 2026-04-01T00:00:00Z\n", 1, 26, 3, false},
+		{"go1 X:foo.bar", 0, 0, 0, true},
 		{"devel go1.24-f99f5da18f Thu Nov 14 22:29:26 2024 +0000 darwin/arm64", 0, 0, 0, true},
 	}
 	for _, tt := range tests {
