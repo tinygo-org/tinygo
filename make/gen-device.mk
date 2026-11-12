@@ -33,6 +33,7 @@ gen-device-nrf: build/gen-device-svd
 
 gen-device-nxp: build/gen-device-svd
 	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/NXP lib/cmsis-svd/data/NXP/ src/device/nxp/
+	./build/gen-device-svd -source=https://github.com/posborne/cmsis-svd/tree/master/data/Freescale lib/cmsis-svd/data/Freescale/MK20D7.svd src/device/nxp/
 	GO111MODULE=off $(GO) fmt ./src/device/nxp
 
 gen-device-sam: build/gen-device-svd
