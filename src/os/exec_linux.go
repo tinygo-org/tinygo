@@ -64,7 +64,7 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 	return spawn(argv0, argv, attr)
 }
 
-// startProcess does not support ProcAttr.Files or Sys yet.
+// startProcess does not support ProcAttr.Sys yet.
 func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err error) {
 	if attr == nil {
 		return nil, errors.New("exec: no ProcAttr")
@@ -81,10 +81,6 @@ func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err e
 			pe.Op = "chdir"
 			return nil, pe
 		}
-	}
-
-	if len(attr.Files) != 0 {
-		return nil, ErrNotImplementedFiles
 	}
 
 	pid, err := forkExec(name, argv, attr)
