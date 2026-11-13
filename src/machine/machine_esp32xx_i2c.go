@@ -255,8 +255,11 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 		}
 	}
 
-	// Reset the FIFOs, bytes left after a NACK would go out in the next transaction.
-	// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1456
+	// Flush TX and RX FIFOs before each transaction.  After a NACK or other
+	// early abort, the TX FIFO may still contain bytes that were loaded but
+	// never sent (e.g. data bytes following a NACKed address byte).  Without
+	// this flush, those stale bytes are prepended to the next transaction,
+	// corrupting the first byte(s) sent on the bus.
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(1)
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(0)
 	i2c.Bus.SetFIFO_CONF_RX_FIFO_RST(1)
@@ -292,7 +295,8 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				// Own WRITE plus END for the address, else an address NACK hangs the controller.
 				// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1296
 				needAddress = false
-				i2c.Bus.SetDATA_FIFO_RDATA((uint32(addr) & 0x7f) << 1)
+				i2c.Bus.DATA.Set((uint32(addr) & 0x7f) << 1)
+				count--
 				i2c.Bus.SLAVE_ADDR.Set(uint32(addr))
 				reg.Set(i2cCMD_WRITE | 1)
 				reg = nextAddress(reg)
@@ -301,7 +305,7 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				break
 			}
 			for ; count > 0 && c.head < len(c.data); count, c.head = count-1, c.head+1 {
-				i2c.Bus.SetDATA_FIFO_RDATA(uint32(c.data[c.head]))
+				i2c.Bus.DATA.Set(uint32(c.data[c.head]))
 			}
 			reg.Set(i2cCMD_WRITE | uint32(32-count))
 			reg = nextAddress(reg)
@@ -318,7 +322,7 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 			if needAddress {
 				// Own WRITE plus END for the address, see i2cCMD_WRITE above.
 				needAddress = false
-				i2c.Bus.SetDATA_FIFO_RDATA((uint32(addr)&0x7f)<<1 | 1)
+				i2c.Bus.DATA.Set((uint32(addr)&0x7f)<<1 | 1)
 				i2c.Bus.SLAVE_ADDR.Set(uint32(addr))
 				reg.Set(i2cCMD_WRITE | 1)
 				reg = nextAddress(reg)
@@ -334,7 +338,7 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				reg.Set(i2cCMD_WRITE | 1)
 
 				reg = nextAddress(reg)
-				i2c.Bus.SetDATA_FIFO_RDATA((uint32(addr)&0x7f)<<1 | 1)
+				i2c.Bus.DATA.Set((uint32(addr)&0x7f)<<1 | 1)
 				needRestart = false
 			}
 			count := 32
@@ -397,6 +401,9 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				// i2cCMD_READLAST uses ack_check_en=0, so the master's own last-byte
 				// NACK (ack_val=1) does NOT trigger NACK_INT; any NACK_INT here is
 				// a real slave-side refusal and must be reported as an error.
+				// The I2C FSM auto-returns to IDLE after a NACK, so no FSM reset is
+				// needed here.  The TX FIFO is flushed at the top of each transmit()
+				// call, so stale bytes do not carry over to the next transaction.
 				return errI2CAckExpected
 			case mask&esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk != 0:
 				i2c.resetMaster()
