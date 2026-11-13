@@ -1,4 +1,4 @@
-//go:build !baremetal && !nintendoswitch && !wasip1 && !wasm_unknown && !wasip2
+//go:build !baremetal && !nintendoswitch && !wasm_unknown && !wasip2
 
 package os
 
