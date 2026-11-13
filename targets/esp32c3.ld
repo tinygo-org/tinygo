@@ -66,6 +66,7 @@ SECTIONS
         *(.sbss)
         *(.sbss.*)
         *(.bss .bss.*)
+        *(COMMON)
         . = ALIGN (4);
         _ebss = ABSOLUTE(.);
     } >DRAM
