@@ -249,6 +249,12 @@ func (p Pin) ioMuxReg() *volatile.Register32 {
 	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.IO_MUX.GPIO0), uintptr(p)*4))
 }
 
+// mux returns the same register as ioMuxReg, matching the name used by the
+// shared ESP32xx peripheral drivers.
+func (p Pin) mux() *volatile.Register32 {
+	return p.ioMuxReg()
+}
+
 // outFunc returns the FUNCx_OUT_SEL_CFG register used for configuring the
 // output function selection.
 func (p Pin) outFunc() *volatile.Register32 {
