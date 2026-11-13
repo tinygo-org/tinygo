@@ -35,6 +35,22 @@ func (p *Process) release() error {
 	return nil
 }
 
+func (p *Process) wait() (*ProcessState, error) {
+	// wait4 with a pid of 0 or less waits for any child in a process group, see wait(2).
+	if p.Pid <= 0 {
+		return nil, errors.New("os: process not initialized")
+	}
+	var status syscall.WaitStatus
+	pid, err := syscall.Wait4(p.Pid, &status, 0, nil)
+	for err == syscall.EINTR {
+		pid, err = syscall.Wait4(p.Pid, &status, 0, nil)
+	}
+	if err != nil {
+		return nil, NewSyscallError("wait", err)
+	}
+	return &ProcessState{pid: pid, status: status}, nil
+}
+
 // forkExec starts argv0 with posix_spawn.
 func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) {
 	if argv == nil {
