@@ -224,9 +224,9 @@ type i2cAck = uint32
 // Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1227
 const (
 	i2cCMD_RSTART   i2cCommandType = 6 << 11
-	i2cCMD_WRITE    i2cCommandType = 1<<11 | 1<<8  // WRITE + ack_check_en
-	i2cCMD_READ     i2cCommandType = 3 << 11       // READ
-	i2cCMD_READLAST i2cCommandType = 3<<11 | 1<<10 // READ + NACK
+	i2cCMD_WRITE    i2cCommandType = 1<<11 | 1<<8 // WRITE + ack_check_en (slave must ACK)
+	i2cCMD_READ     i2cCommandType = 3 << 11      // READ; no ack_check_en — master drives ACK, not slave; ack_check_en causes false NACK_INT on open-drain lines
+	i2cCMD_READLAST i2cCommandType = 3<<11 | 4<<8 // READ last byte: ack_val=1 (master sends NACK to end read)
 	i2cCMD_STOP     i2cCommandType = 2 << 11
 	i2cCMD_END      i2cCommandType = 4 << 11
 )
@@ -393,8 +393,13 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 			}
 			switch {
 			case mask&esp.I2C_INT_STATUS_NACK_INT_ST_Msk != 0:
+				// Slave NACK: device absent or refused a data byte.
+				// i2cCMD_READLAST uses ack_check_en=0, so the master's own last-byte
+				// NACK (ack_val=1) does NOT trigger NACK_INT; any NACK_INT here is
+				// a real slave-side refusal and must be reported as an error.
 				return errI2CAckExpected
 			case mask&esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk != 0:
+				i2c.resetMaster()
 				if readTo != nil {
 					return errI2CReadTimeout
 				}
