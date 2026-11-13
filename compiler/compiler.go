@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/src/tinygo"
@@ -146,7 +147,7 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 	c.i1False = llvm.ConstNull(c.i1)
 	c.i1True = llvm.ConstAllOnes(c.i1)
 	c.mod = c.ctx.NewModule(moduleName)
-	c.mod.SetTarget(config.Triple)
+	c.mod.SetTarget(compileopts.LLVMTriple(config.Triple))
 	c.mod.SetDataLayout(c.targetData.String())
 	if c.Debug {
 		c.dibuilder = llvm.NewDIBuilder(c.mod)
