@@ -22,6 +22,9 @@ import "C"
 
 // int headerfunc(int a) { return a + 1; }
 // static int headerfunc_static(int a) { return a - 1; }
+// static inline int headerfunc_static_inline(int a) { return a - 2; }
+// static inline __attribute__((always_inline)) int headerfunc_static_always_inline(int a) { return a - 3; }
+// static __attribute__((noinline)) int headerfunc_static_noinline(int a) { return a - 4; }
 import "C"
 
 import (
@@ -66,6 +69,9 @@ func main() {
 	// functions in the header C snippet
 	println("headerfunc:", C.headerfunc(5))
 	println("static headerfunc:", C.headerfunc_static(5))
+	println("static inline headerfunc:", C.headerfunc_static_inline(5))
+	println("static always_inline headerfunc:", C.headerfunc_static_always_inline(5))
+	println("static noinline headerfunc:", C.headerfunc_static_noinline(5))
 	headerfunc_2()
 
 	// equivalent types

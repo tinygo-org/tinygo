@@ -532,6 +532,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 						return fmt.Errorf("failed to link module: %w", err)
 					}
 				}
+				resolveCGoStaticFunctions(mod)
 
 				// Erase all globals that are part of the undefinedGlobals list.
 				// This list comes from the -ldflags="-X pkg.foo=val" option.
@@ -1257,6 +1258,30 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 	}
 
 	return result, nil
+}
+
+// resolveCGoStaticFunctions replaces each _Cgo_static_ declaration with the
+// static C function that its _ref global points to. See #6296.
+func resolveCGoStaticFunctions(mod llvm.Module) {
+	var refs []llvm.Value
+	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		name := global.Name()
+		if strings.HasPrefix(name, "_Cgo_static_") && strings.HasSuffix(name, "_ref") {
+			refs = append(refs, global)
+		}
+	}
+	for _, ref := range refs {
+		fn := ref.Initializer()
+		for !fn.IsAConstantExpr().IsNil() && fn.OperandsCount() == 1 {
+			fn = fn.Operand(0)
+		}
+		decl := mod.NamedFunction(strings.TrimSuffix(ref.Name(), "_ref"))
+		if !decl.IsNil() && decl.IsDeclaration() {
+			decl.ReplaceAllUsesWith(fn)
+			decl.EraseFromParentAsFunction()
+		}
+		ref.EraseFromParentAsGlobal()
+	}
 }
 
 func linkOrCopyFile(src, dst string) error {

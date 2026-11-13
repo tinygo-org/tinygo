@@ -1348,29 +1348,9 @@ func (f *cgoFile) getASTDeclNode(name string, found clangCursor) ast.Node {
 	case *ast.FuncDecl:
 		if strings.HasPrefix(node.Doc.List[0].Text, "//export _Cgo_static_") {
 			// Static function. Only accessible in the current Go file.
+			// The reference keeps the function, builder calls it directly. See #6296.
 			globalName := strings.TrimPrefix(node.Doc.List[0].Text, "//export ")
-			// Make an alias. Normally this is done using the alias function
-			// attribute, but MacOS for some reason doesn't support this (even
-			// though the linker has support for aliases in the form of N_INDR).
-			// Therefore, create an actual function for MacOS.
-			var params []string
-			for _, param := range node.Type.Params.List {
-				params = append(params, param.Names[0].Name)
-			}
-			callInst := fmt.Sprintf("%s(%s);", name, strings.Join(params, ", "))
-			if node.Type.Results != nil {
-				callInst = "return " + callInst
-			}
-			aliasDeclaration := fmt.Sprintf(`
-#ifdef __APPLE__
-%s {
-	%s
-}
-#else
-extern __typeof(%s) %s __attribute__((alias(%#v)));
-#endif
-`, extra.(string), callInst, name, globalName, name)
-			f.cgoHeaders[f.index] += "\n\n" + aliasDeclaration
+			f.cgoHeaders[f.index] += fmt.Sprintf("\n\n__typeof(%s) *const %s_ref = %s;\n", name, globalName, name)
 		} else {
 			// Regular (non-static) function.
 			f.definedGlobally[name] = node
