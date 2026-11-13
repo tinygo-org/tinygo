@@ -39,6 +39,8 @@ const (
 	// Onboard LED
 	LED Pin = GPIO25
 
+	psramCSPin = GPIO47
+
 	// Onboard crystal oscillator frequency, in MHz.
 	xoscFreq = 12 // MHz
 )
