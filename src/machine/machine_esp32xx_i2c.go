@@ -390,7 +390,10 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 
 	cmd := i2c.txCmdBuf[:0]
 	cmd = append(cmd, i2cCommand{cmd: i2cCMD_RSTART})
-	if len(w) > 0 {
+	if len(w) > 0 || len(r) == 0 {
+		// Always add a WRITE phase so the device address byte is sent and any
+		// NACK (device absent) can be detected.  For len(r)==0 with empty w
+		// this sends only the address byte — the canonical I2C scan probe.
 		cmd = append(cmd, i2cCommand{cmd: i2cCMD_WRITE, data: w})
 	}
 	if len(r) > 0 {
