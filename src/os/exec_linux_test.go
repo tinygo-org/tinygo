@@ -5,6 +5,7 @@ package os_test
 import (
 	"errors"
 	. "os"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"testing"
@@ -67,12 +68,46 @@ func TestForkExecProcSys(t *testing.T) {
 }
 
 func TestForkExecProcFiles(t *testing.T) {
-	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{Files: []*File{}})
+	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{Files: []*File{Stdin, Stdout, Stderr}})
 	if !errors.Is(err, ErrNotImplementedFiles) {
 		t.Fatalf("wanted ErrNotImplementedFiles, got %v\n", err)
 	}
 
 	if proc != nil {
 		t.Fatalf("wanted nil, got %v\n", proc)
+	}
+}
+
+func TestForkExecNilAttr(t *testing.T) {
+	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, nil)
+	if err == nil {
+		t.Fatal("wanted an error for a nil ProcAttr")
+	}
+
+	if proc != nil {
+		t.Fatalf("wanted nil, got %v\n", proc)
+	}
+}
+
+// The caller keeps running and the command runs once.
+func TestForkExecParentContinues(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "out")
+	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "echo child >> " + out}, &ProcAttr{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ws syscall.WaitStatus
+	if _, err := syscall.Wait4(proc.Pid, &ws, 0, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !ws.Exited() || ws.ExitStatus() != 0 {
+		t.Fatalf("child did not exit cleanly: %v", ws)
+	}
+	data, err := ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "child\n" {
+		t.Fatalf("child output = %q, want %q", data, "child\n")
 	}
 }

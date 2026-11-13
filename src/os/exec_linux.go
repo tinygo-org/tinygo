@@ -35,15 +35,7 @@ func (p *Process) release() error {
 	return nil
 }
 
-// This function is a wrapper around the forkExec function, which is a wrapper around the fork and execve system calls.
-// The StartProcess function creates a new process by forking the current process and then calling execve to replace the current process with the new process.
-// It thereby replaces the newly created process with the specified command and arguments.
-// Differences to upstream golang implementation (https://cs.opensource.google/go/go/+/master:src/syscall/exec_unix.go;l=143):
-// * No setting of Process Attributes
-// * Ignoring Ctty
-// * No ForkLocking (might be introduced by #4273)
-// * No parent-child communication via pipes (TODO)
-// * No waiting for crashes child processes to prohibit zombie process accumulation / Wait status checking (TODO)
+// forkExec starts argv0 with posix_spawn.
 func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) {
 	if argv == nil {
 		return 0, errors.New("exec: no argv")
@@ -53,45 +45,25 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		return 0, errors.New("exec: no argv")
 	}
 
-	if attr == nil {
-		attr = new(ProcAttr)
-	}
-
-	p, err := fork()
-	pid = int(p)
-
-	if err != nil {
-		return 0, err
-	}
-
-	// else code runs in child, which then should exec the new process
-	err = execve(argv0, argv, attr.Env)
-	if err != nil {
-		// exec failed
-		return 0, err
-	}
-	// 3. TODO: use pipes to communicate back child status
-	return pid, nil
+	return spawn(argv0, argv, attr.Env)
 }
 
-// In Golang, the idiomatic way to create a new process is to use the StartProcess function.
-// Since the Model of operating system processes in tinygo differs from the one in Golang, we need to implement the StartProcess function differently.
-// The startProcess function is a wrapper around the forkExec function, which is a wrapper around the fork and execve system calls.
-// The StartProcess function creates a new process by forking the current process and then calling execve to replace the current process with the new process.
-// It thereby replaces the newly created process with the specified command and arguments.
+// startProcess does not support ProcAttr.Dir, Files or Sys yet.
 func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err error) {
-	if attr != nil {
-		if attr.Dir != "" {
-			return nil, ErrNotImplementedDir
-		}
+	if attr == nil {
+		return nil, errors.New("exec: no ProcAttr")
+	}
 
-		if attr.Sys != nil {
-			return nil, ErrNotImplementedSys
-		}
+	if attr.Dir != "" {
+		return nil, ErrNotImplementedDir
+	}
 
-		if len(attr.Files) != 0 {
-			return nil, ErrNotImplementedFiles
-		}
+	if attr.Sys != nil {
+		return nil, ErrNotImplementedSys
+	}
+
+	if len(attr.Files) != 0 {
+		return nil, ErrNotImplementedFiles
 	}
 
 	pid, err := forkExec(name, argv, attr)
