@@ -140,7 +140,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	if config.TrimPath() {
 		debugPrefixMap = compileopts.DebugPrefixMap(dir, remapDir)
 	}
-	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+compileopts.ClangTriple(target), debugPrefixMap)
+	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+compileopts.LLVMTriple(target), debugPrefixMap)
 	resourceDir := goenv.ClangResourceDir(config.TrimPath())
 	if config.TrimPath() {
 		args = append(args,
