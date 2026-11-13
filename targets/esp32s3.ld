@@ -48,6 +48,7 @@ SECTIONS
         . = ALIGN (4);
         _sbss = ABSOLUTE(.);
         *(.bss .bss.*)
+        *(COMMON)
         . = ALIGN (4);
         _ebss = ABSOLUTE(.);
     } >DRAM
