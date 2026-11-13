@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -143,30 +144,30 @@ func checkGolden(t *testing.T, path string, actual []byte) {
 func measureBinarySizes(t *testing.T, tests []sizeTest) []*programSize {
 	t.Helper()
 	type result struct {
-		index int
-		size  *programSize
-		err   error
+		size *programSize
+		err  error
 	}
-
-	results := make(chan result, len(tests))
+	results := make([]result, len(tests))
+	outer := make(chan struct{}, cap(sema))
+	var wg sync.WaitGroup
 	for i, tc := range tests {
 		tmpdir := t.TempDir()
-		go func() {
+		wg.Go(func() {
+			outer <- struct{}{}
+			defer func() { <-outer }()
 			size, err := measureBinarySize(tc, tmpdir)
-			results <- result{i, size, err}
-		}()
+			results[i] = result{size, err}
+		})
 	}
-
+	wg.Wait()
 	sizes := make([]*programSize, len(tests))
 	failed := false
-	for range tests {
-		result := <-results
-		if result.err != nil {
-			tc := tests[result.index]
-			t.Errorf("%s/%s opt=%s: %v", tc.target, tc.path, tc.opt, result.err)
+	for i, tc := range tests {
+		if err := results[i].err; err != nil {
+			t.Errorf("%s/%s opt=%s: %v", tc.target, tc.path, tc.opt, err)
 			failed = true
 		}
-		sizes[result.index] = result.size
+		sizes[i] = results[i].size
 	}
 	if failed {
 		t.FailNow()
