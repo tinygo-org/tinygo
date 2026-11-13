@@ -108,9 +108,12 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		segments = ramSegments
 
 	case "esp32s3":
+		// The DBUS cache window runs to 0x3E000000, but its upper half is
+		// reserved for PSRAM (targets/esp32s3.ld), which is never backed by
+		// flash. Only the DROM half below 0x3D000000 is flash-mapped.
 		var ramSegments []*espImageSegment
 		for _, seg := range segments {
-			if (seg.addr >= 0x3C000000 && seg.addr < 0x3E000000) ||
+			if (seg.addr >= 0x3C000000 && seg.addr < 0x3D000000) ||
 				(seg.addr >= 0x42000000 && seg.addr < 0x44000000) {
 				flashSegments = append(flashSegments, seg)
 			} else {
@@ -185,7 +188,7 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 					return fmt.Errorf("ESP32-S3: multiple IROM segments")
 				}
 				esp32s3IromSegment = seg
-			case seg.addr >= 0x3C000000 && seg.addr < 0x3E000000:
+			case seg.addr >= 0x3C000000 && seg.addr < 0x3D000000:
 				if esp32s3DromSegment != nil {
 					return fmt.Errorf("ESP32-S3: multiple DROM segments")
 				}
