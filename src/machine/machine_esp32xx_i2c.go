@@ -168,22 +168,39 @@ func (i2c *I2C) startMaster() {
 
 //go:inline
 func (i2c *I2C) resetMaster() {
-	// reset FSM
+	// Reset the I2C FSM.
+	// On chips where FSM_RST does not self-clear (e.g. ESP32-P4), the FSM
+	// stays in reset after CONF_UPGATE unless we explicitly write FSM_RST=0.
+	// With FSM_RST=1 latched, TRANS_START has no effect and INT_STATUS never
+	// fires.  Fix: toggle FSM_RST high→low with a CONF_UPGATE on each edge so
+	// the FSM is fully running before we start SCL bus recovery — the FSM must
+	// be running to generate the recovery pulses.
 	i2c.Bus.SetCTR_FSM_RST(1)
+	i2c.Bus.SetCTR_CONF_UPGATE(1) // Trigger FSM reset
+	i2c.Bus.SetCTR_FSM_RST(0)
+	i2c.Bus.SetCTR_CONF_UPGATE(1) // Release FSM from reset; FSM now in IDLE
+
+	// Generate up to 9 SCL pulses to recover a stuck SDA line.
+	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_NUM(9)
+	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_EN(1)
 	i2c.Bus.SetSCL_STRETCH_CONF_SLAVE_SCL_STRETCH_EN(1)
 	i2c.Bus.SetCTR_CONF_UPGATE(1)
 	i2c.Bus.FILTER_CFG.Set(0x377)
 	// Wait for hardware to clear SCL_RST_SLV_EN after sending 9 recovery pulses.
 	// Timeout of 10ms: at 100 kHz SCL, 9 pulses take ~90 µs; 10ms is conservative.
-	// On some chips (e.g. ESP32-P4) the bit may not self-clear if the peripheral
-	// SCLK hasn't started yet; the timeout lets initialization proceed regardless.
 	deadline := nanotime() + 10_000_000
 	for i2c.Bus.GetSCL_SP_CONF_SCL_RST_SLV_EN() != 0 {
 		if nanotime() > deadline {
 			break
 		}
 	}
+	// Force-clear bus recovery bits and slave SCL stretch enable, then apply.
+	// SLAVE_SCL_STRETCH_EN is a slave-mode feature; leaving it set in master
+	// mode causes the FSM to stall waiting for SCL release that never arrives.
+	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_EN(0)
 	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_NUM(0)
+	i2c.Bus.SetSCL_STRETCH_CONF_SLAVE_SCL_STRETCH_EN(0)
+	i2c.Bus.SetCTR_CONF_UPGATE(1)
 }
 
 type i2cCommandType = uint32
