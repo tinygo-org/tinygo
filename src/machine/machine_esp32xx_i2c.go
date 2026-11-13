@@ -109,13 +109,18 @@ func (i2c *I2C) initPins(config I2CConfig) {
 	inFunc(i2c.funcSDA).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDA)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
 	config.SDA.Set(true)
 	config.SDA.pinReg().SetBits(esp.GPIO_PIN_PAD_DRIVER)
+	// Enable internal pull-up so SCL/SDA can rise in open-drain mode even
+	// when no external pull-up is present.  This matches the ESP-IDF default
+	// and is required for SCL to reach VCC after the peripheral releases the
+	// line; without it the SCL positive-edge state stalls forever.
+	config.SDA.mux().SetBits(esp.IO_MUX_GPIO_FUN_WPU)
 	i2c.Bus.SetCTR_SDA_FORCE_OUT(1)
 
 	config.SCL.configure(PinConfig{Mode: PinOutput}, i2c.funcSCL)
 	inFunc(i2c.funcSCL).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SCL)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
 	config.SCL.Set(true)
-	// Configure the pad with the given IO mux configuration.
 	config.SCL.pinReg().SetBits(esp.GPIO_PIN_PAD_DRIVER)
+	config.SCL.mux().SetBits(esp.IO_MUX_GPIO_FUN_WPU)
 	i2c.Bus.SetCTR_SCL_FORCE_OUT(1)
 }
 
@@ -158,8 +163,17 @@ func (i2c *I2C) startMaster() {
 	i2c.Bus.SetFIFO_CONF_RX_FIFO_RST(0)
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(1)
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(0)
-	// set timeout value
+	// Bus-stuck timeout (TO): value in bits[4:0], enable in bit[5].
+	// Keep enable=0 (disabled) so normal clock stretching is not limited.
 	i2c.Bus.TO.Set(0x10)
+	// SCL state-machine watchdog timeouts.
+	// The 5-bit SCL_ST_TO_I2C / SCL_MAIN_ST_TO_I2C fields encode the timeout
+	// as 2^N source-clock cycles.  After reset on ESP32-P4 these default to 0
+	// (= 2^0 = 1 cycle ≈ 25 ns at 40 MHz), which fires before SCL can rise
+	// even with external pull-ups, stalling every transaction.
+	// Set both to the maximum (0x1f = 2^31 ≈ 53 s) to effectively disable them.
+	i2c.Bus.SCL_ST_TIME_OUT.Set(0x1f)
+	i2c.Bus.SCL_MAIN_ST_TIME_OUT.Set(0x1f)
 	// enable master mode
 	i2c.Bus.CTR.Set(0x113)
 	i2c.Bus.SetCTR_CONF_UPGATE(1)
