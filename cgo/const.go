@@ -237,6 +237,9 @@ func castType(t *tokenizer) ast.Expr {
 		return nil
 	}
 	name := t.curValue
+	if _, ok := t.params[name]; ok {
+		return nil
+	}
 	// Built-in types like int are deliberately not looked up in C (see
 	// builtinAliases), so they need to be handled separately.
 	if slices.Contains(builtinAliases, name) {
