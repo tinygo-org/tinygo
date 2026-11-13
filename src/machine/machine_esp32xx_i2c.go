@@ -173,6 +173,17 @@ func (i2c *I2C) resetMaster() {
 	i2c.Bus.SetSCL_STRETCH_CONF_SLAVE_SCL_STRETCH_EN(1)
 	i2c.Bus.SetCTR_CONF_UPGATE(1)
 	i2c.Bus.FILTER_CFG.Set(0x377)
+	// Wait for hardware to clear SCL_RST_SLV_EN after sending 9 recovery pulses.
+	// Timeout of 10ms: at 100 kHz SCL, 9 pulses take ~90 µs; 10ms is conservative.
+	// On some chips (e.g. ESP32-P4) the bit may not self-clear if the peripheral
+	// SCLK hasn't started yet; the timeout lets initialization proceed regardless.
+	deadline := nanotime() + 10_000_000
+	for i2c.Bus.GetSCL_SP_CONF_SCL_RST_SLV_EN() != 0 {
+		if nanotime() > deadline {
+			break
+		}
+	}
+	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_NUM(0)
 }
 
 type i2cCommandType = uint32
