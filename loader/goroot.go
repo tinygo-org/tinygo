@@ -256,7 +256,6 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 		"internal/futex/":                 false,
 		"internal/fuzz/":                  false,
 		"internal/itoa/":                  false,
-		"internal/poll/":                  false,
 		"internal/reflectlite/":           false,
 		"internal/gclayout":               false,
 		"internal/task/":                  false,
@@ -280,6 +279,7 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 	}
 
 	if needsSyscallPackage(config.BuildTags()) {
+		paths["internal/poll/"] = false
 		paths["syscall/"] = true // include syscall/js
 		paths["internal/syscall/"] = true
 		paths["internal/syscall/unix/"] = false
