@@ -215,6 +215,7 @@ type builder struct {
 	selectRecvBuf      map[*ssa.Select]llvm.Value
 	deferBuiltinFuncs  map[ssa.Value]deferBuiltin
 	runningDefers      bool
+	runDefersBefore    map[ssa.Instruction]bool
 	loweringBody       bool
 	inFaultBlock       bool
 	runDefersBlock     []llvm.BasicBlock
@@ -1417,6 +1418,8 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// This function has deferred function calls. Set some things up for
 		// them.
 		b.deferInitFunc()
+	} else if isYieldFunc(b.fn) {
+		b.deferInitCallbacks()
 	}
 
 	if b.NeedsStackObjects {
@@ -1443,6 +1446,9 @@ func (b *builder) createFunction() {
 		b.currentBlockInfo = &b.blockInfo[block.Index]
 		b.SetInsertPointAtEnd(b.currentBlockInfo.entry)
 		for _, instr := range block.Instrs {
+			if b.runDefersBefore[instr] {
+				b.createRunDefersBlock()
+			}
 			if instr, ok := instr.(*ssa.DebugRef); ok {
 				if !b.Debug {
 					continue
@@ -1645,14 +1651,7 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 		}
 		b.createReturn(instr.Results, getPos(instr))
 	case *ssa.RunDefers:
-		// Note where we're going to put the rundefers block
-		run := b.insertBasicBlock("rundefers.block")
-		b.CreateBr(run)
-		b.runDefersBlock = append(b.runDefersBlock, run)
-
-		after := b.insertBasicBlock("rundefers.after")
-		b.SetInsertPointAtEnd(after)
-		b.afterDefersBlock = append(b.afterDefersBlock, after)
+		b.createRunDefersBlock()
 	case *ssa.Send:
 		b.createChanSend(instr)
 	case *ssa.Store:
@@ -2304,6 +2303,8 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 	case "ssa:wrapnilchk":
 		// TODO: do an actual nil check?
 		return argValues[0], nil
+	case "ssa:deferstack":
+		return b.deferPtr, nil
 
 	// Builtins from the unsafe package.
 	case "Add": // unsafe.Add

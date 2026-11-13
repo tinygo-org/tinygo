@@ -1,0 +1,22 @@
+direct: 4321
+closure: 1642
+closure without free variables: 777
+function value: 321
+interface: 654
+method: 876
+builtin: 30
+aggregate: 505
+nested: 332122111
+break: 921
+return: 821
+named result: 4321
+bare return: 4321
+return in loop body: 521
+return local: 4
+own defers: 54321
+generic: 321
+function literal: 4321
+gc: 321
+panic: 215
+recover in loop body: 3921
+panic in deferred call: 3218
