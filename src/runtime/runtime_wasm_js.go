@@ -1,5 +1,3 @@
-//go:build wasm && !wasip1
-
 package runtime
 
 var handleEvent func()
