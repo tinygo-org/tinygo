@@ -52,8 +52,6 @@ typedef struct {
 GoCXCursor tinygo_clang_getTranslationUnitCursor(CXTranslationUnit tu);
 unsigned tinygo_clang_visitChildren(GoCXCursor parent, CXCursorVisitor visitor, CXClientData client_data);
 CXString tinygo_clang_getCursorSpelling(GoCXCursor c);
-CXString tinygo_clang_getCursorPrettyPrinted(GoCXCursor c, CXPrintingPolicy Policy);
-CXPrintingPolicy tinygo_clang_getCursorPrintingPolicy(GoCXCursor c);
 enum CXCursorKind tinygo_clang_getCursorKind(GoCXCursor c);
 CXType tinygo_clang_getCursorType(GoCXCursor c);
 GoCXCursor tinygo_clang_getTypeDeclaration(CXType t);
@@ -225,7 +223,6 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 		numArgs := int(C.tinygo_clang_Cursor_getNumArguments(c))
 		exportName := name
 		localName := name
-		var stringSignature string
 		if C.tinygo_clang_Cursor_getStorageClass(c) == C.CX_SC_Static {
 			// A static function is assigned a globally unique symbol name based
 			// on the file path (like _Cgo_static_2d09198adbf58f4f4655_foo) and
@@ -236,16 +233,6 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 			staticID := hex.EncodeToString(staticIDBuf[:10])
 			exportName = "_Cgo_static_" + staticID + "_" + name
 			localName = name + "!" + filepath.Base(path)
-
-			// Create a signature. This is necessary for MacOS to forward the
-			// call, because MacOS doesn't support aliases like ELF and PE do.
-			// (There is N_INDR but __attribute__((alias("..."))) doesn't work).
-			policy := C.tinygo_clang_getCursorPrintingPolicy(c)
-			defer C.clang_PrintingPolicy_dispose(policy)
-			C.clang_PrintingPolicy_setProperty(policy, C.CXPrintingPolicy_TerseOutput, 1)
-			stringSignature = getString(C.tinygo_clang_getCursorPrettyPrinted(c, policy))
-			stringSignature = strings.Replace(stringSignature, " "+name+"(", " "+exportName+"(", 1)
-			stringSignature = strings.TrimPrefix(stringSignature, "static ")
 		}
 		args := make([]*ast.Field, numArgs)
 		decl := &ast.FuncDecl{
@@ -311,7 +298,7 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 				},
 			}
 		}
-		return decl, stringSignature
+		return decl, nil
 	case C.CXCursor_StructDecl, C.CXCursor_UnionDecl:
 		typ := f.makeASTRecordType(c, pos)
 		typeName := "_Cgo_" + name
