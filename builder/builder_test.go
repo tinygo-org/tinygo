@@ -278,8 +278,7 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 	defer mod.Dispose()
 
 	// Check whether the LLVM target matches.
-	// Use ClangTriple since LLVM 22 normalizes wasm32-unknown-wasi to wasip1.
-	expectedTriple := compileopts.ClangTriple(config.Triple())
+	expectedTriple := compileopts.LLVMTriple(config.Triple())
 	if mod.Target() != expectedTriple {
 		t.Errorf("target has LLVM triple %#v but Clang makes it LLVM triple %#v", expectedTriple, mod.Target())
 	}
