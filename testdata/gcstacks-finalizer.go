@@ -2,6 +2,7 @@ package main
 
 import (
 	"runtime"
+	"sync/atomic"
 	"time"
 )
 
@@ -55,7 +56,7 @@ func collect() {
 type holder struct{ c chan int }
 
 var (
-	fired  int
+	fired  atomic.Int32
 	result = make(chan int)
 )
 
@@ -73,7 +74,7 @@ func worker(c chan int) {
 func setup() {
 	h := &holder{c: make(chan int)}
 	runtime.SetFinalizer(h, func(h *holder) {
-		fired++
+		fired.Add(1)
 		go func() { h.c <- 7 }()
 	})
 	go worker(h.c)
@@ -99,12 +100,12 @@ func main() {
 	setup()
 	sink += scrubStack(8)
 	runtime.Gosched()
-	for i := 0; i < 200 && fired == 0; i++ {
+	for i := 0; i < 200 && fired.Load() == 0; i++ {
 		collect()
 		runtime.Gosched()
 		time.Sleep(time.Millisecond)
 	}
-	if fired == 0 {
+	if fired.Load() == 0 {
 		println("finalizer did not run")
 		return
 	}
