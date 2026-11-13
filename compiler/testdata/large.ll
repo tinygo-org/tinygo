@@ -81,9 +81,12 @@ entry:
 ; Function Attrs: nounwind
 define hidden void @main.makeZeroLargeValue(ptr dereferenceable_or_null(1025) %return, ptr %context) unnamed_addr #1 {
 entry:
-  store [1025 x i8] zeroinitializer, ptr %return, align 1
+  call void @llvm.memset.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %return, i8 0, i32 1025, i1 false)
   ret void
 }
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
+declare void @llvm.memset.p0.i32(ptr writeonly captures(none), i8, i32, i1 immarg) #4
 
 ; Function Attrs: nounwind
 define hidden i8 @main.passZeroLargeValue(ptr %context) unnamed_addr #1 {
@@ -153,9 +156,9 @@ entry:
   ret i8 %0
 }
 
-declare void @"interface:{main.makeLargeValue:func:{}{named:main.largeValue},main.readLargeValue:func:{named:main.largeValue}{basic:uint8}}.makeLargeValue$invoke"(ptr, ptr, ptr, ptr) #4
+declare void @"interface:{main.makeLargeValue:func:{}{named:main.largeValue},main.readLargeValue:func:{named:main.largeValue}{basic:uint8}}.makeLargeValue$invoke"(ptr, ptr, ptr, ptr) #5
 
-declare i8 @"interface:{main.makeLargeValue:func:{}{named:main.largeValue},main.readLargeValue:func:{named:main.largeValue}{basic:uint8}}.readLargeValue$invoke"(ptr, ptr, ptr, ptr) #5
+declare i8 @"interface:{main.makeLargeValue:func:{}{named:main.largeValue},main.readLargeValue:func:{named:main.largeValue}{basic:uint8}}.readLargeValue$invoke"(ptr, ptr, ptr, ptr) #6
 
 ; Function Attrs: nounwind
 define hidden void @main.deferLargeValue(ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
@@ -245,7 +248,7 @@ unwind.return:                                    ; preds = %recover, %rundefers
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn
-declare ptr @llvm.stacksave.p0() #6
+declare ptr @llvm.stacksave.p0() #7
 
 declare void @runtime.setupDeferFrame(ptr dereferenceable_or_null(28), ptr, ptr) #0
 
@@ -254,7 +257,7 @@ declare void @runtime.destroyDeferFrame(ptr dereferenceable_or_null(28), ptr) #0
 declare i1 @runtime.unwindPending(ptr) #0
 
 ; Function Attrs: noinline
-define internal i8 @main.deferLargeValue.asyncifycatch.0(ptr %0, ptr %1) #7 {
+define internal i8 @main.deferLargeValue.asyncifycatch.0(ptr %0, ptr %1) #8 {
 entry:
   %2 = call i8 @main.readLargeValue(ptr %0, ptr %1)
   %3 = call i1 @runtime.unwindPending(ptr undef)
@@ -270,7 +273,7 @@ return:                                           ; preds = %unwind.stop, %entry
 }
 
 ; Function Attrs: noinline
-define internal void @tinygo.asyncify.panicreplay.0(i32 %0) #7 {
+define internal void @tinygo.asyncify.panicreplay.0(i32 %0) #8 {
 entry:
   %1 = call ptr @runtime.panicRewindData(ptr undef)
   %2 = call ptr @runtime.panicRewindStackPointer(ptr undef)
@@ -289,9 +292,9 @@ declare ptr @runtime.panicRewindStackPointer(ptr) #0
 
 declare void @tinygo_set_panic_rewind_stack_pointer(ptr, ptr) #0
 
-declare void @runtime.asyncifyStartRewindImport(ptr captures(none)) #8
+declare void @runtime.asyncifyStartRewindImport(ptr captures(none)) #9
 
-declare void @runtime.asyncifyStopUnwindImport() #9
+declare void @runtime.asyncifyStopUnwindImport() #10
 
 declare void @runtime.savePanicReplay(i32, i32, ptr) #0
 
@@ -311,7 +314,7 @@ entry:
 declare void @runtime.exitGoroutine(ptr) #0
 
 ; Function Attrs: nounwind
-define linkonce_odr void @"main.readLargeValue$gowrapper"(ptr %0) unnamed_addr #10 {
+define linkonce_odr void @"main.readLargeValue$gowrapper"(ptr %0) unnamed_addr #11 {
 entry:
   %1 = call i8 @main.readLargeValue(ptr %0, ptr undef)
   call void @runtime.exitGoroutine(ptr undef) #13
@@ -450,9 +453,6 @@ if.then:                                          ; preds = %typeassert.next
 }
 
 declare i1 @runtime.typeAssert(ptr, ptr dereferenceable_or_null(1), ptr) #0
-
-; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
-declare void @llvm.memset.p0.i32(ptr writeonly captures(none), i8, i32, i1 immarg) #11
 
 ; Function Attrs: nounwind
 define hidden i8 @main.useLargeMap(ptr readonly dereferenceable_or_null(1025) %key, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
@@ -719,13 +719,13 @@ attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirec
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #3 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #4 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-indirect-result"="true" "tinygo-invoke"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}" "tinygo-methods"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}; main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" }
-attributes #5 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-invoke"="main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" "tinygo-methods"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}; main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" }
-attributes #6 = { nocallback nofree nosync nounwind willreturn }
-attributes #7 = { noinline }
-attributes #8 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="asyncify" "wasm-import-name"="start_rewind" }
-attributes #9 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="asyncify" "wasm-import-name"="stop_unwind" }
-attributes #10 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.readLargeValue" }
-attributes #11 = { nocallback nofree nounwind willreturn memory(argmem: write) }
+attributes #4 = { nocallback nofree nounwind willreturn memory(argmem: write) }
+attributes #5 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-indirect-result"="true" "tinygo-invoke"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}" "tinygo-methods"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}; main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" }
+attributes #6 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-invoke"="main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" "tinygo-methods"="main.$methods.makeLargeValue:func:{}{named:main.largeValue}; main.$methods.readLargeValue:func:{named:main.largeValue}{basic:uint8}" }
+attributes #7 = { nocallback nofree nosync nounwind willreturn }
+attributes #8 = { noinline }
+attributes #9 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="asyncify" "wasm-import-name"="start_rewind" }
+attributes #10 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-import-module"="asyncify" "wasm-import-name"="stop_unwind" }
+attributes #11 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.readLargeValue" }
 attributes #12 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite) }
 attributes #13 = { nounwind }

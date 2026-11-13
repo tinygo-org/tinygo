@@ -361,6 +361,61 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 	}
 }
 
+func TestLargeAggregateZeroStore(t *testing.T) {
+	mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "aggregate-storage.go")
+	defer mod.Dispose()
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"main.resetStorage", "main.resetArray"} {
+		ir := mod.NamedFunction(name).String()
+		if strings.Contains(ir, "store %main.storageValue") || strings.Contains(ir, "store [4096 x i8]") {
+			t.Errorf("%s stores a full zero aggregate", name)
+		}
+		if !strings.Contains(ir, "@llvm.memset.") {
+			t.Errorf("%s does not zero storage with memset", name)
+		}
+	}
+	if ir := mod.NamedFunction("main.resetStorage").String(); !strings.Contains(ir, "i32 4100, i1 false") {
+		t.Error("struct reset does not zero the full storage")
+	}
+	if ir := mod.NamedFunction("main.resetArray").String(); !strings.Contains(ir, "i32 4096, i1 false") {
+		t.Error("array reset does not zero the full storage")
+	}
+	if ir := mod.NamedFunction("main.resetSmallArray").String(); !strings.Contains(ir, "store [4 x i8] zeroinitializer") {
+		t.Error("small zero aggregate no longer uses a direct store")
+	}
+}
+
+func TestLargeAggregateDebugValue(t *testing.T) {
+	mod, errs := testCompilePackageWithDebug(t, &compileopts.Options{Target: "wasm"}, "aggregate-storage.go", true)
+	defer mod.Dispose()
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	ir := mod.NamedFunction("main.copyStorage").String()
+	if strings.Contains(ir, "load %main.storageValue") {
+		t.Error("debug value loads the full aggregate")
+	}
+	if !strings.Contains(ir, "!DIExpression(DW_OP_deref)") {
+		t.Error("indirect debug value has no dereference expression")
+	}
+	if !strings.Contains(ir, "@llvm.memcpy.") {
+		t.Error("aggregate value does not preserve its copy")
+	}
+	for line := range strings.Lines(mod.NamedFunction("main.compareArray").String()) {
+		if strings.Contains(line, "#dbg_value(ptr %src,") && strings.Contains(line, "DW_OP_deref") {
+			t.Errorf("debug value reads through the source pointer, which changes later: %s", strings.TrimSpace(line))
+		}
+	}
+}
+
 func TestLargeSliceElement(t *testing.T) {
 	options := &compileopts.Options{GOOS: "linux", GOARCH: "amd64"}
 	mod, errs := testCompilePackage(t, options, "slice-large-element.go")
