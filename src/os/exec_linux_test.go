@@ -6,7 +6,6 @@ import (
 	"errors"
 	. "os"
 	"path/filepath"
-	"runtime"
 	"syscall"
 	"testing"
 )
@@ -15,11 +14,6 @@ import (
 // This test is not run on Windows, as forkExec is not supported on Windows.
 // This test is not run on Plan 9, as forkExec is not supported on Plan 9.
 func TestForkExec(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Logf("skipping test on %s", runtime.GOOS)
-		return
-	}
-
 	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{})
 	if !errors.Is(err, nil) {
 		t.Fatalf("forkExec failed: %v", err)
@@ -96,12 +90,12 @@ func TestForkExecParentContinues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var ws syscall.WaitStatus
-	if _, err := syscall.Wait4(proc.Pid, &ws, 0, nil); err != nil {
+	ps, err := proc.Wait()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !ws.Exited() || ws.ExitStatus() != 0 {
-		t.Fatalf("child did not exit cleanly: %v", ws)
+	if !ps.Success() {
+		t.Fatalf("child did not exit cleanly: %v", ps)
 	}
 	data, err := ReadFile(out)
 	if err != nil {
@@ -109,5 +103,64 @@ func TestForkExecParentContinues(t *testing.T) {
 	}
 	if string(data) != "child\n" {
 		t.Fatalf("child output = %q, want %q", data, "child\n")
+	}
+}
+
+func TestProcessWait(t *testing.T) {
+	for _, tc := range []struct {
+		script  string
+		code    int
+		success bool
+		str     string
+	}{
+		{"exit 0", 0, true, "exit status 0"},
+		{"exit 3", 3, false, "exit status 3"},
+	} {
+		proc, err := StartProcess("/bin/sh", []string{"sh", "-c", tc.script}, &ProcAttr{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ps, err := proc.Wait()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ps.Pid() != proc.Pid {
+			t.Errorf("%s: Pid() = %d, want %d", tc.script, ps.Pid(), proc.Pid)
+		}
+		if !ps.Exited() || ps.ExitCode() != tc.code || ps.Success() != tc.success || ps.String() != tc.str {
+			t.Errorf("%s: Exited %v, ExitCode %d, Success %v, String %q", tc.script, ps.Exited(), ps.ExitCode(), ps.Success(), ps.String())
+		}
+	}
+}
+
+func TestProcessWaitSignal(t *testing.T) {
+	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "kill -KILL $$"}, &ProcAttr{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps, err := proc.Wait()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ps.Exited() || ps.ExitCode() != -1 || ps.Success() || ps.String() != "signal: killed" {
+		t.Errorf("Exited %v, ExitCode %d, Success %v, String %q", ps.Exited(), ps.ExitCode(), ps.Success(), ps.String())
+	}
+}
+
+// Wait on a zero Process must not reap another child.
+func TestProcessWaitZeroValue(t *testing.T) {
+	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "exit 7"}, &ProcAttr{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := new(Process).Wait(); err == nil {
+		t.Fatal("wanted an error from Wait on a zero Process")
+	}
+	ps, err := proc.Wait()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ps.ExitCode() != 7 {
+		t.Fatalf("ExitCode = %d, want 7", ps.ExitCode())
 	}
 }

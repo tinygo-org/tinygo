@@ -18,6 +18,10 @@ func (p *Process) release() error {
 	return nil
 }
 
+func (p *Process) wait() (*ProcessState, error) {
+	return nil, ErrNotImplemented
+}
+
 func forkExec(_ string, _ []string, _ *ProcAttr) (pid int, err error) {
 	return 0, ErrNotImplemented
 }
