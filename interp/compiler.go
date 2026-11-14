@@ -223,7 +223,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				llvmCalledValue := llvmInst.CalledValue()
 				if !llvmCalledValue.IsAFunction().IsNil() {
 					name := llvmCalledValue.Name()
-					if name == "llvm.dbg.value" || strings.HasPrefix(name, "llvm.lifetime.") {
+					if name == "llvm.dbg.value" || name == "llvm.assume" || strings.HasPrefix(name, "llvm.lifetime.") {
 						// These intrinsics should not be interpreted, they are not
 						// relevant to the execution of this function.
 						continue

@@ -7,6 +7,8 @@ target triple = "x86_64--linux"
 @smaxResult = local_unnamed_addr global i32 12
 @lenResult = local_unnamed_addr global i32 2
 @capacityResult = local_unnamed_addr global i32 4
+@assumeInput = local_unnamed_addr global i32 3
+@assumeResult = local_unnamed_addr global i32 3
 
 define void @runtime.initAll() local_unnamed_addr {
   ret void

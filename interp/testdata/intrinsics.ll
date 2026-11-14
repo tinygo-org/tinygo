@@ -7,6 +7,8 @@ target triple = "x86_64--linux"
 @smaxResult = global i32 0
 @lenResult = global i32 0
 @capacityResult = global i32 0
+@assumeInput = global i32 3
+@assumeResult = global i32 0
 
 define void @runtime.initAll() {
   call void @main.init()
@@ -19,6 +21,7 @@ define internal void @main.init() {
   call void @testUMax()
   call void @testSMax()
   call void @testLen()
+  call void @testAssume()
   ret void
 }
 
@@ -69,3 +72,13 @@ define internal void @testLen() {
 }
 
 declare i32 @llvm.ctlz.i32(i32, i1 immarg)
+
+define internal void @testAssume() {
+  %value = load i32, ptr @assumeInput
+  %inRange = icmp ult i32 %value, 16
+  call void @llvm.assume(i1 %inRange)
+  store i32 %value, ptr @assumeResult
+  ret void
+}
+
+declare void @llvm.assume(i1 noundef)
