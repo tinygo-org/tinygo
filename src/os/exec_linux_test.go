@@ -40,9 +40,37 @@ func TestForkExecErrNotExist(t *testing.T) {
 }
 
 func TestForkExecProcDir(t *testing.T) {
-	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{Dir: "dir"})
-	if !errors.Is(err, ErrNotImplementedDir) {
-		t.Fatalf("wanted ErrNotImplementedDir, got %v\n", err)
+	dir := t.TempDir()
+	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "pwd -P > out"}, &ProcAttr{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps, err := proc.Wait()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ps.Success() {
+		t.Fatalf("child did not exit cleanly: %v", ps)
+	}
+	data, err := ReadFile(filepath.Join(dir, "out"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != want+"\n" {
+		t.Fatalf("child dir = %q, want %q", data, want+"\n")
+	}
+}
+
+func TestForkExecProcDirNotExist(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "missing")
+	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{Dir: dir})
+	var pe *PathError
+	if !errors.As(err, &pe) || pe.Op != "chdir" || !errors.Is(err, ErrNotExist) {
+		t.Fatalf("wanted chdir PathError with ErrNotExist, got %v", err)
 	}
 
 	if proc != nil {
