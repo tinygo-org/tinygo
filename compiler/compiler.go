@@ -1450,11 +1450,16 @@ func (b *builder) createFunction() {
 		b.currentBlock = block
 		b.currentBlockInfo = &b.blockInfo[block.Index]
 		b.SetInsertPointAtEnd(b.currentBlockInfo.entry)
+		rangeK, rangeN, isRangeBody := rangeBound(block)
 		if loop := clearLoops[block]; loop != nil {
 			b.createClearLoop(loop, block)
 			continue
 		}
 		for _, instr := range block.Instrs {
+			if _, ok := instr.(*ssa.Phi); !ok && isRangeBody {
+				b.createRangeAssume(rangeK, rangeN)
+				isRangeBody = false
+			}
 			if instr, ok := instr.(*ssa.DebugRef); ok {
 				if !b.Debug {
 					continue

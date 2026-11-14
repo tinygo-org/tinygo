@@ -31,7 +31,7 @@ deref.next:                                       ; preds = %gep.next
   %.unpack = load ptr, ptr %z, align 4
   %.elt2 = getelementptr inbounds nuw i8, ptr %z, i32 4
   %.unpack3 = load i32, ptr %.elt2, align 4
-  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #5
   br label %rangeindex.loop
 
 rangeindex.loop:                                  ; preds = %deref.next
@@ -46,7 +46,7 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
   ret void
 
 gep.throw:                                        ; preds = %gep.next, %entry
-  call void @runtime.nilPanic(ptr undef) #4
+  call void @runtime.nilPanic(ptr undef) #5
   br label %unwind.return
 
 unwind.return:                                    ; preds = %gep.throw
@@ -64,7 +64,7 @@ entry:
   %stackalloc = alloca i8, align 1
   %.unpack = load ptr, ptr @main.global, align 4
   %.unpack2 = load i32, ptr getelementptr inbounds nuw (i8, ptr @main.global, i32 4), align 4
-  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #5
   br label %rangeindex.loop
 
 rangeindex.loop:                                  ; preds = %entry
@@ -126,7 +126,7 @@ deref.next:                                       ; preds = %gep.next
   %.unpack = load ptr, ptr %z, align 4
   %.elt2 = getelementptr inbounds nuw i8, ptr %z, i32 4
   %.unpack3 = load i32, ptr %.elt2, align 4
-  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #5
   %1 = icmp sgt i32 %.unpack3, 0
   br i1 %1, label %rangeint.body, label %rangeint.done
 
@@ -139,7 +139,7 @@ rangeint.done:                                    ; preds = %rangeint.body, %der
   ret void
 
 gep.throw:                                        ; preds = %gep.next, %entry
-  call void @runtime.nilPanic(ptr undef) #4
+  call void @runtime.nilPanic(ptr undef) #5
   br label %unwind.return
 
 unwind.return:                                    ; preds = %gep.throw
@@ -163,7 +163,7 @@ deref.next:                                       ; preds = %gep.next
   %.unpack = load ptr, ptr %z, align 4
   %.elt1 = getelementptr inbounds nuw i8, ptr %z, i32 4
   %.unpack2 = load i32, ptr %.elt1, align 4
-  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #5
   %1 = shl i32 %.unpack2, 2
   call void @llvm.memset.p0.i32(ptr align 4 %.unpack, i8 0, i32 %1, i1 false)
   br label %for.done
@@ -175,7 +175,7 @@ for.done:                                         ; preds = %deref.next
   ret void
 
 gep.throw:                                        ; preds = %gep.next, %for.loop
-  call void @runtime.nilPanic(ptr undef) #4
+  call void @runtime.nilPanic(ptr undef) #5
   br label %unwind.return
 
 unwind.return:                                    ; preds = %gep.throw
@@ -330,6 +330,9 @@ unwind.return:                                    ; preds = %lookup.throw
   ret void
 }
 
+; Function Attrs: nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: write)
+declare void @llvm.assume(i1 noundef) #3
+
 declare void @runtime.lookupPanic(ptr) #0
 
 ; Function Attrs: nounwind
@@ -365,7 +368,7 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
   ret void
 
 lookup.throw:                                     ; preds = %lookup.next3, %lookup.next, %rangeindex.body
-  call void @runtime.lookupPanic(ptr undef) #4
+  call void @runtime.lookupPanic(ptr undef) #5
   br label %unwind.return
 
 unwind.return:                                    ; preds = %lookup.throw
@@ -378,9 +381,9 @@ declare { ptr, i32, i32 } @main.getSlice(ptr) #0
 define hidden void @main.fromCall(ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %0 = call { ptr, i32, i32 } @main.getSlice(ptr undef) #4
+  %0 = call { ptr, i32, i32 } @main.getSlice(ptr undef) #5
   %1 = extractvalue { ptr, i32, i32 } %0, 0
-  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %1, ptr nonnull %stackalloc, ptr undef) #5
   %len = extractvalue { ptr, i32, i32 } %0, 1
   br label %rangeindex.loop
 
@@ -391,9 +394,9 @@ rangeindex.loop:                                  ; preds = %lookup.next, %entry
   br i1 %4, label %rangeindex.body, label %rangeindex.done
 
 rangeindex.body:                                  ; preds = %rangeindex.loop
-  %5 = call { ptr, i32, i32 } @main.getSlice(ptr undef) #4
+  %5 = call { ptr, i32, i32 } @main.getSlice(ptr undef) #5
   %6 = extractvalue { ptr, i32, i32 } %5, 0
-  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %6, ptr nonnull %stackalloc, ptr undef) #5
   %indexaddr.len = extractvalue { ptr, i32, i32 } %5, 1
   %.not = icmp ult i32 %3, %indexaddr.len
   br i1 %.not, label %lookup.next, label %lookup.throw
@@ -408,7 +411,7 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
   ret void
 
 lookup.throw:                                     ; preds = %rangeindex.body
-  call void @runtime.lookupPanic(ptr undef) #4
+  call void @runtime.lookupPanic(ptr undef) #5
   br label %unwind.return
 
 unwind.return:                                    ; preds = %lookup.throw
@@ -429,7 +432,7 @@ deref.next:                                       ; preds = %gep.next
   %.unpack = load ptr, ptr %z, align 4
   %.elt3 = getelementptr inbounds nuw i8, ptr %z, i32 4
   %.unpack4 = load i32, ptr %.elt3, align 4
-  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #5
   br label %rangeindex.loop
 
 rangeindex.loop:                                  ; preds = %lookup.next, %deref.next
@@ -449,7 +452,7 @@ deref.next2:                                      ; preds = %gep.next1
   %.unpack7 = load ptr, ptr %4, align 4
   %.elt8 = getelementptr inbounds nuw i8, ptr %z, i32 16
   %.unpack9 = load i32, ptr %.elt8, align 4
-  call void @runtime.trackPointer(ptr %.unpack7, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack7, ptr nonnull %stackalloc, ptr undef) #5
   %.not = icmp ult i32 %2, %.unpack9
   br i1 %.not, label %lookup.next, label %lookup.throw
 
@@ -462,14 +465,14 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
   ret void
 
 gep.throw:                                        ; preds = %gep.next1, %rangeindex.body, %gep.next, %entry
-  call void @runtime.nilPanic(ptr undef) #4
+  call void @runtime.nilPanic(ptr undef) #5
   br label %unwind.return
 
 unwind.return:                                    ; preds = %lookup.throw, %gep.throw
   ret void
 
 lookup.throw:                                     ; preds = %deref.next2
-  call void @runtime.lookupPanic(ptr undef) #4
+  call void @runtime.lookupPanic(ptr undef) #5
   br label %unwind.return
 }
 
@@ -527,7 +530,7 @@ for.done:                                         ; preds = %for.loop
   ret void
 
 lookup.throw:                                     ; preds = %for.body
-  call void @runtime.lookupPanic(ptr undef) #4
+  call void @runtime.lookupPanic(ptr undef) #5
   br label %unwind.return
 
 unwind.return:                                    ; preds = %lookup.throw
@@ -574,8 +577,8 @@ rangeindex.loop:                                  ; preds = %lookup.next, %entry
   br i1 %2, label %rangeindex.body, label %rangeindex.done
 
 rangeindex.body:                                  ; preds = %rangeindex.loop
-  %complit = call align 4 dereferenceable(20) ptr @runtime.alloc(i32 20, ptr nonnull inttoptr (i32 1675 to ptr), ptr undef) #4
-  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #4
+  %complit = call align 4 dereferenceable(20) ptr @runtime.alloc(i32 20, ptr nonnull inttoptr (i32 1675 to ptr), ptr undef) #5
+  call void @runtime.trackPointer(ptr nonnull %complit, ptr nonnull %stackalloc, ptr undef) #5
   br i1 false, label %store.throw, label %store.next
 
 store.next:                                       ; preds = %rangeindex.body
@@ -588,9 +591,9 @@ store.next:                                       ; preds = %rangeindex.body
   %.unpack4.unpack = load ptr, ptr %.elt3, align 4
   %.unpack4.elt8 = getelementptr inbounds nuw i8, ptr %complit, i32 16
   %.unpack4.unpack9 = load ptr, ptr %.unpack4.elt8, align 4
-  call void @runtime.trackPointer(ptr %.unpack2.unpack, ptr nonnull %stackalloc, ptr undef) #4
-  call void @runtime.trackPointer(ptr %.unpack4.unpack, ptr nonnull %stackalloc, ptr undef) #4
-  call void @runtime.trackPointer(ptr %.unpack4.unpack9, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack2.unpack, ptr nonnull %stackalloc, ptr undef) #5
+  call void @runtime.trackPointer(ptr %.unpack4.unpack, ptr nonnull %stackalloc, ptr undef) #5
+  call void @runtime.trackPointer(ptr %.unpack4.unpack9, ptr nonnull %stackalloc, ptr undef) #5
   %.not = icmp ult i32 %1, %s.len
   br i1 %.not, label %lookup.next, label %lookup.throw
 
@@ -617,12 +620,12 @@ unwind.return:                                    ; preds = %lookup.throw, %stor
   ret void
 
 lookup.throw:                                     ; preds = %store.next
-  call void @runtime.lookupPanic(ptr undef) #4
+  call void @runtime.lookupPanic(ptr undef) #5
   br label %unwind.return
 }
 
 ; Function Attrs: allockind("alloc,zeroed") allocsize(0)
-declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #3
+declare noalias nonnull ptr @runtime.alloc(i32, ptr, ptr) #4
 
 ; Function Attrs: nounwind
 define hidden void @main.storeBeforeLoop(ptr dereferenceable_or_null(12) %p, ptr dereferenceable_or_null(12) %q, ptr %context) unnamed_addr #1 {
@@ -635,7 +638,7 @@ deref.next:                                       ; preds = %entry
   %.unpack = load ptr, ptr %p, align 4
   %.elt3 = getelementptr inbounds nuw i8, ptr %p, i32 4
   %.unpack4 = load i32, ptr %.elt3, align 4
-  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #5
   %1 = icmp eq ptr %q, null
   br i1 %1, label %deref.throw, label %deref.next1
 
@@ -645,7 +648,7 @@ deref.next1:                                      ; preds = %deref.next
   %.unpack9 = load i32, ptr %.elt8, align 4
   %.elt10 = getelementptr inbounds nuw i8, ptr %q, i32 8
   %.unpack11 = load i32, ptr %.elt10, align 4
-  call void @runtime.trackPointer(ptr %.unpack7, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack7, ptr nonnull %stackalloc, ptr undef) #5
   br i1 false, label %deref.throw, label %store.next
 
 store.next:                                       ; preds = %deref.next1
@@ -669,7 +672,7 @@ deref.next2:                                      ; preds = %rangeindex.body
   %.unpack16 = load ptr, ptr %p, align 4
   %.elt17 = getelementptr inbounds nuw i8, ptr %p, i32 4
   %.unpack18 = load i32, ptr %.elt17, align 4
-  call void @runtime.trackPointer(ptr %.unpack16, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack16, ptr nonnull %stackalloc, ptr undef) #5
   %.not = icmp ult i32 %3, %.unpack18
   br i1 %.not, label %lookup.next, label %lookup.throw
 
@@ -682,19 +685,20 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
   ret void
 
 deref.throw:                                      ; preds = %rangeindex.body, %deref.next1, %deref.next, %entry
-  call void @runtime.nilPanic(ptr undef) #4
+  call void @runtime.nilPanic(ptr undef) #5
   br label %unwind.return
 
 unwind.return:                                    ; preds = %lookup.throw, %deref.throw
   ret void
 
 lookup.throw:                                     ; preds = %deref.next2
-  call void @runtime.lookupPanic(ptr undef) #4
+  call void @runtime.lookupPanic(ptr undef) #5
   br label %unwind.return
 }
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: write) }
-attributes #3 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #4 = { nounwind }
+attributes #3 = { nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: write) }
+attributes #4 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #5 = { nounwind }

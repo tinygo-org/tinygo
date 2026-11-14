@@ -28,3 +28,13 @@ func countUp(s []int) int {
 	}
 	return n
 }
+
+// Range loops over an integer assume the index is below the bound.
+
+func rangeIntSum(s []byte, n int) int {
+	sum := 0
+	for i := range n {
+		sum += int(s[i])
+	}
+	return sum
+}
