@@ -5,6 +5,7 @@ package machine
 import (
 	"device/arm"
 	"device/stm32"
+	"internal/byteorder"
 	"machine/usb"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -467,10 +468,7 @@ func handleRxFIFO() {
 		setupBuf := udd_ep_out_cache_buffer[0][:8]
 		for i := uint32(0); i < 8; i += 4 {
 			word := fifo.Get()
-			setupBuf[i] = byte(word)
-			setupBuf[i+1] = byte(word >> 8)
-			setupBuf[i+2] = byte(word >> 16)
-			setupBuf[i+3] = byte(word >> 24)
+			byteorder.LEPutUint32(setupBuf[i:], word)
 		}
 
 		setup := usb.NewSetup(setupBuf)

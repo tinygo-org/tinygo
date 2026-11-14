@@ -4,6 +4,7 @@ package cdc
 
 import (
 	"errors"
+	"internal/byteorder"
 	"machine"
 	"machine/usb"
 	"sync/atomic"
@@ -216,10 +217,7 @@ var cdcSetupBuff [cdcLineInfoSize]byte
 func cdcSetup(setup usb.Setup) bool {
 	if setup.BmRequestType == usb_REQUEST_DEVICETOHOST_CLASS_INTERFACE {
 		if setup.BRequest == usb_CDC_GET_LINE_CODING {
-			cdcSetupBuff[0] = byte(usbLineInfo.dwDTERate)
-			cdcSetupBuff[1] = byte(usbLineInfo.dwDTERate >> 8)
-			cdcSetupBuff[2] = byte(usbLineInfo.dwDTERate >> 16)
-			cdcSetupBuff[3] = byte(usbLineInfo.dwDTERate >> 24)
+			byteorder.LEPutUint32(cdcSetupBuff[:], usbLineInfo.dwDTERate)
 			cdcSetupBuff[4] = byte(usbLineInfo.bCharFormat)
 			cdcSetupBuff[5] = byte(usbLineInfo.bParityType)
 			cdcSetupBuff[6] = byte(usbLineInfo.bDataBits)
@@ -236,7 +234,7 @@ func cdcSetup(setup usb.Setup) bool {
 				return false
 			}
 
-			usbLineInfo.dwDTERate = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
+			usbLineInfo.dwDTERate = byteorder.LEUint32(b[:])
 			usbLineInfo.bCharFormat = b[4]
 			usbLineInfo.bParityType = b[5]
 			usbLineInfo.bDataBits = b[6]

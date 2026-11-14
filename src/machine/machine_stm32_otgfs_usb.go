@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/stm32"
+	"internal/byteorder"
 	"machine/usb"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -432,14 +433,8 @@ func handleRxFIFO() {
 			// 8-byte SETUP packet: read exactly 2 words from DFIFO[0].
 			w0 := otgDFIFO(0).Get()
 			w1 := otgDFIFO(0).Get()
-			usbSetupBuf[0] = byte(w0)
-			usbSetupBuf[1] = byte(w0 >> 8)
-			usbSetupBuf[2] = byte(w0 >> 16)
-			usbSetupBuf[3] = byte(w0 >> 24)
-			usbSetupBuf[4] = byte(w1)
-			usbSetupBuf[5] = byte(w1 >> 8)
-			usbSetupBuf[6] = byte(w1 >> 16)
-			usbSetupBuf[7] = byte(w1 >> 24)
+			byteorder.LEPutUint32(usbSetupBuf[0:], w0)
+			byteorder.LEPutUint32(usbSetupBuf[4:], w1)
 
 		case rxPktstsSetupDone:
 			// SETUP transaction complete: process the buffered SETUP packet.
