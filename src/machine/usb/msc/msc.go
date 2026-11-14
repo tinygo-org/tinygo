@@ -165,14 +165,11 @@ func (m *msc) processTasks() {
 		if gen == m.cmdGen && m.state == mscStateData {
 			m.queuedBytes = 0
 		}
-		ack := m.rxPending
-		m.rxPending = false
-		m.mu.unlock(state)
-
-		// Acknowledge the received data from the host
-		if ack {
+		if m.rxPending {
+			m.rxPending = false
 			machine.AckUsbOutTransfer(usb.MSC_ENDPOINT_OUT)
 		}
+		m.mu.unlock(state)
 	}
 }
 
