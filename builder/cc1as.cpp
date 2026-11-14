@@ -23,7 +23,11 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Driver/DriverDiagnostic.h"
+#if LLVM_VERSION_MAJOR >= 22
 #include "clang/Options/Options.h"
+#else
+#include "clang/Driver/Options.h"
+#endif
 #include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
@@ -69,9 +73,36 @@
 #include <optional>
 #include <system_error>
 using namespace clang;
+#if LLVM_VERSION_MAJOR >= 22
 using namespace clang::options;
+static const auto cc1asOptionVisibility = clang::options::CC1AsOption;
+#else
+using namespace clang::driver;
+using namespace clang::driver::options;
+static const auto cc1asOptionVisibility = clang::driver::options::CC1AsOption;
+#endif
 using namespace llvm;
 using namespace llvm::opt;
+
+// LLVM 20 and 21 use a string triple and StringRef target registry APIs;
+// LLVM 22 and 23 use llvm::Triple objects.
+#if LLVM_VERSION_MAJOR >= 22
+static llvm::Triple tripleFromString(llvm::StringRef triple) {
+  return llvm::Triple(llvm::Triple::normalize(triple));
+}
+static bool tripleEmpty(const llvm::Triple &triple) {
+  return triple.getTriple().empty();
+}
+static std::string tripleString(const llvm::Triple &triple) {
+  return triple.str();
+}
+#else
+static std::string tripleFromString(llvm::StringRef triple) {
+  return llvm::Triple::normalize(triple);
+}
+static bool tripleEmpty(const std::string &triple) { return triple.empty(); }
+static std::string tripleString(const std::string &triple) { return triple; }
+#endif
 
 #include "cc1as.h"
 
@@ -110,7 +141,7 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   // Construct the invocation.
 
   // Target Options
-  Opts.Triple = llvm::Triple(llvm::Triple::normalize(Args.getLastArgValue(OPT_triple)));
+  Opts.Triple = tripleFromString(Args.getLastArgValue(OPT_triple));
   if (Arg *A = Args.getLastArg(options::OPT_darwin_target_variant_triple))
     Opts.DarwinTargetVariantTriple = llvm::Triple(A->getValue());
   if (Arg *A = Args.getLastArg(OPT_darwin_target_variant_sdk_version_EQ)) {
@@ -126,8 +157,12 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   Opts.Features = Args.getAllArgValues(OPT_target_feature);
 
   // Use the default target triple if unspecified.
-  if (Opts.Triple.getTriple().empty())
+  if (tripleEmpty(Opts.Triple))
+#if LLVM_VERSION_MAJOR >= 22
     Opts.Triple = llvm::Triple(llvm::sys::getDefaultTargetTriple());
+#else
+    Opts.Triple = llvm::sys::getDefaultTargetTriple();
+#endif
 
   // Language Options
   Opts.IncludePaths = Args.getAllArgValues(OPT_I);
@@ -268,7 +303,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
   std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(Opts.Triple, Error);
   if (!TheTarget)
-    return Diags.Report(diag::err_target_unknown_triple) << Opts.Triple.str();
+    return Diags.Report(diag::err_target_unknown_triple) << tripleString(Opts.Triple);
 
   ErrorOr<std::unique_ptr<MemoryBuffer>> Buffer =
       MemoryBuffer::getFileOrSTDIN(Opts.InputFile, /*IsText=*/true);
@@ -332,9 +367,9 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
   assert(STI && "Unable to create subtarget info!");
 
 #if LLVM_VERSION_MAJOR >= 23
-  MCContext Ctx(Opts.Triple, *MAI, *MRI, *STI, &SrcMgr);
+  MCContext Ctx(Triple(Opts.Triple), *MAI, *MRI, *STI, &SrcMgr);
 #else
-  MCContext Ctx(Opts.Triple, MAI.get(), MRI.get(), STI.get(), &SrcMgr,
+  MCContext Ctx(Triple(Opts.Triple), MAI.get(), MRI.get(), STI.get(), &SrcMgr,
                 &MCOptions);
 #endif
 
@@ -398,8 +433,13 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
 
   // FIXME: There is a bit of code duplication with addPassesToEmitFile.
   if (Opts.OutputType == AssemblerInvocation::FT_Asm) {
+#if LLVM_VERSION_MAJOR >= 21
     std::unique_ptr<MCInstPrinter> IP(TheTarget->createMCInstPrinter(
-        Opts.Triple, Opts.OutputAsmVariant, *MAI, *MCII, *MRI));
+        llvm::Triple(Opts.Triple), Opts.OutputAsmVariant, *MAI, *MCII, *MRI));
+#else
+    MCInstPrinter *IP = TheTarget->createMCInstPrinter(
+        llvm::Triple(Opts.Triple), Opts.OutputAsmVariant, *MAI, *MCII, *MRI);
+#endif
 
     std::unique_ptr<MCCodeEmitter> CE;
     if (Opts.ShowEncoding)
@@ -408,8 +448,13 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
         TheTarget->createMCAsmBackend(*STI, *MRI, MCOptions));
 
     auto FOut = std::make_unique<formatted_raw_ostream>(*Out);
+#if LLVM_VERSION_MAJOR >= 21
     Str.reset(TheTarget->createAsmStreamer(Ctx, std::move(FOut), std::move(IP),
                                            std::move(CE), std::move(MAB)));
+#else
+    Str.reset(TheTarget->createAsmStreamer(Ctx, std::move(FOut), IP,
+                                           std::move(CE), std::move(MAB)));
+#endif
   } else if (Opts.OutputType == AssemblerInvocation::FT_Null) {
     Str.reset(createNullStreamer(Ctx));
   } else {
@@ -430,7 +475,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
         DwoOS ? MAB->createDwoObjectWriter(*Out, *DwoOS)
               : MAB->createObjectWriter(*Out);
 
-    Triple T = Opts.Triple;
+    Triple T(Opts.Triple);
     Str.reset(TheTarget->createMCObjectStreamer(
         T, Ctx, std::move(MAB), std::move(OW), std::move(CE), *STI));
 #if LLVM_VERSION_MAJOR >= 23
@@ -469,7 +514,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
       TheTarget->createMCAsmParser(*STI, *Parser, *MCII, MCOptions));
 #endif
   if (!TAP)
-    Failed = Diags.Report(diag::err_target_unknown_triple) << Opts.Triple.str();
+    Failed = Diags.Report(diag::err_target_unknown_triple) << tripleString(Opts.Triple);
 
   // Set values for symbols, if any.
   for (auto &S : Opts.SymbolDefs) {
@@ -522,9 +567,15 @@ int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
   InitializeAllAsmParsers();
 
   // Construct our diagnostic client.
+#if LLVM_VERSION_MAJOR >= 21
   DiagnosticOptions DiagOpts;
   TextDiagnosticPrinter *DiagClient
     = new TextDiagnosticPrinter(errs(), DiagOpts);
+#else
+  IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts(new DiagnosticOptions());
+  TextDiagnosticPrinter *DiagClient
+    = new TextDiagnosticPrinter(errs(), &*DiagOpts);
+#endif
   DiagClient->setPrefix("clang -cc1as");
   IntrusiveRefCntPtr<DiagnosticIDs> DiagID(new DiagnosticIDs());
   DiagnosticsEngine Diags(DiagID, DiagOpts, DiagClient);
@@ -544,7 +595,7 @@ int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
         llvm::outs(), "clang -cc1as [options] file...",
         "Clang Integrated Assembler", /*ShowHidden=*/false,
         /*ShowAllAliases=*/false,
-        llvm::opt::Visibility(clang::options::CC1AsOption));
+        llvm::opt::Visibility(cc1asOptionVisibility));
 
     return 0;
   }
