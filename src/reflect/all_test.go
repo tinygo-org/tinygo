@@ -2176,7 +2176,7 @@ func fmtSelect(info []caseInfo) string {
 	return buf.String()
 }
 
-// TODO(tinygo): missing func/method/call support
+*/
 
 type two [2]uintptr
 
@@ -2267,6 +2267,8 @@ func TestCallWithStruct(t *testing.T) {
 		t.Errorf("takesNonEmpty returned %#v", r)
 	}
 }
+
+/*
 
 func TestCallReturnsEmpty(t *testing.T) {
 	// Issue 21717: past-the-end pointer write in Call with
@@ -3774,8 +3776,6 @@ func TestStructArg(t *testing.T) {
 		t.Errorf("function called with (%v, %v), want (%v, %v)", gotA, gotB, wantA, wantB)
 	}
 }
-
-*/
 
 var tagGetTests = []struct {
 	Tag   StructTag

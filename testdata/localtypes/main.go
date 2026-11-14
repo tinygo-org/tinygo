@@ -1,9 +1,21 @@
 package main
 
 import (
+	"reflect"
+
 	"github.com/tinygo-org/tinygo/testdata/localtypes/lib"
 	"github.com/tinygo-org/tinygo/testdata/localtypes/lib2"
 )
+
+var intFunction = lib.GenericFunction[int]()
+var arrayFunction = lib.GenericFunction[[4]int]()
+
+func callLocal(fn, input any) any {
+	value := reflect.ValueOf(fn)
+	arg := reflect.New(value.Type().In(0)).Elem()
+	arg.Field(0).Set(reflect.ValueOf(input))
+	return value.Call([]reflect.Value{arg})[0].Interface()
+}
 
 func expect(name string, ok bool) {
 	if ok {
@@ -37,4 +49,10 @@ func main() {
 	expect("lib.SiblingClosures.Foo#2 accepts own", scBC(scB))
 	expect("lib.SiblingClosures.Foo#1 rejects Foo#2", !scAC(scB))
 	expect("lib.SiblingClosures.Foo#2 rejects Foo#1", !scBC(scA))
+
+	expect("Call generic local in main", callLocal(intFunction, 42).(int) == 42)
+	expect("Call generic local in lib2", callLocal(lib2.IntFunction, 43).(int) == 43)
+	array := [4]int{1, 2, 3, 4}
+	expect("Call aggregate generic local in main", callLocal(arrayFunction, array).([4]int) == array)
+	expect("Call aggregate generic local in lib2", callLocal(lib2.ArrayFunction, array).([4]int) == array)
 }
