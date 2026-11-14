@@ -262,25 +262,46 @@ func (b *builder) createRuntimeAssert(assert llvm.Value, blockPrefix, assertFunc
 }
 
 func (b *builder) getRuntimeAssertBlock(blockPrefix, assertFunc string) llvm.BasicBlock {
+	// Each //go:nopanic check gets its own block, so that an error can point
+	// to the check.
+	nopanic := assertFunc == "lookupPanic" && b.info.isNoPanicIndex()
 	if b.runtimeAssertBlocks == nil {
 		b.runtimeAssertBlocks = make(map[string]llvm.BasicBlock)
 	}
-	if block := b.runtimeAssertBlocks[assertFunc]; !block.IsNil() {
+	if block := b.runtimeAssertBlocks[assertFunc]; !block.IsNil() && !nopanic {
 		return block
 	}
 	savedBlock := b.GetInsertBlock()
 	block := b.ctx.AddBasicBlock(b.llvmFn, blockPrefix+".throw")
-	b.runtimeAssertBlocks[assertFunc] = block
+	if !nopanic {
+		b.runtimeAssertBlocks[assertFunc] = block
+	}
 	b.SetInsertPointAtEnd(block)
 	b.inFaultBlock = true
 	if b.hasDeferFrame() {
 		b.createFaultCheckpoint()
 	}
-	b.createRuntimeInvoke(assertFunc, nil, "")
+	if nopanic {
+		fnType, fn := b.getRuntimeFunction(assertFunc)
+		b.createInvokeWithAnalysis(fnType, b.getNoPanicMarker(fnType, fn), []llvm.Value{llvm.Undef(b.dataPtrType)}, "", true, false)
+	} else {
+		b.createRuntimeInvoke(assertFunc, nil, "")
+	}
 	b.createUnwindReturnOrUnreachable()
 	b.inFaultBlock = false
 	b.SetInsertPointAtEnd(savedBlock)
 	return block
+}
+
+// getNoPanicMarker returns a declaration that takes the place of the runtime
+// function fn in a //go:nopanic check. See transform.CheckNoPanic.
+func (b *builder) getNoPanicMarker(fnType llvm.Type, fn llvm.Value) llvm.Value {
+	name := fn.Name() + "$nopanic"
+	marker := b.mod.NamedFunction(name)
+	if marker.IsNil() {
+		marker = llvm.AddFunction(b.mod, name, fnType)
+	}
+	return marker
 }
 
 // extendInteger extends the value to at least targetType using a zero or sign
