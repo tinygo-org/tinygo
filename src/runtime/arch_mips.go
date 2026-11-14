@@ -10,7 +10,9 @@ const deferExtraRegs = 0
 const callInstSize = 8 // "jal someFunc" is 4 bytes, plus a MIPS delay slot
 
 const (
+	// See https://github.com/torvalds/linux/blob/master/arch/mips/include/uapi/asm/mman.h
 	linux_MAP_ANONYMOUS = 0x800
+	linux_MAP_NORESERVE = 0x0400
 	linux_SIGBUS        = 10
 	linux_SIGFPE        = 8
 	linux_SIGILL        = 4
