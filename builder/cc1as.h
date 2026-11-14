@@ -20,7 +20,7 @@ struct AssemblerInvocation {
   /// @{
 
   /// The name of the target triple to assemble for.
-  llvm::Triple Triple;
+  std::string Triple;
 
   /// If given, the name of the target CPU to determine which instructions
   /// are legal.
@@ -142,7 +142,7 @@ struct AssemblerInvocation {
 
 public:
   AssemblerInvocation() {
-    Triple = llvm::Triple();
+    Triple = "";
     NoInitialTextSection = 0;
     InputFile = "-";
     OutputPath = "-";
