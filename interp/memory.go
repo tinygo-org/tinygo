@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -64,9 +65,10 @@ func (obj object) clone() object {
 //
 // For details, see the README in the package.
 type memoryView struct {
-	r       *runner
-	parent  *memoryView
-	objects map[uint32]object
+	r          *runner
+	parent     *memoryView
+	objects    map[uint32]object
+	attributes llvmutil.FunctionUsageAttributes
 
 	// These instructions were added to runtime.initAll while interpreting a
 	// function. They are stored here in a list so they can be removed if the
@@ -84,6 +86,7 @@ func (mv *memoryView) extend(sub memoryView) {
 	}
 	maps.Copy(mv.objects, sub.objects)
 	mv.instructions = append(mv.instructions, sub.instructions...)
+	mv.attributes = mv.attributes.Merge(sub.attributes)
 }
 
 // revert undoes changes done in this memory view: it removes all instructions

@@ -493,11 +493,24 @@ func (t *rawType) Key() Type {
 }
 
 func (t *rawType) Method(i int) Method {
-	panic("unimplemented: (reflect.Type).Method()")
+	return toMethod(t.RawType.Method(i))
 }
 
 func (t *rawType) MethodByName(name string) (Method, bool) {
-	panic("unimplemented: (reflect.Type).MethodByName()")
+	method, ok := t.RawType.MethodByName(name)
+	if !ok {
+		return Method{}, false
+	}
+	return toMethod(method), true
+}
+
+func toMethod(method reflectlite.MethodInfo) Method {
+	return Method{
+		Name:    method.Name,
+		PkgPath: method.PkgPath,
+		Type:    toType(method.Type),
+		Index:   method.Index,
+	}
 }
 
 func (t *rawType) Methods() iter.Seq[Method] {
