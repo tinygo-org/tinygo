@@ -31,6 +31,10 @@ func OptimizePackage(mod llvm.Module, config *compileopts.Config) {
 // always be run before emitting machine code.
 func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	optLevel, speedLevel, _ := config.OptLevel()
+	instcombine := "instcombine"
+	if llvm.VersionMajor >= 18 {
+		instcombine += "<no-verify-fixpoint>"
+	}
 
 	// Make sure these functions are kept in tact during TinyGo transformation passes.
 	for _, name := range functionsUsedInTransforms {
@@ -57,11 +61,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		// Run some preparatory passes for the Go optimizer.
 		po := llvm.NewPassBuilderOptions()
 		defer po.Dispose()
-		optPasses := "globaldce,globalopt,ipsccp,instcombine<no-verify-fixpoint>,adce,function-attrs"
-		if llvm.VersionMajor < 18 {
-			// LLVM 17 doesn't have the no-verify-fixpoint flag.
-			optPasses = "globaldce,globalopt,ipsccp,instcombine,adce,function-attrs"
-		}
+		optPasses := "globaldce,globalopt,ipsccp," + instcombine + ",adce,function-attrs"
 		blockGlobalAllocPromotion(mod)
 		err := mod.RunPasses(optPasses, llvm.TargetMachine{}, po)
 		removeGlobalAllocPromotionMarker(mod)
@@ -170,6 +170,11 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		pipelineLevel = "O2"
 	}
 	passes := fmt.Sprintf("thinlto-pre-link<%s>", pipelineLevel)
+	if speedLevel > 0 {
+		// Remove late-folded branches before GC roots make their globals escape.
+		// See https://github.com/tinygo-org/tinygo/pull/6256#issuecomment-6879072850.
+		passes += ",function(" + instcombine + ",simplifycfg),globalopt,globaldce"
+	}
 	blockGlobalAllocPromotion(mod)
 	err := mod.RunPasses(passes, llvm.TargetMachine{}, po)
 	removeGlobalAllocPromotionMarker(mod)

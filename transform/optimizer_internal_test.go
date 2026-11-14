@@ -3,8 +3,64 @@ package transform
 import (
 	"testing"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"tinygo.org/x/go-llvm"
 )
+
+func TestOptimizeGCGlobalRoots(t *testing.T) {
+	t.Parallel()
+	for _, used := range []bool{false, true} {
+		name := "unused"
+		if used {
+			name = "used"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			buf, err := llvm.NewMemoryBufferFromFile("testdata/optimizer-gc-roots.ll")
+			if err != nil {
+				t.Fatal(err)
+			}
+			mod, err := ctx.ParseIR(buf)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer mod.Dispose()
+
+			if used {
+				start := mod.NamedFunction("start")
+				store := llvm.NextInstruction(start.EntryBasicBlock().FirstInstruction())
+				store.SetOperand(0, start.FirstParam())
+			}
+			config := &compileopts.Config{
+				Options: &compileopts.Options{Opt: "z"},
+				Target:  &compileopts.TargetSpec{},
+			}
+			if errs := Optimize(mod, config); len(errs) != 0 {
+				t.Fatal(errs)
+			}
+			if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+				t.Fatal(err)
+			}
+			want := uint64(0)
+			if used {
+				want = 1
+			}
+			rootCount := mod.NamedFunction("runtime.gcGlobalRootCount")
+			if rootCount.IsNil() || rootCount.FirstBasicBlock().IsNil() {
+				t.Fatal("GC global roots were not generated")
+			}
+			count := rootCount.EntryBasicBlock().LastInstruction().Operand(0).ZExtValue()
+			if count != want {
+				t.Errorf("got %d global roots, want %d", count, want)
+			}
+			if !used && !mod.NamedGlobal("queue").IsNil() {
+				t.Error("unused queue was retained")
+			}
+		})
+	}
+}
 
 func TestBlockGlobalAllocPromotionUses(t *testing.T) {
 	ctx := llvm.NewContext()
