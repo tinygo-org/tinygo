@@ -106,6 +106,34 @@ func __atomic_add_fetch_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
 }
 
 //go:inline
+func doAtomicSub16(ptr *uint16, value uint16) (old, new uint16) {
+	mask := lockAtomics()
+	old = *ptr
+	new = old - value
+	*ptr = new
+	unlockAtomics(mask)
+	return old, new
+}
+
+//export __atomic_fetch_sub_2
+func __atomic_fetch_sub_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
+	old, _ := doAtomicSub16(ptr, value)
+	return old
+}
+
+//export __sync_fetch_and_sub_2
+func __sync_fetch_and_sub_2(ptr *uint16, value uint16) uint16 {
+	old, _ := doAtomicSub16(ptr, value)
+	return old
+}
+
+//export __atomic_sub_fetch_2
+func __atomic_sub_fetch_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
+	_, new := doAtomicSub16(ptr, value)
+	return new
+}
+
+//go:inline
 func doAtomicAnd16(ptr *uint16, value uint16) (old, new uint16) {
 	mask := lockAtomics()
 	old = *ptr
@@ -251,6 +279,34 @@ func __atomic_add_fetch_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
 }
 
 //go:inline
+func doAtomicSub32(ptr *uint32, value uint32) (old, new uint32) {
+	mask := lockAtomics()
+	old = *ptr
+	new = old - value
+	*ptr = new
+	unlockAtomics(mask)
+	return old, new
+}
+
+//export __atomic_fetch_sub_4
+func __atomic_fetch_sub_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
+	old, _ := doAtomicSub32(ptr, value)
+	return old
+}
+
+//export __sync_fetch_and_sub_4
+func __sync_fetch_and_sub_4(ptr *uint32, value uint32) uint32 {
+	old, _ := doAtomicSub32(ptr, value)
+	return old
+}
+
+//export __atomic_sub_fetch_4
+func __atomic_sub_fetch_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
+	_, new := doAtomicSub32(ptr, value)
+	return new
+}
+
+//go:inline
 func doAtomicAnd32(ptr *uint32, value uint32) (old, new uint32) {
 	mask := lockAtomics()
 	old = *ptr
@@ -392,6 +448,34 @@ func __sync_fetch_and_add_8(ptr *uint64, value uint64) uint64 {
 //export __atomic_add_fetch_8
 func __atomic_add_fetch_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
 	_, new := doAtomicAdd64(ptr, value)
+	return new
+}
+
+//go:inline
+func doAtomicSub64(ptr *uint64, value uint64) (old, new uint64) {
+	mask := lockAtomics()
+	old = *ptr
+	new = old - value
+	*ptr = new
+	unlockAtomics(mask)
+	return old, new
+}
+
+//export __atomic_fetch_sub_8
+func __atomic_fetch_sub_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
+	old, _ := doAtomicSub64(ptr, value)
+	return old
+}
+
+//export __sync_fetch_and_sub_8
+func __sync_fetch_and_sub_8(ptr *uint64, value uint64) uint64 {
+	old, _ := doAtomicSub64(ptr, value)
+	return old
+}
+
+//export __atomic_sub_fetch_8
+func __atomic_sub_fetch_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
+	_, new := doAtomicSub64(ptr, value)
 	return new
 }
 
