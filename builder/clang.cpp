@@ -10,7 +10,9 @@
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 #include <clang/FrontendTool/Utils.h>
 #include <llvm/ADT/IntrusiveRefCntPtr.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/Option/Option.h>
+#include <llvm/Support/VirtualFileSystem.h>
 #include <llvm/TargetParser/Host.h>
 
 using namespace llvm;
@@ -27,9 +29,15 @@ bool tinygo_clang_driver(int argc, char **argv) {
 	std::vector<const char*> args(argv, argv + argc);
 
 	// The compiler invocation needs a DiagnosticsEngine so it can report problems
+#if LLVM_VERSION_MAJOR >= 22
 	clang::DiagnosticOptions DiagOpts;
 	clang::TextDiagnosticPrinter DiagnosticPrinter(llvm::errs(), DiagOpts);
 	clang::DiagnosticsEngine Diags(llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs>(new clang::DiagnosticIDs()), DiagOpts, &DiagnosticPrinter, false);
+#else
+	llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts(new clang::DiagnosticOptions());
+	clang::TextDiagnosticPrinter DiagnosticPrinter(llvm::errs(), &*DiagOpts);
+	clang::DiagnosticsEngine Diags(llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs>(new clang::DiagnosticIDs()), DiagOpts, &DiagnosticPrinter, false);
+#endif
 
 	// Create the clang driver
 	clang::driver::Driver TheDriver(args[0], llvm::sys::getDefaultTargetTriple(), Diags);
@@ -60,7 +68,11 @@ bool tinygo_clang_driver(int argc, char **argv) {
 			}
 
 			// Create the actual diagnostics engine.
+#if LLVM_VERSION_MAJOR >= 22
 			Clang->createDiagnostics();
+#else
+			Clang->createDiagnostics(*llvm::vfs::getRealFileSystem());
+#endif
 			if (!Clang->hasDiagnostics()) {
 				return false;
 			}
