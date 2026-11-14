@@ -10,7 +10,7 @@
 package runtime
 
 import (
-	"internal/binary"
+	"internal/byteorder"
 	"math/bits"
 	"unsafe"
 )
@@ -41,7 +41,7 @@ func hash64(ptr unsafe.Pointer, n uintptr, seed uintptr) uint64 {
 	b := uint64(len(p)) << 56
 
 	for len(p) >= 8 {
-		m := binary.LittleEndian.Uint64(p[:8])
+		m := byteorder.LEUint64(p[:8])
 		s.v1 ^= m
 		s.round()
 		s.v0 ^= m
@@ -111,7 +111,7 @@ func hash32(ptr unsafe.Pointer, n uintptr, seed uintptr) uint32 {
 	b := uint32(len(p)) << 24
 
 	for len(p) >= 4 {
-		m := binary.LittleEndian.Uint32(p[:4])
+		m := byteorder.LEUint32(p[:4])
 		s.v1 ^= m
 		s.round()
 		s.v0 ^= m
