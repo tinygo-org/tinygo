@@ -753,7 +753,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// make test sets these to build TinyGo against the host LLVM.
-	for _, name := range []string{"CGO_CPPFLAGS", "CGO_CFLAGS", "CGO_CXXFLAGS"} {
+	for _, name := range []string{"CGO_CPPFLAGS", "CGO_CFLAGS", "CGO_CXXFLAGS", "CGO_LDFLAGS"} {
 		os.Unsetenv(name)
 	}
 

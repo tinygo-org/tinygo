@@ -31,9 +31,12 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 )
 
-// Flags holds the CGO_CPPFLAGS, CGO_CFLAGS, and CGO_CXXFLAGS environment flags.
+// Flags holds CGO environment flags.
 type Flags struct {
-	CPPFlags, CFlags, CXXFlags []string
+	CPPFlags []string // CGO_CPPFLAGS
+	CFlags   []string // CGO_CFLAGS
+	CXXFlags []string // CGO_CXXFLAGS
+	LDFlags  []string // CGO_LDFLAGS
 }
 
 // cgoPackage holds all CGo-related information of a package.
@@ -391,6 +394,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Flag order matches CFlags in cmd/go/internal/work/exec.go.
 	p.packageCFlags = slices.Concat(env.CPPFlags, p.cppflags, env.CFlags, p.cflags)
 	p.packageCXXFlags = slices.Concat(env.CPPFlags, p.cppflags, env.CXXFlags, p.cxxflags)
+	p.ldflags = slices.Concat(env.LDFlags, p.ldflags)
 	cflagsForCGo := slices.Concat([]string{"-D_FORTIFY_SOURCE=0"}, cflags, p.packageCFlags)
 
 	// Retrieve types such as C.int, C.longlong, etc from C.

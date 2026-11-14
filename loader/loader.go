@@ -877,6 +877,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			{"CGO_CPPFLAGS", &env.CPPFlags},
 			{"CGO_CFLAGS", &env.CFlags},
 			{"CGO_CXXFLAGS", &env.CXXFlags},
+			{"CGO_LDFLAGS", &env.LDFlags},
 		} {
 			flags, err := goenv.SplitFlags(goenv.Get(v.name))
 			if err != nil {

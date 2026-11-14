@@ -152,7 +152,7 @@ func Get(name string) string {
 			panic("could not find cache dir: " + err.Error())
 		}
 		return filepath.Join(dir, "tinygo")
-	case "CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS":
+	case "CGO_CFLAGS", "CGO_CPPFLAGS", "CGO_CXXFLAGS", "CGO_LDFLAGS":
 		return os.Getenv(name)
 	case "CGO_ENABLED":
 		// Always enable CGo. It is required by a number of targets, including
