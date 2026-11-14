@@ -5,6 +5,7 @@ package machine
 import (
 	"device/arm"
 	"device/renesas"
+	"internal/byteorder"
 	"machine/usb"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -118,7 +119,7 @@ func fifoByte(r *volatile.Register16) *volatile.Register8 {
 func fifoWrite(fifo *volatile.Register16, data []byte) {
 	i := 0
 	for ; i+1 < len(data); i += 2 {
-		fifo.Set(uint16(data[i]) | uint16(data[i+1])<<8)
+		fifo.Set(byteorder.LEUint16(data[i:]))
 	}
 	if i < len(data) {
 		fifoByte(fifo).Set(data[i])
@@ -298,8 +299,7 @@ func usbProcessSetup() {
 	u.CFIFOCTR.Set(usbFIFOCTRBCLR)
 	words := [4]uint16{u.USBREQ.Get(), u.USBVAL.Get(), u.USBINDX.Get(), u.USBLENG.Get()}
 	for i, w := range words {
-		usbSetupBuf[2*i] = byte(w)
-		usbSetupBuf[2*i+1] = byte(w >> 8)
+		byteorder.LEPutUint16(usbSetupBuf[2*i:], w)
 	}
 	u.INTSTS0.Set(^uint16(usbVALID))
 

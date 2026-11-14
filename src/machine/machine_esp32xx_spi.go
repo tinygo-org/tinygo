@@ -3,6 +3,7 @@
 package machine
 
 import (
+	"internal/byteorder"
 	"runtime/volatile"
 )
 
@@ -72,7 +73,7 @@ func spiTxFillBuffer(buf *[16]volatile.Register32, w []byte) {
 		// We can fill the entire 64-byte transfer buffer with data.
 		// This loop is slightly faster than the loop below.
 		for i := 0; i < 16; i++ {
-			word := uint32(w[i*4]) | uint32(w[i*4+1])<<8 | uint32(w[i*4+2])<<16 | uint32(w[i*4+3])<<24
+			word := byteorder.LEUint32(w[i*4:])
 			buf[i].Set(word)
 		}
 	} else {

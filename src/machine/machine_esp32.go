@@ -5,6 +5,7 @@ package machine
 import (
 	"device/esp"
 	"errors"
+	"internal/byteorder"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"sync"
@@ -841,7 +842,7 @@ func (spi *SPI) Tx(w, r []byte) error {
 			// We can fill the entire 64-byte transfer buffer with data.
 			// This loop is slightly faster than the loop below.
 			for i := 0; i < 16; i++ {
-				word := uint32(w[i*4])<<0 | uint32(w[i*4+1])<<8 | uint32(w[i*4+2])<<16 | uint32(w[i*4+3])<<24
+				word := byteorder.LEUint32(w[i*4:])
 				transferWords[i].Set(word)
 			}
 		} else {

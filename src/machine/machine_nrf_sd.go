@@ -7,6 +7,7 @@ import (
 	"device/nrf"
 
 	"errors"
+	"internal/byteorder"
 )
 
 // avoid a heap allocation in GetRNG.
@@ -52,7 +53,7 @@ func GetRNG() (ret uint32, err error) {
 		arm.SVCall2(0x2C+5, &buf, 4)
 	}
 
-	return uint32(buf[0]) | uint32(buf[1])<<8 | uint32(buf[2])<<16 | uint32(buf[3])<<24, nil
+	return byteorder.LEUint32(buf[:]), nil
 }
 
 // This function is defined in the runtime, but we need it too.

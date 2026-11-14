@@ -5,6 +5,7 @@ package machine
 import (
 	"crypto/rand"
 	"errors"
+	"internal/byteorder"
 	"slices"
 )
 
@@ -381,5 +382,5 @@ func GetRNG() (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return uint32(buf[0])<<0 | uint32(buf[1])<<8 | uint32(buf[2])<<16 | uint32(buf[3])<<24, nil
+	return byteorder.LEUint32(buf[:]), nil
 }
