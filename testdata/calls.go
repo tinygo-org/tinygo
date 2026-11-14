@@ -115,6 +115,7 @@ func main() {
 	println("phi escape:", err.(*multiReturnErr).x[1])
 	volatile.StoreUint32(&phiCond, 1)
 	println("phi nil:", phiReturnEscape(volatile.LoadUint32(&phiCond) != 0) == nil)
+	println("loop allocation:", loopCarriedAllocation(int(volatile.LoadUint32(&phiCond))+3))
 	g := interfaceReturnEscape()
 	clobberStack()
 	println("interface return:", g.get())
@@ -208,6 +209,21 @@ func phiReturnEscape(cond bool) error {
 		err = nil
 	}
 	return err
+}
+
+//go:noinline
+func loopCarriedAllocation(n int) int {
+	var previous *int
+	sum := 0
+	for i := 0; i < n; i++ {
+		current := new(int)
+		*current = i
+		if previous != nil {
+			sum += *previous
+		}
+		previous = current
+	}
+	return sum
 }
 
 type multiReturnGetter interface{ get() int }
