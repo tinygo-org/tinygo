@@ -6,6 +6,7 @@ package runtime
 // to be Linux, like baremetal systems).
 
 import (
+	"internal/byteorder"
 	"unsafe"
 )
 
@@ -54,6 +55,25 @@ func hardwareRand() (n uint64, ok bool) {
 	}
 	return n, true
 }
+
+// startupRand reads the 16 random bytes the kernel passes in AT_RANDOM.
+//
+//go:noheap
+func startupRand() (uint64, bool) {
+	b := libc_getauxval(_AT_RANDOM)
+	if b == nil {
+		return 0, false
+	}
+	return byteorder.LEUint64(b[:8]), true
+}
+
+// AT_RANDOM from include/uapi/linux/auxvec.h, see getauxval(3).
+const _AT_RANDOM = 25
+
+// unsigned long getauxval(unsigned long type);
+//
+//export getauxval
+func libc_getauxval(typ uintptr) *[16]byte
 
 // ssize_t getrandom(void buf[.buflen], size_t buflen, unsigned int flags);
 //
