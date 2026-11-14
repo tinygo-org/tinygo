@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/scanner"
 	"go/token"
+	"slices"
 	"strings"
 )
 
@@ -228,6 +229,28 @@ func parseIdent(t *tokenizer) (ast.Expr, *scanner.Error) {
 	}, nil
 }
 
+// castType returns the Go type for the current token if it is the name of a
+// typedef or a built-in C type, as used in a cast like ((flag_t)1). It returns
+// nil otherwise.
+func castType(t *tokenizer) ast.Expr {
+	if t.f == nil {
+		return nil
+	}
+	name := t.curValue
+	if _, ok := t.params[name]; ok {
+		return nil
+	}
+	// Built-in types like int are deliberately not looked up in C (see
+	// builtinAliases), so they need to be handled separately.
+	if slices.Contains(builtinAliases, name) {
+		return &ast.Ident{NamePos: t.curPos, Name: "_Cgo_" + name}
+	}
+	if cursor, ok := t.f.names[name]; ok && (t.f.isTypedef(cursor) || cgoAliases["_Cgo_"+name] != "") {
+		return &ast.Ident{NamePos: t.curPos, Name: t.f.getASTDeclName(name, cursor, false)}
+	}
+	return nil
+}
+
 func parseBasicLit(t *tokenizer) (ast.Expr, *scanner.Error) {
 	return &ast.BasicLit{
 		ValuePos: t.curPos,
@@ -239,6 +262,22 @@ func parseBasicLit(t *tokenizer) (ast.Expr, *scanner.Error) {
 func parseParenExpr(t *tokenizer) (ast.Expr, *scanner.Error) {
 	lparen := t.curPos
 	t.Next()
+	if t.curToken == token.IDENT && t.peekToken == token.RPAREN {
+		if typ := castType(t); typ != nil {
+			// This is a cast like ((uint8_t)1), convert it to a Go
+			// conversion.
+			t.Next()
+			t.Next()
+			arg, err := parseConstExpr(t, precedencePrefix)
+			if err != nil {
+				return nil, err
+			}
+			return &ast.CallExpr{
+				Fun:  typ,
+				Args: []ast.Expr{arg},
+			}, nil
+		}
+	}
 	x, err := parseConstExpr(t, precedenceLowest)
 	if err != nil {
 		return nil, err
