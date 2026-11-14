@@ -61,21 +61,26 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 		return 0, errors.New("exec: no argv")
 	}
 
-	return spawn(argv0, argv, attr.Env)
+	return spawn(argv0, argv, attr)
 }
 
-// startProcess does not support ProcAttr.Dir, Files or Sys yet.
+// startProcess does not support ProcAttr.Files or Sys yet.
 func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err error) {
 	if attr == nil {
 		return nil, errors.New("exec: no ProcAttr")
 	}
 
-	if attr.Dir != "" {
-		return nil, ErrNotImplementedDir
-	}
-
 	if attr.Sys != nil {
 		return nil, ErrNotImplementedSys
+	}
+
+	// Check Dir first to report a clear error, as upstream os/exec_posix.go does.
+	if attr.Dir != "" {
+		if _, err := Stat(attr.Dir); err != nil {
+			pe := err.(*PathError)
+			pe.Op = "chdir"
+			return nil, pe
+		}
 	}
 
 	if len(attr.Files) != 0 {
