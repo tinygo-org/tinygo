@@ -1175,8 +1175,13 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 
 	chipName := flasher.ChipName()
 	offset := uint32(0x0)
-	if chipName == "ESP32" {
+	switch chipName {
+	case "ESP32":
 		offset = 0x1000
+	case "ESP32-P4-Rev1":
+		// P4 ROM bootloader reads the image from flash offset 0x2000
+		// (ESP_ROM_BOOTLOADER_OFFSET_FLASH = 0x2000 in esp_rom_caps.h)
+		offset = 0x2000
 	}
 
 	// Read the firmware binary
