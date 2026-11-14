@@ -507,6 +507,16 @@ func TestReflectedPointerTypeAssertions(t *testing.T) {
 	if _, ok := value.(**named); !ok {
 		t.Fatalf("constructed %T failed a type assertion", value)
 	}
+
+	value = reflect.New(reflect.TypeOf((****named)(nil))).Interface()
+	if _, ok := value.(*****named); !ok {
+		t.Errorf("constructed %T failed a type assertion", value)
+	}
+
+	value = reflect.New(reflect.TypeOf((*****named)(nil))).Interface()
+	if _, ok := value.(******named); !ok {
+		t.Errorf("constructed %T failed a type assertion", value)
+	}
 }
 
 func TestSliceOfRuntimeConstruction(t *testing.T) {

@@ -846,6 +846,11 @@ func TestTinyNumMethods(t *testing.T) {
 	if got, want := reft.NumMethod(), 1; got != want {
 		t.Errorf("Value Methods=%v, want %v", got, want)
 	}
+
+	doublePointerType := TypeOf((**methodStruct)(nil))
+	if got := doublePointerType.NumMethod(); got != 0 {
+		t.Errorf("Pointer-to-pointer Methods=%v, want 0", got)
+	}
 }
 
 func TestAssignableTo(t *testing.T) {

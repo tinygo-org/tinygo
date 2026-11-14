@@ -480,6 +480,8 @@ func (p *lowerInterfacesPass) run() error {
 
 	p.createReflectTypeLinks(typeNames)
 
+	p.createReflectPointerTypeLinks(typeNames)
+
 	return nil
 }
 
@@ -558,6 +560,49 @@ func (p *lowerInterfacesPass) createReflectTypeLinks(typeNames []string) {
 		}))
 		dataGlobal.SetGlobalConstant(true)
 	}
+}
+
+func (p *lowerInterfacesPass) createReflectPointerTypeLinks(typeNames []string) {
+	dataGlobal := p.mod.NamedGlobal("internal/reflectlite.pointerTypeLinks")
+	lengthGlobal := p.mod.NamedGlobal("internal/reflectlite.pointerTypeLinksLen")
+	if dataGlobal.IsNil() && lengthGlobal.IsNil() {
+		return
+	}
+	if dataGlobal.IsNil() || lengthGlobal.IsNil() {
+		panic("reflect pointer type link globals must be defined together")
+	}
+
+	var typeCodes []llvm.Value
+	pointerPrefix := strings.Repeat("pointer:", compileopts.MaxTypePointerDepth)
+	for _, name := range typeNames {
+		if !strings.HasPrefix(name, pointerPrefix) {
+			continue
+		}
+		typ := p.types[name]
+		typeCodes = append(typeCodes, llvm.ConstGEP(typ.typecode.GlobalValueType(), typ.typecode, []llvm.Value{
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+		}))
+	}
+
+	lengthGlobal.SetInitializer(llvm.ConstInt(p.uintptrType, uint64(len(typeCodes)), false))
+	lengthGlobal.SetGlobalConstant(true)
+	if len(typeCodes) == 0 {
+		dataGlobal.SetInitializer(llvm.ConstPointerNull(p.ptrType))
+		dataGlobal.SetGlobalConstant(true)
+		return
+	}
+
+	arrayType := llvm.ArrayType(p.ptrType, len(typeCodes))
+	array := llvm.AddGlobal(p.mod, arrayType, "internal/reflectlite.pointerTypeLinks.data")
+	array.SetInitializer(llvm.ConstArray(p.ptrType, typeCodes))
+	array.SetGlobalConstant(true)
+	array.SetLinkage(llvm.InternalLinkage)
+	dataGlobal.SetInitializer(llvm.ConstGEP(arrayType, array, []llvm.Value{
+		llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+		llvm.ConstInt(p.ctx.Int32Type(), 0, false),
+	}))
+	dataGlobal.SetGlobalConstant(true)
 }
 
 // addTypeMethods reads the method set of the given type info struct. It
