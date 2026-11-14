@@ -661,6 +661,10 @@ smoketest-flags: | build/smoke
 	@$(MD5SUM) $(SMOKE_OUT).nro
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pca10040 -opt=0     ./testdata/stdlib.go
 	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pca10040            ./testdata/atomic-sub
+	@$(MD5SUM) $(SMOKE_OUT).hex
+	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pico                ./testdata/atomic-sub
+	@$(MD5SUM) $(SMOKE_OUT).hex
 	GOOS=linux GOARCH=arm $(TINYGO) build -size short -o $(SMOKE_OUT).elf       ./testdata/cgo
 	GOOS=linux GOARCH=mips    $(TINYGO) build -size short -o $(SMOKE_OUT).elf   ./testdata/cgo
 	GOOS=windows GOARCH=amd64 $(TINYGO) build -size short -o $(SMOKE_OUT).exe   ./testdata/cgo
