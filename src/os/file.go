@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/fs"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -650,3 +651,284 @@ const (
 
 	ModePerm = fs.ModePerm // Unix permission bits, 0o777
 )
+
+var errPathEscapes = errors.New("path escapes from parent")
+
+// Root may be used to only access files within a single directory tree.
+type Root struct {
+	name   string
+	closed bool
+}
+
+// OpenInRoot opens the file name in the directory dir.
+func OpenInRoot(dir, name string) (*File, error) {
+	r, err := OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	return r.Open(name)
+}
+
+// OpenRoot opens the named directory.
+func OpenRoot(name string) (*Root, error) {
+	fi, err := Stat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !fi.IsDir() {
+		return nil, &PathError{Op: "open", Path: name, Err: ErrInvalid}
+	}
+	return &Root{name: name}, nil
+}
+
+func (r *Root) resolve(op, name string) (string, error) {
+	if r.closed {
+		return "", &PathError{Op: op, Path: name, Err: ErrClosed}
+	}
+	if name == "" || IsPathSeparator(name[0]) {
+		return "", &PathError{Op: op, Path: name, Err: errPathEscapes}
+	}
+	var cleanParts []string
+	symlinks := 0
+	queue := strings.Split(name, string(PathSeparator))
+	for len(queue) > 0 {
+		part := queue[0]
+		queue = queue[1:]
+		if part == "" || part == "." {
+			continue
+		}
+		if part == ".." {
+			if len(cleanParts) == 0 {
+				return "", &PathError{Op: op, Path: name, Err: errPathEscapes}
+			}
+			cleanParts = cleanParts[:len(cleanParts)-1]
+			continue
+		}
+		cleanParts = append(cleanParts, part)
+		isFinal := len(queue) == 0
+		if isFinal && (op == "lstat" || op == "readlink" || op == "remove" || op == "removeall" || op == "lchown" || op == "symlink" || op == "rename") {
+			continue
+		}
+		cur := r.name + string(PathSeparator) + strings.Join(cleanParts, string(PathSeparator))
+		fi, err := Lstat(cur)
+		if err != nil {
+			continue
+		}
+		if fi.Mode()&ModeSymlink != 0 {
+			symlinks++
+			if symlinks > 255 {
+				return "", &PathError{Op: op, Path: name, Err: errors.New("too many levels of symbolic links")}
+			}
+			target, err := Readlink(cur)
+			if err != nil {
+				return "", &PathError{Op: op, Path: name, Err: err}
+			}
+			if target == "" || IsPathSeparator(target[0]) {
+				return "", &PathError{Op: op, Path: name, Err: errPathEscapes}
+			}
+			cleanParts = cleanParts[:len(cleanParts)-1]
+			queue = append(strings.Split(target, string(PathSeparator)), queue...)
+		}
+	}
+	if len(cleanParts) == 0 {
+		return r.name, nil
+	}
+	return r.name + string(PathSeparator) + strings.Join(cleanParts, string(PathSeparator)), nil
+}
+
+// Name returns the name of the directory presented to OpenRoot.
+func (r *Root) Name() string {
+	return r.name
+}
+
+// Close closes the Root.
+func (r *Root) Close() error {
+	r.closed = true
+	return nil
+}
+
+// Open opens the named file in the root for reading.
+func (r *Root) Open(name string) (*File, error) {
+	return r.OpenFile(name, O_RDONLY, 0)
+}
+
+// Create creates or truncates the named file in the root.
+func (r *Root) Create(name string) (*File, error) {
+	return r.OpenFile(name, O_RDWR|O_CREATE|O_TRUNC, 0666)
+}
+
+// OpenFile opens the named file in the root.
+func (r *Root) OpenFile(name string, flag int, perm FileMode) (*File, error) {
+	p, err := r.resolve("openat", name)
+	if err != nil {
+		return nil, err
+	}
+	return OpenFile(p, flag, perm)
+}
+
+// OpenRoot opens the named directory in the root.
+func (r *Root) OpenRoot(name string) (*Root, error) {
+	p, err := r.resolve("openat", name)
+	if err != nil {
+		return nil, err
+	}
+	return OpenRoot(p)
+}
+
+// Chmod changes the mode of the named file in the root to mode.
+func (r *Root) Chmod(name string, mode FileMode) error {
+	p, err := r.resolve("chmod", name)
+	if err != nil {
+		return err
+	}
+	return Chmod(p, mode)
+}
+
+// Mkdir creates a new directory in the root.
+func (r *Root) Mkdir(name string, perm FileMode) error {
+	p, err := r.resolve("mkdirat", name)
+	if err != nil {
+		return err
+	}
+	return Mkdir(p, perm)
+}
+
+// MkdirAll creates a new directory in the root, along with any necessary parents.
+func (r *Root) MkdirAll(name string, perm FileMode) error {
+	p, err := r.resolve("mkdirat", name)
+	if err != nil {
+		return err
+	}
+	return MkdirAll(p, perm)
+}
+
+// Chown changes the numeric uid and gid of the named file in the root.
+func (r *Root) Chown(name string, uid, gid int) error {
+	p, err := r.resolve("chown", name)
+	if err != nil {
+		return err
+	}
+	return Chown(p, uid, gid)
+}
+
+// Lchown changes the numeric uid and gid of the named file in the root.
+func (r *Root) Lchown(name string, uid, gid int) error {
+	p, err := r.resolve("lchown", name)
+	if err != nil {
+		return err
+	}
+	return Lchown(p, uid, gid)
+}
+
+// Chtimes changes the access and modification times of the named file in the root.
+func (r *Root) Chtimes(name string, atime time.Time, mtime time.Time) error {
+	p, err := r.resolve("chtimes", name)
+	if err != nil {
+		return err
+	}
+	return Chtimes(p, atime, mtime)
+}
+
+// Remove removes the named file or (empty) directory in the root.
+func (r *Root) Remove(name string) error {
+	p, err := r.resolve("remove", name)
+	if err != nil {
+		return err
+	}
+	return Remove(p)
+}
+
+// RemoveAll removes the named file or directory and any children that it contains.
+func (r *Root) RemoveAll(name string) error {
+	p, err := r.resolve("removeall", name)
+	if err != nil {
+		return err
+	}
+	return RemoveAll(p)
+}
+
+// Stat returns a FileInfo describing the named file in the root.
+func (r *Root) Stat(name string) (FileInfo, error) {
+	p, err := r.resolve("stat", name)
+	if err != nil {
+		return nil, err
+	}
+	return Stat(p)
+}
+
+// Lstat returns a FileInfo describing the named file in the root.
+func (r *Root) Lstat(name string) (FileInfo, error) {
+	p, err := r.resolve("lstat", name)
+	if err != nil {
+		return nil, err
+	}
+	return Lstat(p)
+}
+
+// Readlink returns the destination of the named symbolic link in the root.
+func (r *Root) Readlink(name string) (string, error) {
+	p, err := r.resolve("readlink", name)
+	if err != nil {
+		return "", err
+	}
+	return Readlink(p)
+}
+
+// Rename renames (moves) oldname to newname.
+func (r *Root) Rename(oldname, newname string) error {
+	oldp, err := r.resolve("rename", oldname)
+	if err != nil {
+		return err
+	}
+	newp, err := r.resolve("rename", newname)
+	if err != nil {
+		return err
+	}
+	return Rename(oldp, newp)
+}
+
+// Link creates newname as a hard link to the oldname file.
+func (r *Root) Link(oldname, newname string) error {
+	oldp, err := r.resolve("link", oldname)
+	if err != nil {
+		return err
+	}
+	newp, err := r.resolve("link", newname)
+	if err != nil {
+		return err
+	}
+	return Link(oldp, newp)
+}
+
+// Symlink creates newname as a symbolic link to oldname.
+func (r *Root) Symlink(oldname, newname string) error {
+	newp, err := r.resolve("symlink", newname)
+	if err != nil {
+		return err
+	}
+	return Symlink(oldname, newp)
+}
+
+// ReadFile reads the named file in the root and returns its contents.
+func (r *Root) ReadFile(name string) ([]byte, error) {
+	p, err := r.resolve("readfile", name)
+	if err != nil {
+		return nil, err
+	}
+	return ReadFile(p)
+}
+
+// WriteFile writes data to the named file in the root, creating it if necessary.
+func (r *Root) WriteFile(name string, data []byte, perm FileMode) error {
+	p, err := r.resolve("writefile", name)
+	if err != nil {
+		return err
+	}
+	return WriteFile(p, data, perm)
+}
+
+// FS returns a file system (an fs.FS) for the tree of files in the root.
+func (r *Root) FS() fs.FS {
+	return DirFS(r.name)
+}
