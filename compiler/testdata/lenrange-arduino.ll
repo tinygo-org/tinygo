@@ -149,9 +149,12 @@ deref.throw:                                      ; preds = %deref.next, %entry
 ; Function Attrs: nounwind
 define hidden void @main.indirectResult(ptr dereferenceable_or_null(1025) %return, ptr %s.data, i16 %s.len, i16 %s.cap, ptr %context) unnamed_addr addrspace(1) #0 {
 entry:
-  store [1025 x i8] zeroinitializer, ptr %return, align 1
+  call addrspace(1) void @llvm.memset.p0.i16(ptr noundef nonnull align 1 dereferenceable(1025) %return, i8 0, i16 1025, i1 false)
   ret void
 }
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
+declare void @llvm.memset.p0.i16(ptr writeonly captures(none), i8, i16, i1 immarg) addrspace(1) #2
 
 ; Function Attrs: nounwind
 define hidden i32 @main.receiverArg(ptr %s.data, i16 %s.len, i16 %s.cap, ptr %context) unnamed_addr addrspace(1) #0 {
@@ -173,3 +176,4 @@ entry:
 
 attributes #0 = { nounwind }
 attributes #1 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: write) }

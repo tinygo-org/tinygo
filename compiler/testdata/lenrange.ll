@@ -55,8 +55,8 @@ entry:
 define hidden i32 @main.nestedArg(ptr readonly %s.text.data, i32 range(i32 0, -2147483648) %s.text.len, i32 %s.n, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %s = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 71 to ptr), ptr undef) #4
-  call void @runtime.trackPointer(ptr nonnull %s, ptr nonnull %stackalloc, ptr undef) #4
+  %s = call align 4 dereferenceable(12) ptr @runtime.alloc(i32 12, ptr nonnull inttoptr (i32 71 to ptr), ptr undef) #5
+  call void @runtime.trackPointer(ptr nonnull %s, ptr nonnull %stackalloc, ptr undef) #5
   store ptr %s.text.data, ptr %s, align 4
   %s.repack4 = getelementptr inbounds nuw i8, ptr %s, i32 4
   store i32 %s.text.len, ptr %s.repack4, align 4
@@ -68,7 +68,7 @@ deref.next:                                       ; preds = %entry
   %.unpack = load ptr, ptr %s, align 4
   %.elt6 = getelementptr inbounds nuw i8, ptr %s, i32 4
   %.unpack7 = load i32, ptr %.elt6, align 4
-  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #5
   br i1 false, label %deref.throw, label %deref.next1
 
 deref.next1:                                      ; preds = %deref.next
@@ -93,8 +93,8 @@ declare void @runtime.nilPanic(ptr) #0
 define hidden i32 @main.unexpandedArg(%main.sliceField %s, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %s1 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 73 to ptr), ptr undef) #4
-  call void @runtime.trackPointer(ptr nonnull %s1, ptr nonnull %stackalloc, ptr undef) #4
+  %s1 = call align 4 dereferenceable(16) ptr @runtime.alloc(i32 16, ptr nonnull inttoptr (i32 73 to ptr), ptr undef) #5
+  call void @runtime.trackPointer(ptr nonnull %s1, ptr nonnull %stackalloc, ptr undef) #5
   %s.elt = extractvalue %main.sliceField %s, 0
   %s.elt.elt = extractvalue { ptr, i32, i32 } %s.elt, 0
   store ptr %s.elt.elt, ptr %s1, align 4
@@ -113,7 +113,7 @@ deref.next:                                       ; preds = %entry
   %.unpack = load ptr, ptr %s1, align 4
   %.elt9 = getelementptr inbounds nuw i8, ptr %s1, i32 4
   %.unpack10 = load i32, ptr %.elt9, align 4
-  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #4
+  call void @runtime.trackPointer(ptr %.unpack, ptr nonnull %stackalloc, ptr undef) #5
   br i1 false, label %deref.throw, label %deref.next2
 
 deref.next2:                                      ; preds = %deref.next
@@ -133,8 +133,8 @@ unwind.return:                                    ; preds = %deref.throw
 define hidden i32 @main.ordinaryFields(i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
-  %s = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #4
-  call void @runtime.trackPointer(ptr nonnull %s, ptr nonnull %stackalloc, ptr undef) #4
+  %s = call align 4 dereferenceable(8) ptr @runtime.alloc(i32 8, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #5
+  call void @runtime.trackPointer(ptr nonnull %s, ptr nonnull %stackalloc, ptr undef) #5
   store i32 %s.len, ptr %s, align 4
   %s.repack2 = getelementptr inbounds nuw i8, ptr %s, i32 4
   store i32 %s.cap, ptr %s.repack2, align 4
@@ -160,9 +160,12 @@ unwind.return:                                    ; preds = %deref.throw
 ; Function Attrs: nounwind
 define hidden void @main.indirectResult(ptr dereferenceable_or_null(1025) %return, ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
-  store [1025 x i8] zeroinitializer, ptr %return, align 1
+  call void @llvm.memset.p0.i32(ptr noundef nonnull align 1 dereferenceable(1025) %return, i8 0, i32 1025, i1 false)
   ret void
 }
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
+declare void @llvm.memset.p0.i32(ptr writeonly captures(none), i8, i32, i1 immarg) #3
 
 ; Function Attrs: nounwind
 define hidden i32 @main.receiverArg(ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, ptr %context) unnamed_addr #1 {
@@ -172,7 +175,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define i32 @exportedArgs(ptr captures(none) %s.data, i32 %s.len, i32 %s.cap, ptr readonly captures(none) %text.data, i32 %text.len) #3 {
+define i32 @exportedArgs(ptr captures(none) %s.data, i32 %s.len, i32 %s.cap, ptr readonly captures(none) %text.data, i32 %text.len) #4 {
 entry:
   %0 = add i32 %s.len, %s.cap
   %1 = add i32 %0, %text.len
@@ -182,5 +185,6 @@ entry:
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #3 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="exportedArgs" }
-attributes #4 = { nounwind }
+attributes #3 = { nocallback nofree nounwind willreturn memory(argmem: write) }
+attributes #4 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "wasm-export-name"="exportedArgs" }
+attributes #5 = { nounwind }
