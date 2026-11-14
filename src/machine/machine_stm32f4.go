@@ -7,7 +7,7 @@ package machine
 import (
 	"device/stm32"
 	"errors"
-	"internal/binary"
+	"internal/byteorder"
 	"math/bits"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -635,7 +635,7 @@ func writeFlashData(address uintptr, data []byte) (int, error) {
 		// start write operation
 		stm32.FLASH.SetCR_PG(1)
 
-		*(*uint16)(unsafe.Pointer(address)) = binary.LittleEndian.Uint16(data[i : i+writeBlockSize])
+		*(*uint16)(unsafe.Pointer(address)) = byteorder.LEUint16(data[i : i+writeBlockSize])
 
 		waitUntilFlashDone()
 

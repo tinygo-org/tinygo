@@ -1,7 +1,7 @@
 package descriptor
 
 import (
-	"internal/binary"
+	"internal/byteorder"
 )
 
 /* Endpoint Descriptor
@@ -84,7 +84,7 @@ func (d EndpointType) Attributes(v uint8) {
 }
 
 func (d EndpointType) MaxPacketSize(v uint16) {
-	binary.LittleEndian.PutUint16(d.data[4:6], v)
+	byteorder.LEPutUint16(d.data[4:6], v)
 }
 
 func (d EndpointType) Interval(v uint8) {
@@ -92,5 +92,5 @@ func (d EndpointType) Interval(v uint8) {
 }
 
 func (d EndpointType) GetMaxPacketSize() uint16 {
-	return binary.LittleEndian.Uint16(d.data[4:6])
+	return byteorder.LEUint16(d.data[4:6])
 }
