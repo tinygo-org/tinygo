@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -116,6 +118,44 @@ func TestFixHelpAndFlags(t *testing.T) {
 		if status != test.status || !strings.Contains(output, test.want) {
 			t.Fatalf("%v: status=%d, want=%d:\n%s", test.args, status, test.status, output)
 		}
+	}
+}
+
+func TestFixCGoGeneratedHeaders(t *testing.T) {
+	root, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TINYGOROOT", root)
+	cache := t.TempDir()
+	switch runtime.GOOS {
+	case "windows":
+		t.Setenv("LocalAppData", cache)
+	case "darwin", "ios":
+		t.Setenv("HOME", cache)
+	default:
+		t.Setenv("XDG_CACHE_HOME", cache)
+	}
+	if _, err := os.Stat(goenv.Get("GOCACHE")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected a cold TinyGo cache: %v", err)
+	}
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	for name, content := range map[string]string{
+		"go.mod":  "module example.com/probe\n\ngo 1.26.0\n",
+		"main.go": "package main\n/*\n#include <picolibc.h>\n*/\nimport \"C\"\nfunc main() {}\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"cold", "warm"} {
+		t.Run(name, func(t *testing.T) {
+			status, output := fixCommand(t, root, "-C", dir, "-target", "pico", "-tests=false", "-diff")
+			if status != 0 {
+				t.Fatalf("fix status=%d:\n%s", status, output)
+			}
+		})
 	}
 }
 

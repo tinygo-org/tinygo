@@ -86,17 +86,18 @@ type BuildResult struct {
 // key, avoiding the need for recompiling all dependencies when only the
 // implementation of an imported package changes.
 type packageAction struct {
-	ImportPath       string
-	CompilerBuildID  string
-	TinyGoVersion    string
-	LLVMVersion      string
-	Config           *compiler.Config
-	CFlags           []string
-	FileHashes       map[string]string // hash of every file that's part of the package
-	EmbeddedFiles    map[string]string // hash of all the //go:embed files in the package
-	Imports          map[string]string // map from imported package to action ID hash
-	OptLevel         string            // LLVM optimization level (O0, O1, O2, Os, Oz)
-	UndefinedGlobals []string          // globals that are left as external globals (no initializer)
+	ImportPath        string
+	CompilerBuildID   string
+	TinyGoVersion     string
+	LLVMVersion       string
+	CCompilerIdentity string
+	Config            *compiler.Config
+	CFlags            []string
+	FileHashes        map[string]string // hash of every file that's part of the package
+	EmbeddedFiles     map[string]string // hash of all the //go:embed files in the package
+	Imports           map[string]string // map from imported package to action ID hash
+	OptLevel          string            // LLVM optimization level (O0, O1, O2, Os, Oz)
+	UndefinedGlobals  []string          // globals that are left as external globals (no initializer)
 }
 
 // Build performs a single package to executable Go build. It takes in a package
@@ -166,66 +167,45 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 	// As a side effect, this also creates the headers for the given libc, if
 	// the libc needs them.
 	root := goenv.Get("TINYGOROOT")
+	libraries, err := configuredLibraries(config)
+	if err != nil {
+		return nil, err
+	}
+	outext := filepath.Ext(outpath)
+	if outext == ".o" || outext == ".bc" || outext == ".ll" {
+		libraries.linker = nil
+	}
+	libraryInputs, libraryKeys, err := makeLibraryCacheInputs(config, libraries)
+	if err != nil {
+		return nil, err
+	}
+	buildConfig := *config
+	buildConfig.LibraryKeys = libraryKeys
+	config = &buildConfig
 	var libcDependencies []*compileJob
-	switch config.Target.Libc {
-	case "darwin-libSystem":
+	if config.Target.Libc == "darwin-libSystem" {
 		libcJob := makeDarwinLibSystemJob(config, tmpdir)
 		libcDependencies = append(libcDependencies, libcJob)
-	case "musl":
-		var unlock func()
-		libcJob, unlock, err := libMusl.load(config, tmpdir)
-		if err != nil {
-			return nil, err
-		}
-		defer unlock()
-		libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(libcJob.result), "crt1.o")))
-		libcDependencies = append(libcDependencies, libcJob)
-	case "glibc":
+	} else if config.Target.Libc == "glibc" {
 		libDir, err := compileopts.GlibcLibDir(config.GOARCH())
 		if err != nil {
 			return nil, err
 		}
 		libcDependencies = append(libcDependencies, glibcStartupJobs(libDir)...)
-	case "picolibc":
-		libcJob, unlock, err := libPicolibc.load(config, tmpdir)
+	}
+	if libraries.libc != nil {
+		libcJob, unlock, err := libraries.libc.load(config, tmpdir, libraryInputs[libraries.libc.name])
 		if err != nil {
 			return nil, err
 		}
 		defer unlock()
-		libcDependencies = append(libcDependencies, libcJob)
-	case "wasi-libc":
-		lib := libWasiLibc
-		if slices.Contains(config.BuildTags(), "wasip2") {
-			if llvm.VersionMajor < 22 {
-				return nil, fmt.Errorf("target wasip2 requires clang 22 or newer, but TinyGo uses LLVM %s", llvm.Version)
-			}
-			lib = libWasiLibcWasip2
+		if libraries.libc.crt1Source != "" {
+			libcDependencies = append(libcDependencies, dummyCompileJob(filepath.Join(filepath.Dir(libcJob.result), "crt1.o")))
 		}
-		libcJob, unlock, err := lib.load(config, tmpdir)
-		if err != nil {
-			return nil, err
-		}
-		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
-	case "wasmbuiltins":
-		libcJob, unlock, err := libWasmBuiltins.load(config, tmpdir)
-		if err != nil {
-			return nil, err
-		}
-		defer unlock()
-		libcDependencies = append(libcDependencies, libcJob)
-	case "mingw-w64":
-		libcJob, unlock, err := libMinGW.load(config, tmpdir)
-		if err != nil {
-			return nil, err
-		}
-		defer unlock()
-		libcDependencies = append(libcDependencies, libcJob)
+	}
+	if config.Target.Libc == "mingw-w64" {
 		libcDependencies = append(libcDependencies, makeMinGWExtraLibs(tmpdir, config.GOARCH())...)
-	case "":
-		// no library specified, so nothing to do
-	default:
-		return nil, fmt.Errorf("unknown libc: %s", config.Target.Libc)
 	}
 
 	optLevel, speedLevel, sizeLevel := config.OptLevel()
@@ -429,6 +409,13 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 					OptLevel:         optLevel,
 					UndefinedGlobals: undefinedGlobals,
 				}
+				if len(pkg.CGoHeaders) != 0 {
+					compilerID, err := clangCompilerIdentity()
+					if err != nil {
+						return err
+					}
+					actionID.CCompilerIdentity = compilerID
+				}
 				for filePath, hash := range pkg.FileHashes {
 					actionID.FileHashes[pkg.RecordedPath(filePath)] = hex.EncodeToString(hash)
 				}
@@ -483,9 +470,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 				}
 
 				// Load bitcode of CGo headers and join the modules together.
-				// This may seem vulnerable to cache problems, but this is not
-				// the case: the Go code that was just compiled already tracks
-				// all C files that are read and hashes them.
 				// These headers could be compiled in parallel but the benefit
 				// is so small that it's probably not worth parallelizing.
 				// Packages are compiled independently anyway.
@@ -496,14 +480,16 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 					if err != nil {
 						return err
 					}
-					_, err = f.Write([]byte(cgoHeader))
-					if err != nil {
+					if _, err := f.Write([]byte(cgoHeader)); err != nil {
 						return err
 					}
-					f.Close()
+					if err := f.Close(); err != nil {
+						return err
+					}
+					output := f.Name() + ".bc"
 
 					// Compile the code (if there is any) to bitcode.
-					flags := append([]string{"-c", "-emit-llvm", "-o", f.Name() + ".bc", f.Name()}, pkg.CFlags...)
+					flags := cgoHeaderCompileArgs(f.Name(), output, pkg.CFlags)
 					flags = append(flags, "-working-directory="+tmpdir)
 					if config.TrimPath() {
 						flags = append(flags,
@@ -523,7 +509,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 					// in the header together with the Go code. In particular,
 					// this allows inlining. It also ensures there is only one
 					// file per package to cache.
-					headerMod, err := mod.Context().ParseBitcodeFile(f.Name() + ".bc")
+					headerMod, err := mod.Context().ParseBitcodeFile(output)
 					if err != nil {
 						return fmt.Errorf("failed to load bitcode file: %w", err)
 					}
@@ -770,7 +756,6 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 
 	// Check whether we only need to create an object file.
 	// If so, we don't need to link anything and will be finished quickly.
-	outext := filepath.Ext(outpath)
 	if outext == ".o" || outext == ".bc" || outext == ".ll" {
 		// Run jobs to produce the LLVM module.
 		err := runJobs(programJob, sema)
@@ -855,20 +840,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 		}
 	}
 
-	// Add compiler-rt dependency if needed. Usually this is a simple load from
-	// a cache.
-	if config.Target.RTLib == "compiler-rt" {
-		job, unlock, err := libCompilerRT.load(config, tmpdir)
-		if err != nil {
-			return nil, err
-		}
-		defer unlock()
-		linkerDependencies = append(linkerDependencies, job)
-	}
-
-	// The Boehm collector is stored in a separate C library.
-	if config.GC() == "boehm" {
-		job, unlock, err := BoehmGC.load(config, tmpdir)
+	// Add library dependencies needed by the linker, usually from the cache.
+	for _, library := range libraries.linker {
+		job, unlock, err := library.load(config, tmpdir, libraryInputs[library.name])
 		if err != nil {
 			return nil, err
 		}
@@ -1285,6 +1259,15 @@ func linkOrCopyFile(src, dst string) error {
 		return closeErr
 	}
 	return nil
+}
+
+func cgoHeaderCompileArgs(source, output string, cflags []string) []string {
+	flags := append([]string{"-c", "-emit-llvm", "-o", output, source}, cflags...)
+	flags = append(flags,
+		"-ffile-prefix-map="+source+"=tinygo-cgo.c",
+		"-fdebug-prefix-map="+source+"=tinygo-cgo.c",
+	)
+	return appendCacheStableCFlags(flags)
 }
 
 // createEmbedObjectFile creates a new object file with the given contents, for
