@@ -22,12 +22,13 @@
 	"ldflags": [
 		"--stack-first",
 		"--no-demangle",
-		"--no-entry"
+		"--no-entry",
+		"--undefined=__wasilibc_find_relpath_alloc"
 	],
 	"extra-files": [
 		"src/runtime/asm_tinygowasm.S"
 	],
-	"emulator": "wasmtime run --wasm component-model -Sinherit-network -Sallow-ip-name-lookup --dir={tmpDir}::/tmp {}",
+	"emulator": "wasmtime run --wasm component-model -Sinherit-network -Sallow-ip-name-lookup {}",
 	"wit-package": "{root}/lib/wasi-libc/wasi/p2/wit/",
 	"wit-world": "wasi:cli/command@0.2.12"
 }
