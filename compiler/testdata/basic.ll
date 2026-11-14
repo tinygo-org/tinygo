@@ -3,9 +3,11 @@ source_filename = "basic.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
 target triple = "wasm32-unknown-wasi"
 
+%main.plainStruct = type { [16 x i32], ptr }
 %main.kv = type { float, i32, i32, i32 }
 %main.kv.0 = type { i8, i32, i32, i32 }
 
+@cmpconst = internal unnamed_addr constant %main.plainStruct zeroinitializer, align 4
 @main.kvGlobal = hidden global %main.kv zeroinitializer, align 4
 @main.a = hidden global { ptr, i32, i32 } zeroinitializer, align 4
 @main.b = hidden global [2 x ptr] zeroinitializer, align 4
@@ -74,6 +76,46 @@ deref.next1:                                      ; preds = %deref.next
   ret i1 %2
 
 deref.throw:                                      ; preds = %deref.next, %entry
+  call void @runtime.nilPanic(ptr undef) #3
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i1 undef
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.equalPlainStruct(ptr dereferenceable_or_null(68) %x, ptr dereferenceable_or_null(68) %y, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %x, null
+  br i1 %0, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  %1 = icmp eq ptr %y, null
+  br i1 %1, label %deref.throw, label %deref.next1
+
+deref.next1:                                      ; preds = %deref.next
+  %arraycmp = call i1 @runtime.memequal(ptr nonnull %x, ptr nonnull %y, i32 68, ptr undef) #3
+  ret i1 %arraycmp
+
+deref.throw:                                      ; preds = %deref.next, %entry
+  call void @runtime.nilPanic(ptr undef) #3
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i1 undef
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.isZeroPlainStruct(ptr dereferenceable_or_null(68) %x, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %x, null
+  br i1 %0, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  %arraycmp = call i1 @runtime.memequal(ptr nonnull %x, ptr nonnull @cmpconst, i32 68, ptr undef) #3
+  ret i1 %arraycmp
+
+deref.throw:                                      ; preds = %entry
   call void @runtime.nilPanic(ptr undef) #3
   br label %unwind.return
 
