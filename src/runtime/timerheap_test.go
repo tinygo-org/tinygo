@@ -1,10 +1,30 @@
 package runtime_test
 
 import (
+	"math"
 	"runtime"
 	"sort"
 	"testing"
 )
+
+func TestTimerNextWhen(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		when, period, delta int64
+		want                int64
+	}{
+		{"next", 5, 10, 0, 15},
+		{"missed", 5, 10, 25, 35},
+		{"max-period", 1, math.MaxInt64, 0, math.MaxInt64},
+		{"missed-overflow", 2, math.MaxInt64 / 2, math.MaxInt64 / 2, math.MaxInt64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runtime.TimerNextWhen(tc.when, tc.period, tc.delta); got != tc.want {
+				t.Fatalf("next deadline = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
 
 type heapEntry struct {
 	t    *runtime.HeapTimer

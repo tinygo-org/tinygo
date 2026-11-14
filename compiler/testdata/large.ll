@@ -494,7 +494,7 @@ declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr capt
 declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), i32, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i8 @main.useLargeChannel(ptr dereferenceable_or_null(40) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i8 @main.useLargeChannel(ptr dereferenceable_or_null(44) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op1 = alloca %runtime.channelOp, align 8
   %chan.op = alloca %runtime.channelOp, align 8
@@ -531,15 +531,15 @@ if.then:                                          ; preds = %entry
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.start.p0(ptr captures(none)) #12
 
-declare void @runtime.chanSend(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
+declare void @runtime.chanSend(ptr dereferenceable_or_null(44), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.lifetime.end.p0(ptr captures(none)) #12
 
-declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
+declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(44), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i8 @main.selectLargeChannel(ptr dereferenceable_or_null(40) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
+define hidden i8 @main.selectLargeChannel(ptr dereferenceable_or_null(44) %ch, ptr readonly dereferenceable_or_null(1025) %value, ptr %context) unnamed_addr #1 {
 entry:
   %select.block.alloca = alloca [2 x %runtime.channelOp], align 8
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
@@ -596,7 +596,7 @@ declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 536870912), i
 declare void @runtime._panic(ptr, ptr, ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.sendZeroLargeValue(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.sendZeroLargeValue(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   %stackalloc = alloca i8, align 1
@@ -609,7 +609,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i1 @main.selectZeroLargeValue(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden i1 @main.selectZeroLargeValue(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %"main.largeValue{}:main.largeValue" = call align 1 dereferenceable(1025) ptr @runtime.alloc(i32 1025, ptr nonnull inttoptr (i32 3 to ptr), ptr undef) #13
@@ -624,7 +624,7 @@ select.next:                                      ; preds = %entry
   ret i1 false
 }
 
-declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(40), ptr, ptr) #0
+declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(44), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.storeZeroLargeMap(ptr dereferenceable_or_null(52) %values, ptr %context) unnamed_addr #1 {

@@ -155,13 +155,13 @@ declare i32 @llvm.umin.i32(i32, i32) #7
 declare void @llvm.memmove.p0.p0.i32(ptr writeonly captures(none), ptr readonly captures(none), i32, i1 immarg) #8
 
 ; Function Attrs: nounwind
-define hidden void @main.closeBuiltinGoroutine(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.closeBuiltinGoroutine(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   call void @runtime.chanClose(ptr %ch, ptr undef) #11
   ret void
 }
 
-declare void @runtime.chanClose(ptr dereferenceable_or_null(40), ptr) #0
+declare void @runtime.chanClose(ptr dereferenceable_or_null(44), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {

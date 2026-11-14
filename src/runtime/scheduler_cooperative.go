@@ -156,18 +156,22 @@ func addTimer(tim *timerNode) {
 
 // reAddTimer finishes firing a timer. The cooperative scheduler runs timer
 // callbacks to completion, so periodic timers can be re-added directly.
-func reAddTimer(tn *timerNode) {
-	if tn.timer.period == 0 {
+func reAddTimer(tn *timerNode, delta int64) {
+	if tn.timer.period == 0 || tn.timer.stopped {
 		releaseTimerNode(tn)
 		return
 	}
-	tn.timer.when += tn.timer.period
+	tn.timer.when = tn.timer.nextWhen(delta)
+	if tn.timer.isChan && tn.timer.blocked == 0 {
+		tn.timer.pausedNode = tn
+		return
+	}
 	addTimer(tn)
 }
 
 // removeTimer is the implementation of time.stopTimer. It removes a timer from
 // the timer queue, returning it if the timer is present in the timer queue.
-func removeTimer(tim *timer) *timerNode {
+func removeTimer(tim *timer, stopFiring bool) *timerNode {
 	mask := interrupt.Disable()
 	n := timerQueueRemove(tim)
 	interrupt.Restore(mask)
