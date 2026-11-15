@@ -210,7 +210,7 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	}
 
 	// Set configuration
-	ioRegister := p.ioMuxReg()
+	ioRegister := p.mux()
 	ioRegister.Set(ioConfig)
 
 	switch config.Mode {
@@ -243,9 +243,9 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	}
 }
 
-// ioMuxReg returns the IO_MUX_n_REG register used for configuring the io mux for
-// this pin
-func (p Pin) ioMuxReg() *volatile.Register32 {
+// mux returns the I/O mux configuration register corresponding to the given
+// GPIO pin.
+func (p Pin) mux() *volatile.Register32 {
 	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.IO_MUX.GPIO0), uintptr(p)*4))
 }
 

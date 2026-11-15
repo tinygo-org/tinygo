@@ -218,8 +218,8 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	setUSBOTGInput(usbOTGAVALIDSignal, gpioMatrixConstLow)
 
 	// D- is GPIO19 and D+ is GPIO20.
-	GPIO19.ioMuxReg().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
-	GPIO20.ioMuxReg().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
+	GPIO19.mux().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
+	GPIO20.mux().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
 
 	waitUSBBits(&esp.USB0.GRSTCTL, grstAHBIDL, grstAHBIDL)
 	esp.USB0.GRSTCTL.SetBits(grstCSRST)
