@@ -6,8 +6,8 @@ import (
 	"device/esp"
 )
 
-// Watchdog uses the timer group 1 watchdog (MWDT1), which is free after boot.
-// See ESP32 TRM v5.9 chapter 11 Watchdog Timers.
+// Watchdog uses the timer group 1 watchdog (MWDT1). At reset the chip only enables
+// the TIMG0 and RTC watchdogs, see ESP32 TRM v5.9 section 11.3.4.
 var Watchdog = &watchdogImpl{}
 
 const (
@@ -28,7 +28,7 @@ const (
 
 type watchdogImpl struct{}
 
-// Configure the watchdog.
+// Configure configures the watchdog.
 //
 // This method should not be called after the watchdog is started.
 func (wd *watchdogImpl) Configure(config WatchdogConfig) error {
@@ -46,7 +46,7 @@ func (wd *watchdogImpl) Configure(config WatchdogConfig) error {
 	return nil
 }
 
-// Starts the watchdog.
+// Start starts the watchdog timer.
 func (wd *watchdogImpl) Start() error {
 	esp.TIMG1.WDTWPROTECT.Set(wdtWriteKey)
 	esp.TIMG1.WDTFEED.Set(1)
@@ -56,7 +56,7 @@ func (wd *watchdogImpl) Start() error {
 	return nil
 }
 
-// Update the watchdog, indicating that the app is healthy.
+// Update updates the watchdog to indicate it is healthy.
 func (wd *watchdogImpl) Update() {
 	esp.TIMG1.WDTWPROTECT.Set(wdtWriteKey)
 	esp.TIMG1.WDTFEED.Set(1)
