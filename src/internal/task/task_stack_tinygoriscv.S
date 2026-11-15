@@ -1,5 +1,15 @@
 //go:build tinygo
 
+#if __riscv_xlen == 64
+#define REGSIZE 8
+#define SREG sd
+#define LREG ld
+#else
+#define REGSIZE 4
+#define SREG sw
+#define LREG lw
+#endif
+
 .section .text.tinygo_startTask
 .global  tinygo_startTask
 .type    tinygo_startTask, %function
@@ -38,47 +48,47 @@ tinygo_swapTaskRISC:
     csrrci t0, mstatus, 8
 
     // Push all callee-saved registers.
-    addi sp, sp, -52
-    sw ra,  48(sp)
-    sw s11, 44(sp)
-    sw s10, 40(sp)
-    sw s9,  36(sp)
-    sw s8,  32(sp)
-    sw s7,  28(sp)
-    sw s6,  24(sp)
-    sw s5,  20(sp)
-    sw s4,  16(sp)
-    sw s3,  12(sp)
-    sw s2,   8(sp)
-    sw s1,   4(sp)
-    sw s0,    (sp)
+    addi sp, sp, -13*REGSIZE
+    SREG ra,  12*REGSIZE(sp)
+    SREG s11, 11*REGSIZE(sp)
+    SREG s10, 10*REGSIZE(sp)
+    SREG s9,   9*REGSIZE(sp)
+    SREG s8,   8*REGSIZE(sp)
+    SREG s7,   7*REGSIZE(sp)
+    SREG s6,   6*REGSIZE(sp)
+    SREG s5,   5*REGSIZE(sp)
+    SREG s4,   4*REGSIZE(sp)
+    SREG s3,   3*REGSIZE(sp)
+    SREG s2,   2*REGSIZE(sp)
+    SREG s1,   1*REGSIZE(sp)
+    SREG s0,   0*REGSIZE(sp)
 
     // Save the current stack pointer in oldStack.
-    sw sp,  0(a1)
+    SREG sp,  0(a1)
 
     // Switch to the new stack pointer.
     mv sp,  a0
 
     // Clear the saved system stack only after switching back to it.
     beqz a2, 1f
-    sw zero, 0(a2)
+    SREG zero, 0(a2)
 1:
 
     // Pop all saved registers from this new stack.
-    lw ra,  48(sp)
-    lw s11, 44(sp)
-    lw s10, 40(sp)
-    lw s9,  36(sp)
-    lw s8,  32(sp)
-    lw s7,  28(sp)
-    lw s6,  24(sp)
-    lw s5,  20(sp)
-    lw s4,  16(sp)
-    lw s3,  12(sp)
-    lw s2,   8(sp)
-    lw s1,   4(sp)
-    lw s0,    (sp)
-    addi sp, sp, 52
+    LREG ra,  12*REGSIZE(sp)
+    LREG s11, 11*REGSIZE(sp)
+    LREG s10, 10*REGSIZE(sp)
+    LREG s9,   9*REGSIZE(sp)
+    LREG s8,   8*REGSIZE(sp)
+    LREG s7,   7*REGSIZE(sp)
+    LREG s6,   6*REGSIZE(sp)
+    LREG s5,   5*REGSIZE(sp)
+    LREG s4,   4*REGSIZE(sp)
+    LREG s3,   3*REGSIZE(sp)
+    LREG s2,   2*REGSIZE(sp)
+    LREG s1,   1*REGSIZE(sp)
+    LREG s0,   0*REGSIZE(sp)
+    addi sp, sp, 13*REGSIZE
 
     // Restore the interrupt-enable state.
     andi t0, t0, 8
