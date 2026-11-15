@@ -982,6 +982,9 @@ func (c *compilerContext) createPackage(irbuilder llvm.Builder, pkg *ssa.Package
 				global.SetInitializer(llvm.ConstNull(global.GlobalValueType()))
 				global.SetVisibility(llvm.HiddenVisibility)
 				if info.section != "" {
+					if (info.section == ".psram" || strings.HasPrefix(info.section, ".psram.")) && typeHasPointers(global.GlobalValueType()) {
+						c.addError(member.Pos(), "//go:section .psram cannot be used on variables containing pointers")
+					}
 					global.SetSection(info.section)
 				}
 			}

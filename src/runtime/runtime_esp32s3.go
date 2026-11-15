@@ -75,7 +75,7 @@ func main() {
 	}
 
 	// Initialize PSRAM if numa_psram_* build tag is enabled.
-	initPSRAM()
+	psramInitErr = initPSRAM()
 
 	// Initialize main system timer used for time.Now.
 	initTimer()
@@ -93,9 +93,22 @@ func main() {
 	exit(0)
 }
 
+var (
+	psramInitErr   string
+	psramFreeStart uintptr
+	psramFreeLen   int
+)
+
+func esp32s3PSRAM() (uintptr, int) {
+	return psramFreeStart, psramFreeLen
+}
+
 func init() {
 	// Initialize UART.
 	machine.InitSerial()
+	if psramInitErr != "" {
+		panic(psramInitErr)
+	}
 }
 
 func abort() {

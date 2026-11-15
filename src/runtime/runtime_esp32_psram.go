@@ -1,11 +1,10 @@
 //go:build esp32s3 && numa_psram_octal
 
 // Shared PSRAM support for ESP32-S3: linker symbols, MMU/ROM-call helpers,
-// and address-map documentation common to both the Quad SPI driver
-// (runtime_esp32_psram_qspi.go, build tag numa_psram_qspi) and the Octal
-// SPI driver (runtime_esp32_psram_octal.go, build tag numa_psram_octal).
+// and address-map documentation for the Octal SPI driver
+// (runtime_esp32_psram_octal.go, build tag numa_psram_octal).
 // Everything protocol-specific (SPI1 command sequencing, chip ID/mode
-// register parsing, SPI0 cache-phase configuration) lives in those files.
+// register parsing, SPI0 cache-phase configuration) lives in that file.
 //
 // Address map (esp-idf soc/ext_mem_defs.h; verified on hardware while
 // bringing up the Octal driver):
@@ -83,23 +82,24 @@ func psramWindow() (start, end uintptr, pageCap int) {
 // into the MMU, verifying with a known pattern first that writes actually
 // reach the chip (a hardware or timing issue could otherwise silently
 // drop them).
-func zeroInitPSRAM() {
+func zeroInitPSRAM() string {
 	spsram := uintptr(unsafe.Pointer(&_spsram))
 	epsram := uintptr(unsafe.Pointer(&_epsram))
 	if epsram <= spsram {
-		return
+		return ""
 	}
 
 	*(*uint32)(unsafe.Pointer(spsram)) = 0x5A5A5A5A
 	if *(*uint32)(unsafe.Pointer(spsram)) != 0x5A5A5A5A {
-		panic("PSRAM readback test failed")
+		return "PSRAM readback test failed"
 	}
 	*(*uint32)(unsafe.Pointer(spsram)) = 0
 	if *(*uint32)(unsafe.Pointer(spsram)) != 0 {
-		panic("PSRAM readback test failed")
+		return "PSRAM readback test failed"
 	}
 
 	for addr := spsram + 4; addr < epsram; addr += 4 {
 		*(*uint32)(unsafe.Pointer(addr)) = 0
 	}
+	return ""
 }

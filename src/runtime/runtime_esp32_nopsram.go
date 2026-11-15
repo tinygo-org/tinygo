@@ -3,4 +3,4 @@
 package runtime
 
 // initPSRAM is a no-op when PSRAM support is disabled.
-func initPSRAM() {}
+func initPSRAM() string { return "" }

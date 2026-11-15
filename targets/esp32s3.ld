@@ -196,7 +196,7 @@ SECTIONS
     {
         _spsram = ABSOLUTE(.);
         *(.psram .psram.*)
-        . = ALIGN(4);
+        . = ALIGN(16);
         _epsram = ABSOLUTE(.);
     } > PSRAM
 

@@ -2,12 +2,11 @@
 
 // Octal SPI (OPI) PSRAM support for ESP32-S3 (e.g. ESP32-S3-WROOM-1U-N16R8,
 // combo modules with in-package Octal PSRAM). Octal PSRAM uses 8 data
-// lines and a DTR (double transfer rate / DDR) protocol, unlike the 4-line
-// single-rate Quad PSRAM handled by runtime_esp32_psram_qspi.go; the two
-// are not interchangeable and use different GPIOs (Octal adds D4-D7+DQS
-// on GPIO33-37, on top of the CS1/D0-D3 pins shared with flash). Shared
-// linker symbols, MMU/ROM-call helpers, and the address map are
-// documented in runtime_esp32_psram.go.
+// lines and a DTR (double transfer rate / DDR) protocol, unlike 4-line
+// single-rate Quad PSRAM; the two are not interchangeable and use different
+// GPIOs (Octal adds D4-D7+DQS on GPIO33-37, on top of the CS1/D0-D3 pins
+// shared with flash). Shared linker symbols, MMU/ROM-call helpers, and the
+// address map are documented in runtime_esp32_psram.go.
 //
 // Unlike its own Quad PSRAM driver, ESP-IDF does not hand-roll the Octal
 // DTR command sequence in C -- it delegates entirely to a mask-ROM
@@ -121,7 +120,7 @@ func setPSRAMClockDivider(n, h, l uint32) {
 //  4. Read vendor ID (MR1) and density (MR2), validate and size the MMU window.
 //  5. Configure SPI0's cache-facing read/write command phases for Octal DTR.
 //  6. Map PSRAM into the MMU, zero-initialize .psram BSS.
-func initPSRAM() {
+func initPSRAM() string {
 	psramStart, _, psramMmuPagesCap := psramWindow()
 
 	// Enable SPI0/SPI1 peripheral clock and clear resets.
@@ -173,14 +172,14 @@ func initPSRAM() {
 	writePSRAMModeReg(0x0, mr0)
 
 	if !checkPSRAMConnected() {
-		panic("PSRAM init failed: sync read/write mismatch, chip not detected")
+		return "PSRAM init failed: sync read/write mismatch, chip not detected"
 	}
 
 	mr1 := readPSRAMModeReg(0x1) // vendor id
 	mr2 := readPSRAMModeReg(0x2) // density / dev id / gb
 	vendorID := mr1 & 0x1f
 	if vendorID != opiVendorIDAP && vendorID != opiVendorIDUnilc {
-		panic("PSRAM init failed: unrecognized vendor id")
+		return "PSRAM init failed: unrecognized vendor id"
 	}
 
 	// Density encoding (esp_psram_impl_octal.c:372-376): 0x1=4MB, 0x3=8MB,
@@ -204,6 +203,11 @@ func initPSRAM() {
 		if mmuPages > 256 {
 			mmuPages = 256 // 16MB
 		}
+	}
+
+	epsram := uintptr(unsafe.Pointer(&_epsram))
+	if epsram > psramStart && epsram-psramStart > uintptr(mmuPages)*65536 {
+		return "PSRAM init failed: .psram section exceeds detected chip size"
 	}
 
 	// Perform DQS / MSPI delay timing calibration to upgrade Octal PSRAM to
@@ -258,15 +262,24 @@ func initPSRAM() {
 
 	// Map PSRAM into the MMU: PSRAM physical page 0 at _psram_start, 64KB
 	// pages, fixed=0 (physical pages grow linearly with virtual pages).
-	if romCacheDbusMMUSet(mmuAccessSpiram, uint32(psramStart), 0, 64, uint32(mmuPages), 0) != 0 {
-		panic("PSRAM init failed: Cache_Dbus_MMU_Set error")
+	mmuErr := romCacheDbusMMUSet(mmuAccessSpiram, uint32(psramStart), 0, 64, uint32(mmuPages), 0)
+
+	// Re-enable DCache before checking mmuErr so any error string in .rodata
+	// is readable. Cache_Disable_DCache above already invalidated all tag memory.
+	romCacheEnableDCache(0)
+	if mmuErr != 0 {
+		return "PSRAM init failed: Cache_Dbus_MMU_Set error"
 	}
 
-	// Re-enable DCache. Cache_Disable_DCache above already invalidated all
-	// tag memory.
-	romCacheEnableDCache(0)
+	if err := zeroInitPSRAM(); err != "" {
+		return err
+	}
 
-	zeroInitPSRAM()
+	if psramEnd := psramStart + uintptr(mmuPages)*65536; psramEnd > epsram {
+		psramFreeStart = epsram
+		psramFreeLen = int(psramEnd - epsram)
+	}
+	return ""
 }
 
 //export rom_spi_flash_disable_cache

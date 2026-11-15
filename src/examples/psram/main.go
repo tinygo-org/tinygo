@@ -1,7 +1,7 @@
 package main
 
-// This example demonstrates how to use external PSRAM (Octal or Quad SPI) on
-// supported targets (e.g., -target=esp32s3-psram-qspi).
+// This example demonstrates how to use external PSRAM on supported targets
+// (e.g., -target=esp32s3-psram-octal).
 //
 // Variables placed in the `.psram` section via the `//go:section .psram`
 // pragma are stored in external PSRAM rather than internal SRAM.
@@ -9,6 +9,7 @@ package main
 
 import (
 	"fmt"
+	"machine"
 	"time"
 	"unsafe"
 )
@@ -24,6 +25,7 @@ func main() {
 	fmt.Println("=== PSRAM Example ===")
 	fmt.Printf("psramBuffer start address: 0x%X\n", uintptr(unsafe.Pointer(&psramBuffer[0])))
 	fmt.Printf("psramBuffer size:          %d bytes\n", len(psramBuffer))
+	fmt.Printf("Remaining machine.PSRAM(): %d bytes\n", len(machine.PSRAM()))
 
 	fmt.Println("Writing test pattern to PSRAM...")
 	for i := range psramBuffer {
