@@ -774,6 +774,10 @@ func hashmapStringDelete(m *hashmap, key string) {
 func valueInterfaceUnsafe(v reflectlite.Value) interface{}
 
 func hashmapFloat32Hash(ptr unsafe.Pointer, seed uintptr) uint32 {
+	if f := *(*float32)(ptr); f != f {
+		// NaN is never equal to itself, so give each one a random hash, as Go does.
+		return fastrand()
+	}
 	f := *(*uint32)(ptr)
 	if f == 0x80000000 {
 		// convert -0 to 0 for hashing
@@ -783,6 +787,10 @@ func hashmapFloat32Hash(ptr unsafe.Pointer, seed uintptr) uint32 {
 }
 
 func hashmapFloat64Hash(ptr unsafe.Pointer, seed uintptr) uint32 {
+	if f := *(*float64)(ptr); f != f {
+		// NaN is never equal to itself, so give each one a random hash, as Go does.
+		return fastrand()
+	}
 	f := *(*uint64)(ptr)
 	if f == 0x8000000000000000 {
 		// convert -0 to 0 for hashing
