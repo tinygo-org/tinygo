@@ -12,7 +12,7 @@ import "unsafe"
 // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
 func hash32(ptr unsafe.Pointer, n, seed uintptr) uint32 {
 	var result uint32 = 2166136261 // FNV offset basis
-	result *= uint32(seed)
+	result ^= uint32(seed)
 	for i := uintptr(0); i < n; i++ {
 		c := *(*uint8)(unsafe.Add(ptr, i))
 		result ^= uint32(c) // XOR with byte
@@ -24,7 +24,7 @@ func hash32(ptr unsafe.Pointer, n, seed uintptr) uint32 {
 // Also a FNV-1a hash.
 func hash64(ptr unsafe.Pointer, n, seed uintptr) uint64 {
 	var result uint64 = 14695981039346656037 // FNV offset basis
-	result *= uint64(seed)
+	result ^= uint64(seed)
 	for i := uintptr(0); i < n; i++ {
 		c := *(*uint8)(unsafe.Add(ptr, i))
 		result ^= uint64(c)     // XOR with byte
