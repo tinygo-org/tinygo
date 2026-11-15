@@ -7,7 +7,6 @@ package os_test
 import (
 	"fmt"
 	"io"
-	"os"
 	. "os"
 	"runtime"
 	"strings"
@@ -126,7 +125,7 @@ func TestSeek(t *testing.T) {
 		off, err := f.Seek(tt.in, tt.whence)
 		if off != tt.out || err != nil {
 			if e, ok := err.(*PathError); ok && e.Err == syscall.EINVAL && tt.out > 1<<32 && runtime.GOOS == "linux" {
-				mounts, _ := os.ReadFile("/proc/mounts")
+				mounts, _ := ReadFile("/proc/mounts")
 				if strings.Contains(string(mounts), "reiserfs") {
 					// Reiserfs rejects the big seeks.
 					t.Skipf("skipping test known to fail on reiserfs; https://golang.org/issue/91")
@@ -274,7 +273,7 @@ func TestWriteAt(t *testing.T) {
 		t.Fatalf("WriteAt 7: %d, %v", n, err)
 	}
 
-	b, err := os.ReadFile(f.Name())
+	b, err := ReadFile(f.Name())
 	if err != nil {
 		t.Fatalf("ReadFile %s: %v", f.Name(), err)
 	}
@@ -317,5 +316,13 @@ func TestWriteAtInAppendMode(t *testing.T) {
 	_, err = f.WriteAt([]byte(""), 1)
 	if err != ErrWriteAtInAppendMode {
 		t.Fatalf("f.WriteAt returned %v, expected %v", err, ErrWriteAtInAppendMode)
+	}
+}
+
+func TestNilProcessStateString(t *testing.T) {
+	var ps *ProcessState
+	s := ps.String()
+	if s != "<nil>" {
+		t.Errorf("(*ProcessState)(nil).String() = %q, want %q", s, "<nil>")
 	}
 }
