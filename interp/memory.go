@@ -170,7 +170,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 							calledValue := inst.CalledValue()
 							if !calledValue.IsAFunction().IsNil() {
 								functionName := calledValue.Name()
-								if functionName == "llvm.dbg.value" || strings.HasPrefix(functionName, "llvm.lifetime.") {
+								if functionName == "llvm.dbg.value" || functionName == "llvm.assume" || strings.HasPrefix(functionName, "llvm.lifetime.") {
 									continue
 								}
 							}

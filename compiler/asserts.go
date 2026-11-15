@@ -298,3 +298,16 @@ func (b *builder) extendInteger(value llvm.Value, valueType types.Type, targetTy
 	}
 	return value
 }
+
+// createLenCapAssume tells LLVM that len <= cap, which it cannot infer from
+// the separate len and cap values of a slice.
+func (b *builder) createLenCapAssume(oldLen, oldCap llvm.Value) {
+	if b.info.isNoBounds() {
+		return
+	}
+	assume := b.mod.NamedFunction("llvm.assume")
+	if assume.IsNil() {
+		assume = llvm.AddFunction(b.mod, "llvm.assume", llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.ctx.Int1Type()}, false))
+	}
+	b.CreateCall(assume.GlobalValueType(), assume, []llvm.Value{b.CreateICmp(llvm.IntULE, oldLen, oldCap, "")}, "")
+}

@@ -90,3 +90,10 @@ func SliceUint64(ptr *int, len uint64) []int {
 func SliceInt64(ptr *int, len int64) []int {
 	return unsafe.Slice(ptr, len)
 }
+
+func SliceAfterLenGuard(p []byte) []byte {
+	if len(p) >= 4 {
+		return p[:4]
+	}
+	return nil
+}
