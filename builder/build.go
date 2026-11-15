@@ -652,24 +652,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 				if err != nil {
 					return fmt.Errorf("failed to load bitcode file: %w", err)
 				}
-				// Resolve duplicate function definitions before linking.
-				// This can happen when a newer Go version adds a function
-				// body in a standard library package that was previously
-				// just a declaration provided by //go:linkname from the
-				// runtime. In that case, keep the existing (runtime)
-				// definition by weakening the new one's linkage so the
-				// LLVM linker discards it in favor of the existing one.
-				for fn := pkgMod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-					if fn.IsDeclaration() {
-						continue
-					}
-					existing := mod.NamedFunction(fn.Name())
-					if existing.IsNil() || existing.IsDeclaration() {
-						continue
-					}
-					fn.SetLinkage(llvm.LinkOnceODRLinkage)
-				}
-				err = linker.LinkModule(pkgMod)
+				err = linkPackageModule(linker, mod, pkgMod)
 				if err != nil {
 					return fmt.Errorf("failed to link module: %w", err)
 				}
@@ -1392,6 +1375,28 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 		return "", err
 	}
 	return outfile.Name(), outfile.Close()
+}
+
+// linkPackageModule links pkgMod into mod.
+//
+// Resolve duplicate function definitions before linking. This can happen when
+// a newer Go version adds a function body in a standard library package that
+// was previously just a declaration provided by //go:linkname from the
+// runtime. In that case, keep the existing (runtime) definition by weakening
+// the new one's linkage so the LLVM linker discards it in favor of the
+// existing one. Internal functions never clash, the linker renames them.
+func linkPackageModule(linker llvm.Linker, mod, pkgMod llvm.Module) error {
+	for fn := pkgMod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		if fn.IsDeclaration() || fn.Linkage() == llvm.InternalLinkage || fn.Linkage() == llvm.PrivateLinkage {
+			continue
+		}
+		existing := mod.NamedFunction(fn.Name())
+		if existing.IsNil() || existing.IsDeclaration() {
+			continue
+		}
+		fn.SetLinkage(llvm.LinkOnceODRLinkage)
+	}
+	return linker.LinkModule(pkgMod)
 }
 
 // optimizeProgram runs a series of optimizations and transformations that are
