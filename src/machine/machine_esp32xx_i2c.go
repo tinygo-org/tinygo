@@ -304,6 +304,10 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				reg = nil
 				break
 			}
+			if len(c.data) == 0 {
+				cmdIdx++
+				break
+			}
 			for ; count > 0 && c.head < len(c.data); count, c.head = count-1, c.head+1 {
 				i2c.Bus.DATA.Set(uint32(c.data[c.head]))
 			}
