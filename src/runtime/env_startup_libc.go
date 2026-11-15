@@ -1,4 +1,4 @@
-//go:build darwin || windows || wasip1 || (linux && !baremetal && !wasm_unknown && !wasip2 && !nintendoswitch)
+//go:build darwin || windows || wasip1 || (linux && !baremetal && !tinygo.wasm && !nintendoswitch)
 
 package runtime
 
