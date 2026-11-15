@@ -260,10 +260,9 @@ type ptrType struct {
 }
 
 type pointerCacheEntry struct {
-	elem       *RawType
-	typ        *RawType
-	allocation unsafe.Pointer
-	next       *pointerCacheEntry
+	elem *RawType
+	typ  *RawType
+	next *pointerCacheEntry
 }
 
 var pointerTypeCache atomic.Pointer[pointerCacheEntry]
@@ -503,8 +502,8 @@ func isLinkedPointerType(typ *RawType) bool {
 	return false
 }
 
-func loadOrStorePointerType(elem, typ *RawType, allocation unsafe.Pointer) *RawType {
-	entry := &pointerCacheEntry{elem: elem, typ: typ, allocation: allocation}
+func loadOrStorePointerType(elem, typ *RawType) *RawType {
+	entry := &pointerCacheEntry{elem: elem, typ: typ}
 	for {
 		head := pointerTypeCache.Load()
 		for existing := head; existing != nil; existing = existing.next {
@@ -517,17 +516,6 @@ func loadOrStorePointerType(elem, typ *RawType, allocation unsafe.Pointer) *RawT
 			return typ
 		}
 	}
-}
-
-func makePointerType(elem *RawType) (*RawType, unsafe.Pointer) {
-	allocation := new([unsafe.Sizeof(ptrType{}) + 3]byte)
-	address := (uintptr(unsafe.Pointer(allocation)) + 3) &^ 3
-	typ := (*ptrType)(unsafe.Pointer(address))
-	*typ = ptrType{
-		RawType: RawType{meta: uint8(Pointer) | flagComparable | flagIsBinary},
-		elem:    elem,
-	}
-	return &typ.RawType, unsafe.Pointer(allocation)
 }
 
 func isDynamicPointerType(typ *RawType) bool {
@@ -553,7 +541,7 @@ func pointerTo(t *RawType) *RawType {
 		return (*basicType)(unsafe.Pointer(t)).ptrTo
 	case Pointer:
 		if typ := loadLinkedPointerType(t); typ != nil {
-			return loadOrStorePointerType(t, typ, nil)
+			return loadOrStorePointerType(t, typ)
 		}
 
 		if tag := t.ptrtag(); tag < 3 &&
@@ -561,8 +549,11 @@ func pointerTo(t *RawType) *RawType {
 			return (*RawType)(unsafe.Add(unsafe.Pointer(t), 1))
 		}
 
-		typ, allocation := makePointerType(t)
-		return loadOrStorePointerType(t, typ, allocation)
+		typ := &ptrType{
+			RawType: RawType{meta: uint8(Pointer) | flagComparable | flagIsBinary},
+			elem:    t,
+		}
+		return loadOrStorePointerType(t, &typ.RawType)
 	case Interface:
 		return (*interfaceType)(unsafe.Pointer(t)).ptrTo
 	case Func:
