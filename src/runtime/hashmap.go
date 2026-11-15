@@ -796,6 +796,9 @@ func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 	if x.RawType() == nil {
 		return 0 // nil interface
 	}
+	if !x.RawType().Comparable() {
+		panicUnhashable(x.RawType())
+	}
 
 	value := (*_interface)(unsafe.Pointer(&itf)).value
 	ptr := value
@@ -844,9 +847,13 @@ func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 		}
 		return hash
 	default:
-		runtimePanic(errUncomparable)
+		panicUnhashable(x.RawType())
 		return 0 // unreachable
 	}
+}
+
+func panicUnhashable(t *reflectlite.RawType) {
+	runtimePanic(plainError(runtimeErrorPrefix + "hash of unhashable type " + t.String()))
 }
 
 func hashmapInterfacePtrHash(iptr unsafe.Pointer, size uintptr, seed uintptr) uint32 {
