@@ -259,14 +259,6 @@ type ptrType struct {
 	methods   methodSet // only present when numMethod & numMethodHasMethodSet != 0
 }
 
-type pointerCacheEntry struct {
-	elem *RawType
-	typ  *RawType
-	next *pointerCacheEntry
-}
-
-var pointerTypeCache atomic.Pointer[pointerCacheEntry]
-
 //go:extern internal/reflectlite.pointerTypeLinks
 var pointerTypeLinks **RawType
 
@@ -475,15 +467,6 @@ func SliceOf(t Type) Type {
 	return loadOrStoreCachedType(key, &typ.RawType)
 }
 
-func loadPointerType(elem *RawType) *RawType {
-	for entry := pointerTypeCache.Load(); entry != nil; entry = entry.next {
-		if entry.elem == elem {
-			return entry.typ
-		}
-	}
-	return nil
-}
-
 func loadLinkedPointerType(elem *RawType) *RawType {
 	for _, typ := range unsafe.Slice(pointerTypeLinks, pointerTypeLinksLen) {
 		if (*ptrType)(unsafe.Pointer(typ)).elem == elem {
@@ -502,25 +485,9 @@ func isLinkedPointerType(typ *RawType) bool {
 	return false
 }
 
-func loadOrStorePointerType(elem, typ *RawType) *RawType {
-	entry := &pointerCacheEntry{elem: elem, typ: typ}
-	for {
-		head := pointerTypeCache.Load()
-		for existing := head; existing != nil; existing = existing.next {
-			if existing.elem == elem {
-				return existing.typ
-			}
-		}
-		entry.next = head
-		if pointerTypeCache.CompareAndSwap(head, entry) {
-			return typ
-		}
-	}
-}
-
 func isDynamicPointerType(typ *RawType) bool {
-	for entry := pointerTypeCache.Load(); entry != nil; entry = entry.next {
-		if entry.typ == typ {
+	for entry := lookupCache.Load(); entry != nil; entry = entry.next {
+		if entry.key.kind == Pointer && entry.typ == typ {
 			return true
 		}
 	}
@@ -528,10 +495,6 @@ func isDynamicPointerType(typ *RawType) bool {
 }
 
 func pointerTo(t *RawType) *RawType {
-	if typ := loadPointerType(t); typ != nil {
-		return typ
-	}
-
 	if t.isNamed() {
 		return (*elemType)(unsafe.Pointer(t)).ptrTo
 	}
@@ -540,10 +503,17 @@ func pointerTo(t *RawType) *RawType {
 	case Bool, Int, Int8, Int16, Int32, Int64, Uint, Uint8, Uint16, Uint32, Uint64, Uintptr, Complex64, Complex128, Float32, Float64, String, UnsafePointer:
 		return (*basicType)(unsafe.Pointer(t)).ptrTo
 	case Pointer:
-		if typ := loadLinkedPointerType(t); typ != nil {
-			return loadOrStorePointerType(t, typ)
+		key := cacheKey{kind: Pointer, t1: t}
+		if typ := loadCachedType(key); typ != nil {
+			return typ
 		}
 
+		if typ := loadLinkedPointerType(t); typ != nil {
+			return loadOrStoreCachedType(key, typ)
+		}
+
+		// Tag n marks n+1 levels of pointers. compileopts.MaxTypePointerDepth levels
+		// and deeper use a full descriptor, see getTypeCode in compiler/interface.go.
 		if tag := t.ptrtag(); tag < 3 &&
 			(tag != 0 || (!isDynamicPointerType(t) && !isLinkedPointerType(t))) {
 			return (*RawType)(unsafe.Add(unsafe.Pointer(t), 1))
@@ -553,7 +523,7 @@ func pointerTo(t *RawType) *RawType {
 			RawType: RawType{meta: uint8(Pointer) | flagComparable | flagIsBinary},
 			elem:    t,
 		}
-		return loadOrStorePointerType(t, &typ.RawType)
+		return loadOrStoreCachedType(key, &typ.RawType)
 	case Interface:
 		return (*interfaceType)(unsafe.Pointer(t)).ptrTo
 	case Func:
