@@ -51,6 +51,9 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
   ret i32 %0
 }
 
+; Function Attrs: nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: write)
+declare void @llvm.assume(i1 noundef) #2
+
 ; Function Attrs: nounwind
 define hidden i32 @main.countUp(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
@@ -71,5 +74,44 @@ for.done:                                         ; preds = %for.loop
   ret i32 %0
 }
 
+; Function Attrs: nounwind
+define hidden i32 @main.rangeIntSum(ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, i32 %n, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp sgt i32 %n, 0
+  br i1 %0, label %rangeint.body, label %rangeint.done
+
+rangeint.body:                                    ; preds = %lookup.next, %entry
+  %1 = phi i32 [ 0, %entry ], [ %7, %lookup.next ]
+  %2 = phi i32 [ 0, %entry ], [ %8, %lookup.next ]
+  %3 = icmp ult i32 %2, %n
+  call void @llvm.assume(i1 %3)
+  %.not = icmp ult i32 %2, %s.len
+  br i1 %.not, label %lookup.next, label %lookup.throw
+
+lookup.next:                                      ; preds = %rangeint.body
+  %4 = getelementptr inbounds i8, ptr %s.data, i32 %2
+  %5 = load i8, ptr %4, align 1
+  %6 = zext i8 %5 to i32
+  %7 = add i32 %1, %6
+  %8 = add i32 %2, 1
+  %9 = icmp slt i32 %8, %n
+  br i1 %9, label %rangeint.body, label %rangeint.done
+
+rangeint.done:                                    ; preds = %lookup.next, %entry
+  %10 = phi i32 [ 0, %entry ], [ %7, %lookup.next ]
+  ret i32 %10
+
+lookup.throw:                                     ; preds = %rangeint.body
+  call void @runtime.lookupPanic(ptr undef) #3
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %lookup.throw
+  ret i32 undef
+}
+
+declare void @runtime.lookupPanic(ptr) #0
+
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
+attributes #2 = { nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: write) }
+attributes #3 = { nounwind }
