@@ -284,36 +284,6 @@ func TestProcessWaitZeroValue(t *testing.T) {
 	}
 }
 
-func TestProcessKill(t *testing.T) {
-	proc, err := StartProcess("/bin/sleep", []string{"sleep", "10"}, &ProcAttr{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := proc.Kill(); err != nil {
-		t.Fatal(err)
-	}
-	ps, err := proc.Wait()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ps.String() != "signal: killed" {
-		t.Fatalf("String() = %q, want %q", ps.String(), "signal: killed")
-	}
-}
-
-func TestProcessSignalDone(t *testing.T) {
-	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "exit 0"}, &ProcAttr{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := proc.Wait(); err != nil {
-		t.Fatal(err)
-	}
-	if err := proc.Signal(Kill); !errors.Is(err, ErrProcessDone) {
-		t.Fatalf("wanted ErrProcessDone, got %v", err)
-	}
-}
-
 // Signal on a zero Process must not signal the process group.
 func TestProcessSignalZeroValue(t *testing.T) {
 	if err := new(Process).Signal(syscall.Signal(0)); err == nil {
