@@ -52,6 +52,7 @@ TEST_PACKAGES_FAST = \
 	hash/adler32 \
 	hash/crc64 \
 	hash/fnv \
+	hash/maphash \
 	html \
 	image \
 	internal/itoa \
