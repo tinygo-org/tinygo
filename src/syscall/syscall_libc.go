@@ -1,4 +1,4 @@
-//go:build js || nintendoswitch || wasip1 || wasip2
+//go:build js || nintendoswitch || tinygo.wasi
 
 package syscall
 

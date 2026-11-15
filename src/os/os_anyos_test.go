@@ -1,4 +1,4 @@
-//go:build windows || darwin || (linux && !baremetal) || wasip1 || wasip2
+//go:build windows || darwin || (linux && !baremetal) || tinygo.wasi
 
 package os_test
 

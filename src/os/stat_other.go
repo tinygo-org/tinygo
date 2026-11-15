@@ -1,4 +1,4 @@
-//go:build baremetal || (tinygo.wasm && !wasip1 && !wasip2) || nintendoswitch
+//go:build baremetal || (tinygo.wasm && !tinygo.wasi) || nintendoswitch
 
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

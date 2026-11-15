@@ -1,4 +1,4 @@
-//go:build !js && !wasip1 && !wasip2 && !windows
+//go:build !js && !tinygo.wasi && !windows
 
 package syscall
 
