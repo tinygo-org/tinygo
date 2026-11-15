@@ -7,12 +7,25 @@ package os_test
 import (
 	"fmt"
 	"io"
+	"log"
 	. "os"
 	"runtime"
 	"strings"
 	"syscall"
 	"testing"
 )
+
+func TestMain(m *testing.M) {
+	if Getenv("GO_OS_TEST_DRAIN_STDIN") == "1" {
+		Stdout.Close()
+		io.Copy(io.Discard, Stdin)
+		Exit(0)
+	}
+
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	Exit(m.Run())
+}
 
 // localTmp returns a local temporary directory not on NFS.
 func localTmp() string {

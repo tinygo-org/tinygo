@@ -8,12 +8,27 @@ package os_test
 
 import (
 	"errors"
+	"internal/testenv"
 	"math"
 	. "os"
 	"runtime"
 	"syscall"
 	"testing"
 )
+
+func TestErrProcessDone(t *testing.T) {
+	testenv.MustHaveGoBuild(t)
+	t.Parallel()
+
+	p, err := StartProcess(testenv.GoToolPath(t), []string{"go"}, &ProcAttr{})
+	if err != nil {
+		t.Fatalf("starting test process: %v", err)
+	}
+	p.Wait()
+	if got := p.Signal(Kill); got != ErrProcessDone {
+		t.Errorf("got %v want %v", got, ErrProcessDone)
+	}
+}
 
 // Lookup of a process that does not exist at time of lookup.
 func TestProcessAlreadyDone(t *testing.T) {
@@ -39,6 +54,26 @@ func TestProcessAlreadyDone(t *testing.T) {
 
 	if err := p.Release(); err != nil {
 		t.Errorf("Release() got err %v, want nil", err)
+	}
+}
+
+func TestUNIXProcessAlive(t *testing.T) {
+	testenv.MustHaveGoBuild(t)
+	t.Parallel()
+
+	p, err := StartProcess(testenv.GoToolPath(t), []string{"sleep", "1"}, &ProcAttr{})
+	if err != nil {
+		t.Skipf("starting test process: %v", err)
+	}
+	defer p.Kill()
+
+	proc, err := FindProcess(p.Pid)
+	if err != nil {
+		t.Errorf("OS reported error for running process: %v", err)
+	}
+	err = proc.Signal(syscall.Signal(0))
+	if err != nil {
+		t.Errorf("OS reported error for running process: %v", err)
 	}
 }
 
