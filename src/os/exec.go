@@ -90,6 +90,7 @@ func (p *ProcessState) ExitCode() int {
 
 type Process struct {
 	Pid int
+	processState
 }
 
 // StartProcess starts a new process with the program, arguments and attributes specified by name, argv and attr.
@@ -106,12 +107,14 @@ func (p *Process) Wait() (*ProcessState, error) {
 	return p.wait()
 }
 
+// Kill causes the Process to exit immediately.
 func (p *Process) Kill() error {
-	return ErrNotImplemented
+	return p.Signal(Kill)
 }
 
+// Signal sends a signal to the Process.
 func (p *Process) Signal(sig Signal) error {
-	return ErrNotImplemented
+	return p.signal(sig)
 }
 
 func Ignore(sig ...Signal) {

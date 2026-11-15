@@ -283,3 +283,61 @@ func TestProcessWaitZeroValue(t *testing.T) {
 		t.Fatalf("ExitCode = %d, want 7", ps.ExitCode())
 	}
 }
+
+func TestProcessKill(t *testing.T) {
+	proc, err := StartProcess("/bin/sleep", []string{"sleep", "10"}, &ProcAttr{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := proc.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	ps, err := proc.Wait()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ps.String() != "signal: killed" {
+		t.Fatalf("String() = %q, want %q", ps.String(), "signal: killed")
+	}
+}
+
+func TestProcessSignalDone(t *testing.T) {
+	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "exit 0"}, &ProcAttr{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := proc.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if err := proc.Signal(Kill); !errors.Is(err, ErrProcessDone) {
+		t.Fatalf("wanted ErrProcessDone, got %v", err)
+	}
+}
+
+// Signal on a zero Process must not signal the process group.
+func TestProcessSignalZeroValue(t *testing.T) {
+	if err := new(Process).Signal(syscall.Signal(0)); err == nil {
+		t.Fatal("wanted an error from Signal on a zero Process")
+	}
+}
+
+// Signal while Wait reaps the child must not reach another process.
+func TestProcessSignalDuringWait(t *testing.T) {
+	for i := 0; i < 20; i++ {
+		proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "exit 0"}, &ProcAttr{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error)
+		go func() {
+			_, err := proc.Wait()
+			done <- err
+		}()
+		if err := proc.Signal(syscall.Signal(0)); err != nil && !errors.Is(err, ErrProcessDone) {
+			t.Fatal(err)
+		}
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+}

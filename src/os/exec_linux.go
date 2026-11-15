@@ -9,7 +9,10 @@ package os
 import (
 	"errors"
 	"runtime"
+	"sync"
+	"sync/atomic"
 	"syscall"
+	"unsafe"
 )
 
 // The only signal values guaranteed to be present in the os package on all
@@ -21,6 +24,12 @@ var (
 	Interrupt Signal = syscall.SIGINT
 	Kill      Signal = syscall.SIGKILL
 )
+
+// processState stops Signal from reaching a reused pid after Wait reaps the child.
+type processState struct {
+	done  atomic.Bool
+	sigMu sync.RWMutex
+}
 
 // Keep compatible with golang and always succeed and return new proc with pid on Linux.
 func findProcess(pid int) (*Process, error) {
@@ -40,6 +49,13 @@ func (p *Process) wait() (*ProcessState, error) {
 	if p.Pid <= 0 {
 		return nil, errors.New("os: process not initialized")
 	}
+	if err := p.blockUntilWaitable(); err != nil {
+		return nil, err
+	}
+	p.done.Store(true)
+	p.sigMu.Lock()
+	p.sigMu.Unlock()
+
 	var status syscall.WaitStatus
 	pid, err := syscall.Wait4(p.Pid, &status, 0, nil)
 	for err == syscall.EINTR {
@@ -49,6 +65,50 @@ func (p *Process) wait() (*ProcessState, error) {
 		return nil, NewSyscallError("wait", err)
 	}
 	return &ProcessState{pid: pid, status: status}, nil
+}
+
+// blockUntilWaitable waits for the child to exit but leaves it for wait4 to reap.
+func (p *Process) blockUntilWaitable() error {
+	const _P_PID = 1
+	var siginfo [16]uint64
+	for {
+		_, _, errno := syscall.Syscall6(syscall.SYS_WAITID, _P_PID, uintptr(p.Pid), uintptr(unsafe.Pointer(&siginfo[0])), syscall.WEXITED|syscall.WNOWAIT, 0, 0)
+		switch errno {
+		case 0:
+			return nil
+		case syscall.EINTR:
+			continue
+		default:
+			return NewSyscallError("waitid", errno)
+		}
+	}
+}
+
+func (p *Process) signal(sig Signal) error {
+	s, ok := sig.(syscall.Signal)
+	if !ok {
+		return errors.New("os: unsupported signal type")
+	}
+	if p.Pid == -1 {
+		return errors.New("os: process already released")
+	}
+	// kill with a pid of 0 or less signals a process group, see kill(2).
+	if p.Pid <= 0 {
+		return errors.New("os: process not initialized")
+	}
+
+	p.sigMu.RLock()
+	defer p.sigMu.RUnlock()
+	if p.done.Load() {
+		return ErrProcessDone
+	}
+	if err := syscall.Kill(p.Pid, s); err != nil {
+		if err == syscall.ESRCH {
+			return ErrProcessDone
+		}
+		return err
+	}
+	return nil
 }
 
 // forkExec starts argv0 with posix_spawn.
