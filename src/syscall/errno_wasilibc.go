@@ -1,4 +1,4 @@
-//go:build wasip1 || wasip2 || js
+//go:build tinygo.wasi || js
 
 package syscall
 

@@ -1,4 +1,4 @@
-//go:build !baremetal && !js && !wasip1 && !wasip2
+//go:build !baremetal && !js && !tinygo.wasi
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

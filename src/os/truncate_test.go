@@ -1,4 +1,4 @@
-//go:build darwin || (linux && !baremetal && !js && !wasi)
+//go:build darwin || (linux && !baremetal && !js && !tinygo.wasi)
 
 // Copyright 2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

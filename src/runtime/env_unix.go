@@ -1,4 +1,4 @@
-//go:build linux || darwin || wasip1 || wasip2
+//go:build linux || darwin || tinygo.wasi
 
 package runtime
 

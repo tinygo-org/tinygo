@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build darwin || linux || wasip1 || wasip2
+//go:build darwin || linux || tinygo.wasi
 
 package os_test
 
