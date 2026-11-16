@@ -28,11 +28,12 @@ tinygo_startTask:
     // Branch to the "goroutine start" function.
     callq *%r12
 
-    // After return, exit this goroutine. This is a tail call.
+    // After return, exit this goroutine. Use a call so tinygo_task_exit
+    // starts with the stack alignment required by the ABI.
     #ifdef __MACH__
-    jmp _tinygo_task_exit
+    callq _tinygo_task_exit
     #else
-    jmp tinygo_task_exit
+    callq tinygo_task_exit
     #endif
     .cfi_endproc
 
