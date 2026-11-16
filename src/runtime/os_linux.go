@@ -1,4 +1,4 @@
-//go:build !baremetal && !nintendoswitch && !wasm_unknown && !wasip2
+//go:build !baremetal && !nintendoswitch && !tinygo.wasm
 
 package runtime
 
@@ -7,6 +7,8 @@ package runtime
 
 import (
 	"internal/byteorder"
+	"internal/task"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -89,4 +91,263 @@ func fcntl(fd int32, cmd int32, arg int32) (ret int32, errno int32) {
 	ret = int32(libc_fcntl(int(fd), int(cmd), int(arg)))
 	errno = *libc_errno_location()
 	return
+}
+
+const (
+	pollNoError = iota
+	pollErrClosing
+	pollErrTimeout
+	pollErrNotPollable
+)
+
+type pollNode struct {
+	fd        int32
+	rwakefd   int32
+	wwakefd   int32
+	closing   atomic.Bool
+	rdeadline atomic.Int64
+	wdeadline atomic.Int64
+	nextFree  uintptr
+}
+
+var (
+	pollMu        task.PMutex
+	pollEpfd      int32
+	pollEpfdReady bool
+	pollNodes     []*pollNode
+	pollFreeHead  uintptr
+)
+
+//export tinygo_poll_epoll_create
+func tinygo_poll_epoll_create() int32
+
+//export tinygo_poll_can_poll
+func tinygo_poll_can_poll(epfd int32, fd int32) int32
+
+//export tinygo_poll_eventfd
+func tinygo_poll_eventfd() int32
+
+//export tinygo_poll_wake
+func tinygo_poll_wake(wakefd int32)
+
+//export tinygo_poll_close
+func tinygo_poll_close(wakefd int32)
+
+//export tinygo_poll_wait
+func tinygo_poll_wait(fd int32, wakefd int32, mode int32, timeoutNs int64) int32
+
+func getPollNode(ctx uintptr) *pollNode {
+	if ctx == 0 {
+		return nil
+	}
+	pollMu.Lock()
+	node := pollNodes[ctx-1]
+	pollMu.Unlock()
+	return node
+}
+
+//go:linkname poll_runtime_pollServerInit internal/poll.runtime_pollServerInit
+func poll_runtime_pollServerInit() {
+}
+
+//go:linkname poll_runtime_pollOpen internal/poll.runtime_pollOpen
+func poll_runtime_pollOpen(fd uintptr) (uintptr, int) {
+	pollMu.Lock()
+	if !pollEpfdReady {
+		epfd := tinygo_poll_epoll_create()
+		if epfd < 0 {
+			errno := int(*libc_errno_location())
+			pollMu.Unlock()
+			return 0, errno
+		}
+		pollEpfd = epfd
+		pollEpfdReady = true
+	}
+	if errno := tinygo_poll_can_poll(pollEpfd, int32(fd)); errno != 0 {
+		pollMu.Unlock()
+		return 0, int(errno)
+	}
+	pollMu.Unlock()
+
+	rwakefd := tinygo_poll_eventfd()
+	if rwakefd < 0 {
+		return 0, int(*libc_errno_location())
+	}
+	wwakefd := tinygo_poll_eventfd()
+	if wwakefd < 0 {
+		errno := int(*libc_errno_location())
+		tinygo_poll_close(rwakefd)
+		return 0, errno
+	}
+	pollMu.Lock()
+	var ctx uintptr
+	var node *pollNode
+	if pollFreeHead != 0 {
+		ctx = pollFreeHead
+		node = pollNodes[ctx-1]
+		pollFreeHead = node.nextFree
+	} else {
+		node = &pollNode{}
+		pollNodes = append(pollNodes, node)
+		ctx = uintptr(len(pollNodes))
+	}
+	node.fd = int32(fd)
+	node.rwakefd = rwakefd
+	node.wwakefd = wwakefd
+	node.closing.Store(false)
+	node.rdeadline.Store(0)
+	node.wdeadline.Store(0)
+	node.nextFree = 0
+	pollMu.Unlock()
+	return ctx, 0
+}
+
+//go:linkname poll_runtime_pollClose internal/poll.runtime_pollClose
+func poll_runtime_pollClose(ctx uintptr) {
+	if ctx == 0 {
+		return
+	}
+	pollMu.Lock()
+	node := pollNodes[ctx-1]
+	rwakefd := node.rwakefd
+	wwakefd := node.wwakefd
+	node.rwakefd = -1
+	node.wwakefd = -1
+	node.fd = -1
+	node.nextFree = pollFreeHead
+	pollFreeHead = ctx
+	pollMu.Unlock()
+	if rwakefd >= 0 {
+		tinygo_poll_close(rwakefd)
+	}
+	if wwakefd >= 0 {
+		tinygo_poll_close(wwakefd)
+	}
+}
+
+func pollCheckDeadline(node *pollNode, mode int) (int64, bool) {
+	var d int64
+	if mode == 'w' {
+		d = node.wdeadline.Load()
+	} else {
+		d = node.rdeadline.Load()
+	}
+	if d < 0 {
+		return 0, true
+	}
+	if d > 0 {
+		rem := d - nanotime()
+		if rem <= 0 {
+			return 0, true
+		}
+		return rem, false
+	}
+	return -1, false
+}
+
+//go:linkname poll_runtime_pollReset internal/poll.runtime_pollReset
+func poll_runtime_pollReset(ctx uintptr, mode int) int {
+	node := getPollNode(ctx)
+	if node == nil {
+		return pollNoError
+	}
+	if node.closing.Load() {
+		return pollErrClosing
+	}
+	if _, expired := pollCheckDeadline(node, mode); expired {
+		return pollErrTimeout
+	}
+	return pollNoError
+}
+
+//go:linkname poll_runtime_pollWait internal/poll.runtime_pollWait
+func poll_runtime_pollWait(ctx uintptr, mode int) int {
+	node := getPollNode(ctx)
+	if node == nil {
+		return pollNoError
+	}
+	wakefd := node.rwakefd
+	if mode == 'w' {
+		wakefd = node.wwakefd
+	}
+	for {
+		if node.closing.Load() {
+			return pollErrClosing
+		}
+		timeoutNs, expired := pollCheckDeadline(node, mode)
+		if expired {
+			return pollErrTimeout
+		}
+		waitNs := timeoutNs
+		if hasScheduler {
+			waitNs = 0
+		}
+		res := tinygo_poll_wait(node.fd, wakefd, int32(mode), waitNs)
+		if res == 0 {
+			if node.closing.Load() {
+				return pollErrClosing
+			}
+			return pollNoError
+		}
+		if hasScheduler && res == 2 {
+			sleepDur := int64(1_000_000)
+			if timeoutNs > 0 && timeoutNs < sleepDur {
+				sleepDur = timeoutNs
+			}
+			sleep(sleepDur)
+		}
+	}
+}
+
+//go:linkname poll_runtime_pollWaitCanceled internal/poll.runtime_pollWaitCanceled
+func poll_runtime_pollWaitCanceled(ctx uintptr, mode int) {
+}
+
+//go:linkname poll_runtime_pollSetDeadline internal/poll.runtime_pollSetDeadline
+func poll_runtime_pollSetDeadline(ctx uintptr, d int64, mode int) {
+	node := getPollNode(ctx)
+	if node == nil {
+		return
+	}
+	if d > 0 {
+		d += nanotime()
+		if d <= 0 {
+			d = 1<<63 - 1
+		}
+	}
+	if mode == 'r' || mode == 'r'+'w' {
+		node.rdeadline.Store(d)
+		tinygo_poll_wake(node.rwakefd)
+	}
+	if mode == 'w' || mode == 'r'+'w' {
+		node.wdeadline.Store(d)
+		tinygo_poll_wake(node.wwakefd)
+	}
+}
+
+//go:linkname poll_runtime_pollUnblock internal/poll.runtime_pollUnblock
+func poll_runtime_pollUnblock(ctx uintptr) {
+	node := getPollNode(ctx)
+	if node == nil {
+		return
+	}
+	node.closing.Store(true)
+	tinygo_poll_wake(node.rwakefd)
+	tinygo_poll_wake(node.wwakefd)
+}
+
+//go:linkname poll_runtime_isPollServerDescriptor internal/poll.runtime_isPollServerDescriptor
+func poll_runtime_isPollServerDescriptor(fd uintptr) bool {
+	pollMu.Lock()
+	defer pollMu.Unlock()
+	if pollEpfdReady && uintptr(pollEpfd) == fd {
+		return true
+	}
+	for _, node := range pollNodes {
+		if (node.rwakefd >= 0 && uintptr(node.rwakefd) == fd) ||
+			(node.wwakefd >= 0 && uintptr(node.wwakefd) == fd) {
+			return true
+		}
+	}
+	return false
 }

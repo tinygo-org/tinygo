@@ -145,3 +145,87 @@ void tinygo_register_fatal_signals(void) {
 	sigaction(SIGILL, &act, NULL);
 	sigaction(SIGSEGV, &act, NULL);
 }
+
+#ifdef __linux__
+#include <errno.h>
+#include <poll.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <time.h>
+
+int32_t tinygo_poll_epoll_create(void) {
+	return (int32_t)epoll_create1(EPOLL_CLOEXEC);
+}
+
+int32_t tinygo_poll_can_poll(int32_t epfd, int32_t fd) {
+	struct epoll_event ev;
+	memset(&ev, 0, sizeof(ev));
+	ev.events = EPOLLIN;
+	if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) < 0) {
+		if (errno == ELOOP || errno == EEXIST) {
+			return 0;
+		}
+		return errno;
+	}
+	epoll_ctl(epfd, EPOLL_CTL_DEL, fd, &ev);
+	return 0;
+}
+
+int32_t tinygo_poll_eventfd(void) {
+	return (int32_t)eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+}
+
+void tinygo_poll_wake(int32_t wakefd) {
+	uint64_t val = 1;
+	ssize_t r;
+	do {
+		r = write(wakefd, &val, sizeof(val));
+	} while (r < 0 && errno == EINTR);
+}
+
+void tinygo_poll_close(int32_t wakefd) {
+	close(wakefd);
+}
+
+int32_t tinygo_poll_wait(int32_t fd, int32_t wakefd, int32_t mode, int64_t timeout_ns) {
+	struct pollfd fds[2];
+	fds[0].fd = fd;
+	fds[0].events = (mode == 'w') ? POLLOUT : (POLLIN | POLLRDHUP);
+	fds[0].revents = 0;
+	fds[1].fd = wakefd;
+	fds[1].events = POLLIN;
+	fds[1].revents = 0;
+
+	struct timespec ts;
+	struct timespec *pts = NULL;
+	if (timeout_ns >= 0) {
+		const int64_t max_ns = 86400LL * 1000000000LL;
+		if (timeout_ns > max_ns) {
+			timeout_ns = max_ns;
+		}
+		ts.tv_sec = timeout_ns / 1000000000LL;
+		ts.tv_nsec = timeout_ns % 1000000000LL;
+		pts = &ts;
+	}
+	int r = ppoll(fds, 2, pts, NULL);
+	if (r < 0) {
+		if (errno == EINTR || errno == EAGAIN) {
+			return -1;
+		}
+		return 0;
+	}
+	if (r == 0) {
+		return 2;
+	}
+	if (fds[1].revents != 0) {
+		uint64_t val;
+		while (read(wakefd, &val, sizeof(val)) > 0) {
+		}
+		return 1;
+	}
+	if (fds[0].revents != 0) {
+		return 0;
+	}
+	return -1;
+}
+#endif

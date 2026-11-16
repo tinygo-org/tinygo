@@ -9,6 +9,7 @@ package os
 import (
 	"internal/byteorder"
 	"io"
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -29,6 +30,9 @@ func (d *dirInfo) close() {
 }
 
 func (f *File) readdir(n int, mode readdirMode) (names []string, dirents []DirEntry, infos []FileInfo, err error) {
+	if f == nil {
+		return nil, nil, nil, ErrInvalid
+	}
 	// If this file has no dirinfo, create one.
 	if f.dirinfo == nil {
 		f.dirinfo = new(dirInfo)
@@ -53,9 +57,11 @@ func (f *File) readdir(n int, mode readdirMode) (names []string, dirents []DirEn
 		if d.bufp >= d.nbuf {
 			d.bufp = 0
 			var errno error
-			d.nbuf, errno = syscall.ReadDirent(syscallFd(f.handle.(unixFileHandle)), d.buf[:])
+			d.nbuf, errno = f.pfd.fd.ReadDirent(d.buf[:])
+			runtime.KeepAlive(f)
+			errno = mapPollErr(errno)
 			if d.nbuf < 0 {
-				errno = handleSyscallError(errno)
+				d.nbuf = 0
 			}
 			if errno != nil {
 				return names, dirents, infos, &PathError{Op: "readdirent", Path: f.name, Err: errno}

@@ -170,6 +170,9 @@ func Truncate(filename string, size int64) (err error) {
 
 // Truncate is unsupported on this system.
 func (f *File) Truncate(size int64) (err error) {
+	if f == nil {
+		return ErrInvalid
+	}
 	if f.handle == nil {
 		return ErrClosed
 	}
