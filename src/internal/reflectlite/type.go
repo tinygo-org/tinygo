@@ -569,7 +569,7 @@ func (t *RawType) String() string {
 		numIn := int(ft.numIn)
 		numOut := int(ft.numOut &^ funcTypeVariadic)
 		variadic := ft.numOut&funcTypeVariadic != 0
-		inOut := (*[1 << 16]*RawType)(unsafe.Pointer(&ft.inOut))
+		inOut := unsafe.Slice((**RawType)(unsafe.Pointer(&ft.inOut)), numIn+numOut)
 		s := "func("
 		for i := 0; i < numIn; i++ {
 			if i > 0 {
