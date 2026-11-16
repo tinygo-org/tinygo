@@ -24,6 +24,11 @@ entry:
   ret void
 }
 
+define void @POWER_CLOCK_IRQHandler() {
+  call void @"(*machine.UART).handleInterrupt$bound"(i32 0, ptr @machine.UART0)
+  ret void
+}
+
 define void @UARTE0_UART0_IRQHandler() {
   call void @"(*machine.UART).handleInterrupt$bound"(i32 2, ptr @machine.UART0)
   ret void

@@ -237,12 +237,10 @@ func AppendToGlobal(mod llvm.Module, globalName string, values ...llvm.Value) {
 	// Read the existing values in the llvm.used array (if it exists).
 	var usedValues []llvm.Value
 	if used := mod.NamedGlobal(globalName); !used.IsNil() {
-		builder := mod.Context().NewBuilder()
-		defer builder.Dispose()
 		usedInitializer := used.Initializer()
 		num := usedInitializer.Type().ArrayLength()
 		for i := range num {
-			usedValues = append(usedValues, builder.CreateExtractValue(usedInitializer, i, ""))
+			usedValues = append(usedValues, usedInitializer.Operand(i))
 		}
 		used.EraseFromParentAsGlobal()
 	}
@@ -270,12 +268,10 @@ func RemoveFromGlobal(mod llvm.Module, globalName string, remove func(llvm.Value
 		return
 	}
 
-	builder := mod.Context().NewBuilder()
-	defer builder.Dispose()
 	initializer := global.Initializer()
 	var kept []llvm.Value
 	for i := 0; i < initializer.Type().ArrayLength(); i++ {
-		value := builder.CreateExtractValue(initializer, i, "")
+		value := initializer.Operand(i)
 		base := value
 		for !base.IsAConstantExpr().IsNil() && base.OperandsCount() == 1 {
 			base = base.Operand(0)
@@ -298,12 +294,10 @@ func RemoveGlobalReferences(mod llvm.Module, targetGlobal, referenceGlobal strin
 		return
 	}
 
-	builder := mod.Context().NewBuilder()
-	defer builder.Dispose()
 	initializer := references.Initializer()
 	values := make(map[llvm.Value]int, initializer.Type().ArrayLength())
 	for i := 0; i < initializer.Type().ArrayLength(); i++ {
-		value := builder.CreateExtractValue(initializer, i, "")
+		value := initializer.Operand(i)
 		for !value.IsAConstantExpr().IsNil() && value.OperandsCount() == 1 {
 			value = value.Operand(0)
 		}
