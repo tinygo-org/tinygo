@@ -1,4 +1,4 @@
-//go:build !wasip1
+//go:build !wasip1 && (!linux || baremetal || tinygo.wasm || nintendoswitch)
 
 package os
 

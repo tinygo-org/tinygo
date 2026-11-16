@@ -97,8 +97,7 @@ func OpenFile(name string, flag int, perm FileMode) (*File, error) {
 	if err != nil {
 		return nil, &PathError{Op: "open", Path: name, Err: err}
 	}
-	f := NewFile(handle, name)
-	f.appendMode = (flag & O_APPEND) != 0
+	f := openNewFile(handle, name, flag)
 	return f, nil
 }
 
@@ -115,11 +114,10 @@ func Create(name string) (*File, error) {
 // Read reads up to len(b) bytes from the File. It returns the number of bytes
 // read and any error encountered. At end of file, Read returns 0, io.EOF.
 func (f *File) Read(b []byte) (n int, err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		n, err = f.handle.Read(b)
+	if f == nil {
+		return 0, ErrInvalid
 	}
+	n, err = f.read(b)
 	// TODO: want to always wrap, like upstream, but ReadFile() compares against exactly io.EOF?
 	if err != nil && err != io.EOF {
 		err = &PathError{Op: "read", Path: f.name, Err: err}
@@ -133,15 +131,18 @@ var errNegativeOffset = errors.New("negative offset")
 // It returns the number of bytes read and any error encountered, possible io.EOF.
 // At end of file, Read returns 0, io.EOF.
 func (f *File) ReadAt(b []byte, offset int64) (n int, err error) {
+	if f == nil {
+		return 0, ErrInvalid
+	}
 	if offset < 0 {
 		return 0, &PathError{Op: "readat", Path: f.name, Err: errNegativeOffset}
 	}
-	if f.handle == nil {
-		return 0, &PathError{Op: "readat", Path: f.name, Err: ErrClosed}
+	if err := f.checkClosed(); err != nil {
+		return 0, &PathError{Op: "readat", Path: f.name, Err: err}
 	}
 
 	for len(b) > 0 {
-		m, e := f.handle.ReadAt(b, offset)
+		m, e := f.pread(b, offset)
 		if e != nil {
 			// TODO: want to always wrap, like upstream, but TestReadAtEOF compares against exactly io.EOF?
 			if e != io.EOF {
@@ -162,11 +163,10 @@ func (f *File) ReadAt(b []byte, offset int64) (n int, err error) {
 // Write writes len(b) bytes to the File. It returns the number of bytes written
 // and an error, if any. Write returns a non-nil error when n != len(b).
 func (f *File) Write(b []byte) (n int, err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		n, err = f.handle.Write(b)
+	if f == nil {
+		return 0, ErrInvalid
 	}
+	n, err = f.write(b)
 	if err != nil {
 		err = &PathError{Op: "write", Path: f.name, Err: err}
 	}
@@ -187,18 +187,22 @@ var errWriteAtInAppendMode = errors.New("os: invalid use of WriteAt on file open
 //
 // If file was opened with the O_APPEND flag, WriteAt returns an error.
 func (f *File) WriteAt(b []byte, offset int64) (n int, err error) {
-	switch {
-	case offset < 0:
+	if f == nil {
+		return 0, ErrInvalid
+	}
+	if offset < 0 {
 		return 0, &PathError{Op: "writeat", Path: f.name, Err: errNegativeOffset}
-	case f.handle == nil:
-		return 0, &PathError{Op: "writeat", Path: f.name, Err: ErrClosed}
-	case f.appendMode:
+	}
+	if err := f.checkClosed(); err != nil {
+		return 0, &PathError{Op: "writeat", Path: f.name, Err: err}
+	}
+	if f.appendMode {
 		// Go does not wrap this error but it would be more consistent
 		// if it did.
 		return 0, errWriteAtInAppendMode
 	}
 	for len(b) > 0 {
-		m, e := f.handle.WriteAt(b, offset)
+		m, e := f.pwrite(b, offset)
 		if e != nil {
 			err = &PathError{Op: "writeat", Path: f.name, Err: e}
 			break
@@ -212,21 +216,10 @@ func (f *File) WriteAt(b []byte, offset int64) (n int, err error) {
 
 // Close closes the File, rendering it unusable for I/O.
 func (f *File) Close() (err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		// Some platforms manage extra state other than the system handle which
-		// needs to be released when the file is closed. For example, darwin
-		// files have a DIR object holding a dup of the file descriptor, and
-		// linux files hold a buffer which needs to be released to a pool.
-		//
-		// These platform-specific logic is provided by the (*file).close method
-		// which is why we do not call the handle's Close method directly.
-		err = f.file.close()
-		if err == nil {
-			f.handle = nil
-		}
+	if f == nil {
+		return ErrInvalid
 	}
+	err = f.closeFile()
 	if err != nil {
 		err = &PathError{Op: "close", Path: f.name, Err: err}
 	}
@@ -243,33 +236,29 @@ func (f *File) Close() (err error) {
 // system; you can seek to the beginning of the directory on Unix-like
 // operating systems, but not on Windows.
 func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		ret, err = f.handle.Seek(offset, whence)
+	if f == nil {
+		return 0, ErrInvalid
 	}
+	ret, err = f.seek(offset, whence)
 	if err != nil {
 		err = &PathError{Op: "seek", Path: f.name, Err: err}
 	}
 	return
 }
 
-func (f *File) SyscallConn() (conn syscall.RawConn, err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		err = ErrNotImplemented
+func (f *File) SyscallConn() (syscall.RawConn, error) {
+	if f == nil {
+		return nil, ErrInvalid
 	}
-	return
+	return f.syscallConn()
 }
 
 // SetDeadline sets the read and write deadlines for a File.
 // Calls to SetDeadline for files that do not support deadlines will return ErrNoDeadline
-// This stub always returns ErrNoDeadline.
 // A zero value for t means I/O operations will not time out.
 func (f *File) SetDeadline(t time.Time) error {
-	if f.handle == nil {
-		return ErrClosed
+	if f == nil {
+		return ErrInvalid
 	}
 	return f.setDeadline(t)
 }
@@ -277,12 +266,18 @@ func (f *File) SetDeadline(t time.Time) error {
 // SetReadDeadline sets the deadline for future Read calls and any
 // currently-blocked Read call.
 func (f *File) SetReadDeadline(t time.Time) error {
+	if f == nil {
+		return ErrInvalid
+	}
 	return f.setReadDeadline(t)
 }
 
 // SetWriteDeadline sets the deadline for any future Write calls and any
 // currently-blocked Write call.
 func (f *File) SetWriteDeadline(t time.Time) error {
+	if f == nil {
+		return ErrInvalid
+	}
 	return f.setWriteDeadline(t)
 }
 
@@ -294,45 +289,44 @@ type fd interface {
 
 // Fd returns the file handle referencing the open file.
 func (f *File) Fd() uintptr {
-	handle, ok := f.handle.(fd)
-	if ok {
-		return handle.Fd()
+	if f == nil {
+		return ^uintptr(0)
 	}
-	return ^uintptr(0)
+	return f.fd()
 }
 
 // Sync commits the current contents of the file to stable storage.
 // Typically, this means flushing the file system's in-memory copy of recently
 // written data to disk.
-func (f *File) Sync() (err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		err = f.handle.Sync()
+func (f *File) Sync() error {
+	if f == nil {
+		return ErrInvalid
 	}
-	return
+	return f.sync()
 }
 
 // Chmod changes the mode of the file to mode. If there is an error, it will be
 // of type *PathError.
-func (f *File) Chmod(mode FileMode) (err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		err = f.chmod(mode)
+func (f *File) Chmod(mode FileMode) error {
+	if f == nil {
+		return ErrInvalid
 	}
-	return
+	if err := f.checkClosed(); err != nil {
+		return err
+	}
+	return f.chmod(mode)
 }
 
 // Chdir changes the current working directory to the file, which must be a
 // directory. If there is an error, it will be of type *PathError.
-func (f *File) Chdir() (err error) {
-	if f.handle == nil {
-		err = ErrClosed
-	} else {
-		err = f.chdir()
+func (f *File) Chdir() error {
+	if f == nil {
+		return ErrInvalid
 	}
-	return
+	if err := f.checkClosed(); err != nil {
+		return err
+	}
+	return f.chdir()
 }
 
 // LinkError records an error during a link or symlink or rename system call and

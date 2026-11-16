@@ -13,10 +13,11 @@ import (
 // Stat returns the FileInfo structure describing file.
 // If there is an error, it will be of type *PathError.
 func (f *File) Stat() (FileInfo, error) {
+	if f == nil {
+		return nil, ErrInvalid
+	}
 	var fs fileStat
-	err := ignoringEINTR(func() error {
-		return syscall.Fstat(int(f.handle.(unixFileHandle)), &fs.sys)
-	})
+	err := f.fstat(&fs.sys)
 	if err != nil {
 		return nil, &PathError{Op: "fstat", Path: f.name, Err: err}
 	}

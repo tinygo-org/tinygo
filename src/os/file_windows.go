@@ -121,6 +121,9 @@ func (f unixFileHandle) Sync() error {
 // Truncate changes the size of the named file.
 // If the file is a symbolic link, it changes the size of the link's target.
 func (f *File) Truncate(size int64) error {
+	if f == nil {
+		return ErrInvalid
+	}
 	if f.handle == nil {
 		return &PathError{Op: "truncate", Path: f.name, Err: ErrClosed}
 	}

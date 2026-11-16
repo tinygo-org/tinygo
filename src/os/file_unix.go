@@ -64,10 +64,6 @@ func (f *file) close() (err error) {
 	return f.handle.Close()
 }
 
-func NewFile(fd uintptr, name string) *File {
-	return &File{&file{handle: unixFileHandle(fd), name: name}}
-}
-
 // Truncate changes the size of the named file.
 // If the file is a symbolic link, it changes the size of the link's target.
 // If there is an error, it will be of type *PathError.
@@ -79,17 +75,6 @@ func Truncate(name string, size int64) error {
 		return &PathError{Op: "truncate", Path: name, Err: e}
 	}
 	return nil
-}
-
-func Pipe() (r *File, w *File, err error) {
-	var p [2]int
-	err = handleSyscallError(pipe(p[:]))
-	if err != nil {
-		return
-	}
-	r = NewFile(uintptr(p[0]), "|0")
-	w = NewFile(uintptr(p[1]), "|1")
-	return
 }
 
 func tempDir() string {
@@ -149,60 +134,6 @@ func Readlink(name string) (string, error) {
 			return string(b[0:n]), nil
 		}
 	}
-}
-
-// Truncate changes the size of the file.
-// It does not change the I/O offset.
-// If there is an error, it will be of type *PathError.
-// Alternatively just use 'raw' syscall by file name
-func (f *File) Truncate(size int64) (err error) {
-	if f.handle == nil {
-		return ErrClosed
-	}
-
-	return Truncate(f.name, size)
-}
-
-// Chown changes the numeric uid and gid of the named file.
-// A uid or gid of -1 means to not change that value.
-// If there is an error, it will be of type *PathError.
-func (f *File) Chown(uid, gid int) error {
-	if f.handle == nil {
-		return ErrClosed
-	}
-
-	return Chown(f.name, uid, gid)
-}
-
-func (f *File) chmod(mode FileMode) error {
-	if f.handle == nil {
-		return ErrClosed
-	}
-
-	longName := fixLongPath(f.name)
-	e := ignoringEINTR(func() error {
-		return syscall.Chmod(longName, syscallMode(mode))
-	})
-	if e != nil {
-		return &PathError{Op: "chmod", Path: f.name, Err: e}
-	}
-	return nil
-}
-
-func (f *File) chdir() error {
-	if f.handle == nil {
-		return ErrClosed
-	}
-
-	// TODO: use syscall.Fchdir instead
-	longName := fixLongPath(f.name)
-	e := ignoringEINTR(func() error {
-		return syscall.Chdir(longName)
-	})
-	if e != nil {
-		return &PathError{Op: "chdir", Path: f.name, Err: e}
-	}
-	return nil
 }
 
 // ReadAt reads up to len(b) bytes from the File starting at the given absolute offset.
@@ -283,18 +214,4 @@ func newUnixDirent(parent, name string, typ FileMode) (DirEntry, error) {
 	ude.typ = info.Mode().Type()
 	ude.info = info
 	return ude, nil
-}
-
-// Since internal/poll is not available, we need to stub this out.
-// Big go requires the option to add the fd to the polling system.
-//
-//go:linkname net_newUnixFile net.newUnixFile
-func net_newUnixFile(fd int, name string) *File {
-	if fd < 0 {
-		panic("invalid FD")
-	}
-
-	// see src/os/file_unix.go:162 newFile for the original implementation.
-	// return newFile(fd, name, kindSock, true)
-	return NewFile(uintptr(fd), name)
 }

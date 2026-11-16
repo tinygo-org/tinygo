@@ -1,3 +1,5 @@
+//go:build !linux || baremetal || nintendoswitch || tinygo.wasm
+
 package runtime
 
 import (
