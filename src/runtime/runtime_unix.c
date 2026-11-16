@@ -145,3 +145,47 @@ void tinygo_register_fatal_signals(void) {
 	sigaction(SIGILL, &act, NULL);
 	sigaction(SIGSEGV, &act, NULL);
 }
+
+void tinygo_signal_clear_handlers(void);
+
+static __thread sigset_t tinygo_fork_sigmask;
+
+static void reset_caught_signal(int sig) {
+	struct sigaction old;
+	if (sigaction(sig, NULL, &old) != 0) {
+		return;
+	}
+	if ((old.sa_flags & SA_SIGINFO) || (old.sa_handler != SIG_IGN && old.sa_handler != SIG_DFL)) {
+		struct sigaction act = { 0 };
+		act.sa_handler = SIG_DFL;
+		sigaction(sig, &act, NULL);
+	}
+}
+
+void tinygo_before_fork(void) {
+	sigset_t set;
+	sigfillset(&set);
+	sigdelset(&set, SIGBUS);
+	sigdelset(&set, SIGFPE);
+	sigdelset(&set, SIGILL);
+	sigdelset(&set, SIGSEGV);
+	pthread_sigmask(SIG_SETMASK, &set, &tinygo_fork_sigmask);
+}
+
+void tinygo_after_fork(void) {
+	pthread_sigmask(SIG_SETMASK, &tinygo_fork_sigmask, NULL);
+}
+
+void tinygo_after_fork_in_child(void) {
+	tinygo_signal_clear_handlers();
+	reset_caught_signal(SIGBUS);
+	reset_caught_signal(SIGFPE);
+	reset_caught_signal(SIGILL);
+	reset_caught_signal(SIGSEGV);
+#ifdef __linux__
+	reset_caught_signal(SIGRTMIN + 6);
+#elif defined(__APPLE__)
+	reset_caught_signal(SIGIO);
+#endif
+	pthread_sigmask(SIG_SETMASK, &tinygo_fork_sigmask, NULL);
+}

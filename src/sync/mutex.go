@@ -2,6 +2,7 @@ package sync
 
 import (
 	"internal/task"
+	_ "unsafe"
 )
 
 type Mutex = task.Mutex
@@ -198,3 +199,9 @@ type rlocker RWMutex
 
 func (r *rlocker) Lock()   { (*RWMutex)(r).RLock() }
 func (r *rlocker) Unlock() { (*RWMutex)(r).RUnlock() }
+
+//go:linkname syscall_hasWaitingReaders syscall.hasWaitingReaders
+func syscall_hasWaitingReaders(rw *RWMutex) bool {
+	r := int32(rw.readers.Load())
+	return r < 0 && r+rwMutexMaxReaders > 0
+}

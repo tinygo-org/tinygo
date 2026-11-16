@@ -124,14 +124,13 @@ func forkExec(argv0 string, argv []string, attr *ProcAttr) (pid int, err error) 
 	return spawn(argv0, argv, attr)
 }
 
-// startProcess does not support ProcAttr.Sys yet.
 func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err error) {
 	if attr == nil {
 		return nil, errors.New("exec: no ProcAttr")
 	}
 
 	if attr.Sys != nil {
-		return nil, ErrNotImplementedSys
+		return startProcessWithSys(name, argv, attr)
 	}
 
 	// Check Dir first to report a clear error, as upstream os/exec_posix.go does.
@@ -146,6 +145,33 @@ func startProcess(name string, argv []string, attr *ProcAttr) (p *Process, err e
 	pid, err := forkExec(name, argv, attr)
 	if err != nil {
 		return nil, err
+	}
+
+	return findProcess(pid)
+}
+
+func startProcessWithSys(name string, argv []string, attr *ProcAttr) (*Process, error) {
+	sysattr := &syscall.ProcAttr{
+		Dir:   attr.Dir,
+		Env:   attr.Env,
+		Files: make([]uintptr, 0, len(attr.Files)),
+		Sys:   attr.Sys,
+	}
+	if sysattr.Env == nil {
+		sysattr.Env = Environ()
+	}
+	for _, f := range attr.Files {
+		if f == nil {
+			sysattr.Files = append(sysattr.Files, ^uintptr(0))
+		} else {
+			sysattr.Files = append(sysattr.Files, f.Fd())
+		}
+	}
+
+	pid, _, err := syscall.StartProcess(name, argv, sysattr)
+	runtime.KeepAlive(attr)
+	if err != nil {
+		return nil, &PathError{Op: "fork/exec", Path: name, Err: err}
 	}
 
 	return findProcess(pid)
