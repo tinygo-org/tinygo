@@ -20,15 +20,15 @@ func initOTGFSPHY() {
 	}
 
 	// Enable FS PHY.
-	stm32.OTG_FS_GLOBAL.GCCFG.SetBits(stm32.USB_OTG_FS_GCCFG_PWRDWN)
+	stm32.OTG_FS_GLOBAL.GCCFG.SetBits(stm32.USB_OTG_FS_GLOBAL_GCCFG_PWRDWN)
 
 	// Disable hardware VBUS detection (F7 uses VBDEN, opposite polarity to F4's NOVBUSSENS).
 	// Clearing this prevents the peripheral from gating enumeration on PA9 VBUS level.
-	stm32.OTG_FS_GLOBAL.GCCFG.ClearBits(stm32.USB_OTG_FS_GCCFG_VBDEN)
+	stm32.OTG_FS_GLOBAL.GCCFG.ClearBits(stm32.USB_OTG_FS_GLOBAL_GCCFG_VBDEN)
 
 	// Override B-session valid so GOTGCTL-based detection reports device connected.
 	stm32.OTG_FS_GLOBAL.GOTGCTL.SetBits(
-		stm32.USB_OTG_FS_GOTGCTL_BVALOEN | // enable B-valid override
-			stm32.USB_OTG_FS_GOTGCTL_BVALOVAL, // set B-valid = 1
+		stm32.USB_OTG_FS_GLOBAL_GOTGCTL_BVALOEN | // enable B-valid override
+			stm32.USB_OTG_FS_GLOBAL_GOTGCTL_BVALOVAL, // set B-valid = 1
 	)
 }

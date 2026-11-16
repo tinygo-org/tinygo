@@ -9,7 +9,7 @@ import "device/stm32"
 // check so boards without PA9 connected to VBUS still enumerate.
 func initOTGFSPHY() {
 	stm32.OTG_FS_GLOBAL.GCCFG.Set(
-		stm32.USB_OTG_FS_GCCFG_PWRDWN | // enable FS PHY
-			stm32.USB_OTG_FS_GCCFG_NOVBUSSENS, // bypass VBUS sensing
+		stm32.USB_OTG_FS_GLOBAL_GCCFG_PWRDWN | // enable FS PHY
+			stm32.USB_OTG_FS_GLOBAL_GCCFG_NOVBUSSENS, // bypass VBUS sensing
 	)
 }
