@@ -18,12 +18,15 @@ target triple = "x86_64--linux"
 @atomic.runtimeOld = local_unnamed_addr global i32 0
 @atomic.runtimeSuccess = local_unnamed_addr global i1 false
 @atomic.runtimeSeen = local_unnamed_addr global i32 0
+@pause.lock = local_unnamed_addr global i32 0
 
 declare void @externalCall(i64) local_unnamed_addr
 
 declare i64 @ptrHash(ptr nocapture) local_unnamed_addr
 
 declare void @modifyAtomic(ptr) local_unnamed_addr
+
+declare void @"internal/task.PauseLocked"(ptr) local_unnamed_addr
 
 define i32 @"sync/atomic.SwapUint32"(ptr %addr, i32 %new, ptr %context) local_unnamed_addr {
   %old = atomicrmw xchg ptr %addr, i32 %new syncscope("singlethread") seq_cst, align 4
@@ -56,6 +59,7 @@ entry:
   call fastcc void @y.init(ptr undef)
   call fastcc void @z.set(ptr @z.bloom, ptr @z.bloom)
   call fastcc void @z.setArr(ptr @z.arr, i64 32, ptr @z.bloom)
+  call fastcc void @pause.sleep(ptr undef)
   ret void
 }
 
@@ -104,5 +108,11 @@ define internal fastcc void @z.set(ptr %ptr, ptr %context) unnamed_addr {
   %old = load i64, ptr %context, align 8
   %new = or i64 %old, %bit
   store i64 %new, ptr %context, align 8
+  ret void
+}
+
+define internal fastcc void @pause.sleep(ptr %context) unnamed_addr {
+  store atomic i32 1, ptr @pause.lock seq_cst, align 4
+  call void @"internal/task.PauseLocked"(ptr undef)
   ret void
 }

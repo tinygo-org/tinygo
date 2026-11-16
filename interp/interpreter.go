@@ -324,7 +324,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 				if err != nil {
 					return nil, mem, err
 				}
-			case callFn.name == "internal/task.Pause":
+			case callFn.name == "internal/task.Pause" || callFn.name == "internal/task.PauseLocked":
 				// Task scheduling isn't possible at compile time.
 				return nil, mem, r.rollbackAt(inst, "goroutine would block")
 			case callFn.name == "runtime.fastrand" || callFn.name == "runtime.fastrand64":
