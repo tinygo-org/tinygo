@@ -1744,16 +1744,16 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 	}
 	defer b.Builder.Dispose()
 
+	// set up IR builder
+	block := b.ctx.AddBasicBlock(wrapper, "entry")
+	b.SetInsertPointAtEnd(block)
+
 	// add debug info if needed
 	if c.Debug {
 		pos := c.program.Fset.Position(fn.Pos())
 		difunc := c.attachDebugInfoRaw(fn, wrapper, "$invoke", pos.Filename, pos.Line)
 		b.SetCurrentDebugLocation(uint(pos.Line), uint(pos.Column), difunc, llvm.Metadata{})
 	}
-
-	// set up IR builder
-	block := b.ctx.AddBasicBlock(wrapper, "entry")
-	b.SetInsertPointAtEnd(block)
 
 	wrapperParams := wrapper.Params()
 	params := append([]llvm.Value{}, wrapperParams[:resultOffset]...)

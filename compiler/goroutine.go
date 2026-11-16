@@ -173,6 +173,10 @@ func (b *builder) createWasmExport() {
 	builder := newBuilder(b.context, b.ctx.NewBuilder(), b.fn)
 	defer builder.Dispose()
 
+	// Create a single basic block inside of it.
+	bb := b.ctx.AddBasicBlock(exportedFn, "entry")
+	builder.SetInsertPointAtEnd(bb)
+
 	// Define this function as a separate function in DWARF
 	if b.Debug {
 		if b.fn.Syntax() != nil {
@@ -182,10 +186,6 @@ func (b *builder) createWasmExport() {
 		}
 		builder.setDebugLocation(pos)
 	}
-
-	// Create a single basic block inside of it.
-	bb := b.ctx.AddBasicBlock(exportedFn, "entry")
-	builder.SetInsertPointAtEnd(bb)
 
 	// Insert an assertion to make sure this //go:wasmexport function is not
 	// called at a time when it is not allowed (for example, before the runtime
