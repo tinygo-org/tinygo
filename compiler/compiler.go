@@ -1297,7 +1297,6 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 			pos := b.program.Fset.Position(b.fn.Pos())
 			b.difunc = b.attachDebugInfoRaw(b.fn, b.llvmFn, "", pos.Filename, pos.Line)
 		}
-		b.setDebugLocation(b.fn.Pos())
 	}
 
 	// Pre-create all basic blocks in the function.
@@ -1332,6 +1331,9 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		entryBlock = blockInfo[0].entry
 	}
 	b.SetInsertPointAtEnd(entryBlock)
+	if b.Debug {
+		b.setDebugLocation(b.fn.Pos())
+	}
 
 	if b.fn.Synthetic == "package initializer" {
 		b.initPseudoFuncs = make(map[string]llvm.Metadata)
