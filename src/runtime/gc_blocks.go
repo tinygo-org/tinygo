@@ -95,6 +95,11 @@ const blockStateEach = 1<<blocksPerStateByte - 1
 // The byte value of a block where every block is a 'tail' block.
 const blockStateByteAllTails = byte(blockStateTail) * blockStateEach
 
+const (
+	blocksPerStateWord = gcBlock(blocksPerStateByte * unsafe.Sizeof(uintptr(0)))
+	stateWordLowBits   = ^uintptr(0) / 0xff * blockStateEach
+)
+
 // String returns a human-readable version of the block state, for debugging.
 func (s blockState) String() string {
 	switch s {
@@ -210,6 +215,20 @@ func (b gcBlock) unmark() {
 func (b gcBlock) free() {
 	stateBytePtr := (*uint8)(unsafe.Add(metadataStart, b/blocksPerStateByte))
 	*stateBytePtr &^= uint8(blockStateMask) << (b % blocksPerStateByte)
+}
+
+func setBlockStates(start, end gcBlock, state blockState) {
+	for start < end {
+		p := (*uint8)(unsafe.Add(metadataStart, start/blocksPerStateByte))
+		if start%blocksPerStateByte == 0 && end-start >= blocksPerStateByte {
+			*p = uint8(state) * blockStateEach
+			start += blocksPerStateByte
+			continue
+		}
+		shift := start % blocksPerStateByte
+		*p = *p&^(uint8(blockStateMask)<<shift) | uint8(state)<<shift
+		start++
+	}
 }
 
 // objHeader is a structure appended to every heap object to hold metadata.
@@ -389,7 +408,7 @@ func calculateHeapAddresses() {
 
 	// Allocate some memory to keep 2 bits of information about every block.
 	metadataSize := (totalSize + blocksPerStateByte*bytesPerBlock) / (1 + blocksPerStateByte*bytesPerBlock)
-	metadataStart = unsafe.Pointer(heapEnd - metadataSize)
+	metadataStart = unsafe.Pointer((heapEnd - metadataSize) &^ (unsafe.Alignof(uintptr(0)) - 1))
 
 	// Use the rest of the available memory as heap.
 	numBlocks := (uintptr(metadataStart) - heapStart) / bytesPerBlock
@@ -495,10 +514,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	block := blockFromAddr(uintptr(pointer))
 	i := block + gcBlock(neededBlocks) - 1
 	i.setState(blockStateHead)
-	for i != block {
-		i--
-		i.setState(blockStateTail)
-	}
+	setBlockStates(block, i, blockStateTail)
 
 	// Create the object header.
 	size -= unsafe.Sizeof(objHeader{})
@@ -572,9 +588,7 @@ func free(ptr unsafe.Pointer) {
 		gcLock.Unlock()
 		runtimeFatal("free: invalid pointer")
 	}
-	for block := firstBlock; block <= lastBlock; block++ {
-		block.free()
-	}
+	setBlockStates(firstBlock, lastBlock+1, blockStateFree)
 	insertFreeRange(firstBlock.pointer(), uintptr(lastBlock-firstBlock+1))
 	gcLock.Unlock()
 }
@@ -588,9 +602,7 @@ func freeTaskStack(addr uintptr) {
 		runtimeFatal("gc: freeing pointer inside allocation")
 	}
 	lastBlock := firstBlock.findHead()
-	for block := firstBlock; block <= lastBlock; block++ {
-		block.free()
-	}
+	setBlockStates(firstBlock, lastBlock+1, blockStateFree)
 	insertFreeRange(ptr, uintptr(lastBlock-firstBlock+1))
 	gcLock.Unlock()
 }
@@ -830,7 +842,18 @@ func sweep() uintptr {
 		// Scan backwards until we find a marked head.
 		// Free the blocks as we go.
 		freeEnd := block
-		for block > 0 && (block-1).state() != blockStateMark {
+		for block > 0 {
+			if block%blocksPerStateWord == 0 {
+				w := (*uintptr)(unsafe.Add(metadataStart, uintptr(block/blocksPerStateByte)-unsafe.Sizeof(uintptr(0))))
+				if v := *w; v&(v>>blocksPerStateByte)&stateWordLowBits == 0 {
+					*w = 0
+					block -= blocksPerStateWord
+					continue
+				}
+			}
+			if (block - 1).state() == blockStateMark {
+				break
+			}
 			block--
 			block.free()
 		}
@@ -856,6 +879,11 @@ func sweep() uintptr {
 		// Skip the tail.
 		for block > 0 && (block-1).state() == blockStateTail {
 			block--
+			if block%blocksPerStateByte == 0 {
+				for block > 0 && (block-1).stateByte() == blockStateByteAllTails {
+					block -= blocksPerStateByte
+				}
+			}
 		}
 	}
 
