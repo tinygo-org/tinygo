@@ -341,7 +341,7 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		"esp32c6": 0x10, // 80MHz=0x00, 2MB=0x10 (C6 uses different freq encoding)
 		"esp32h2": 0x1f, // 48MHz=0x0F, 2MB=0x10
 		"esp32s3": 0x1f, // 80MHz=0x0F, 2MB=0x10
-		"esp32p4": 0x10, // 80MHz=0x00, 2MB=0x10 (P4 uses same encoding as C6)
+		"esp32p4": 0x10, // 40MHz=0x00, 2MB=0x10 (ESP32P4ROM inherits ESP32 flash-frequency encoding)
 	}[chip]
 
 	// Image header.
