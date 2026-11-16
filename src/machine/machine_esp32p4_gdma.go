@@ -24,8 +24,8 @@
 //	CFG0     0x10  DMAC_EN
 //	CHEN0    0x18  per-channel enable (EN + EN_WE)
 //
-// The control-word encodings are computed by internal/esp32p4dsi so the exact
-// bit patterns are covered by host unit tests.
+// The control-word encodings are computed by machine/internal/esp32p4dsi so
+// the exact bit patterns are covered by host unit tests.
 //
 // Reference: ESP-IDF components/esp_hal_dma/esp32p4/include/hal/dw_gdma_ll.h
 // and components/esp_lcd/dsi/esp_lcd_panel_dpi.c.
@@ -35,7 +35,7 @@ import (
 	"device/esp"
 	"device/riscv"
 	"errors"
-	"internal/esp32p4dsi"
+	"machine/internal/esp32p4dsi"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -72,7 +72,7 @@ const (
 var ErrGDMAChannel = errors.New("machine: DW-GDMA channel must be 0..3")
 
 // dmaLLIItem is the hardware layout of a 64-byte DW-GDMA link-list item.
-// Fields are written with the full word values produced by internal/esp32p4dsi.
+// Fields are written with the full word values produced by machine/internal/esp32p4dsi.
 type dmaLLIItem struct {
 	SarLo, SarHi       uint32 // source address (low/high)
 	DarLo, DarHi       uint32 // destination address (low/high)
