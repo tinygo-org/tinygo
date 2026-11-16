@@ -4033,7 +4033,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			return b.loadFromStorage(x, unop.Type(), ""), nil
 		}
 	case token.XOR: // ^x, toggle all bits in integer
-		return b.CreateXor(x, llvm.ConstInt(x.Type(), ^uint64(0), false), ""), nil
+		return b.CreateXor(x, llvm.ConstAllOnes(x.Type()), ""), nil
 	case token.ARROW: // <-x, receive from channel
 		return b.createChanRecv(unop), nil
 	default:
