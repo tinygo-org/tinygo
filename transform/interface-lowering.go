@@ -170,9 +170,12 @@ func (p *lowerInterfacesPass) run() error {
 					typecode: global,
 				}
 				p.types[name] = t
+				// The names of struct fields also use this prefix, and they
+				// are i8 arrays, not structs. Thus, examine the type of the
+				// first element, and read its value only from a struct.
 				initializer := global.Initializer()
-				firstField := p.builder.CreateExtractValue(initializer, 0, "")
-				if firstField.Type() != p.ctx.Int8Type() {
+				if elementType(initializer.Type(), 0) != p.ctx.Int8Type() {
+					firstField := constElement(initializer, 0)
 					// Temporary metadata precedes the kind byte at index 1.
 					t.typecodeGEP = llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
 						llvm.ConstInt(p.ctx.Int32Type(), 0, false),
@@ -410,7 +413,7 @@ func (p *lowerInterfacesPass) run() error {
 			initializer := t.typecode.Initializer()
 			ifaceSet := make(map[string]struct{})
 			for i := 0; i < initializer.Type().StructElementTypesCount(); i++ {
-				field := p.builder.CreateExtractValue(initializer, i, "")
+				field := constElement(initializer, i)
 				for _, sig := range p.extractMethodSigs(field) {
 					methodFilter[sig] = struct{}{}
 					ifaceSet[sig] = struct{}{}
@@ -438,7 +441,7 @@ func (p *lowerInterfacesPass) run() error {
 			var numMethodsConst uint64
 			var numMethodsIsI16 bool
 			if numFields > 2 {
-				nmField := p.builder.CreateExtractValue(initializer, 2, "")
+				nmField := constElement(initializer, 2)
 				if nmField.Type() == p.ctx.Int16Type() {
 					numMethodsConst = nmField.ZExtValue()
 					numMethodsIsI16 = true
@@ -447,7 +450,7 @@ func (p *lowerInterfacesPass) run() error {
 
 			var newInitializerFields []llvm.Value
 			for i := 1; i < numFields; i++ {
-				field := p.builder.CreateExtractValue(initializer, i, "")
+				field := constElement(initializer, i)
 				if !keepAllMethods {
 					field = p.filterMethodSet(field, methodFilter, ifaceMethodSets)
 				}
@@ -477,7 +480,7 @@ func (p *lowerInterfacesPass) run() error {
 					opcode := use.Opcode()
 					if opcode == llvm.GetElementPtr && use.OperandsCount() == 3 {
 						if use.Operand(1).ZExtValue() == 0 && use.Operand(2).ZExtValue() == 1 {
-							gep := p.builder.CreateInBoundsGEP(newGlobal.GlobalValueType(), newGlobal, []llvm.Value{zero, zero}, "")
+							gep := llvm.ConstInBoundsGEP(newGlobal.GlobalValueType(), newGlobal, []llvm.Value{zero, zero})
 							use.ReplaceAllUsesWith(gep)
 						}
 					}
@@ -486,7 +489,7 @@ func (p *lowerInterfacesPass) run() error {
 			// Fallback.
 			if hasUses(t.typecode) {
 				negativeOffset := -int64(p.targetData.TypeAllocSize(p.ptrType))
-				gep := p.builder.CreateInBoundsGEP(p.ctx.Int8Type(), newGlobal, []llvm.Value{llvm.ConstInt(p.ctx.Int32Type(), uint64(negativeOffset), true)}, "")
+				gep := llvm.ConstInBoundsGEP(p.ctx.Int8Type(), newGlobal, []llvm.Value{llvm.ConstInt(p.ctx.Int32Type(), uint64(negativeOffset), true)})
 				t.typecode.ReplaceAllUsesWith(gep)
 			}
 			t.typecode.EraseFromParentAsGlobal()
@@ -502,7 +505,7 @@ func (p *lowerInterfacesPass) run() error {
 			changed := false
 			fields := make([]llvm.Value, 0, numFields)
 			for i := 0; i < numFields; i++ {
-				field := p.builder.CreateExtractValue(initializer, i, "")
+				field := constElement(initializer, i)
 				filtered := field
 				if !keepInterfaceMethods {
 					filtered = p.filterMethodSet(field, methodFilter, ifaceMethodSets)
@@ -544,14 +547,14 @@ func (p *lowerInterfacesPass) pruneUnusedMethodMetadata() error {
 		fields := make([]llvm.Value, initializer.Type().StructElementTypesCount())
 		globalChanged := false
 		for i := range fields {
-			field := p.builder.CreateExtractValue(initializer, i, "")
+			field := constElement(initializer, i)
 			if p.isMethodSetType(field.Type()) {
-				names := p.builder.CreateExtractValue(field, 2, "")
-				types := p.builder.CreateExtractValue(field, 3, "")
+				names := constElement(field, 2)
+				types := constElement(field, 3)
 				if !names.IsNull() || !types.IsNull() {
 					field = p.ctx.ConstStruct([]llvm.Value{
-						p.builder.CreateExtractValue(field, 0, ""),
-						p.builder.CreateExtractValue(field, 1, ""),
+						constElement(field, 0),
+						constElement(field, 1),
 						llvm.ConstNull(names.Type()),
 						llvm.ConstNull(types.Type()),
 					}, false)
@@ -780,12 +783,12 @@ func (p *lowerInterfacesPass) addTypeMethods(t *typeInfo, methodSet llvm.Value) 
 	// This type has methods, collect all methods of this type.
 	t.methodSet = methodSet
 	set := methodSet.Initializer() // get value from global
-	signatures := p.builder.CreateExtractValue(set, 1, "")
-	wrappers := p.builder.CreateExtractValue(set, 2, "")
+	signatures := constElement(set, 1)
+	wrappers := constElement(set, 2)
 	numMethods := signatures.Type().ArrayLength()
 	for i := range numMethods {
-		signatureGlobal := p.builder.CreateExtractValue(signatures, i, "")
-		function := p.builder.CreateExtractValue(wrappers, i, "")
+		signatureGlobal := constElement(signatures, i)
+		function := constElement(wrappers, i)
 		function = stripPointerCasts(function) // strip bitcasts
 		signatureName := signatureGlobal.Name()
 		signature := p.getSignature(signatureName)
@@ -1017,11 +1020,11 @@ func (p *lowerInterfacesPass) extractMethodSigs(field llvm.Value) []string {
 	if !p.isMethodSetType(field.Type()) {
 		return nil
 	}
-	methodArray := p.builder.CreateExtractValue(field, 1, "")
+	methodArray := constElement(field, 1)
 	n := methodArray.Type().ArrayLength()
 	sigs := make([]string, 0, n)
 	for j := range n {
-		sig := p.builder.CreateExtractValue(methodArray, j, "")
+		sig := constElement(methodArray, j)
 		sig = stripPointerCasts(sig)
 		sigs = append(sigs, sig.Name())
 	}
@@ -1042,9 +1045,9 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 		return field
 	}
 
-	methodArray := p.builder.CreateExtractValue(field, 1, "")
-	nameArray := p.builder.CreateExtractValue(field, 2, "")
-	typeArray := p.builder.CreateExtractValue(field, 3, "")
+	methodArray := constElement(field, 1)
+	nameArray := constElement(field, 2)
+	typeArray := constElement(field, 3)
 	numMethods := methodArray.Type().ArrayLength()
 
 	// Strip mode: replace with empty method set.
@@ -1071,13 +1074,13 @@ func (p *lowerInterfacesPass) filterMethodSet(field llvm.Value, keepSigs map[str
 	entries := make([]methodEntry, numMethods)
 	nameSet := make(map[string]struct{}, numMethods)
 	for j := range numMethods {
-		sig := p.builder.CreateExtractValue(methodArray, j, "")
+		sig := constElement(methodArray, j)
 		stripped := stripPointerCasts(sig)
 		name := stripped.Name()
 		entries[j] = methodEntry{
 			signature: sig,
-			namePtr:   p.builder.CreateExtractValue(nameArray, j, ""),
-			typePtr:   p.builder.CreateExtractValue(typeArray, j, ""),
+			namePtr:   constElement(nameArray, j),
+			typePtr:   constElement(typeArray, j),
 			name:      name,
 		}
 		nameSet[name] = struct{}{}
