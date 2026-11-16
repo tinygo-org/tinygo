@@ -120,30 +120,6 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		segments = ramSegments
 	}
 
-	// For ESP32-P4: separate flash-mapped segments from SRAM segments.
-	// Flash-mapped range: 0x40000000–0x4FF1FFFF (HP L2 cache, 1:1 MMU).
-	// SRAM range: 0x4FF20000+ (HP-SRAM, loaded by ROM bootloader).
-	//
-	// The ROM bootloader attempts to memcpy flash-mapped segments to their VMA.
-	// For small segments this appears to succeed, but for large binaries (≥~20KB
-	// of flash segments) it triggers the HP_SYS watchdog before finishing.
-	// Instead, we exclude flash-mapped segments from the ROM image segment list
-	// and append their data at flash offset 0x10000 (the second 64KB page), where
-	// the L2 cache MMU automatically makes them accessible at VMA 0x40010000+.
-	// The linker script places .text at VMA 0x40010000 to match.
-	var esp32p4FlashSegs []*espImageSegment
-	if chip == "esp32p4" {
-		var sramSegs []*espImageSegment
-		for _, seg := range segments {
-			if seg.addr >= 0x4FF20000 { // HP-SRAM
-				sramSegs = append(sramSegs, seg)
-			} else { // flash-mapped (0x40000000–0x4FF1FFFF)
-				esp32p4FlashSegs = append(esp32p4FlashSegs, seg)
-			}
-		}
-		segments = sramSegs
-	}
-
 	// ESP32 flash XIP: compute where the DROM segment will be placed in flash
 	// (page-aligned, right after the RAM segments) and patch the
 	// _drom_flash_addr variable so the startup code can program the cache MMU.
@@ -530,24 +506,6 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 				return fmt.Errorf("ESP32-C3: segment at 0x%x overlaps the previous one", seg.addr)
 			}
 			outf.Write(make([]byte, offset-outf.Len()))
-			outf.Write(seg.data)
-		}
-	}
-
-	// For ESP32-P4: append flash-mapped code (.text, .rodata) at flash offset
-	// 0x10000 (the second 64KB page). The L2 cache MMU maps flash[0x10000] to
-	// VMA 0x40010000, matching the linker script's .flash_dummy placement.
-	// The SRAM image (header + SRAM segments + footer + SHA256) must fit in
-	// the first 64KB page (0xE000 bytes of image = flash 0x2000–0xFFFF).
-	if len(esp32p4FlashSegs) > 0 {
-		const esp32p4ImageBase = 0x2000  // image flashed at flash offset 0x2000
-		const esp32p4CodeFlash = 0x10000 // flash offset for .text/.rodata
-		targetImageOffset := esp32p4CodeFlash - esp32p4ImageBase
-		if outf.Len() > targetImageOffset {
-			return fmt.Errorf("ESP32-P4: SRAM image (%d bytes) too large, overlaps flash code region at flash offset 0x%x", outf.Len(), esp32p4CodeFlash)
-		}
-		outf.Write(make([]byte, targetImageOffset-outf.Len()))
-		for _, seg := range esp32p4FlashSegs {
 			outf.Write(seg.data)
 		}
 	}
