@@ -78,7 +78,6 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 		llvmFn:     llvmFn,
 		name:       llvmFn.Name(),
 		params:     llvmFn.Params(),
-		locals:     make(map[llvm.Value]int),
 		attributes: llvmutil.ReadFunctionUsageAttributes(llvmFn),
 	}
 	if llvmFn.IsDeclaration() {
@@ -102,16 +101,18 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 		}
 	}
 
-	for i, param := range fn.params {
-		fn.locals[param] = i
-	}
-
 	// Make a map of all the blocks, to quickly find the block number for a
 	// given branch instruction.
 	blockIndices := make(map[llvm.Value]int)
 	for llvmBB := range llvmutil.BasicBlocks(llvmFn) {
 		index := len(blockIndices)
 		blockIndices[llvmBB.AsValue()] = index
+	}
+
+	// Every parameter and instruction gets a local.
+	fn.locals = make(map[llvm.Value]int, len(fn.params)+llvmFn.InstructionsCount())
+	for i, param := range fn.params {
+		fn.locals[param] = i
 	}
 	blockIndex := func(bb llvm.BasicBlock) literalValue {
 		// A missing block would otherwise silently become block 0 (the entry
