@@ -25,16 +25,14 @@ func CheckNoRuntime(mod llvm.Module) []error {
 	// See compiler.getFunction and transform.Optimize.
 	var abiNames []string
 	if roots := mod.NamedGlobal("tinygo.indirect-abi"); !roots.IsNil() {
-		builder := mod.Context().NewBuilder()
 		initializer := roots.Initializer()
 		for i := 0; i < initializer.Type().ArrayLength(); i++ {
-			value := builder.CreateExtractValue(initializer, i, "")
+			value := initializer.Operand(i)
 			for !value.IsAConstantExpr().IsNil() && value.OperandsCount() == 1 {
 				value = value.Operand(0)
 			}
 			abiNames = append(abiNames, value.Name())
 		}
-		builder.Dispose()
 		llvmutil.RemoveGlobalReferences(mod, "llvm.used", "tinygo.indirect-abi")
 	}
 
