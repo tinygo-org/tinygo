@@ -365,6 +365,7 @@ func readSVD(path, sourceURL string) (*Device, error) {
 	if err != nil {
 		return nil, err
 	}
+	tweakSVD(device)
 
 	peripheralDict := map[string]*Peripheral{}
 	groups := map[string]*Peripheral{}
