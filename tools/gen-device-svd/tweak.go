@@ -5,6 +5,25 @@ import (
 	"strings"
 )
 
+func tweakSVD(d *SVDFile) {
+	if d.Name != "ESP32-P4" {
+		return
+	}
+	// AHB_DMA OUT_CONF0_CH%s at 0x190 is channel 1, not 0. See ESP-IDF
+	// components/soc/esp32p4/register/hw_ver{1,3}/soc/ahb_dma_reg.h.
+	for _, p := range d.Peripherals {
+		if p.Name != "AHB_DMA" {
+			continue
+		}
+		for _, r := range p.Registers {
+			if r.Name == "OUT_CONF0_CH%s" && r.DimIndex == nil {
+				idx := "1-2"
+				r.DimIndex = &idx
+			}
+		}
+	}
+}
+
 func tweakDevice(d *Device, pkgName string) {
 	if pkgName != "stm32" {
 		// no-op for device types that do not need tweaks
