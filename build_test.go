@@ -578,17 +578,11 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// These targets grow slices to the next power of two.
 			continue
 		}
-		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
+		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386" || options.GOARCH == "mips" || options.GOARCH == "mipsle") {
 			switch name {
 			case "timers.go":
 				// Timer tests do not work because syscall.seek is implemented
 				// as Assembly in mainline Go and causes linker failure
-				continue
-			}
-		}
-		if options.GOOS == "linux" && (options.GOARCH == "mips" || options.GOARCH == "mipsle") {
-			if name == "atomic.go" || name == "timers.go" {
-				// 64-bit atomic operations aren't currently supported on MIPS.
 				continue
 			}
 		}
