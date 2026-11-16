@@ -68,3 +68,15 @@ func (h *TimerHeap) Check() string {
 	}
 	return ""
 }
+
+func Semacquire(sema *uint32) {
+	semacquire(sema)
+}
+
+func Semrelease(sema *uint32) {
+	semrelease(sema)
+}
+
+func SemNwait(sema *uint32) uint32 {
+	return semroot(sema).nwait.Load()
+}

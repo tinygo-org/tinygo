@@ -111,6 +111,7 @@ TEST_PACKAGES_LINUX := \
 	go/build/constraint \
 	go/parser \
 	go/printer \
+	internal/poll \
 	io/ioutil \
 	iter \
 	mime \
@@ -241,6 +242,8 @@ TEST_OPTIONS_slices := -skip='^(TestGrow|TestInsert|TestConcat)$$'
 TEST_OPTIONS_strings := -skip='^(TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace)$$'
 TEST_OPTIONS_crypto/mldsa := -short -stack-size=1MB -skip='^TestAllocations$$'
 TEST_OPTIONS_encoding/gob := -skip='^(TestIgnoreDepthLimit|TestCountEncodeMallocs|TestCountDecodeMallocs)$$'
+# TestSplicePipePool waits for runtime.AddCleanup callbacks, which are not implemented yet.
+TEST_OPTIONS_internal/poll := -short -skip='^TestSplicePipePool$$'
 
 tinygo-test tinygo-test-fast: TEST_OPTIONS_time := -skip='^TestTimerGC$$'
 ifeq ($(uname),Darwin)
