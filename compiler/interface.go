@@ -571,12 +571,12 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			}
 		case *types.Array:
 			typeFields = []llvm.Value{
-				llvm.ConstInt(c.i16, 0, false),                         // numMethods
-				c.getTypeCode(types.NewPointer(typ)),                   // ptrTo
-				c.getTypeCode(typ.Elem()),                              // elementType
-				llvm.ConstInt(c.uintptrType, uint64(typ.Len()), false), // length
-				c.getTypeCode(types.NewSlice(typ.Elem())),              // slicePtr
-				c.createObjectLayout(c.getLLVMType(typ), token.NoPos),  // layout
+				llvm.ConstInt(c.i16, 0, false),                        // numMethods
+				c.getTypeCode(types.NewPointer(typ)),                  // ptrTo
+				c.getTypeCode(typ.Elem()),                             // elementType
+				c.constArrayLen(typ.Len(), token.NoPos),               // length
+				c.getTypeCode(types.NewSlice(typ.Elem())),             // slicePtr
+				c.createObjectLayout(c.getLLVMType(typ), token.NoPos), // layout
 			}
 		case *types.Map:
 			typeFields = []llvm.Value{

@@ -552,7 +552,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 		elemHash := b.generateKeyHash(elemType, llvmElemType, elemPtr, seed)
 		newHash := b.CreateXor(b.CreateMul(phiHash, multiplier, ""), elemHash, "")
 		nextI := b.CreateAdd(phiI, llvm.ConstInt(b.uintptrType, 1, false), "")
-		cond := b.CreateICmp(llvm.IntULT, nextI, llvm.ConstInt(b.uintptrType, uint64(arrayLen), false), "")
+		cond := b.CreateICmp(llvm.IntULT, nextI, b.constArrayLen(arrayLen, token.NoPos), "")
 		b.CreateCondBr(cond, loopBody, loopDone)
 
 		bodyEnd := b.GetInsertBlock()
@@ -677,7 +677,7 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 		elemEq := b.generateKeyEqual(elemType, llvmElemType, xElemPtr, yElemPtr, fn)
 
 		nextI := b.CreateAdd(phiI, llvm.ConstInt(b.uintptrType, 1, false), "")
-		atEnd := b.CreateICmp(llvm.IntUGE, nextI, llvm.ConstInt(b.uintptrType, uint64(arrayLen), false), "")
+		atEnd := b.CreateICmp(llvm.IntUGE, nextI, b.constArrayLen(arrayLen, token.NoPos), "")
 		exitLoop := b.CreateOr(atEnd, b.CreateNot(elemEq, ""), "")
 		b.CreateCondBr(exitLoop, loopDone, loopBody)
 

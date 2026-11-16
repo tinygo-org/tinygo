@@ -88,11 +88,11 @@ func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lo
 // createSliceToArrayPointerCheck adds a check for slice-to-array pointer
 // conversions. This conversion was added in Go 1.17. For details, see:
 // https://tip.golang.org/ref/spec#Conversions_from_slice_to_array_pointer
-func (b *builder) createSliceToArrayPointerCheck(sliceLen llvm.Value, arrayLen int64) {
+func (b *builder) createSliceToArrayPointerCheck(sliceLen llvm.Value, arrayLen int64, pos token.Pos) {
 	// From the spec:
 	// > If the length of the slice is less than the length of the array, a
 	// > run-time panic occurs.
-	arrayLenValue := llvm.ConstInt(b.uintptrType, uint64(arrayLen), false)
+	arrayLenValue := b.constArrayLen(arrayLen, pos)
 	isLess := b.CreateICmp(llvm.IntULT, sliceLen, arrayLenValue, "")
 	b.createRuntimeAssert(isLess, "slicetoarray", "sliceToArrayPointerPanic")
 }

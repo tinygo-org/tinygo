@@ -2639,6 +2639,21 @@ func (c *context) maxSliceSize(elementType llvm.Type) uint64 {
 	return maxSize
 }
 
+// constArrayLen returns the length n of an array type as a uintptr constant.
+// The type checker accepts a length that does not fit in a uintptr when int
+// is wider than uintptr. For example, on AVR int has 32 bits and uintptr has
+// 16 bits. For such a length, constArrayLen reports an error at pos. The
+// compiler continues with the package before the build stops, and ConstInt
+// does not accept such a length, so constArrayLen returns the largest uintptr.
+func (c *context) constArrayLen(n int64, pos token.Pos) llvm.Value {
+	maxLen := llvm.ConstAllOnes(c.uintptrType)
+	if uint64(n) > maxLen.ZExtValue() {
+		c.addError(pos, fmt.Sprintf("array length %d does not fit in a %d-bit uintptr", n, c.targetData.PointerSize()*8))
+		return maxLen
+	}
+	return llvm.ConstInt(c.uintptrType, uint64(n), false)
+}
+
 // goHeapAddressBits matches heapAddrBits for Go's common 64-bit targets.
 // See https://github.com/golang/go/blob/2ff5743d9fd52fac166225e75df0c2c1edf82abb/src/runtime/malloc.go#L207-L220.
 const goHeapAddressBits = 48
@@ -2830,7 +2845,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			index = b.extendInteger(index, expr.Index.Type(), b.uintptrType)
 
 			// Check bounds.
-			arrayLen := llvm.ConstInt(b.uintptrType, uint64(xType.Len()), false)
+			arrayLen := b.constArrayLen(xType.Len(), getPos(expr))
 			b.createLookupBoundsCheck(arrayLen, index)
 
 			// Can't load directly from array (as index is non-constant), so
@@ -2858,7 +2873,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			switch typ := typ.(type) {
 			case *types.Array:
 				bufptr = val
-				buflen = llvm.ConstInt(b.uintptrType, uint64(typ.Len()), false)
+				buflen = b.constArrayLen(typ.Len(), getPos(expr))
 				bufType = b.getLLVMType(typ)
 				// Check for nil pointer before calculating the address, from
 				// the spec:
@@ -3032,7 +3047,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			// slice an array
 			arrayType := typ.Elem().Underlying().(*types.Array)
 			length := arrayType.Len()
-			llvmLen := llvm.ConstInt(b.uintptrType, uint64(length), false)
+			llvmLen := b.constArrayLen(length, getPos(expr))
 			if high.IsNil() {
 				high = llvmLen
 			}
@@ -3149,7 +3164,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		slice := b.getValue(expr.X, getPos(expr))
 		sliceLen := b.CreateExtractValue(slice, 1, "")
 		arrayLen := expr.Type().Underlying().(*types.Pointer).Elem().Underlying().(*types.Array).Len()
-		b.createSliceToArrayPointerCheck(sliceLen, arrayLen)
+		b.createSliceToArrayPointerCheck(sliceLen, arrayLen, getPos(expr))
 		ptr := b.CreateExtractValue(slice, 0, "")
 		return ptr, nil
 	case *ssa.TypeAssert:
