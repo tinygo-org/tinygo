@@ -52,6 +52,26 @@ func typeHasPointers(typ llvm.Type) bool {
 	return false
 }
 
+// constElement returns element i of the constant struct or array v.
+func constElement(v llvm.Value, i int) llvm.Value {
+	if v.IsAConstantAggregateZero().IsNil() {
+		return v.Operand(i)
+	}
+	// LLVM stores an aggregate with only zero elements as a
+	// zeroinitializer, which has no operands. Each element is zero too.
+	return llvm.ConstNull(elementType(v.Type(), i))
+}
+
+// elementType returns the type of element i of the struct or array type typ.
+func elementType(typ llvm.Type, i int) llvm.Type {
+	switch typ.TypeKind() {
+	case llvm.StructTypeKind:
+		return typ.StructTypeAtIndex(i)
+	default:
+		return typ.ElementType()
+	}
+}
+
 // stripPointerCasts strips instruction pointer casts (getelementptr and
 // bitcast) and returns the original value without the casts.
 func stripPointerCasts(value llvm.Value) llvm.Value {

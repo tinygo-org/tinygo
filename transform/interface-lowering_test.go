@@ -110,6 +110,28 @@ define ptr @box() {
 `,
 		dispatch: true,
 	}, {
+		// The method set of an interface without methods is a zeroinitializer.
+		name: "boxed with empty interface type",
+		ir: `
+@"reflect/types.type:interface:{}" = linkonce_odr constant { i8, ptr, { i32, [0 x ptr], [0 x ptr], [0 x ptr] } } { i8 20, ptr null, { i32, [0 x ptr], [0 x ptr], [0 x ptr] } zeroinitializer }, align 4
+
+define ptr @box() {
+  ret ptr getelementptr inbounds ({ ptr, i8, ptr, ptr }, ptr @"reflect/types.type:named:Number", i32 0, i32 1)
+}
+`,
+		dispatch: true,
+	}, {
+		// Struct field names share the type prefix, but are i8 arrays.
+		name: "boxed with struct field name",
+		ir: `
+@"reflect/types.type:struct:{Method:basic:int}.Method" = linkonce_odr unnamed_addr constant [9 x i8] c"\04\00Method\00", align 1
+
+define ptr @box() {
+  ret ptr getelementptr inbounds ({ ptr, i8, ptr, ptr }, ptr @"reflect/types.type:named:Number", i32 0, i32 1)
+}
+`,
+		dispatch: true,
+	}, {
 		name: "only element of boxed chan",
 		ir: `
 define ptr @box() {
