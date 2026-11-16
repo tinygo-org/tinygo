@@ -184,7 +184,7 @@ func (b *builder) createWasmExport() {
 	}
 
 	// Create a single basic block inside of it.
-	bb := llvm.AddBasicBlock(exportedFn, "entry")
+	bb := b.ctx.AddBasicBlock(exportedFn, "entry")
 	builder.SetInsertPointAtEnd(bb)
 
 	// Insert an assertion to make sure this //go:wasmexport function is not

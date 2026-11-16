@@ -229,6 +229,29 @@ func TestCompiler(t *testing.T) {
 	}
 }
 
+func TestWasmExportBasicBlockContext(t *testing.T) {
+	for _, scheduler := range []string{"none", "asyncify"} {
+		t.Run(scheduler, func(t *testing.T) {
+			mod, errs := testCompilePackage(t, &compileopts.Options{
+				Target:    "wasm",
+				Scheduler: scheduler,
+			}, "lenrange-wasmexport.go")
+			if len(errs) != 0 {
+				t.Fatal(errs)
+			}
+			defer mod.Dispose()
+
+			fn := mod.NamedFunction("main.exportString#wasmexport")
+			if fn.IsNil() {
+				t.Fatal("wasm export wrapper not found")
+			}
+			if got := fn.EntryBasicBlock().AsValue().Type().Context(); got != mod.Context() {
+				t.Fatalf("wasm export entry block context = %v, want %v", got, mod.Context())
+			}
+		})
+	}
+}
+
 func TestCGoGlobalOrder(t *testing.T) {
 	for range 10 {
 		mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "cgo-global-order.go")
