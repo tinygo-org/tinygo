@@ -8,6 +8,7 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/loader"
+	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -35,6 +36,21 @@ func refBlockInCycle(bb llvm.BasicBlock) bool {
 		}
 	}
 	return false
+}
+
+// refDerivedFrom is the algorithm that Value.UnderlyingObject replaced in
+// isLocalAlloca and isArgumentPointer.
+func refDerivedFrom(ptr llvm.Value, match func(llvm.Value) bool) bool {
+	for {
+		switch {
+		case match(ptr):
+			return true
+		case !ptr.IsAGetElementPtrInst().IsNil(), !ptr.IsABitCastInst().IsNil():
+			ptr = ptr.Operand(0)
+		default:
+			return false
+		}
+	}
 }
 
 // compilePackagesForTesting compiles every package of the program into its own
@@ -86,33 +102,62 @@ func compilePackagesForTesting(t *testing.T, filename string) (mods []llvm.Modul
 	return mods, machine
 }
 
+type helperStats struct {
+	blocks, cyclic, pointers, allocas, arguments int
+}
+
 // compareHelpers compares the LLVM based helpers with the old algorithms on
-// the module. It checks every stride-th block.
-func compareHelpers(t *testing.T, mod llvm.Module, stride int, blocks, cyclic *int) {
+// the module. It checks every stride-th block for InCycle, and the pointer
+// operands of all blocks.
+func compareHelpers(t *testing.T, mod llvm.Module, stride int, stats *helperStats) {
 	t.Helper()
+	isAlloca := func(v llvm.Value) bool { return !v.IsAAllocaInst().IsNil() }
+	isArgument := func(v llvm.Value) bool { return !v.IsAArgument().IsNil() }
 	n := 0
 	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
 		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
 			n++
-			if n%stride != 0 {
-				continue
+			if n%stride == 0 {
+				stats.blocks++
+				want := refBlockInCycle(bb)
+				if want {
+					stats.cyclic++
+				}
+				if got := bb.InCycle(); got != want {
+					t.Errorf("%s block %s: InCycle() = %v, want %v", fn.Name(), bb.AsValue().Name(), got, want)
+				}
 			}
-			*blocks++
-			want := refBlockInCycle(bb)
-			if want {
-				*cyclic++
-			}
-			if got := bb.InCycle(); got != want {
-				t.Errorf("%s block %s: InCycle() = %v, want %v", fn.Name(), bb.AsValue().Name(), got, want)
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				for i := 0; i < inst.OperandsCount(); i++ {
+					op := inst.Operand(i)
+					if op.Type().TypeKind() != llvm.PointerTypeKind {
+						continue
+					}
+					stats.pointers++
+					wantAlloca := refDerivedFrom(op, isAlloca)
+					wantArgument := refDerivedFrom(op, isArgument)
+					if wantAlloca {
+						stats.allocas++
+					}
+					if wantArgument {
+						stats.arguments++
+					}
+					if got := transform.IsLocalAlloca(op); got != wantAlloca {
+						t.Errorf("%s operand %d of opcode %d: isLocalAlloca = %v, want %v", fn.Name(), i, inst.InstructionOpcode(), got, wantAlloca)
+					}
+					if got := transform.IsArgumentPointer(op); got != wantArgument {
+						t.Errorf("%s operand %d of opcode %d: isArgumentPointer = %v, want %v", fn.Name(), i, inst.InstructionOpcode(), got, wantArgument)
+					}
+				}
 			}
 		}
 	}
 }
 
-// TestInCycleMatchesReference checks BasicBlock.InCycle on real programs, before
-// and after LLVM's optimizations. The old algorithm is quadratic, so a short
-// run samples the blocks.
-func TestInCycleMatchesReference(t *testing.T) {
+// TestHelpersMatchReference checks the helpers that use LLVM on real programs,
+// before and after LLVM's optimizations. The old InCycle is quadratic, so a
+// short run samples the blocks.
+func TestHelpersMatchReference(t *testing.T) {
 	t.Parallel()
 	programs := []string{"generics.go", "reflect.go"}
 	stride := 1
@@ -130,7 +175,7 @@ func TestInCycleMatchesReference(t *testing.T) {
 			t.Run(desc, func(t *testing.T) {
 				mods, machine := compilePackagesForTesting(t, filepath.Join("..", "testdata", name))
 				defer machine.Dispose()
-				var blocks, cyclic int
+				var stats helperStats
 				for _, mod := range mods {
 					if optimize {
 						po := llvm.NewPassBuilderOptions()
@@ -140,13 +185,13 @@ func TestInCycleMatchesReference(t *testing.T) {
 							t.Fatal(err)
 						}
 					}
-					compareHelpers(t, mod, stride, &blocks, &cyclic)
+					compareHelpers(t, mod, stride, &stats)
 					ctx := mod.Context()
 					mod.Dispose()
 					ctx.Dispose()
 				}
-				if cyclic == 0 || cyclic == blocks {
-					t.Errorf("the blocks checked do not cover both answers, %d of %d are in a cycle", cyclic, blocks)
+				if stats.cyclic == 0 || stats.cyclic == stats.blocks || stats.allocas == 0 || stats.arguments == 0 {
+					t.Errorf("the checks do not cover both answers, %+v", stats)
 				}
 			})
 		}
