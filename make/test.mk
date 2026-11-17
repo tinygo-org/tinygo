@@ -209,7 +209,7 @@ report-stdlib-tests-pass:
 	@rm $(jointmp).*
 
 # Standard library packages that pass tests quickly on the current platform
-TEST_PACKAGES_HOST_FULL_ONLY := internal/synctest testing/synctest
+TEST_PACKAGES_HOST_FULL_ONLY := internal/synctest testing/synctest ./tests/stackbuffer
 ifeq ($(uname),Darwin)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_DARWIN)
 TEST_PACKAGES_HOST_FULL_ONLY += io/fs
