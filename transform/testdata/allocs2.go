@@ -46,8 +46,8 @@ func main() {
 	s8 := []int{3, 5, 8} // OUT: escapes at line 47
 	callVariadic(s8...)
 
-	n4 := 3 // OUT: escapes at line 51
-	n5 := 7 // OUT: escapes at line 51
+	n4 := 3 // OUT: escapes at line 53
+	n5 := 7 // OUT: escapes at line 53
 	func() {
 		n4 = n5
 	}()
