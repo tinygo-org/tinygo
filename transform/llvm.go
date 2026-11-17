@@ -89,3 +89,30 @@ func stripPointerCasts(value llvm.Value) llvm.Value {
 	}
 	return value
 }
+
+// memoryEffects holds two bits, ref and mod, per memory location. See
+// https://github.com/llvm/llvm-project/blob/94ebcfd16dac67486bae624f74e1c5c789448bae/llvm/include/llvm/Support/ModRef.h#L62
+type memoryEffects uint64
+
+var memoryAttrKind = llvm.AttributeKindID("memory")
+
+// readMemoryEffects returns the memory effects of fn. A function without a
+// memory attribute may read and write any memory.
+func readMemoryEffects(fn llvm.Value) memoryEffects {
+	attr := fn.GetEnumFunctionAttribute(memoryAttrKind)
+	if attr.IsNil() {
+		return ^memoryEffects(0)
+	}
+	return memoryEffects(attr.GetEnumValue())
+}
+
+// onlyAccessesArgMem returns whether the function reads or writes only memory
+// that its pointer arguments point to.
+func (effects memoryEffects) onlyAccessesArgMem() bool {
+	return effects>>2 == 0
+}
+
+// onlyReadsMemory returns whether the function writes no memory.
+func (effects memoryEffects) onlyReadsMemory() bool {
+	return effects&0xaaaaaaaa == 0
+}

@@ -242,10 +242,7 @@ func isReadOnlyFunction(fn llvm.Value) bool {
 		!fn.GetEnumFunctionAttribute(llvm.AttributeKindID("readonly")).IsNil() {
 		return true
 	}
-	// memory(...) uses two bits per location and 2 means mod. See ModRef.h in
-	// LLVM.
-	attr := fn.GetEnumFunctionAttribute(llvm.AttributeKindID("memory"))
-	return !attr.IsNil() && attr.GetEnumValue()&0xaaaa == 0
+	return readMemoryEffects(fn).onlyReadsMemory()
 }
 
 // callWritesOnlyLocal returns whether the call writes only callee-local memory
@@ -313,8 +310,7 @@ func writesOnlyLocalMemory(fn llvm.Value, depth int) bool {
 						return false
 					}
 				}
-				attr := callee.GetEnumFunctionAttribute(llvm.AttributeKindID("memory"))
-				if (!attr.IsNil() && attr.GetEnumValue()&^0x3 == 0) || writesArgsOnly(callee) {
+				if readMemoryEffects(callee).onlyAccessesArgMem() || writesArgsOnly(callee) {
 					// memory(argmem: ...) only writes through arguments, which were
 					// checked above.
 					continue
