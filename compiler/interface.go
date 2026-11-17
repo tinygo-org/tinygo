@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -1606,12 +1607,13 @@ func (c *context) getInvokeFunction(instr *ssa.CallCommon) llvm.Value {
 		llvmFnType := c.getLLVMFunctionType(types.NewSignature(sig.Recv(), types.NewTuple(paramTuple...), sig.Results(), false))
 		llvmFn = llvm.AddFunction(c.mod, fnName, llvmFnType)
 		c.addStandardDeclaredAttributes(llvmFn)
-		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-invoke", c.getMethodSignatureName(instr.Method)))
-		if _, indirect := c.hasIndirectResult(sig); indirect {
-			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-indirect-result", "true"))
+		_, indirect := c.hasIndirectResult(sig)
+		stub := &llvmutil.InterfaceStub{
+			Methods:        c.getMethodsString(instr.Value.Type().Underlying().(*types.Interface)),
+			Invoke:         c.getMethodSignatureName(instr.Method),
+			IndirectResult: indirect,
 		}
-		methods := c.getMethodsString(instr.Value.Type().Underlying().(*types.Interface))
-		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("tinygo-methods", methods))
+		stub.Apply(llvmFn)
 	}
 	return llvmFn
 }
@@ -1633,8 +1635,8 @@ func (b *builder) createInterfaceTypeAssert(intf *types.Interface, actualType ll
 		llvmFnType := llvm.FunctionType(b.i1, []llvm.Type{b.dataPtrType}, false)
 		llvmFn = llvm.AddFunction(b.mod, fnName, llvmFnType)
 		b.addStandardDeclaredAttributes(llvmFn)
-		methods := b.getMethodsString(intf)
-		llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-methods", methods))
+		stub := &llvmutil.InterfaceStub{Methods: b.getMethodsString(intf)}
+		stub.Apply(llvmFn)
 	}
 	return b.CreateCall(llvmFn.GlobalValueType(), llvmFn, []llvm.Value{actualType}, "")
 }
