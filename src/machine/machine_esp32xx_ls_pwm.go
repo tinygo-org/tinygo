@@ -2,17 +2,17 @@
 
 // Low-speed LEDC code, shared by the ESP32-C3 and the ESP32-S3.
 //
-// Both chips have only the low-speed LEDC block. Their clock and timer registers
-// use the same names, so one copy of this code serves both.
+// Both chips have only the low-speed LEDC block. Their clock, timer and channel
+// registers use the same names, so one copy of this code serves both.
 //
 // The classic ESP32 has a high-speed block instead, with different register
-// names. Its versions of these two functions are in machine_esp32_pwm.go.
+// names. Its versions of these functions are in machine_esp32_pwm.go.
 //
-// The SVD (lib/cmsis-svd/data/Espressif/esp32s3.svd) describes the two bits that
-// make a change take effect on these chips. CONF0.PARA_UP "updates HPOINT,
-// DUTY_START, SIG_OUT_EN, TIMER_SEL, DUTY_NUM, DUTY_CYCLE, DUTY_SCALE, DUTY_INC
-// for channel and is auto-cleared by hardware". CONF1.DUTY_START "other CONF1
-// fields take effect when this bit is set to 1".
+// The SVD (lib/esp32-svd/svd/esp32s3.svd) describes the two bits that make a
+// change take effect on these chips. CONF0.PARA_UP updates HPOINT, DUTY_START,
+// SIG_OUT_EN, TIMER_SEL, DUTY_NUM, DUTY_CYCLE, DUTY_SCALE and DUTY_INC for the
+// channel and is cleared by hardware. CONF1.DUTY_START makes the other CONF1
+// fields take effect.
 
 package machine
 
@@ -36,39 +36,47 @@ func (pwm *LEDCPWM) enableClock() {
 }
 
 func (pwm *LEDCPWM) setTimerConf(dutyRes uint8, divReg uint32) {
-	t := pwm.timerNum
-	switch t {
-	case 0:
-		esp.LEDC.SetTIMER0_CONF_DUTY_RES(uint32(dutyRes))
-		esp.LEDC.SetTIMER0_CONF_CLK_DIV(divReg)
-		esp.LEDC.SetTIMER0_CONF_TICK_SEL(0)
-		esp.LEDC.SetTIMER0_CONF_PAUSE(0)
-		esp.LEDC.SetTIMER0_CONF_RST(1)
-		esp.LEDC.SetTIMER0_CONF_RST(0)
-		esp.LEDC.SetTIMER0_CONF_PARA_UP(1)
-	case 1:
-		esp.LEDC.SetTIMER1_CONF_DUTY_RES(uint32(dutyRes))
-		esp.LEDC.SetTIMER1_CONF_CLK_DIV(divReg)
-		esp.LEDC.SetTIMER1_CONF_TICK_SEL(0)
-		esp.LEDC.SetTIMER1_CONF_PAUSE(0)
-		esp.LEDC.SetTIMER1_CONF_RST(1)
-		esp.LEDC.SetTIMER1_CONF_RST(0)
-		esp.LEDC.SetTIMER1_CONF_PARA_UP(1)
-	case 2:
-		esp.LEDC.SetTIMER2_CONF_DUTY_RES(uint32(dutyRes))
-		esp.LEDC.SetTIMER2_CONF_CLK_DIV(divReg)
-		esp.LEDC.SetTIMER2_CONF_TICK_SEL(0)
-		esp.LEDC.SetTIMER2_CONF_PAUSE(0)
-		esp.LEDC.SetTIMER2_CONF_RST(1)
-		esp.LEDC.SetTIMER2_CONF_RST(0)
-		esp.LEDC.SetTIMER2_CONF_PARA_UP(1)
-	case 3:
-		esp.LEDC.SetTIMER3_CONF_DUTY_RES(uint32(dutyRes))
-		esp.LEDC.SetTIMER3_CONF_CLK_DIV(divReg)
-		esp.LEDC.SetTIMER3_CONF_TICK_SEL(0)
-		esp.LEDC.SetTIMER3_CONF_PAUSE(0)
-		esp.LEDC.SetTIMER3_CONF_RST(1)
-		esp.LEDC.SetTIMER3_CONF_RST(0)
-		esp.LEDC.SetTIMER3_CONF_PARA_UP(1)
+	t := &esp.LEDC.TIMER[pwm.timerNum]
+	t.SetCONF_DUTY_RES(uint32(dutyRes))
+	t.SetCONF_CLK_DIV(divReg)
+	t.SetCONF_TICK_SEL(0)
+	t.SetCONF_PAUSE(0)
+	t.SetCONF_RST(1)
+	t.SetCONF_RST(0)
+	t.SetCONF_PARA_UP(1)
+}
+
+// chanDisable stops a channel from driving its pin.
+func chanDisable(ch uint8) {
+	c := &esp.LEDC.CH[ch]
+	c.SetCONF0_SIG_OUT_EN(0)
+	c.SetCONF0_PARA_UP(1)
+}
+
+// chanOp implements LEDC low-speed channel ops.
+// DUTY_NUM is 0 so a new DUTY_START is not dropped (see machine_esp32_pwm.go).
+// Two Set calls within about 100 ns can still both be dropped.
+func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32) {
+	c := &esp.LEDC.CH[ch]
+	switch op {
+	case ledcChanOpInit:
+		c.SetCONF0_TIMER_SEL(uint32(pwm.timerNum))
+		c.SetCONF0_SIG_OUT_EN(1)
+		c.SetCONF0_IDLE_LV(0)
+		c.SetHPOINT(0)
+		c.SetDUTY(0)
+		c.SetCONF1_DUTY_CYCLE(0)
+		c.SetCONF1_DUTY_NUM(0)
+		c.SetCONF1_DUTY_INC(1)
+		c.SetCONF1_DUTY_START(1)
+		c.SetCONF0_PARA_UP(1)
+	case ledcChanOpSetDuty:
+		c.SetDUTY(duty)
+		c.SetCONF1_DUTY_CYCLE(0)
+		c.SetCONF1_DUTY_NUM(0)
+		c.SetCONF1_DUTY_INC(1)
+		c.SetCONF1_DUTY_START(1)
+		c.SetCONF0_SIG_OUT_EN(1)
+		c.SetCONF0_PARA_UP(1)
 	}
 }

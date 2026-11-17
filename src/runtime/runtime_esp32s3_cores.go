@@ -78,9 +78,9 @@ var (
 // Set (1) or clear (0) the FROM_CPU interrupt of the given core.
 func signalCore(core, value uint32) {
 	if core == 0 {
-		esp.SYSTEM.CPU_INTR_FROM_CPU_0.Set(value)
+		esp.SYSTEM.CPU_INTR_FROM_CPU0.Set(value)
 	} else {
-		esp.SYSTEM.CPU_INTR_FROM_CPU_1.Set(value)
+		esp.SYSTEM.CPU_INTR_FROM_CPU1.Set(value)
 	}
 }
 
@@ -173,8 +173,8 @@ func interruptEnableLocal(mask uint32)
 // Start core 1, following start_other_core in esp-idf
 // components/esp_system/port/cpu_start.c.
 func startSecondaryCores() {
-	esp.INTERRUPT_CORE0.SetCPU_INTR_FROM_CPU_0_MAP(crossCoreCPUInterrupt)
-	esp.INTERRUPT_CORE1.SetCPU_INTR_FROM_CPU_1_MAP(crossCoreCPUInterrupt)
+	esp.INTERRUPT_CORE0.SetCORE_0_INTR_MAP79_MAP(crossCoreCPUInterrupt)
+	esp.INTERRUPT_CORE1.SetCORE_1_INTR_MAP80_MAP(crossCoreCPUInterrupt)
 	signalCore(0, 0)
 	signalCore(1, 0)
 	crossCoreInterrupt = interrupt.New(crossCoreCPUInterrupt, crossCoreHandler)
@@ -359,4 +359,9 @@ func coreStackTop(core uint32) uintptr {
 		runtimeFatal("unexpected core")
 		return 0
 	}
+}
+
+// interruptMapCore1 returns the core 1 interrupt matrix register for interrupt source irq.
+func interruptMapCore1(irq int) *volatile.Register32 {
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.INTERRUPT_CORE1.CORE_1_INTR_MAP0), irq*4))
 }

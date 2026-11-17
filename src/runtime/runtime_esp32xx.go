@@ -24,22 +24,22 @@ func initTimer() {
 	//   INCREASE: Count up every tick (as opposed to counting down).
 	//   DIVIDER:  16-bit prescaler. Each chip sets timerDivider.
 	// esp.TIMG0.T0CONFIG.Set(0 << esp.TIMG_T0CONFIG_T0_EN_Pos)
-	esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_EN | esp.TIMG_T0CONFIG_INCREASE | timerDivider<<esp.TIMG_T0CONFIG_DIVIDER_Pos)
+	esp.TIMG0.T[0].CONFIG.Set(esp.TIMG_T_CONFIG_EN | esp.TIMG_T_CONFIG_INCREASE | timerDivider<<esp.TIMG_T_CONFIG_DIVIDER_Pos)
 	// esp.TIMG0.T0CONFIG.Set(1 << esp.TIMG_T0CONFIG_T0_DIVCNT_RST_Pos)
 	// esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_T0_EN)
 
 	// Set the timer counter value to 0.
-	esp.TIMG0.T0LOADLO.Set(0)
-	esp.TIMG0.T0LOADHI.Set(0)
-	esp.TIMG0.T0LOAD.Set(0) // value doesn't matter.
+	esp.TIMG0.T[0].LOADLO.Set(0)
+	esp.TIMG0.T[0].LOADHI.Set(0)
+	esp.TIMG0.T[0].LOAD.Set(0) // value doesn't matter.
 }
 
 func ticks() timeUnit {
 	// First, update the LO and HI register pair by writing any value to the
 	// register. This allows reading the pair atomically.
-	esp.TIMG0.T0UPDATE.Set(0)
+	esp.TIMG0.T[0].UPDATE.Set(0)
 	// Then read the two 32-bit parts of the timer.
-	return timeUnit(uint64(esp.TIMG0.T0LO.Get()) | uint64(esp.TIMG0.T0HI.Get())<<32)
+	return timeUnit(uint64(esp.TIMG0.T[0].LO.Get()) | uint64(esp.TIMG0.T[0].HI.Get())<<32)
 }
 
 func nanosecondsToTicks(ns int64) timeUnit {

@@ -32,6 +32,6 @@ func enableI2C0PeriphClock() {
 	// in PCR.
 	// Select the XTAL (40 MHz) source and enable the clock gate, otherwise SCL
 	// is never driven and no bytes are clocked onto the bus.
-	esp.PCR.SetI2C_SCLK_CONF_I2C_SCLK_SEL(i2cClkSource)
-	esp.PCR.SetI2C_SCLK_CONF_I2C_SCLK_EN(1)
+	esp.PCR.SetI2C0_SCLK_CONF_I2C_SCLK_SEL(i2cClkSource)
+	esp.PCR.SetI2C0_SCLK_CONF_I2C_SCLK_EN(1)
 }

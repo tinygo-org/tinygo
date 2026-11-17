@@ -60,17 +60,17 @@ var timerAlarmInterrupt interrupt.Interrupt
 
 // timerAlarmHandler clears the timer interrupt at the peripheral level.
 func timerAlarmHandler(interrupt.Interrupt) {
-	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+	esp.TIMG0.INT_CLR.Set(1)
 }
 
 // initTimerInterrupt routes the TIMG0 timer 0 alarm interrupt to a CPU
 // interrupt and registers a handler.
 func initTimerInterrupt() {
 	// Map the TIMG0 T0 peripheral interrupt to a CPU interrupt line.
-	esp.INTERRUPT_CORE0.TG0_T0_INTR_MAP.Set(timerAlarmCPUInterrupt)
+	interruptMap(esp.IRQ_TG0_T0_LEVEL).Set(timerAlarmCPUInterrupt)
 
 	// Enable T0 interrupt at the timer group level.
-	esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
+	esp.TIMG0.INT_ENA.SetBits(1)
 
 	// Register the interrupt handler.
 	timerAlarmInterrupt = interrupt.New(timerAlarmCPUInterrupt, timerAlarmHandler)
@@ -88,11 +88,11 @@ func sleepTicks(d timeUnit) {
 	for ticks() < target {
 		interruptPending.Set(0)
 
-		esp.TIMG0.T0ALARMLO.Set(uint32(target))
-		esp.TIMG0.T0ALARMHI.Set(uint32(target >> 32))
+		esp.TIMG0.T[0].ALARMLO.Set(uint32(target))
+		esp.TIMG0.T[0].ALARMHI.Set(uint32(target >> 32))
 
 		// Enable the alarm (auto-clears when alarm fires).
-		esp.TIMG0.T0CONFIG.SetBits(esp.TIMG_T0CONFIG_ALARM_EN)
+		esp.TIMG0.T[0].CONFIG.SetBits(esp.TIMG_T_CONFIG_ALARM_EN)
 
 		for interruptPending.Get() == 0 {
 			if ticks() >= target {

@@ -254,7 +254,7 @@ var (
 )
 
 func setupPinInterrupt() error {
-	esp.INTERRUPT_CORE0.GPIO_INTERRUPT_PRO_MAP.Set(cpuInterruptFromPin)
+	interruptMap(esp.IRQ_GPIO).Set(cpuInterruptFromPin)
 	return interrupt.New(cpuInterruptFromPin, func(interrupt.Interrupt) {
 		status := esp.GPIO.STATUS.Get()
 		// Clear before processing so new edges during callbacks are not lost.
@@ -295,11 +295,11 @@ const (
 	defaultStopBit  = 1
 	defaultParity   = ParityNone
 
-	uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
-		esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
-		esp.UART_INT_ENA_FRM_ERR_INT_ENA |
-		esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA |
-		esp.UART_INT_ENA_GLITCH_DET_INT_ENA
+	uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL |
+		esp.UART_INT_ENA_PARITY_ERR |
+		esp.UART_INT_ENA_FRM_ERR |
+		esp.UART_INT_ENA_RXFIFO_OVF |
+		esp.UART_INT_ENA_GLITCH_DET
 
 	uartClockFreq = 32e6
 )
@@ -324,12 +324,12 @@ func (uart *UART) Configure(config UARTConfig) error {
 	switch {
 	case uart.Bus == esp.UART0:
 		return uart.configure(config, registerSet{
-			interruptMapReg:  &esp.INTERRUPT_CORE0.UART0_INTR_MAP,
+			interruptMapReg:  interruptMap(esp.IRQ_UART0),
 			gpioMatrixSignal: 6,
 		})
 	case uart.Bus == esp.UART1:
 		return uart.configure(config, registerSet{
-			interruptMapReg:  &esp.INTERRUPT_CORE0.UART1_INTR_MAP,
+			interruptMapReg:  interruptMap(esp.IRQ_UART1),
 			gpioMatrixSignal: 9,
 		})
 	}
@@ -398,29 +398,29 @@ func initUARTClock(bus *esp.UART_Type) {
 	// See ESP-IDF esp_hal_uart/esp32h2/include/hal/uart_ll.h uart_ll_set_sclk.
 	switch bus {
 	case esp.UART0:
-		esp.PCR.SetUART0_CONF_UART0_CLK_EN(1)
-		esp.PCR.SetUART0_CONF_UART0_RST_EN(0) // ensure not in reset
+		esp.PCR.UART[0].SetCONF_CLK_EN(1)
+		esp.PCR.UART[0].SetCONF_RST_EN(0) // ensure not in reset
 		bus.SetCLK_CONF_RST_CORE(1)
-		esp.PCR.SetUART0_CONF_UART0_RST_EN(1)
-		esp.PCR.SetUART0_CONF_UART0_RST_EN(0)
+		esp.PCR.UART[0].SetCONF_RST_EN(1)
+		esp.PCR.UART[0].SetCONF_RST_EN(0)
 		bus.SetCLK_CONF_RST_CORE(0)
-		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_SEL(3)
-		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_EN(1)
-		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_NUM(0)
-		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_A(0)
-		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_B(0)
+		esp.PCR.UART[0].SetCLK_CONF_SCLK_SEL(3)
+		esp.PCR.UART[0].SetCLK_CONF_SCLK_EN(1)
+		esp.PCR.UART[0].SetCLK_CONF_SCLK_DIV_NUM(0)
+		esp.PCR.UART[0].SetCLK_CONF_SCLK_DIV_A(0)
+		esp.PCR.UART[0].SetCLK_CONF_SCLK_DIV_B(0)
 	case esp.UART1:
-		esp.PCR.SetUART1_CONF_UART1_CLK_EN(1)
-		esp.PCR.SetUART1_CONF_UART1_RST_EN(0)
+		esp.PCR.UART[1].SetCONF_CLK_EN(1)
+		esp.PCR.UART[1].SetCONF_RST_EN(0)
 		bus.SetCLK_CONF_RST_CORE(1)
-		esp.PCR.SetUART1_CONF_UART1_RST_EN(1)
-		esp.PCR.SetUART1_CONF_UART1_RST_EN(0)
+		esp.PCR.UART[1].SetCONF_RST_EN(1)
+		esp.PCR.UART[1].SetCONF_RST_EN(0)
 		bus.SetCLK_CONF_RST_CORE(0)
-		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_SEL(3)
-		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_EN(1)
-		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_NUM(0)
-		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_A(0)
-		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_B(0)
+		esp.PCR.UART[1].SetCLK_CONF_SCLK_SEL(3)
+		esp.PCR.UART[1].SetCLK_CONF_SCLK_EN(1)
+		esp.PCR.UART[1].SetCLK_CONF_SCLK_DIV_NUM(0)
+		esp.PCR.UART[1].SetCLK_CONF_SCLK_DIV_A(0)
+		esp.PCR.UART[1].SetCLK_CONF_SCLK_DIV_B(0)
 	}
 	// wait for Core Clock to ready for configuration
 	for bus.GetREG_UPDATE() > 0 {
@@ -439,9 +439,9 @@ func (uart *UART) SetBaudRate(baudRate uint32) {
 	// The SCLK divisor is in the PCR register.
 	switch uart.Bus {
 	case esp.UART0:
-		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_NUM(uint32(sclk_div - 1))
+		esp.PCR.UART[0].SetCLK_CONF_SCLK_DIV_NUM(uint32(sclk_div - 1))
 	case esp.UART1:
-		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_NUM(uint32(sclk_div - 1))
+		esp.PCR.UART[1].SetCLK_CONF_SCLK_DIV_NUM(uint32(sclk_div - 1))
 	}
 }
 
@@ -486,7 +486,7 @@ func (uart *UART) serveInterrupt(num int) {
 	// block UART interrupts while processing
 	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
 
-	if interrutFlag&esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA > 0 {
+	if interrutFlag&esp.UART_INT_ENA_RXFIFO_FULL > 0 {
 		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
 			b := uart.Bus.GetFIFO_RXFIFO_RD_BYTE()
 			if !uart.Buffer.Put(byte(b & 0xff)) {
@@ -494,16 +494,16 @@ func (uart *UART) serveInterrupt(num int) {
 			}
 		}
 	}
-	if interrutFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA > 0 {
+	if interrutFlag&esp.UART_INT_ENA_PARITY_ERR > 0 {
 		uart.ParityErrorDetected = true
 	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA {
+	if 0 != interrutFlag&esp.UART_INT_ENA_FRM_ERR {
 		uart.DataErrorDetected = true
 	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA {
+	if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_OVF {
 		uart.DataOverflowDetected = true
 	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA {
+	if 0 != interrutFlag&esp.UART_INT_ENA_GLITCH_DET {
 		uart.DataErrorDetected = true
 	}
 
@@ -526,11 +526,11 @@ func (uart *UART) enableReceiver() {
 	uart.Bus.SetCONF0_RXFIFO_RST(1)
 	uart.Bus.SetCONF0_RXFIFO_RST(0)
 	uart.Bus.SetCONF1_RXFIFO_FULL_THRHD(1)
-	uart.Bus.SetINT_ENA_RXFIFO_FULL_INT_ENA(1)
-	uart.Bus.SetINT_ENA_FRM_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_PARITY_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_GLITCH_DET_INT_ENA(1)
-	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
+	uart.Bus.SetINT_ENA_RXFIFO_FULL(1)
+	uart.Bus.SetINT_ENA_FRM_ERR(1)
+	uart.Bus.SetINT_ENA_PARITY_ERR(1)
+	uart.Bus.SetINT_ENA_GLITCH_DET(1)
+	uart.Bus.SetINT_ENA_RXFIFO_OVF(1)
 }
 
 func (uart *UART) writeByte(b byte) error {

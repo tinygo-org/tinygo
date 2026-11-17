@@ -72,9 +72,9 @@ func main() {
 	// Select PLL_F80M (80MHz) as the source so the timer counts at 40MHz and
 	// the 25ns/tick assumption holds. Clock source encoding (esp-idf
 	// timer_ll_set_clock_source): 0 = XTAL, 1 = PLL_F80M, 2 = RC_FAST.
-	esp.PCR.SetTIMERGROUP0_CONF_TG0_CLK_EN(1)
-	esp.PCR.SetTIMERGROUP0_TIMER_CLK_CONF_TG0_TIMER_CLK_SEL(1)
-	esp.PCR.SetTIMERGROUP0_TIMER_CLK_CONF_TG0_TIMER_CLK_EN(1)
+	esp.PCR.TIMERGROUP[0].SetCONF_CLK_EN(1)
+	esp.PCR.TIMERGROUP[0].SetTIMER_CLK_CONF_TIMER_CLK_SEL(1)
+	esp.PCR.TIMERGROUP[0].SetTIMER_CLK_CONF_TIMER_CLK_EN(1)
 
 	clearbss()
 

@@ -91,7 +91,7 @@ func interruptInit() {
 	mie := riscv.DisableInterrupts()
 
 	// Reset all interrupt source priorities to zero.
-	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI_1
+	priReg := &esp.INTERRUPT_CORE0.CPU_INT_PRI1
 	for i := 0; i < 31; i++ {
 		priReg.Set(0)
 		priReg = (*volatile.Register32)(unsafe.Add(unsafe.Pointer(priReg), 4))
@@ -121,24 +121,24 @@ var timerAlarmInterrupt interrupt.Interrupt
 
 // timerAlarmHandler clears the timer interrupt at the peripheral level.
 func timerAlarmHandler(interrupt.Interrupt) {
-	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+	esp.TIMG0.INT_CLR.Set(1)
 }
 
 // initTimerInterrupt routes the TIMG0 timer 0 alarm interrupt to a CPU
 // interrupt and registers a handler that signals timerWakeup.
 func initTimerInterrupt() {
 	// Map the TIMG0 T0 peripheral interrupt to a CPU interrupt line.
-	esp.INTERRUPT_CORE0.TG_T0_INT_MAP.Set(timerAlarmCPUInterrupt)
+	interruptMap(esp.IRQ_TG0_T0_LEVEL).Set(timerAlarmCPUInterrupt)
 
 	// Enable T0 interrupt at the timer group level.
-	esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
+	esp.TIMG0.INT_ENA.SetBits(1)
 
 	// Register the interrupt handler (compile-time wiring).
 	timerAlarmInterrupt = interrupt.New(timerAlarmCPUInterrupt, timerAlarmHandler)
 	timerAlarmInterrupt.Enable()
 
 	// Raise the priority above the default that Enable sets for peripherals.
-	priReg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI_0), timerAlarmCPUInterrupt*4))
+	priReg := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.INTERRUPT_CORE0.CPU_INT_PRI0), timerAlarmCPUInterrupt*4))
 	priReg.Set(10)
 }
 
@@ -152,11 +152,11 @@ func sleepTicks(d timeUnit) {
 		// as the 54-bit counter allows).
 		interruptPending.Set(0)
 
-		esp.TIMG0.T0ALARMLO.Set(uint32(target))
-		esp.TIMG0.T0ALARMHI.Set(uint32(target >> 32))
+		esp.TIMG0.T[0].ALARMLO.Set(uint32(target))
+		esp.TIMG0.T[0].ALARMHI.Set(uint32(target >> 32))
 
 		// Enable the alarm (auto-clears when alarm fires).
-		esp.TIMG0.T0CONFIG.SetBits(esp.TIMG_T0CONFIG_ALARM_EN)
+		esp.TIMG0.T[0].CONFIG.SetBits(esp.TIMG_T_CONFIG_ALARM_EN)
 
 		// Wait for any interrupt (timer alarm or other) or a timeout.
 		for interruptPending.Get() == 0 {

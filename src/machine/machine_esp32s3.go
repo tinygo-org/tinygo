@@ -389,7 +389,7 @@ var (
 )
 
 func setupPinInterrupt() error {
-	esp.INTERRUPT_CORE0.SetGPIO_INTERRUPT_PRO_MAP(cpuInterruptFromPin)
+	interruptMap(esp.IRQ_GPIO).Set(cpuInterruptFromPin)
 	return interrupt.New(cpuInterruptFromPin, func(interrupt.Interrupt) {
 		// Read and immediately clear interrupt status bits.
 		// Clearing before processing is critical for edge-triggered CPU
@@ -477,13 +477,13 @@ func initADCClock() {
 	// only support ADC_CTRL_CLK set to 1
 	esp.APB_SARADC.SetCLKM_CONF_CLK_SEL(1)
 
-	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_GATED(1)
+	esp.APB_SARADC.SetCTRL_SAR_CLK_GATED(1)
 
 	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_NUM(15)
 	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_B(1)
 	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_A(0)
 
-	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_DIV(1)
+	esp.APB_SARADC.SetCTRL_SAR_CLK_DIV(1)
 	esp.APB_SARADC.SetCLKM_CONF_CLK_EN(1)
 }
 

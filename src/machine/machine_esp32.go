@@ -336,11 +336,11 @@ func (p Pin) configureRTCPull(mode PinMode) {
 		esp.RTC_IO.SetTOUCH_PAD3_RUE(rue)
 		esp.RTC_IO.SetTOUCH_PAD3_RDE(rde)
 	case 25:
-		esp.RTC_IO.SetPAD_DAC1_PDAC1_RUE(rue)
-		esp.RTC_IO.SetPAD_DAC1_PDAC1_RDE(rde)
+		esp.RTC_IO.SetPAD_DAC1_RUE(rue)
+		esp.RTC_IO.SetPAD_DAC1_RDE(rde)
 	case 26:
-		esp.RTC_IO.SetPAD_DAC2_PDAC2_RUE(rue)
-		esp.RTC_IO.SetPAD_DAC2_PDAC2_RDE(rde)
+		esp.RTC_IO.SetPAD_DAC2_RUE(rue)
+		esp.RTC_IO.SetPAD_DAC2_RDE(rde)
 	case 27:
 		esp.RTC_IO.SetTOUCH_PAD7_RUE(rue)
 		esp.RTC_IO.SetTOUCH_PAD7_RDE(rde)
@@ -424,7 +424,7 @@ var (
 )
 
 func setupPinInterrupt() error {
-	esp.DPORT.SetPRO_GPIO_INTERRUPT_MAP_PRO_GPIO_INTERRUPT_PRO_MAP(cpuInterruptFromPin)
+	interruptMap(esp.IRQ_GPIO).Set(cpuInterruptFromPin)
 	return interrupt.New(cpuInterruptFromPin, handleGPIOInterrupt).Enable()
 }
 
@@ -495,12 +495,12 @@ var (
 const cpuInterruptFromUART = 8
 
 // uartInterrupts is the set of UART interrupt flags we care about for RX.
-const uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
-	esp.UART_INT_ENA_RXFIFO_TOUT_INT_ENA |
-	esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
-	esp.UART_INT_ENA_FRM_ERR_INT_ENA |
-	esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA |
-	esp.UART_INT_ENA_GLITCH_DET_INT_ENA
+const uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL |
+	esp.UART_INT_ENA_RXFIFO_TOUT |
+	esp.UART_INT_ENA_PARITY_ERR |
+	esp.UART_INT_ENA_FRM_ERR |
+	esp.UART_INT_ENA_RXFIFO_OVF |
+	esp.UART_INT_ENA_GLITCH_DET
 
 type UART struct {
 	Bus    *esp.UART_Type
@@ -583,11 +583,11 @@ func (uart *UART) configureInterrupt() {
 	// Map this UART's peripheral interrupt to a CPU interrupt line via DPORT.
 	switch uart.Bus {
 	case esp.UART0:
-		esp.DPORT.SetPRO_UART_INTR_MAP(cpuInterruptFromUART)
+		interruptMap(esp.IRQ_UART0).Set(cpuInterruptFromUART)
 	case esp.UART1:
-		esp.DPORT.SetPRO_UART1_INTR_MAP(cpuInterruptFromUART)
+		interruptMap(esp.IRQ_UART1).Set(cpuInterruptFromUART)
 	case esp.UART2:
-		esp.DPORT.SetPRO_UART2_INTR_MAP(cpuInterruptFromUART)
+		interruptMap(esp.IRQ_UART2).Set(cpuInterruptFromUART)
 	}
 
 	// Register the ISR only once (shared across all UARTs on the same CPU int).
@@ -619,7 +619,7 @@ func (uart *UART) serveInterrupt() {
 	// Block UART interrupts while processing.
 	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
 
-	if interruptFlag&(esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA|esp.UART_INT_ENA_RXFIFO_TOUT_INT_ENA) != 0 {
+	if interruptFlag&(esp.UART_INT_ENA_RXFIFO_FULL|esp.UART_INT_ENA_RXFIFO_TOUT) != 0 {
 		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
 			// The ESP32 UART FIFO must be accessed through the AHB address
 			// (base + 0x200C0000 == 0x60000000 for UART0), not the APB FIFO
@@ -630,16 +630,16 @@ func (uart *UART) serveInterrupt() {
 			}
 		}
 	}
-	if interruptFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA > 0 {
+	if interruptFlag&esp.UART_INT_ENA_PARITY_ERR > 0 {
 		uart.parityErrorDetected = true
 	}
-	if interruptFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA != 0 {
+	if interruptFlag&esp.UART_INT_ENA_FRM_ERR != 0 {
 		uart.dataErrorDetected = true
 	}
-	if interruptFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA != 0 {
+	if interruptFlag&esp.UART_INT_ENA_RXFIFO_OVF != 0 {
 		uart.dataOverflowDetected = true
 	}
-	if interruptFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA != 0 {
+	if interruptFlag&esp.UART_INT_ENA_GLITCH_DET != 0 {
 		uart.dataErrorDetected = true
 	}
 
@@ -662,12 +662,12 @@ func (uart *UART) enableReceiver() {
 	uart.Bus.SetCONF1_RX_TOUT_THRHD(2)
 	uart.Bus.SetCONF1_RX_TOUT_EN(1)
 	// Enable RX-related interrupts.
-	uart.Bus.SetINT_ENA_RXFIFO_FULL_INT_ENA(1)
-	uart.Bus.SetINT_ENA_RXFIFO_TOUT_INT_ENA(1)
-	uart.Bus.SetINT_ENA_FRM_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_PARITY_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_GLITCH_DET_INT_ENA(1)
-	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
+	uart.Bus.SetINT_ENA_RXFIFO_FULL(1)
+	uart.Bus.SetINT_ENA_RXFIFO_TOUT(1)
+	uart.Bus.SetINT_ENA_FRM_ERR(1)
+	uart.Bus.SetINT_ENA_PARITY_ERR(1)
+	uart.Bus.SetINT_ENA_GLITCH_DET(1)
+	uart.Bus.SetINT_ENA_RXFIFO_OVF(1)
 }
 
 func (uart *UART) writeByte(b byte) error {
@@ -901,4 +901,9 @@ func (spi *SPI) Tx(w, r []byte) error {
 	}
 
 	return nil
+}
+
+// interruptMap returns the interrupt matrix register for interrupt source irq.
+func interruptMap(irq int) *volatile.Register32 {
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.DPORT.CORE_0_INTR_MAP0), irq*4))
 }

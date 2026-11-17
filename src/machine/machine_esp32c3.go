@@ -258,7 +258,7 @@ var (
 )
 
 func setupPinInterrupt() error {
-	esp.INTERRUPT_CORE0.GPIO_INTERRUPT_PRO_MAP.Set(cpuInterruptFromPin)
+	interruptMap(esp.IRQ_GPIO).Set(cpuInterruptFromPin)
 	return interrupt.New(cpuInterruptFromPin, func(interrupt.Interrupt) {
 		status := esp.GPIO.STATUS.Get()
 		// Clear before processing so new edges during callbacks are not lost.
@@ -299,11 +299,11 @@ const (
 	defaultStopBit  = 1
 	defaultParity   = ParityNone
 
-	uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
-		esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
-		esp.UART_INT_ENA_FRM_ERR_INT_ENA |
-		esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA |
-		esp.UART_INT_ENA_GLITCH_DET_INT_ENA
+	uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL |
+		esp.UART_INT_ENA_PARITY_ERR |
+		esp.UART_INT_ENA_FRM_ERR |
+		esp.UART_INT_ENA_RXFIFO_OVF |
+		esp.UART_INT_ENA_GLITCH_DET
 
 	pplClockFreq = 80e6
 )
@@ -324,13 +324,13 @@ func (uart *UART) Configure(config UARTConfig) error {
 	switch {
 	case uart.Bus == esp.UART0:
 		return uart.configure(config, registerSet{
-			interruptMapReg:  &esp.INTERRUPT_CORE0.UART_INTR_MAP,
+			interruptMapReg:  interruptMap(esp.IRQ_UART0),
 			uartClockBitMask: esp.SYSTEM_PERIP_CLK_EN0_UART_CLK_EN,
 			gpioMatrixSignal: 6,
 		})
 	case uart.Bus == esp.UART1:
 		return uart.configure(config, registerSet{
-			interruptMapReg:  &esp.INTERRUPT_CORE0.UART1_INTR_MAP,
+			interruptMapReg:  interruptMap(esp.IRQ_UART1),
 			uartClockBitMask: esp.SYSTEM_PERIP_CLK_EN0_UART1_CLK_EN,
 			gpioMatrixSignal: 9,
 		})
@@ -483,7 +483,7 @@ func (uart *UART) serveInterrupt(num int) {
 	// block UART interrupts while processing
 	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
 
-	if interrutFlag&esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA > 0 {
+	if interrutFlag&esp.UART_INT_ENA_RXFIFO_FULL > 0 {
 		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
 			b := uart.Bus.GetFIFO_RXFIFO_RD_BYTE()
 			if !uart.Buffer.Put(byte(b & 0xff)) {
@@ -491,16 +491,16 @@ func (uart *UART) serveInterrupt(num int) {
 			}
 		}
 	}
-	if interrutFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA > 0 {
+	if interrutFlag&esp.UART_INT_ENA_PARITY_ERR > 0 {
 		uart.ParityErrorDetected = true
 	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA {
+	if 0 != interrutFlag&esp.UART_INT_ENA_FRM_ERR {
 		uart.DataErrorDetected = true
 	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA {
+	if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_OVF {
 		uart.DataOverflowDetected = true
 	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA {
+	if 0 != interrutFlag&esp.UART_INT_ENA_GLITCH_DET {
 		uart.DataErrorDetected = true
 	}
 
@@ -528,11 +528,11 @@ func (uart *UART) enableReceiver() {
 	// using value 1 so that we can start populate ring buffer with data as we get it
 	uart.Bus.SetCONF1_RXFIFO_FULL_THRHD(1)
 	// enable interrupts for:
-	uart.Bus.SetINT_ENA_RXFIFO_FULL_INT_ENA(1)
-	uart.Bus.SetINT_ENA_FRM_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_PARITY_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_GLITCH_DET_INT_ENA(1)
-	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
+	uart.Bus.SetINT_ENA_RXFIFO_FULL(1)
+	uart.Bus.SetINT_ENA_FRM_ERR(1)
+	uart.Bus.SetINT_ENA_PARITY_ERR(1)
+	uart.Bus.SetINT_ENA_GLITCH_DET(1)
+	uart.Bus.SetINT_ENA_RXFIFO_OVF(1)
 }
 
 func (uart *UART) writeByte(b byte) error {
@@ -572,12 +572,12 @@ func initADCClock() {
 	// only support ADC_CTRL_CLK set to 1
 	esp.APB_SARADC.SetCLKM_CONF_CLK_SEL(1)
 
-	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_GATED(1)
+	esp.APB_SARADC.SetCTRL_SAR_CLK_GATED(1)
 
 	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_NUM(15)
 	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_B(1)
 	esp.APB_SARADC.SetCLKM_CONF_CLKM_DIV_A(0)
 
-	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_DIV(1)
+	esp.APB_SARADC.SetCTRL_SAR_CLK_DIV(1)
 	esp.APB_SARADC.SetCLKM_CONF_CLK_EN(1)
 }

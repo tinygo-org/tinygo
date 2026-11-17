@@ -240,7 +240,7 @@ type i2cCommand struct {
 //go:linkname nanotime runtime.nanotime
 func nanotime() int64
 
-const i2cIntMask = esp.I2C_INT_STATUS_END_DETECT_INT_ST_Msk | esp.I2C_INT_STATUS_TRANS_COMPLETE_INT_ST_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk | esp.I2C_INT_STATUS_NACK_INT_ST_Msk
+const i2cIntMask = esp.I2C_INT_ST_END_DETECT_Msk | esp.I2C_INT_ST_TRANS_COMPLETE_Msk | esp.I2C_INT_ST_TIME_OUT_Msk | esp.I2C_INT_ST_NACK_Msk
 
 func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 	// After a NACK the controller keeps the bus busy for some microseconds.
@@ -391,7 +391,7 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 			i2c.Bus.SetCTR_TRANS_START(1)
 			end := nanotime() + timeoutNS
 			var mask uint32
-			for mask = i2c.Bus.INT_STATUS.Get(); mask&i2cIntMask == 0; mask = i2c.Bus.INT_STATUS.Get() {
+			for mask = i2c.Bus.INT_ST.Get(); mask&i2cIntMask == 0; mask = i2c.Bus.INT_ST.Get() {
 				if nanotime() > end {
 					if readTo != nil {
 						return errI2CReadTimeout
@@ -400,7 +400,7 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				}
 			}
 			switch {
-			case mask&esp.I2C_INT_STATUS_NACK_INT_ST_Msk != 0:
+			case mask&esp.I2C_INT_ST_NACK_Msk != 0:
 				// Slave NACK: device absent or refused a data byte.
 				// i2cCMD_READLAST uses ack_check_en=0, so the master's own last-byte
 				// NACK (ack_val=1) does NOT trigger NACK_INT; any NACK_INT here is
@@ -409,7 +409,7 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				// needed here.  The TX FIFO is flushed at the top of each transmit()
 				// call, so stale bytes do not carry over to the next transaction.
 				return errI2CAckExpected
-			case mask&esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk != 0:
+			case mask&esp.I2C_INT_ST_TIME_OUT_Msk != 0:
 				i2c.resetMaster()
 				if readTo != nil {
 					return errI2CReadTimeout

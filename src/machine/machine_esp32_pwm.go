@@ -12,7 +12,7 @@
 //
 //   - The clock is switched on in DPORT. The newer chips renamed that block to
 //     SYSTEM. This chip also has no LEDC.CONF_CLK_EN bit.
-//   - Register names start with HS, for example HSTIMER0_CONF and HSCH0_CONF0.
+//   - Register names start with HS, for example HSTIMER[0].CONF and HSCH[0].CONF0.
 //   - There is no PARA_UP bit. On the C3 and S3 you set PARA_UP to say "apply my
 //     changes now". Here the channel applies them by itself, at the end of the
 //     period it is in. That is what makes it "high speed".
@@ -22,11 +22,7 @@
 
 package machine
 
-import (
-	"device/esp"
-	"runtime/volatile"
-	"unsafe"
-)
+import "device/esp"
 
 // The GPIO matrix can send an internal signal to almost any pin. Each signal has
 // a number. High-speed LEDC channel 0 is number 71, and the rest follow on from
@@ -35,14 +31,6 @@ import (
 const LEDC_HS_SIG_OUT0_IDX = 71
 
 const ledcChannelsESP32 = 8
-
-// Each channel has 5 registers and each timer has 2, so the blocks repeat at a
-// fixed distance. HSCH0_CONF0 is at 0x0 and HSCH1_CONF0 is at 0x14.
-// HSTIMER0_CONF is at 0x140 and HSTIMER1_CONF is at 0x148.
-const (
-	ledcChannelStride = 0x14
-	ledcTimerStride   = 0x8
-)
 
 // Bit positions in HSCHn_CONF0, HSCHn_CONF1 and HSTIMERn_CONF.
 const (
@@ -61,16 +49,6 @@ var (
 	PWM2 = &LEDCPWM{SigOutBase: LEDC_HS_SIG_OUT0_IDX, NumChannels: ledcChannelsESP32, timerNum: 2}
 	PWM3 = &LEDCPWM{SigOutBase: LEDC_HS_SIG_OUT0_IDX, NumChannels: ledcChannelsESP32, timerNum: 3}
 )
-
-// chanReg returns a register of channel ch, given the register of channel 0.
-func chanReg(channel0 *volatile.Register32, ch uint8) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(channel0), uintptr(ch)*ledcChannelStride))
-}
-
-// timerReg returns a register of timer t, given the register of timer 0.
-func timerReg(timer0 *volatile.Register32, t uint8) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(timer0), uintptr(t)*ledcTimerStride))
-}
 
 // enableClock turns the LEDC hardware on and picks its clock.
 func (pwm *LEDCPWM) enableClock() {
@@ -102,7 +80,7 @@ func (pwm *LEDCPWM) enableClock() {
 // These timers have no PARA_UP bit. The short reset pulse at the end is what
 // makes the new values take effect.
 func (pwm *LEDCPWM) setTimerConf(dutyRes uint8, divReg uint32) {
-	conf := timerReg(&esp.LEDC.HSTIMER0_CONF, pwm.timerNum)
+	conf := &esp.LEDC.HSTIMER[pwm.timerNum].CONF
 	value := uint32(dutyRes) | divReg<<ledcDivNumPos | ledcTickSelAPB
 	conf.Set(value | ledcTimerRst)
 	conf.Set(value)
@@ -110,7 +88,7 @@ func (pwm *LEDCPWM) setTimerConf(dutyRes uint8, divReg uint32) {
 
 // chanDisable stops a channel from driving its pin.
 func chanDisable(ch uint8) {
-	chanReg(&esp.LEDC.HSCH0_CONF0, ch).ClearBits(ledcSigOutEn)
+	esp.LEDC.HSCH[ch].CONF0.ClearBits(ledcSigOutEn)
 }
 
 // chanOp does the work for one channel, numbered 0 to 7. It either sets the
@@ -119,7 +97,7 @@ func chanDisable(ch uint8) {
 // DUTY_SCALE stays 0. LEDC can fade slowly from one duty to the next, and 0
 // turns that off, so the duty changes in a single step.
 func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32) {
-	conf0 := chanReg(&esp.LEDC.HSCH0_CONF0, ch)
+	c := &esp.LEDC.HSCH[ch]
 
 	// No fade steps. With DUTY_NUM 1 the channel stays busy one more period and
 	// drops a new DUTY_START. See ESP32 TRM v5.8 section 28.2.3 Channels.
@@ -127,13 +105,13 @@ func (pwm *LEDCPWM) chanOp(ch uint8, op ledcChanOp, duty uint32) {
 
 	switch op {
 	case ledcChanOpInit:
-		chanReg(&esp.LEDC.HSCH0_HPOINT, ch).Set(0)
-		chanReg(&esp.LEDC.HSCH0_DUTY, ch).Set(0)
-		chanReg(&esp.LEDC.HSCH0_CONF1, ch).Set(conf1)
-		conf0.Set(uint32(pwm.timerNum)<<ledcTimerSelPos | ledcSigOutEn)
+		c.HPOINT.Set(0)
+		c.DUTY.Set(0)
+		c.CONF1.Set(conf1)
+		c.CONF0.Set(uint32(pwm.timerNum)<<ledcTimerSelPos | ledcSigOutEn)
 	case ledcChanOpSetDuty:
-		chanReg(&esp.LEDC.HSCH0_DUTY, ch).Set(duty)
-		chanReg(&esp.LEDC.HSCH0_CONF1, ch).Set(conf1)
-		conf0.SetBits(ledcSigOutEn)
+		c.DUTY.Set(duty)
+		c.CONF1.Set(conf1)
+		c.CONF0.SetBits(ledcSigOutEn)
 	}
 }

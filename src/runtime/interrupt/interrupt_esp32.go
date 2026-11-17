@@ -61,7 +61,7 @@ var inInterrupt bool
 // map the peripheral to a CPU interrupt line using the interrupt matrix,
 // e.g.:
 //
-//	esp.DPORT.PRO_TG_T0_LEVEL_INT_MAP.Set(cpuInt)
+//	esp.DPORT.CORE_0_INTR_MAP14.Set(cpuInt) // TG0_T0_LEVEL
 //	interrupt.New(cpuInt, handler).Enable()
 func (i Interrupt) Enable() error {
 	if i.num < firstCPUInt || i.num > lastCPUInt {

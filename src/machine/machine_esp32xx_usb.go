@@ -97,10 +97,10 @@ func (usbdev *USB_DEVICE) Configure(config UARTConfig) error {
 
 	// Clear any pending interrupts, then enable the RX interrupt.
 	usbdev.Bus.INT_CLR.Set(0xFFFFFFFF)
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(1)
+	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT(1)
 
 	// Map the USB_DEVICE peripheral interrupt to CPU interrupt line.
-	esp.INTERRUPT_CORE0.SetUSB_DEVICE_INT_MAP(cpuInterruptFromUSB)
+	interruptMap(esp.IRQ_USB_DEVICE).Set(cpuInterruptFromUSB)
 
 	_ = interrupt.New(cpuInterruptFromUSB, usbHandleInterrupt).Enable()
 
@@ -119,8 +119,8 @@ func (usbdev *USB_DEVICE) ensureConfigured() {
 // level-triggered interrupt from re-asserting immediately (data may
 // still be in the FIFO).  Buffered() re-enables after draining.
 func (usbdev *USB_DEVICE) handleInterrupt() {
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(0)
-	usbdev.Bus.SetINT_CLR_SERIAL_OUT_RECV_PKT_INT_CLR(1)
+	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT(0)
+	usbdev.Bus.SetINT_CLR_SERIAL_OUT_RECV_PKT(1)
 }
 
 func (usbdev *USB_DEVICE) WriteByte(c byte) error {
@@ -204,7 +204,7 @@ func (usbdev *USB_DEVICE) Buffered() int {
 	}
 	// Clear pending flags and re-enable the RX interrupt at the peripheral level.
 	usbdev.Bus.INT_CLR.Set(0xFFFFFFFF)
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(1)
+	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT(1)
 	return int(usbdev.Buffer.Used())
 }
 

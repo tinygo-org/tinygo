@@ -28,20 +28,20 @@ const (
 )
 
 var i2sGDMARegs = i2sGDMA{
-	outConf0:   &esp.DMA.OUT_CONF0_CH0,
-	outLink:    &esp.DMA.OUT_LINK_CH0,
-	outPeriSel: &esp.DMA.OUT_PERI_SEL_CH0,
-	outIntEna:  &esp.DMA.OUT_INT_ENA_CH0,
-	outIntClr:  &esp.DMA.OUT_INT_CLR_CH0,
-	outIntSt:   &esp.DMA.OUT_INT_ST_CH0,
-	outEOFAddr: &esp.DMA.OUT_EOF_DES_ADDR_CH0,
-	inConf0:    &esp.DMA.IN_CONF0_CH0,
-	inLink:     &esp.DMA.IN_LINK_CH0,
-	inPeriSel:  &esp.DMA.IN_PERI_SEL_CH0,
-	inIntEna:   &esp.DMA.IN_INT_ENA_CH0,
-	inIntClr:   &esp.DMA.IN_INT_CLR_CH0,
-	inIntSt:    &esp.DMA.IN_INT_ST_CH0,
-	inEOFAddr:  &esp.DMA.IN_SUC_EOF_DES_ADDR_CH0,
+	outConf0:   &esp.DMA.CH[0].OUT_CONF0,
+	outLink:    &esp.DMA.CH[0].OUT_LINK,
+	outPeriSel: &esp.DMA.CH[0].OUT_PERI_SEL,
+	outIntEna:  &esp.DMA.CH[0].OUT_INT_ENA,
+	outIntClr:  &esp.DMA.CH[0].OUT_INT_CLR,
+	outIntSt:   &esp.DMA.CH[0].OUT_INT_ST,
+	outEOFAddr: &esp.DMA.CH[0].OUT_EOF_DES_ADDR,
+	inConf0:    &esp.DMA.CH[0].IN_CONF0,
+	inLink:     &esp.DMA.CH[0].IN_LINK,
+	inPeriSel:  &esp.DMA.CH[0].IN_PERI_SEL,
+	inIntEna:   &esp.DMA.CH[0].IN_INT_ENA,
+	inIntClr:   &esp.DMA.CH[0].IN_INT_CLR,
+	inIntSt:    &esp.DMA.CH[0].IN_INT_ST,
+	inEOFAddr:  &esp.DMA.CH[0].IN_SUC_EOF_DES_ADDR,
 }
 
 func i2sEnableClocks() {
@@ -71,8 +71,8 @@ func i2sSetRxClock(div, x, y, z, yn1 uint32) {
 }
 
 func i2sEnableInterrupt() {
-	esp.INTERRUPT_CORE0.SetDMA_OUT_CH0_INT_MAP(cpuInterruptFromI2S)
-	esp.INTERRUPT_CORE0.SetDMA_IN_CH0_INT_MAP(cpuInterruptFromI2S)
+	interruptMap(esp.IRQ_DMA_OUT_CH0).Set(cpuInterruptFromI2S)
+	interruptMap(esp.IRQ_DMA_IN_CH0).Set(cpuInterruptFromI2S)
 	interrupt.New(cpuInterruptFromI2S, func(interrupt.Interrupt) {
 		I2S0.handleInterrupt()
 	}).Enable()

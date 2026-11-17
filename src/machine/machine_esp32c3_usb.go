@@ -101,10 +101,10 @@ func (usbdev *USB_DEVICE) Configure(config UARTConfig) error {
 	usbdev.Bus.INT_CLR.Set(0xFFFFFFFF)
 
 	// Enable the RX-packet-received interrupt.
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(1)
+	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT(1)
 
 	// Map the USB peripheral interrupt to CPU interrupt cpuInterruptFromUSB.
-	esp.INTERRUPT_CORE0.SetUSB_INTR_MAP(cpuInterruptFromUSB)
+	interruptMap(esp.IRQ_USB_DEVICE).Set(cpuInterruptFromUSB)
 
 	_ = interrupt.New(cpuInterruptFromUSB, func(interrupt.Interrupt) {
 		_USBCDC.handleInterrupt()
@@ -126,9 +126,9 @@ func (usbdev *USB_DEVICE) handleInterrupt() {
 	intStatus := usbdev.Bus.INT_ST.Get()
 
 	// Disable the RX interrupt to prevent re-triggering while we drain.
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(0)
+	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT(0)
 
-	if intStatus&esp.USB_DEVICE_INT_ST_SERIAL_OUT_RECV_PKT_INT_ST != 0 {
+	if intStatus&esp.USB_DEVICE_INT_ST_SERIAL_OUT_RECV_PKT != 0 {
 		// Drain all available bytes from the EP1 OUT FIFO.
 		// Use EP1.Get() directly — the generated GetEP1_RDWR_BYTE is
 		// functionally identical, but a direct load makes the FIFO-pop
@@ -138,11 +138,11 @@ func (usbdev *USB_DEVICE) handleInterrupt() {
 			usbdev.Buffer.Put(b)
 		}
 		// Clear the interrupt.
-		usbdev.Bus.SetINT_CLR_SERIAL_OUT_RECV_PKT_INT_CLR(1)
+		usbdev.Bus.SetINT_CLR_SERIAL_OUT_RECV_PKT(1)
 	}
 
 	// Re-enable the RX interrupt.
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(1)
+	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT(1)
 }
 
 func (usbdev *USB_DEVICE) WriteByte(c byte) error {

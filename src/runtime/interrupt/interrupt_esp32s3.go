@@ -257,14 +257,14 @@ func writeINTCLEAR(val uint32) {
 // The ESP32-S3 interrupt matrix has one mapping register per peripheral
 // source.  These are memory-mapped in the INTERRUPT_CORE0 peripheral.
 // The mapping register for peripheral source N is at:
-//   base + N*4  (where base = &INTERRUPT_CORE0.PRO_MAC_INTR_MAP)
+//   base + N*4  (where base = &INTERRUPT_CORE0.CORE_0_INTR_MAP0)
 //
 // We provide helpers to set/get the mapping for any source number.
 
 // mapPeripheralToInt routes peripheral IRQ source `src` to CPU interrupt
 // `cpuInt` via the interrupt matrix.
 func mapPeripheralToInt(src int, cpuInt int) {
-	base := unsafe.Pointer(&esp.INTERRUPT_CORE0.PRO_MAC_INTR_MAP)
+	base := unsafe.Pointer(&esp.INTERRUPT_CORE0.CORE_0_INTR_MAP0)
 	reg := (*volatile.Register32)(unsafe.Add(base, uintptr(src)*4))
 	reg.Set(uint32(cpuInt))
 }

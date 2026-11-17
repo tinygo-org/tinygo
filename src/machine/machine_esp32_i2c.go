@@ -58,9 +58,9 @@ func (i2c *I2C) initAll() {
 func (i2c *I2C) initClock() {
 	// reset I2C clock
 	if i2c.Bus == esp.I2C0 {
-		esp.DPORT.SetPERIP_RST_EN_I2C0_EXT0_RST(1)
-		esp.DPORT.SetPERIP_CLK_EN_I2C0_EXT0_CLK_EN(1)
-		esp.DPORT.SetPERIP_RST_EN_I2C0_EXT0_RST(0)
+		esp.DPORT.SetPERIP_RST_EN_I2C_EXT0_RST(1)
+		esp.DPORT.SetPERIP_CLK_EN_I2C_EXT0_CLK_EN(1)
+		esp.DPORT.SetPERIP_RST_EN_I2C_EXT0_RST(0)
 	} else {
 		esp.DPORT.SetPERIP_RST_EN_I2C_EXT1_RST(1)
 		esp.DPORT.SetPERIP_CLK_EN_I2C_EXT1_CLK_EN(1)
@@ -230,7 +230,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 		i2c.resetBus()
 	}
 
-	const intMask = esp.I2C_INT_STATUS_END_DETECT_INT_ST_Msk | esp.I2C_INT_STATUS_TRANS_COMPLETE_INT_ST_Msk | esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk | esp.I2C_INT_STATUS_ACK_ERR_INT_ST_Msk | esp.I2C_INT_STATUS_ARBITRATION_LOST_INT_ST_Msk
+	const intMask = esp.I2C_INT_ST_END_DETECT_Msk | esp.I2C_INT_ST_TRANS_COMPLETE_Msk | esp.I2C_INT_ST_TIME_OUT_Msk | esp.I2C_INT_ST_NACK_Msk | esp.I2C_INT_ST_ARBITRATION_LOST_Msk
 	i2c.Bus.INT_CLR.Set(intMask)
 	i2c.Bus.INT_ENA.Set(intMask)
 
@@ -339,7 +339,7 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 			i2c.Bus.SetCTR_TRANS_START(1)
 			end := nanotime() + timeoutNS
 			var mask uint32
-			for mask = i2c.Bus.INT_STATUS.Get(); mask&intMask == 0; mask = i2c.Bus.INT_STATUS.Get() {
+			for mask = i2c.Bus.INT_ST.Get(); mask&intMask == 0; mask = i2c.Bus.INT_ST.Get() {
 				if nanotime() > end {
 					// timeout leaves the bus in an undefined state, reset
 					i2c.resetBus()
@@ -350,9 +350,9 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 				}
 			}
 			switch {
-			case mask&esp.I2C_INT_STATUS_ACK_ERR_INT_ST_Msk != 0:
+			case mask&esp.I2C_INT_ST_NACK_Msk != 0:
 				return errI2CAckExpected
-			case mask&esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk != 0:
+			case mask&esp.I2C_INT_ST_TIME_OUT_Msk != 0:
 				// timeout leaves the bus in an undefined state, reset
 				i2c.resetBus()
 				if isRead {

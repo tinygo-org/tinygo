@@ -229,7 +229,7 @@ func (spi *SPI) Transfer(w byte) (byte, error) {
 	bus.SetMS_DLEN_MS_DATA_BITLEN(7)
 
 	// Clear any pending interrupt flags BEFORE starting transaction
-	bus.SetDMA_INT_CLR_TRANS_DONE_INT_CLR(1)
+	bus.SetDMA_INT_CLR_TRANS_DONE(1)
 
 	// Write data to buffer (use W0 register)
 	bus.W0.Set(uint32(w))

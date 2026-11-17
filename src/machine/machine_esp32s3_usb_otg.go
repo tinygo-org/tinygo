@@ -63,17 +63,17 @@ type otgOutEndpoint struct {
 }
 
 func otgInEP(ep uint32) *otgInEndpoint {
-	return (*otgInEndpoint)(unsafe.Add(unsafe.Pointer(&esp.USB0.DIEPCTL0), uintptr(ep)*0x20))
+	return (*otgInEndpoint)(unsafe.Add(unsafe.Pointer(&esp.USB_FS.IN_EP0.DIEPCTL), uintptr(ep)*0x20))
 }
 
 func otgOutEP(ep uint32) *otgOutEndpoint {
-	return (*otgOutEndpoint)(unsafe.Add(unsafe.Pointer(&esp.USB0.DOEPCTL0), uintptr(ep)*0x20))
+	return (*otgOutEndpoint)(unsafe.Add(unsafe.Pointer(&esp.USB_FS.OUT_EP0.DOEPCTL), uintptr(ep)*0x20))
 }
 
 // otgFIFO returns the data FIFO of an endpoint. Reads from any of them pop
 // the shared RX FIFO.
 func otgFIFO(ep uint32) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(esp.USB0), 0x1000+uintptr(ep)*0x1000))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(esp.USB_FS), 0x1000+uintptr(ep)*0x1000))
 }
 
 // GUSBCFG bits.
@@ -221,43 +221,43 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	GPIO19.mux().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
 	GPIO20.mux().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
 
-	waitUSBBits(&esp.USB0.GRSTCTL, grstAHBIDL, grstAHBIDL)
-	esp.USB0.GRSTCTL.SetBits(grstCSRST)
-	waitUSBBits(&esp.USB0.GRSTCTL, grstCSRST, 0)
-	waitUSBBits(&esp.USB0.GRSTCTL, grstAHBIDL, grstAHBIDL)
+	waitUSBBits(&esp.USB_FS.GRSTCTL, grstAHBIDL, grstAHBIDL)
+	esp.USB_FS.GRSTCTL.SetBits(grstCSRST)
+	waitUSBBits(&esp.USB_FS.GRSTCTL, grstCSRST, 0)
+	waitUSBBits(&esp.USB_FS.GRSTCTL, grstAHBIDL, grstAHBIDL)
 
 	// TRDT 5 matches esp-hal calculate_trdt_fn for the S3.
-	gusbcfg := esp.USB0.GUSBCFG.Get()
+	gusbcfg := esp.USB_FS.GUSBCFG.Get()
 	gusbcfg &^= gusbcfgFHMOD | gusbcfgTRDT_Msk
 	gusbcfg |= gusbcfgFDMOD | gusbcfgPHYSEL | 5<<gusbcfgTRDT_Pos
-	esp.USB0.GUSBCFG.Set(gusbcfg)
-	waitUSBBits(&esp.USB0.GINTSTS, gintCMOD, 0)
+	esp.USB_FS.GUSBCFG.Set(gusbcfg)
+	waitUSBBits(&esp.USB_FS.GINTSTS, gintCMOD, 0)
 
-	esp.USB0.PCGCCTL.Set(0)
+	esp.USB_FS.PCGCCTL.Set(0)
 	dev.Detach()
 
-	esp.USB0.GRXFSIZ.Set(rxFIFOWords)
+	esp.USB_FS.GRXFSIZ.Set(rxFIFOWords)
 	start := uint32(rxFIFOWords)
-	esp.USB0.GNPTXFSIZ.Set(tx0FIFOWords<<16 | start)
+	esp.USB_FS.GNPTXFSIZ.Set(tx0FIFOWords<<16 | start)
 	start += tx0FIFOWords
-	esp.USB0.DIEPTXF1.Set(tx1FIFOWords<<16 | start)
+	esp.USB_FS.DIEPTXF1.Set(tx1FIFOWords<<16 | start)
 	start += tx1FIFOWords
-	esp.USB0.DIEPTXF2.Set(tx2FIFOWords<<16 | start)
+	esp.USB_FS.DIEPTXF2.Set(tx2FIFOWords<<16 | start)
 	start += tx2FIFOWords
-	esp.USB0.DIEPTXF3.Set(tx3FIFOWords<<16 | start)
+	esp.USB_FS.DIEPTXF3.Set(tx3FIFOWords<<16 | start)
 	flushRxFIFO()
 	flushTxFIFO(0x10)
 
-	esp.USB0.DCFG.Set(dcfgDSPDFS48)
+	esp.USB_FS.DCFG.Set(dcfgDSPDFS48)
 
-	esp.USB0.GINTSTS.Set(0xFFFFFFFF)
-	esp.USB0.GINTMSK.Set(gintUSBRST | gintENUMDNE | gintRXFLVL | gintIEPINT | gintOEPINT |
+	esp.USB_FS.GINTSTS.Set(0xFFFFFFFF)
+	esp.USB_FS.GINTMSK.Set(gintUSBRST | gintENUMDNE | gintRXFLVL | gintIEPINT | gintOEPINT |
 		gintUSBSUSP | gintWKUPINT)
-	esp.USB0.DIEPMSK.Set(depintXFRC)
-	esp.USB0.DOEPMSK.Set(depintXFRC | depintSTUP)
-	esp.USB0.GAHBCFG.SetBits(gahbcfgGINT)
+	esp.USB_FS.DIEPMSK.Set(depintXFRC)
+	esp.USB_FS.DOEPMSK.Set(depintXFRC | depintSTUP)
+	esp.USB_FS.GAHBCFG.SetBits(gahbcfgGINT)
 
-	esp.INTERRUPT_CORE0.SetUSB_INTR_MAP(cpuInterruptFromUSB)
+	interruptMap(esp.IRQ_USB).Set(cpuInterruptFromUSB)
 	interrupt.New(cpuInterruptFromUSB, handleUSBIRQ).Enable()
 
 	dev.Attach()
@@ -281,33 +281,33 @@ func waitUSBBits(reg *volatile.Register32, mask, value uint32) bool {
 
 // Attach connects the device to the USB bus by releasing soft disconnect.
 func (dev *USBDevice) Attach() {
-	esp.USB0.DCTL.ClearBits(dctlSDIS)
+	esp.USB_FS.DCTL.ClearBits(dctlSDIS)
 }
 
 // Detach disconnects the device from the USB bus with soft disconnect.
 func (dev *USBDevice) Detach() {
-	esp.USB0.DCTL.SetBits(dctlSDIS)
+	esp.USB_FS.DCTL.SetBits(dctlSDIS)
 }
 
 func handleUSBIRQ(interrupt.Interrupt) {
-	status := esp.USB0.GINTSTS.Get() & esp.USB0.GINTMSK.Get()
+	status := esp.USB_FS.GINTSTS.Get() & esp.USB_FS.GINTMSK.Get()
 
 	if status&gintUSBSUSP != 0 {
-		esp.USB0.GINTSTS.Set(gintUSBSUSP)
+		esp.USB_FS.GINTSTS.Set(gintUSBSUSP)
 	}
 	if status&gintWKUPINT != 0 {
-		esp.USB0.GINTSTS.Set(gintWKUPINT)
-		esp.USB0.PCGCCTL.ClearBits(pcgcctlStopCK)
+		esp.USB_FS.GINTSTS.Set(gintWKUPINT)
+		esp.USB_FS.PCGCCTL.ClearBits(pcgcctlStopCK)
 	}
 	if status&gintUSBRST != 0 {
-		esp.USB0.GINTSTS.Set(gintUSBRST)
+		esp.USB_FS.GINTSTS.Set(gintUSBRST)
 		handleUSBReset()
 	}
 	if status&gintENUMDNE != 0 {
-		esp.USB0.GINTSTS.Set(gintENUMDNE)
+		esp.USB_FS.GINTSTS.Set(gintENUMDNE)
 		// EP0 max packet size field 0 is 64 bytes.
 		otgInEP(0).CTL.ClearBits(3)
-		esp.USB0.DCTL.SetBits(dctlCGINAK)
+		esp.USB_FS.DCTL.SetBits(dctlCGINAK)
 	}
 	if status&gintRXFLVL != 0 {
 		handleRxFIFO()
@@ -328,12 +328,12 @@ func handleUSBReset() {
 		usbRxReady[ep] = false
 	}
 	unlockUSBRegs(state)
-	esp.USB0.DCFG.ClearBits(dcfgDAD_Msk)
+	esp.USB_FS.DCFG.ClearBits(dcfgDAD_Msk)
 	flushRxFIFO()
 	flushTxFIFO(0x10)
 
-	esp.USB0.DAINT.Set(0xFFFFFFFF)
-	esp.USB0.DAINTMSK.Set(1<<0 | 1<<16)
+	esp.USB_FS.DAINT.Set(0xFFFFFFFF)
+	esp.USB_FS.DAINTMSK.Set(1<<0 | 1<<16)
 	sendOnEP0DATADONE.data = nil
 	armEP0Out()
 
@@ -345,8 +345,8 @@ func handleUSBReset() {
 // the cache buffer of its endpoint.
 func handleRxFIFO() {
 	state := lockUSBRegs()
-	for esp.USB0.GINTSTS.Get()&gintRXFLVL != 0 {
-		status := esp.USB0.GRXSTSP.Get()
+	for esp.USB_FS.GINTSTS.Get()&gintRXFLVL != 0 {
+		status := esp.USB_FS.GRXSTSP.Get()
 		ep := status & 0xF
 		bcnt := (status >> 4) & 0x7FF
 
@@ -385,7 +385,7 @@ func readUSBFIFO(ep, bcnt uint32) {
 }
 
 func handleOutEndpoints() {
-	active := (esp.USB0.DAINT.Get() & esp.USB0.DAINTMSK.Get()) >> 16
+	active := (esp.USB_FS.DAINT.Get() & esp.USB_FS.DAINTMSK.Get()) >> 16
 	for ep := uint32(0); ep < otgNumEndpoints; ep++ {
 		if active&(1<<ep) == 0 {
 			continue
@@ -432,7 +432,7 @@ func handleUSBSetup() {
 }
 
 func handleInEndpoints() {
-	active := esp.USB0.DAINT.Get() & esp.USB0.DAINTMSK.Get() & 0xFFFF
+	active := esp.USB_FS.DAINT.Get() & esp.USB_FS.DAINTMSK.Get() & 0xFFFF
 	for ep := uint32(0); ep < otgNumEndpoints; ep++ {
 		if active&(1<<ep) == 0 {
 			continue
@@ -475,13 +475,13 @@ func initEndpoint(ep, config uint32) {
 		state := lockUSBRegs()
 		otgInEP(ep).CTL.Set(ctl | ep<<depctlTXFNUM_Pos | depctlSNAK)
 		unlockUSBRegs(state)
-		esp.USB0.DAINTMSK.SetBits(1 << ep)
+		esp.USB_FS.DAINTMSK.SetBits(1 << ep)
 		return
 	}
 	state := lockUSBRegs()
 	otgOutEP(ep).CTL.Set(ctl)
 	unlockUSBRegs(state)
-	esp.USB0.DAINTMSK.SetBits(1 << (ep + 16))
+	esp.USB_FS.DAINTMSK.SetBits(1 << (ep + 16))
 	AckUsbOutTransfer(ep)
 }
 
@@ -555,8 +555,8 @@ func armEP0Out() {
 // handleUSBSetAddress stores the new address before the status ZLP goes out.
 // The core still answers the status stage on address 0.
 func handleUSBSetAddress(setup usb.Setup) bool {
-	dcfg := esp.USB0.DCFG.Get() &^ dcfgDAD_Msk
-	esp.USB0.DCFG.Set(dcfg | uint32(setup.WValueL&0x7F)<<dcfgDAD_Pos)
+	dcfg := esp.USB_FS.DCFG.Get() &^ dcfgDAD_Msk
+	esp.USB_FS.DCFG.Set(dcfg | uint32(setup.WValueL&0x7F)<<dcfgDAD_Pos)
 	SendZlp()
 	return true
 }
@@ -569,7 +569,7 @@ func ReceiveUSBControlPacket() ([cdcLineInfoSize]byte, error) {
 	armEP0Out()
 
 	for i := 0; i < 2000000; i++ {
-		if esp.USB0.GINTSTS.Get()&gintRXFLVL != 0 {
+		if esp.USB_FS.GINTSTS.Get()&gintRXFLVL != 0 {
 			handleRxFIFO()
 		}
 		if usbRxReady[0] {
@@ -611,12 +611,12 @@ func (dev *USBDevice) SetStallEPOut(ep uint32) {
 	}
 	// Disabling an enabled OUT endpoint needs a global OUT NAK, as in
 	// TinyUSB src/portable/synopsys/dwc2/dcd_dwc2.c edpt_disable.
-	esp.USB0.DCTL.SetBits(dctlSGONAK)
-	waitUSBBits(&esp.USB0.GINTSTS, gintGONAKEFF, gintGONAKEFF)
+	esp.USB_FS.DCTL.SetBits(dctlSGONAK)
+	waitUSBBits(&esp.USB_FS.GINTSTS, gintGONAKEFF, gintGONAKEFF)
 	out.CTL.SetBits(depctlEPDIS | depctlSTALL)
 	waitUSBBits(&out.INT, depintEPDISD, depintEPDISD)
 	out.INT.Set(depintEPDISD)
-	esp.USB0.DCTL.SetBits(dctlCGONAK)
+	esp.USB_FS.DCTL.SetBits(dctlCGONAK)
 	unlockUSBRegs(state)
 }
 
@@ -643,13 +643,13 @@ func (dev *USBDevice) ClearStallEPOut(ep uint32) {
 }
 
 func flushTxFIFO(txfnum uint32) {
-	esp.USB0.GRSTCTL.Set(grstTXFFLSH | txfnum<<grstTXFNUM_Pos)
-	waitUSBBits(&esp.USB0.GRSTCTL, grstTXFFLSH, 0)
+	esp.USB_FS.GRSTCTL.Set(grstTXFFLSH | txfnum<<grstTXFNUM_Pos)
+	waitUSBBits(&esp.USB_FS.GRSTCTL, grstTXFFLSH, 0)
 }
 
 func flushRxFIFO() {
-	esp.USB0.GRSTCTL.Set(grstRXFFLSH)
-	waitUSBBits(&esp.USB0.GRSTCTL, grstRXFFLSH, 0)
+	esp.USB_FS.GRSTCTL.Set(grstRXFFLSH)
+	waitUSBBits(&esp.USB_FS.GRSTCTL, grstRXFFLSH, 0)
 }
 
 // FlushSerial is a no-op, the CDC class sends from its own ring buffer.
@@ -660,7 +660,7 @@ func EnterBootloader() {
 	interrupt.Disable()
 
 	// Drop off the bus first so the host enumerates USB Serial/JTAG anew.
-	esp.USB0.DCTL.SetBits(dctlSDIS)
+	esp.USB_FS.DCTL.SetBits(dctlSDIS)
 	usbDelayMs(500)
 	usbPHYToSerialJTAG()
 

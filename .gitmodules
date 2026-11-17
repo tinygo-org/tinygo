@@ -41,3 +41,6 @@
 [submodule "lib/py32-svd"]
 	path = lib/py32-svd
 	url = https://github.com/tinygo-org/py32-svd.git
+[submodule "lib/esp32-svd"]
+	path = lib/esp32-svd
+	url = https://github.com/tinygo-org/esp32-svd

@@ -45,14 +45,14 @@ func initTimer() {
 	//   DIVIDER:  16-bit prescaler, set to 2 for dividing the APB clock by two
 	//             (40MHz).
 	// esp.TIMG0.T0CONFIG.Set(0 << esp.TIMG_T0CONFIG_T0_EN_Pos)
-	esp.TIMG0.T0CONFIG.Set(esp.TIMG_TCONFIG_EN | esp.TIMG_TCONFIG_INCREASE | 2<<esp.TIMG_TCONFIG_DIVIDER_Pos)
+	esp.TIMG0.T[0].CONFIG.Set(esp.TIMG_T_CONFIG_EN | esp.TIMG_T_CONFIG_INCREASE | 2<<esp.TIMG_T_CONFIG_DIVIDER_Pos)
 	// esp.TIMG0.T0CONFIG.Set(1 << esp.TIMG_T0CONFIG_T0_DIVCNT_RST_Pos)
 	// esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_T0_EN)
 
 	// Set the timer counter value to 0.
-	esp.TIMG0.T0LOADLO.Set(0)
-	esp.TIMG0.T0LOADHI.Set(0)
-	esp.TIMG0.T0LOAD.Set(0) // value doesn't matter.
+	esp.TIMG0.T[0].LOADLO.Set(0)
+	esp.TIMG0.T[0].LOADHI.Set(0)
+	esp.TIMG0.T[0].LOAD.Set(0) // value doesn't matter.
 }
 
 func ticks() timeUnit {
@@ -61,12 +61,12 @@ func ticks() timeUnit {
 
 	// First, update the LO and HI register pair by writing any value to the
 	// register. This allows reading the pair atomically.
-	esp.TIMG0.T0UPDATE.Set(1)
-	for esp.TIMG0.T0UPDATE.Get() != 0 {
+	esp.TIMG0.T[0].UPDATE.Set(1)
+	for esp.TIMG0.T[0].UPDATE.Get() != 0 {
 		// Register is cleared when the update is complete.
 	}
 	// Then read the two 32-bit parts of the timer.
-	t := timeUnit(uint64(esp.TIMG0.T0LO.Get()) | uint64(esp.TIMG0.T0HI.Get())<<32)
+	t := timeUnit(uint64(esp.TIMG0.T[0].LO.Get()) | uint64(esp.TIMG0.T[0].HI.Get())<<32)
 	unlockTicks(mask)
 	return t
 }
@@ -97,18 +97,18 @@ var timerAlarmInterrupt interrupt.Interrupt
 // timerAlarmHandler clears the timer interrupt at the peripheral level
 // and disables INT_ENA to prevent level-triggered re-assertion.
 func timerAlarmHandler(interrupt.Interrupt) {
-	esp.TIMG0.INT_ENA_TIMERS.ClearBits(1)
-	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+	esp.TIMG0.INT_ENA.ClearBits(1)
+	esp.TIMG0.INT_CLR.Set(1)
 }
 
 // initTimerInterrupt routes the TIMG0 timer 0 alarm interrupt to a CPU
 // interrupt and registers a handler that clears the alarm flag.
 func initTimerInterrupt() {
 	// Clear any stale timer interrupt before enabling.
-	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+	esp.TIMG0.INT_CLR.Set(1)
 
 	// Map the TIMG0 T0 peripheral interrupt to a CPU interrupt line.
-	esp.INTERRUPT_CORE0.SetTG_T0_INT_MAP(timerAlarmCPUInterrupt)
+	interruptMap(esp.IRQ_TG0_T0_LEVEL).Set(timerAlarmCPUInterrupt)
 
 	// Register the interrupt handler and enable it once.
 	timerAlarmInterrupt = interrupt.New(timerAlarmCPUInterrupt, timerAlarmHandler)
@@ -127,15 +127,15 @@ func sleepTicks(d timeUnit) {
 		// Set the alarm to fire at the target tick count.
 		interruptPending[core].Set(0)
 
-		esp.TIMG0.T0ALARMLO.Set(uint32(target))
-		esp.TIMG0.T0ALARMHI.Set(uint32(target >> 32))
+		esp.TIMG0.T[0].ALARMLO.Set(uint32(target))
+		esp.TIMG0.T[0].ALARMHI.Set(uint32(target >> 32))
 
 		// Enable the alarm (auto-clears when alarm fires).
-		esp.TIMG0.T0CONFIG.SetBits(esp.TIMG_TCONFIG_ALARM_EN)
+		esp.TIMG0.T[0].CONFIG.SetBits(esp.TIMG_T_CONFIG_ALARM_EN)
 
 		// Re-enable the timer interrupt (handler disables INT_ENA).
-		esp.TIMG0.INT_CLR_TIMERS.Set(1)
-		esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
+		esp.TIMG0.INT_CLR.Set(1)
+		esp.TIMG0.INT_ENA.SetBits(1)
 
 		// Wait for any interrupt (timer alarm or other) or timeout.
 		for interruptPending[core].Get() == 0 {

@@ -6,6 +6,7 @@ import (
 	"device/esp"
 	"runtime/interrupt"
 	"runtime/volatile"
+	"unsafe"
 )
 
 // CPU interrupt number used for the TIMG0 timer alarm.
@@ -22,19 +23,19 @@ var timerAlarmInterrupt interrupt.Interrupt
 // timerAlarmHandler clears the timer interrupt at the peripheral level
 // and disables INT_ENA to prevent level-triggered re-assertion.
 func timerAlarmHandler(interrupt.Interrupt) {
-	esp.TIMG0.INT_ENA_TIMERS.ClearBits(1)
-	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+	esp.TIMG0.INT_ENA.ClearBits(1)
+	esp.TIMG0.INT_CLR.Set(1)
 }
 
 // initTimerInterrupt routes the TIMG0 timer 0 alarm interrupt to a CPU
 // interrupt and registers a handler that clears the alarm flag.
 func initTimerInterrupt() {
 	// Clear any stale timer interrupt before enabling.
-	esp.TIMG0.INT_CLR_TIMERS.Set(1)
+	esp.TIMG0.INT_CLR.Set(1)
 
 	// Map the TIMG0 T0 peripheral interrupt to a CPU interrupt line
 	// via the DPORT interrupt matrix.
-	esp.DPORT.PRO_TG_T0_LEVEL_INT_MAP.Set(timerAlarmCPUInterrupt)
+	interruptMap(esp.IRQ_TG0_T0_LEVEL).Set(timerAlarmCPUInterrupt)
 
 	// Register the interrupt handler and enable it once.
 	timerAlarmInterrupt = interrupt.New(timerAlarmCPUInterrupt, timerAlarmHandler)
@@ -49,15 +50,15 @@ func sleepTicks(d timeUnit) {
 		// Set the alarm to fire at the target tick count.
 		interruptPending.Set(0)
 
-		esp.TIMG0.T0ALARMLO.Set(uint32(target))
-		esp.TIMG0.T0ALARMHI.Set(uint32(target >> 32))
+		esp.TIMG0.T[0].ALARMLO.Set(uint32(target))
+		esp.TIMG0.T[0].ALARMHI.Set(uint32(target >> 32))
 
 		// Enable the alarm (auto-clears when alarm fires).
-		esp.TIMG0.T0CONFIG.SetBits(esp.TIMG_T0CONFIG_ALARM_EN)
+		esp.TIMG0.T[0].CONFIG.SetBits(esp.TIMG_T_CONFIG_ALARM_EN)
 
 		// Re-enable the timer interrupt (handler disables INT_ENA).
-		esp.TIMG0.INT_CLR_TIMERS.Set(1)
-		esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
+		esp.TIMG0.INT_CLR.Set(1)
+		esp.TIMG0.INT_ENA.SetBits(1)
 
 		// Wait for any interrupt (timer alarm or other) or timeout.
 		for interruptPending.Get() == 0 {
@@ -66,4 +67,9 @@ func sleepTicks(d timeUnit) {
 			}
 		}
 	}
+}
+
+// interruptMap returns the interrupt matrix register for interrupt source irq.
+func interruptMap(irq int) *volatile.Register32 {
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.DPORT.CORE_0_INTR_MAP0), irq*4))
 }
