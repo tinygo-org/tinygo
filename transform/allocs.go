@@ -205,6 +205,10 @@ type escapeAnalysis struct {
 
 	originFn      llvm.Value
 	originInCycle bool
+
+	// cuts counts the PHIs that were reached again while they were still
+	// being checked.
+	cuts int
 }
 
 type escapeResult struct {
@@ -228,6 +232,12 @@ func (r *escapeResult) merge(other escapeResult) bool {
 
 func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (result escapeResult) {
 	if _, ok := a.visiting[value]; ok {
+		if !value.IsAPHINode().IsNil() {
+			// A value flowing around a loop back into the same PHI. The
+			// first visit already checks every use of the PHI.
+			a.cuts++
+			return escapeResult{}
+		}
 		// Recursive call graph while following returned parameters. Treat this
 		// as escaping to keep the analysis conservative and bounded.
 		return escapeResult{escapeAt: value}
@@ -239,9 +249,15 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 		return result
 	}
 	a.visiting[value] = struct{}{}
+	cuts := a.cuts
 	defer func() {
 		delete(a.visiting, value)
-		a.results[key] = result
+		// A result that stopped at a PHI that was still being checked misses
+		// what that PHI reaches, such as a return. It is only right for this
+		// path, so don't reuse it.
+		if a.cuts == cuts {
+			a.results[key] = result
+		}
 	}()
 
 	for use := range llvmutil.Uses(value) {
