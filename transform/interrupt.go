@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -36,7 +37,7 @@ func LowerInterrupts(mod llvm.Module) []error {
 	handleMap := map[int64][]llvm.Value{}
 	handleType := mod.GetTypeByName("runtime/interrupt.handle")
 	if !handleType.IsNil() {
-		for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		for global := range llvmutil.Globals(mod) {
 			if global.GlobalValueType() != handleType {
 				continue
 			}

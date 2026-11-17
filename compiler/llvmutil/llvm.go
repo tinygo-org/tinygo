@@ -66,6 +66,28 @@ func (attrs FunctionUsageAttributes) Apply(fn llvm.Value) {
 	}
 }
 
+// Functions returns an iterator over the functions of mod.
+func Functions(mod llvm.Module) iter.Seq[llvm.Value] {
+	return func(yield func(llvm.Value) bool) {
+		for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+			if !yield(fn) {
+				return
+			}
+		}
+	}
+}
+
+// Globals returns an iterator over the global variables of mod.
+func Globals(mod llvm.Module) iter.Seq[llvm.Value] {
+	return func(yield func(llvm.Value) bool) {
+		for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+			if !yield(global) {
+				return
+			}
+		}
+	}
+}
+
 // BasicBlocks returns an iterator over the basic blocks of fn.
 func BasicBlocks(fn llvm.Value) iter.Seq[llvm.BasicBlock] {
 	return func(yield func(llvm.BasicBlock) bool) {

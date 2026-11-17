@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"sort"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -140,7 +141,7 @@ func (c *context) getFunctionABIWithReceiver(sig *types.Signature, exported, int
 // ValidateWasmFunctionParameters checks the final LLVM module before the
 // WebAssembly backend expands aggregate parameters into scalar values.
 func ValidateWasmFunctionParameters(mod llvm.Module) error {
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		if fn.IsDeclaration() && fn.FirstUse().IsNil() {
 			continue
 		}

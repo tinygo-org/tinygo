@@ -53,7 +53,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	// External functions may indirectly suspend the goroutine or perform a heap allocation.
 	// Their callers should get stack objects.
 	memAttr := llvm.AttributeKindID("memory")
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		if _, ok := trackFuncs[fn]; ok {
 			continue // already found
 		}
@@ -81,7 +81,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	// calls.
 	// This takes less than 5ms for ~100kB of WebAssembly but would perhaps be
 	// faster when written in C++ (to avoid the CGo overhead).
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		if _, ok := trackFuncs[fn]; ok {
 			continue // already found
 		}
@@ -369,7 +369,7 @@ func makeGCGlobalRoots(mod llvm.Module) bool {
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
 	var roots []gcGlobalRootRange
-	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+	for global := range llvmutil.Globals(mod) {
 		if strings.HasPrefix(global.Name(), "llvm.") ||
 			global.IsGlobalConstant() ||
 			global.Initializer().IsNil() ||

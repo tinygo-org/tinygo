@@ -179,10 +179,10 @@ func Module(mod llvm.Module) []error {
 
 	types := map[llvm.Type]struct{}{}
 	specials := map[llvm.TypeKind]llvm.Type{}
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		errs = append(errs, c.checkFunction(fn, types, specials)...)
 	}
-	for g := mod.FirstGlobal(); !g.IsNil(); g = llvm.NextGlobal(g) {
+	for g := range llvmutil.Globals(mod) {
 		if err := c.checkValue(g, types, specials); err != nil {
 			errs = append(errs, fmt.Errorf("failed to verify global %s of module: %s", g.Name(), err.Error()))
 		}

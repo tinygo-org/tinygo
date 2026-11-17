@@ -158,7 +158,7 @@ func (p *lowerInterfacesPass) run() error {
 	}
 
 	// Collect all type codes.
-	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+	for global := range llvmutil.Globals(p.mod) {
 		if after, ok := strings.CutPrefix(global.Name(), "reflect/types.type:"); ok {
 			// Retrieve Go type information based on an opaque global variable.
 			// Only the name of the global is relevant, the object itself is
@@ -204,7 +204,7 @@ func (p *lowerInterfacesPass) run() error {
 	// Find all interface type asserts and interface method thunks.
 	var interfaceAssertFunctions []llvm.Value
 	var interfaceInvokeFunctions []llvm.Value
-	for fn := p.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(p.mod) {
 		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
 		if methodsAttr.IsNil() {
 			continue
@@ -535,7 +535,7 @@ func (p *lowerInterfacesPass) pruneUnusedMethodMetadata() error {
 	}
 
 	changed := false
-	for global := p.mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+	for global := range llvmutil.Globals(p.mod) {
 		name, ok := strings.CutPrefix(global.Name(), "reflect/types.type:")
 		if !ok || strings.HasPrefix(name, "interface:") {
 			continue
@@ -719,7 +719,7 @@ func (p *lowerInterfacesPass) createReflectCallLinks(typeNames []string) {
 }
 
 func (p *lowerInterfacesPass) usesReflectMethods() bool {
-	for fn := p.mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(p.mod) {
 		attr := fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-method")
 		if !attr.IsNil() && (fn.Linkage() != llvm.InternalLinkage || hasUses(fn)) {
 			return true
