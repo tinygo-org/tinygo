@@ -163,8 +163,8 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 			} else {
 				// This is a function. Go through all instructions and mark all
 				// objects in there.
-				for bb := llvmValue.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-					for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				for bb := range llvmutil.BasicBlocks(llvmValue) {
+					for inst := range llvmutil.Instructions(bb) {
 						opcode := inst.InstructionOpcode()
 						if opcode == llvm.Call {
 							calledValue := inst.CalledValue()

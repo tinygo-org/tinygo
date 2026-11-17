@@ -287,8 +287,8 @@ func writesOnlyLocalMemory(fn llvm.Value, depth int) bool {
 		}
 		return isLocalAlloca(ptr) || (depth > 0 && isArgumentPointer(ptr))
 	}
-	for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-		for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+	for bb := range llvmutil.BasicBlocks(fn) {
+		for inst := range llvmutil.Instructions(bb) {
 			if !inst.IsABranchInst().IsNil() {
 				// Br was split in two opcodes in LLVM 23.
 				continue
