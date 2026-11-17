@@ -8,7 +8,7 @@ import (
 
 // useSmallBufferForAlloc gives a non-escaping allocation of unknown size, like
 // make([]byte, n), a stack buffer when it fits. It reports whether it handled it.
-func useSmallBufferForAlloc(builder llvm.Builder, alloc llvm.Value, maxAlign int64) bool {
+func useSmallBufferForAlloc(mod llvm.Module, builder llvm.Builder, alloc llvm.Value, maxAlign int64) bool {
 	if alloc.CalledValue().Name() != "runtime.alloc" {
 		return false
 	}
@@ -36,5 +36,6 @@ func useSmallBufferForAlloc(builder llvm.Builder, alloc llvm.Value, maxAlign int
 	phi := builder.CreatePHI(alloc.Type(), "alloc.ptr")
 	alloc.ReplaceAllUsesWith(phi)
 	phi.AddIncoming([]llvm.Value{branch.buffer, alloc}, []llvm.BasicBlock{branch.small, branch.heap})
+	addSmallBufferLifetimes(mod, builder, branch)
 	return true
 }

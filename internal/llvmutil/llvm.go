@@ -382,3 +382,10 @@ func ByteOrder(target string) binary.ByteOrder {
 // never through ones marked readonly. LLVM ignores it. The transform passes
 // use it where LLVM cannot infer this, for example across indirect calls.
 const WritesArgsOnlyAttrName = "tinygo-writes-args-only"
+
+// EmitLifetimeStart signals the start of an (alloca) lifetime by calling the
+// llvm.lifetime.start intrinsic.
+func EmitLifetimeStart(builder llvm.Builder, mod llvm.Module, ptr, size llvm.Value) {
+	fnType, fn := getLifetimeStartFunc(mod)
+	builder.CreateCall(fnType, fn, lifetimeCallArgs(size, ptr), "")
+}

@@ -309,3 +309,61 @@ func TestAllocsRuntimeCallers(t *testing.T) {
 		t.Errorf("^runtime.grow$: got %d reports, want 1 plain report:\n%s", n, reasons)
 	}
 }
+
+// The lifetime of the small buffer for make must not end in the string copy
+// when the slice is read afterwards. The liveness walk used to depend on the
+// order of a map, so the same input gave different results from run to run.
+func TestSmallBufferLifetimeOrder(t *testing.T) {
+	t.Parallel()
+
+	for i := 0; i < 30; i++ {
+		mod := compileGoFileForTesting(t, "../testdata/smallbufferlifetime.go")
+		po := llvm.NewPassBuilderOptions()
+		passes := "globalopt,ipsccp,instcombine,adce,function-attrs"
+		if llvm.VersionMajor >= 18 {
+			passes = "globalopt,ipsccp,instcombine<no-verify-fixpoint>,adce,function-attrs"
+		}
+		if err := mod.RunPasses(passes, llvm.TargetMachine{}, po); err != nil {
+			t.Fatal(err)
+		}
+		po.Dispose()
+		transform.OptimizeStringFromBytesStack(mod)
+		transform.OptimizeAllocs(mod, nil, 256, nil)
+		if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+			t.Fatal(err)
+		}
+
+		fn := mod.NamedFunction("main.stringThenBytes")
+		if fn.IsNil() {
+			t.Fatal("stringThenBytes not found")
+		}
+		var buffers int
+		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				if inst.IsAAllocaInst().IsNil() {
+					continue
+				}
+				buffers++
+			}
+		}
+		if buffers < 2 {
+			t.Fatalf("expected a buffer for the make and one for the string, got %d:\n%s", buffers, fn.String())
+		}
+		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			if bb.AsValue().Name() != "string.small" {
+				continue
+			}
+			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+				if inst.IsACallInst().IsNil() || inst.CalledValue().Name() != "llvm.lifetime.end.p0" {
+					continue
+				}
+				if inst.Operand(0).Name() == "alloc.buffer" {
+					t.Fatalf("run %d: lifetime of alloc.buffer ends in string.small, but it is read later:\n%s", i, fn.String())
+				}
+			}
+		}
+		ctx := mod.Context()
+		mod.Dispose()
+		ctx.Dispose()
+	}
+}

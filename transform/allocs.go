@@ -61,7 +61,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		}
 		if heapalloc.Operand(0).IsAConstantInt().IsNil() {
 			// A variable size can use a small stack buffer when it fits.
-			if !useSmallBufferForAlloc(builder, heapalloc, maxAlign) && logAllocs {
+			if !useSmallBufferForAlloc(mod, builder, heapalloc, maxAlign) && logAllocs {
 				report("size is not constant")
 			}
 			continue

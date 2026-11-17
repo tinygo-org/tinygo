@@ -76,6 +76,7 @@ func copyStringToStackWhenSmall(mod llvm.Module, builder llvm.Builder, call llvm
 		use.ReplaceAllUsesWith(branch.resolve(length))
 		use.EraseFromParentAsInstruction()
 	}
+	addSmallBufferLifetimes(mod, builder, branch)
 }
 
 // createMemcpy calls llvm.memcpy for a non-volatile copy.
