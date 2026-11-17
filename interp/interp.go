@@ -189,9 +189,8 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 			initializerType := initializer.Type()
 			newGlobal := llvm.AddGlobal(mod, initializerType, obj.llvmGlobal.Name()+".tmp")
 			newGlobal.SetInitializer(initializer)
-			newGlobal.SetLinkage(obj.llvmGlobal.Linkage())
-			newGlobal.SetAlignment(obj.llvmGlobal.Alignment())
-			// TODO: copy debug info, unnamed_addr, ...
+			llvmutil.ReadGlobalProperties(obj.llvmGlobal).Apply(newGlobal)
+			// TODO: copy debug info and unnamed_addr.
 			obj.llvmGlobal.ReplaceAllUsesWith(newGlobal)
 			name := obj.llvmGlobal.Name()
 			obj.llvmGlobal.EraseFromParentAsGlobal()
