@@ -77,15 +77,13 @@ func stopRace(seed uint32) {
 	}
 	var wg sync.WaitGroup
 	for g := 0; g < 3; g++ {
-		wg.Add(1)
 		r := rng(seed + uint32(g)*7919 + 1)
-		go func(g int) {
-			defer wg.Done()
+		wg.Go(func() {
 			for i := g; i < timers; i += 3 {
 				spin(r.next() % 4000)
 				stopped[i] = tm[i].Stop()
 			}
-		}(g)
+		})
 	}
 	wg.Wait()
 	time.Sleep(200 * time.Millisecond)
@@ -124,10 +122,8 @@ func resetRace(seed uint32) {
 	}
 	var wg sync.WaitGroup
 	for g := 0; g < 3; g++ {
-		wg.Add(1)
 		r := rng(seed + uint32(g)*104729 + 1)
-		go func(g int) {
-			defer wg.Done()
+		wg.Go(func() {
 			for i := g; i < timers; i += 3 {
 				for k := 0; k < 4; k++ {
 					spin(r.next() % 4000)
@@ -136,7 +132,7 @@ func resetRace(seed uint32) {
 					}
 				}
 			}
-		}(g)
+		})
 	}
 	wg.Wait()
 	time.Sleep(200 * time.Millisecond)
@@ -154,6 +150,49 @@ func resetRace(seed uint32) {
 			fail("reset: fires vs 1+false", f, 1+falseResets[i])
 		}
 	}
+}
+
+// reuseRace reuses one channel timer the way sync primitives with deadlines
+// do: wait on the timer or a wakeup, then Stop the timer, drain its channel if
+// Stop lost to the expiry, and Reset it for the next wait. The wakeup arrives
+// around the deadline, so Stop often races with the timer firing. After a
+// Stop (and drain), Reset must report that the timer was inactive.
+func reuseRace() {
+	var wg sync.WaitGroup
+	for g := 0; g < 4*pick(4, 1); g++ {
+		wg.Go(func() {
+			t := time.NewTimer(time.Hour)
+			t.Stop()
+			wake := make(chan struct{}, 1)
+			for i := 0; i < pick(1500, 300); i++ {
+				if t.Reset(time.Duration(50+i%7*10) * time.Microsecond) {
+					fail("channel timer: Reset returned true after Stop", g, i)
+					return
+				}
+				go func(d int) {
+					time.Sleep(time.Duration(d) * time.Microsecond)
+					select {
+					case wake <- struct{}{}:
+					default:
+					}
+				}(40 + i%11*10)
+				expired := false
+				select {
+				case <-wake:
+				case <-t.C:
+					expired = true
+				}
+				if !expired && !t.Stop() {
+					<-t.C
+				}
+				select {
+				case <-wake:
+				default:
+				}
+			}
+		})
+	}
+	wg.Wait()
 }
 
 // tickerStop: a stopped ticker must stay stopped even if Stop races with its tick.
@@ -183,15 +222,13 @@ func tickerStop(seed uint32) {
 	}
 	var wg sync.WaitGroup
 	for g := 0; g < 2; g++ {
-		wg.Add(1)
 		r := rng(seed + uint32(g)*31 + 1)
-		go func(g int) {
-			defer wg.Done()
+		wg.Go(func() {
 			for i := g; i < n; i += 2 {
 				spin(r.next() % 20000)
 				tk[i].Stop()
 			}
-		}(g)
+		})
 	}
 	wg.Wait()
 	time.Sleep(5 * time.Millisecond)
@@ -212,6 +249,7 @@ func main() {
 		seed := uint32(round)*2654435761 + 12345
 		stopRace(seed)
 		resetRace(seed)
+		reuseRace()
 		tickerStop(seed)
 		if failed.Load() {
 			println("FAILED at round", round)

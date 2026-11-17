@@ -93,6 +93,9 @@ func (bubble *synctestBubble) removeFiringTimerLocked(tn *timerNode) {
 func (bubble *synctestBubble) stopFiringTimerLocked(tim *timer) {
 	for tn := bubble.firingTimers; tn != nil; tn = tn.firingNext {
 		if tn.timer == tim {
+			if tn.stopped {
+				return
+			}
 			tn.stopped = true
 			if tim.isChan {
 				tim.suppressedCallback = true
