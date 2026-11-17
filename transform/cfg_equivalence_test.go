@@ -2,6 +2,7 @@ package transform_test
 
 import (
 	"go/types"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -11,6 +12,18 @@ import (
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
+
+// skipUnlessEquivalenceRequested skips the tests that compare the LLVM helpers
+// with the algorithms they replaced. They take minutes, so they are only run
+// on request, for example after an LLVM upgrade:
+//
+//	TINYGO_EQUIVALENCE_TEST=1 go test ./transform -run 'MatchReference'
+func skipUnlessEquivalenceRequested(t *testing.T) {
+	t.Helper()
+	if os.Getenv("TINYGO_EQUIVALENCE_TEST") == "" {
+		t.Skip("set TINYGO_EQUIVALENCE_TEST=1 to compare the LLVM helpers with the old algorithms")
+	}
+}
 
 // refBlockInCycle is the algorithm that BasicBlock.InCycle replaced.
 func refBlockInCycle(bb llvm.BasicBlock) bool {
@@ -158,6 +171,7 @@ func compareHelpers(t *testing.T, mod llvm.Module, stride int, stats *helperStat
 // before and after LLVM's optimizations. The old InCycle is quadratic, so a
 // short run samples the blocks.
 func TestHelpersMatchReference(t *testing.T) {
+	skipUnlessEquivalenceRequested(t)
 	t.Parallel()
 	programs := []string{"generics.go", "reflect.go"}
 	stride := 1
