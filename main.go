@@ -1757,7 +1757,7 @@ func getListOfPackages(pkgs []string, options *compileopts.Options) ([]loader.Pa
 	if err != nil {
 		return nil, err
 	}
-	cmd, err := loader.List(config, []string{"-json"}, pkgs)
+	cmd, err := loader.List(config, []string{loader.PackageJSONFlag()}, pkgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run `go list`: %w", err)
 	}
