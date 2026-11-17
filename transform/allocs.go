@@ -186,6 +186,10 @@ func valueEscapesAt(value llvm.Value) llvm.Value {
 	analysis := escapeAnalysis{
 		visiting: make(map[llvm.Value]struct{}),
 		results:  make(map[escapeKey]escapeResult),
+		originFn: value.InstructionParent().Parent(),
+		// An allocation that runs more than once per call reuses its stack
+		// slot, so older objects must not stay reachable through a PHI.
+		originInCycle: value.InstructionParent().InCycle(),
 	}
 	return analysis.valueEscapesAt(value, false).escapeAt
 }
@@ -198,6 +202,9 @@ type escapeKey struct {
 type escapeAnalysis struct {
 	visiting map[llvm.Value]struct{}
 	results  map[escapeKey]escapeResult
+
+	originFn      llvm.Value
+	originInCycle bool
 }
 
 type escapeResult struct {
@@ -247,7 +254,10 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 				return result
 			}
 		case llvm.PHI:
-			if use.InstructionParent().InCycle() {
+			// A PHI in another function runs once per call of the allocating
+			// function, so the object cannot be overwritten through it.
+			if a.originInCycle && use.InstructionParent().Parent() == a.originFn &&
+				use.InstructionParent().InCycle() {
 				return escapeResult{escapeAt: use}
 			}
 			fallthrough
