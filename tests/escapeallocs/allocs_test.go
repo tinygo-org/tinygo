@@ -70,3 +70,54 @@ func TestAllocInLoopKeptAcrossIterations(t *testing.T) {
 		t.Errorf("got %v allocations, want 4", allocs)
 	}
 }
+
+type uint128 struct{ hi, lo uint64 }
+
+func (u *uint128) halves() [2]*uint64 {
+	return [2]*uint64{&u.hi, &u.lo}
+}
+
+type addr struct {
+	addr uint128
+	z    int
+}
+
+// v6 takes the address of its receiver copy and picks one of two pointers into
+// it with a run time index, like net/netip.Addr.v6.
+//
+//go:noinline
+func (a addr) v6(i uint8) uint8 {
+	return uint8(*(a.addr.halves()[(i/8)%2]) >> ((7 - i%8) * 8))
+}
+
+// A pointer is stored into a temporary array on the stack and loaded again.
+func TestPointerThroughLocalArray(t *testing.T) {
+	checkNoAllocs(t, func() {
+		a := addr{addr: uint128{hi: 0x0102030405060708, lo: 0x1112131415161718}}
+		sinkInt = int(a.v6(3)) + int(a.v6(12))
+	})
+}
+
+// Objects allocated in a loop and kept in a local array across iterations must
+// stay on the heap, one allocation per iteration, and keep their values.
+func TestAllocInLoopKeptInArray(t *testing.T) {
+	var sum int
+	allocs := testing.AllocsPerRun(100, func() {
+		var keep [2]*[16]byte
+		sum = 0
+		for i := 0; i < 6; i++ {
+			b := new([16]byte)
+			b[0] = byte(i + 1)
+			keep[i&1] = b
+			if other := keep[(i+1)&1]; other != nil {
+				sum += int(other[0])
+			}
+		}
+	})
+	if allocs != 6 {
+		t.Errorf("got %v allocations, want 6", allocs)
+	}
+	if sum != 1+2+3+4+5 {
+		t.Errorf("got sum %d, want %d", sum, 1+2+3+4+5)
+	}
+}
