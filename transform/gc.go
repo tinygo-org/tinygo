@@ -198,7 +198,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 				// be re-evaluated has its slot overwritten on the way round
 				// and so only roots the value the current iteration selected,
 				// so remember it and give its inputs slots below.
-				if blockInCycle(ptr.InstructionParent()) {
+				if ptr.InstructionParent().InCycle() {
 					cyclicPHIs = append(cyclicPHIs, ptr)
 				}
 			case llvm.ExtractValue, llvm.BitCast:
@@ -256,7 +256,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 						// Constants and arguments cannot be given a slot here.
 						continue
 					}
-					if incoming.InstructionOpcode() == llvm.PHI && blockInCycle(incoming.InstructionParent()) {
+					if incoming.InstructionOpcode() == llvm.PHI && incoming.InstructionParent().InCycle() {
 						worklist = append(worklist, incoming)
 					}
 					if stripped := stripPointerCasts(incoming); !stripped.IsAAllocaInst().IsNil() {
@@ -521,34 +521,4 @@ func markParentFunctions(marked map[llvm.Value]struct{}, fn llvm.Value) {
 			}
 		}
 	}
-}
-
-// blockInCycle returns whether bb lies on a cycle, that is, whether it is
-// reachable from itself and so can execute more than once per call. This is
-// broader than being a loop header: a merge inside a loop body also qualifies,
-// and its slot is overwritten each iteration just the same.
-func blockInCycle(bb llvm.BasicBlock) bool {
-	// Walk forward from bb and look for an edge back into it.
-	seen := map[llvm.BasicBlock]struct{}{}
-	worklist := []llvm.BasicBlock{bb}
-	for len(worklist) != 0 {
-		cur := worklist[len(worklist)-1]
-		worklist = worklist[:len(worklist)-1]
-		term := cur.LastInstruction()
-		if term.IsNil() {
-			continue
-		}
-		for i := 0; i < term.SuccessorsCount(); i++ {
-			succ := term.Successor(i)
-			if succ == bb {
-				return true
-			}
-			if _, ok := seen[succ]; ok {
-				continue
-			}
-			seen[succ] = struct{}{}
-			worklist = append(worklist, succ)
-		}
-	}
-	return false
 }
