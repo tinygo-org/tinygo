@@ -3,6 +3,7 @@ package transform
 import (
 	"strings"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -86,8 +87,8 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		}
 
 	scanBody:
-		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-			for call := bb.FirstInstruction(); !call.IsNil(); call = llvm.NextInstruction(call) {
+		for bb := range llvmutil.BasicBlocks(fn) {
+			for call := range llvmutil.Instructions(bb) {
 				if call.IsACallInst().IsNil() {
 					continue // only looking at calls
 				}
@@ -143,8 +144,8 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		// Find all calls to runtime.trackPointer in this function.
 		var calls []llvm.Value
 		var returns []llvm.Value
-		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+		for bb := range llvmutil.BasicBlocks(fn) {
+			for inst := range llvmutil.Instructions(bb) {
 				switch inst.InstructionOpcode() {
 				case llvm.Call:
 					if inst.CalledValue() == trackPointer {

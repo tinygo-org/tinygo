@@ -106,7 +106,7 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 	// }
 	// This function gets a list of these call instructions.
 	var initCalls []llvm.Value
-	for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+	for inst := range llvmutil.Instructions(bb) {
 		if inst == dummy {
 			continue
 		}

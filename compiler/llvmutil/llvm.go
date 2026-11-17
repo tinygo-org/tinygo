@@ -9,6 +9,7 @@ package llvmutil
 
 import (
 	"encoding/binary"
+	"iter"
 	"math"
 	"slices"
 	"strings"
@@ -62,6 +63,28 @@ func (attrs FunctionUsageAttributes) Merge(other FunctionUsageAttributes) Functi
 func (attrs FunctionUsageAttributes) Apply(fn llvm.Value) {
 	for kind, value := range attrs {
 		fn.AddFunctionAttr(fn.GlobalParent().Context().CreateStringAttribute(kind, value))
+	}
+}
+
+// BasicBlocks returns an iterator over the basic blocks of fn.
+func BasicBlocks(fn llvm.Value) iter.Seq[llvm.BasicBlock] {
+	return func(yield func(llvm.BasicBlock) bool) {
+		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+			if !yield(bb) {
+				return
+			}
+		}
+	}
+}
+
+// Instructions returns an iterator over the instructions of bb.
+func Instructions(bb llvm.BasicBlock) iter.Seq[llvm.Value] {
+	return func(yield func(llvm.Value) bool) {
+		for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+			if !yield(inst) {
+				return
+			}
+		}
 	}
 }
 

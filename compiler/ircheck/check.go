@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -139,7 +140,7 @@ func (c *checker) checkBasicBlock(bb llvm.BasicBlock, types map[llvm.Type]struct
 	}
 
 	// check instructions
-	for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+	for inst := range llvmutil.Instructions(bb) {
 		if err := c.checkInstruction(inst, types, specials); err != nil {
 			errs = append(errs, err)
 		}
@@ -156,7 +157,7 @@ func (c *checker) checkFunction(fn llvm.Value, types map[llvm.Type]struct{}, spe
 	}
 
 	// check basic blocks
-	for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+	for bb := range llvmutil.BasicBlocks(fn) {
 		errs = append(errs, c.checkBasicBlock(bb, types, specials)...)
 	}
 

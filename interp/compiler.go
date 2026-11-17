@@ -86,7 +86,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 		return fn
 	}
 
-	for inst := llvmFn.EntryBasicBlock().FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+	for inst := range llvmutil.Instructions(llvmFn.EntryBasicBlock()) {
 		if inst.IsACallInst().IsNil() || inst.CalledValue().Name() != "runtime.setupDeferFrame" {
 			continue
 		}
@@ -109,7 +109,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 	// Make a map of all the blocks, to quickly find the block number for a
 	// given branch instruction.
 	blockIndices := make(map[llvm.Value]int)
-	for llvmBB := llvmFn.FirstBasicBlock(); !llvmBB.IsNil(); llvmBB = llvm.NextBasicBlock(llvmBB) {
+	for llvmBB := range llvmutil.BasicBlocks(llvmFn) {
 		index := len(blockIndices)
 		blockIndices[llvmBB.AsValue()] = index
 	}
@@ -124,12 +124,12 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 	}
 
 	// Compile every block.
-	for llvmBB := llvmFn.FirstBasicBlock(); !llvmBB.IsNil(); llvmBB = llvm.NextBasicBlock(llvmBB) {
+	for llvmBB := range llvmutil.BasicBlocks(llvmFn) {
 		bb := &basicBlock{}
 		fn.blocks = append(fn.blocks, bb)
 
 		// Compile every instruction in the block.
-		for llvmInst := llvmBB.FirstInstruction(); !llvmInst.IsNil(); llvmInst = llvm.NextInstruction(llvmInst) {
+		for llvmInst := range llvmutil.Instructions(llvmBB) {
 			// Create instruction skeleton.
 			opcode := llvmInst.InstructionOpcode()
 			inst := instruction{
