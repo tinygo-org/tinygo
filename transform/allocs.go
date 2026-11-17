@@ -212,7 +212,7 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 				return result
 			}
 		case llvm.PHI:
-			if blockInCycle(use.InstructionParent()) {
+			if use.InstructionParent().InCycle() {
 				return escapeResult{escapeAt: use}
 			}
 			fallthrough
