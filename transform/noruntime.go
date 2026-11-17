@@ -11,7 +11,7 @@ import (
 // Call after interp and before any inlining (builder.optimizeProgram).
 func CheckNoRuntime(mod llvm.Module) []error {
 	hasMarked := false
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		if isNoRuntime(fn) {
 			hasMarked = true
 			break
@@ -56,7 +56,7 @@ func CheckNoRuntime(mod llvm.Module) []error {
 	}
 
 	var errs []error
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		if !isNoRuntime(fn) {
 			continue
 		}
