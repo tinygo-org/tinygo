@@ -7,11 +7,6 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
-// This is somewhat ugly to access through the API.
-// https://github.com/llvm/llvm-project/blob/94ebcfd16dac67486bae624f74e1c5c789448bae/llvm/include/llvm/Support/ModRef.h#L62
-// https://github.com/llvm/llvm-project/blob/94ebcfd16dac67486bae624f74e1c5c789448bae/llvm/include/llvm/Support/ModRef.h#L87
-const shiftExcludeArgMem = 2
-
 // MakeGCStackSlots converts all calls to runtime.trackPointer to explicit
 // stores to stack slots that are scannable by the GC.
 func MakeGCStackSlots(mod llvm.Module) bool {
@@ -52,7 +47,6 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 
 	// External functions may indirectly suspend the goroutine or perform a heap allocation.
 	// Their callers should get stack objects.
-	memAttr := llvm.AttributeKindID("memory")
 	for fn := range llvmutil.Functions(mod) {
 		if _, ok := trackFuncs[fn]; ok {
 			continue // already found
@@ -66,8 +60,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			continue
 		}
 
-		mem := fn.GetEnumFunctionAttribute(memAttr)
-		if !mem.IsNil() && mem.GetEnumValue()>>shiftExcludeArgMem == 0 {
+		if readMemoryEffects(fn).onlyAccessesArgMem() {
 			// This does not access non-argument memory.
 			// Exclude it.
 			continue
