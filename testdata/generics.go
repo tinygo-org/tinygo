@@ -1,6 +1,8 @@
 package main
 
 import (
+	"unsafe"
+
 	"github.com/tinygo-org/tinygo/testdata/generics/testa"
 	"github.com/tinygo-org/tinygo/testdata/generics/testb"
 )
@@ -13,6 +15,8 @@ func main() {
 	c.F() // issue 2951
 
 	SliceOp([]int(nil)) // issue 3002
+
+	println("sizeof:", int(sizeofNil[[3]int64]())) // unsafe.Sizeof doesn't evaluate its operand
 
 	testa.Test()
 	testb.Test()
@@ -33,3 +37,8 @@ func (c *C[V]) F() {}
 
 // Test for https://github.com/tinygo-org/tinygo/issues/3002
 func SliceOp[S ~[]E, E any](s S) {}
+
+func sizeofNil[T any]() uintptr {
+	var x *T
+	return unsafe.Sizeof(*x)
+}

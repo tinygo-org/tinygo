@@ -3970,6 +3970,31 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 	}
 }
 
+// onlyUsedForTypeInfo returns whether the value is used exclusively as the
+// argument of unsafe.Sizeof or unsafe.Alignof, which only look at its type.
+func onlyUsedForTypeInfo(v ssa.Value) bool {
+	refs := v.Referrers()
+	if refs == nil {
+		return false
+	}
+	found := false
+	for _, ref := range *refs {
+		if _, ok := ref.(*ssa.DebugRef); ok {
+			continue
+		}
+		call, ok := ref.(*ssa.Call)
+		if !ok {
+			return false
+		}
+		builtin, ok := call.Call.Value.(*ssa.Builtin)
+		if !ok || (builtin.Name() != "Sizeof" && builtin.Name() != "Alignof") {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
 // createUnOp creates LLVM IR for a given Go unary operation.
 // Most unary operators are pretty simple, such as the not and minus operator
 // which can all be directly lowered to IR. However, there is also the channel
@@ -4027,6 +4052,12 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 				return llvm.Value{}, b.makeError(unop.Pos(), "cgo function not found: "+name)
 			}
 			return fn, nil
+		} else if onlyUsedForTypeInfo(unop) {
+			// The operand of unsafe.Sizeof and unsafe.Alignof is never
+			// evaluated in Go, but SSA still emits the load (for example for
+			// generic code like unsafe.Sizeof(*(*T)(nil))). Don't load, so a
+			// nil pointer doesn't panic.
+			return llvm.ConstNull(valueType), nil
 		} else {
 			b.createNilCheck(unop.X, x, "deref")
 			if canUseDereferencePointer(unop) {
