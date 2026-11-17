@@ -162,6 +162,13 @@ func TestBuild(t *testing.T) {
 		// scheduler.none does not link on Windows.
 		switch runtime.GOOS {
 		case "darwin", "linux":
+			t.Run("gcstacks-blocked.go-gc=boehm-scheduler=tasks", func(t *testing.T) {
+				t.Parallel()
+				options := compileopts.Options(hostOptions)
+				options.GC = "boehm"
+				options.Scheduler = "tasks"
+				runTest("gcstacks-blocked.go", options, t, nil, nil)
+			})
 			for _, scheduler := range []string{"threads", "none"} {
 				t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
 					t.Parallel()
