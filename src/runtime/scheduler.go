@@ -206,11 +206,16 @@ func firingTimersRemove(tn *timerNode) {
 }
 
 // firingTimerStop marks a currently-firing timer as stopped, so that its
-// callback will not re-add it to the queue. It returns whether the timer is
-// currently firing. The caller must hold the scheduler's timer lock.
+// callback will not re-add it to the queue. It returns whether the timer was
+// firing and not already stopped. The caller must hold the scheduler's timer lock.
 func firingTimerStop(tim *timer) bool {
 	for tn := firingTimers; tn != nil; tn = tn.firingNext {
 		if tn.timer == tim {
+			if tn.stopped {
+				// Already stopped by an earlier call and still waiting
+				// for its callback to finish: it is no longer active.
+				return false
+			}
 			tn.stopped = true
 			if tim.isChan {
 				tim.suppressedCallback = true
