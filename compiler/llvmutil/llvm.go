@@ -110,6 +110,38 @@ func Instructions(bb llvm.BasicBlock) iter.Seq[llvm.Value] {
 	}
 }
 
+// InterfaceStub describes a function that the compiler declares for an
+// interface method call or type assert, which interface lowering defines.
+type InterfaceStub struct {
+	Methods        string
+	Invoke         string
+	IndirectResult bool
+}
+
+// ReadInterfaceStub returns nil if fn is not an interface stub.
+func ReadInterfaceStub(fn llvm.Value) *InterfaceStub {
+	methods := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
+	if methods.IsNil() {
+		return nil
+	}
+	return &InterfaceStub{
+		Methods:        methods.GetStringValue(),
+		Invoke:         fn.GetStringAttributeAtIndex(-1, "tinygo-invoke").GetStringValue(),
+		IndirectResult: fn.GetStringAttributeAtIndex(-1, "tinygo-indirect-result").GetStringValue() == "true",
+	}
+}
+
+func (stub *InterfaceStub) Apply(fn llvm.Value) {
+	ctx := fn.GlobalParent().Context()
+	fn.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-methods", stub.Methods))
+	if stub.Invoke != "" {
+		fn.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-invoke", stub.Invoke))
+	}
+	if stub.IndirectResult {
+		fn.AddFunctionAttr(ctx.CreateStringAttribute("tinygo-indirect-result", "true"))
+	}
+}
+
 // CreateEntryBlockAlloca creates a new alloca in the entry block, even though
 // the IR builder is located elsewhere. It assumes that the insert point is
 // at the end of the current block.

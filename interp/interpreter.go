@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -593,8 +594,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 
 				// Load the signature of the to-be-called function.
 				llvmFn := inst.llvmInst.CalledValue()
-				invokeAttr := llvmFn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
-				invokeName := invokeAttr.GetStringValue()
+				invokeName := llvmutil.ReadInterfaceStub(llvmFn).Invoke
 				signature := r.mod.NamedGlobal(invokeName)
 
 				// Iterate through all methods, looking for the one method that

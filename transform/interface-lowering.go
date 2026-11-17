@@ -205,17 +205,16 @@ func (p *lowerInterfacesPass) run() error {
 	var interfaceAssertFunctions []llvm.Value
 	var interfaceInvokeFunctions []llvm.Value
 	for fn := range llvmutil.Functions(p.mod) {
-		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
-		if methodsAttr.IsNil() {
+		stub := llvmutil.ReadInterfaceStub(fn)
+		if stub == nil {
 			continue
 		}
 		if !hasUses(fn) {
 			// Don't bother defining this function.
 			continue
 		}
-		p.addInterface(methodsAttr.GetStringValue())
-		invokeAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
-		if invokeAttr.IsNil() {
+		p.addInterface(stub.Methods)
+		if stub.Invoke == "" {
 			// Type assert.
 			interfaceAssertFunctions = append(interfaceAssertFunctions, fn)
 		} else {
@@ -299,10 +298,9 @@ func (p *lowerInterfacesPass) run() error {
 	var abiErrors scanner.ErrorList
 	seenABIErrors := make(map[llvm.Value]struct{})
 	for _, fn := range interfaceInvokeFunctions {
-		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
-		invokeAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
-		itf := p.interfaces[methodsAttr.GetStringValue()]
-		signature := itf.signatures[invokeAttr.GetStringValue()]
+		stub := llvmutil.ReadInterfaceStub(fn)
+		itf := p.interfaces[stub.Methods]
+		signature := itf.signatures[stub.Invoke]
 		for _, typ := range itf.types {
 			function := typ.getMethod(signature).function
 			if attr := function.GetStringAttributeAtIndex(-1, "tinygo-interface-abi-error"); !attr.IsNil() {
@@ -321,17 +319,15 @@ func (p *lowerInterfacesPass) run() error {
 
 	// Define all interface invoke thunks.
 	for _, fn := range interfaceInvokeFunctions {
-		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
-		invokeAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
-		itf := p.interfaces[methodsAttr.GetStringValue()]
-		signature := itf.signatures[invokeAttr.GetStringValue()]
+		stub := llvmutil.ReadInterfaceStub(fn)
+		itf := p.interfaces[stub.Methods]
+		signature := itf.signatures[stub.Invoke]
 		p.defineInterfaceMethodFunc(fn, itf, signature)
 	}
 
 	// Define all interface type assert functions.
 	for _, fn := range interfaceAssertFunctions {
-		methodsAttr := fn.GetStringAttributeAtIndex(-1, "tinygo-methods")
-		itf := p.interfaces[methodsAttr.GetStringValue()]
+		itf := p.interfaces[llvmutil.ReadInterfaceStub(fn).Methods]
 		p.defineInterfaceAssertFunc(fn, itf)
 	}
 
@@ -841,7 +837,7 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	actualType := llvm.PrevParam(context)
 	returnType := fn.GlobalValueType().ReturnType()
 	resultOffset := 0
-	if fn.GetStringAttributeAtIndex(-1, "tinygo-indirect-result").GetStringValue() == "true" {
+	if llvmutil.ReadInterfaceStub(fn).IndirectResult {
 		resultOffset = 1
 	}
 	context.SetName("context")
