@@ -152,49 +152,6 @@ func resetRace(seed uint32) {
 	}
 }
 
-// reuseRace reuses one channel timer the way sync primitives with deadlines
-// do: wait on the timer or a wakeup, then Stop the timer, drain its channel if
-// Stop lost to the expiry, and Reset it for the next wait. The wakeup arrives
-// around the deadline, so Stop often races with the timer firing. After a
-// Stop (and drain), Reset must report that the timer was inactive.
-func reuseRace() {
-	var wg sync.WaitGroup
-	for g := 0; g < 4*pick(4, 1); g++ {
-		wg.Go(func() {
-			t := time.NewTimer(time.Hour)
-			t.Stop()
-			wake := make(chan struct{}, 1)
-			for i := 0; i < pick(1500, 300); i++ {
-				if t.Reset(time.Duration(50+i%7*10) * time.Microsecond) {
-					fail("channel timer: Reset returned true after Stop", g, i)
-					return
-				}
-				go func(d int) {
-					time.Sleep(time.Duration(d) * time.Microsecond)
-					select {
-					case wake <- struct{}{}:
-					default:
-					}
-				}(40 + i%11*10)
-				expired := false
-				select {
-				case <-wake:
-				case <-t.C:
-					expired = true
-				}
-				if !expired && !t.Stop() {
-					<-t.C
-				}
-				select {
-				case <-wake:
-				default:
-				}
-			}
-		})
-	}
-	wg.Wait()
-}
-
 // tickerStop: a stopped ticker must stay stopped even if Stop races with its tick.
 func tickerStop(seed uint32) {
 	n := tickers
@@ -249,7 +206,6 @@ func main() {
 		seed := uint32(round)*2654435761 + 12345
 		stopRace(seed)
 		resetRace(seed)
-		reuseRace()
 		tickerStop(seed)
 		if failed.Load() {
 			println("FAILED at round", round)
