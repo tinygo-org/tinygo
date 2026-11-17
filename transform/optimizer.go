@@ -38,12 +38,11 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 
 	// Make sure these functions are kept in tact during TinyGo transformation passes.
 	for _, name := range functionsUsedInTransforms {
-		fn := mod.NamedFunction(name)
-		if fn.IsNil() {
+		if mod.NamedFunction(name).IsNil() {
 			panic(fmt.Errorf("missing core function %q", name))
 		}
-		fn.SetLinkage(llvm.ExternalLinkage)
 	}
+	exported := exportFunctions(mod, functionsUsedInTransforms)
 
 	if errs := CheckNoRuntime(mod); len(errs) != 0 {
 		return errs
@@ -149,13 +148,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 	}
 
 	// After TinyGo-specific transforms have finished, undo exporting these functions.
-	for _, name := range functionsUsedInTransforms {
-		fn := mod.NamedFunction(name)
-		if fn.IsNil() || fn.IsDeclaration() {
-			continue
-		}
-		fn.SetLinkage(llvm.InternalLinkage)
-	}
+	exported.restore()
 
 	// Run the ThinLTO pre-link passes, meant to be run on each individual
 	// module. This saves compilation time compared to "default<#>" and is meant
@@ -229,19 +222,7 @@ func pruneRuntimeStartup(mod llvm.Module) error {
 
 // PrepareRuntimeStartup resolves startup checks before interpreting initializers.
 func PrepareRuntimeStartup(mod llvm.Module) error {
-	linkages := make(map[llvm.Value]llvm.Linkage, len(functionsUsedInTransforms))
-	for _, name := range functionsUsedInTransforms {
-		fn := mod.NamedFunction(name)
-		if !fn.IsNil() {
-			linkages[fn] = fn.Linkage()
-			fn.SetLinkage(llvm.ExternalLinkage)
-		}
-	}
-	defer func() {
-		for fn, linkage := range linkages {
-			fn.SetLinkage(linkage)
-		}
-	}()
+	defer exportFunctions(mod, functionsUsedInTransforms).restore()
 	options := llvm.NewPassBuilderOptions()
 	defer options.Dispose()
 	err := mod.RunPasses("globaldce,function-attrs,adce,globaldce", llvm.TargetMachine{}, options)
@@ -371,4 +352,31 @@ var functionsUsedInTransforms = []string{
 	"runtime.alloc",
 	"runtime.free",
 	"runtime.nilPanic",
+}
+
+// linkageSnapshot holds the linkage of functions, so that it can be restored
+// after the functions were made external.
+type linkageSnapshot map[llvm.Value]llvm.Linkage
+
+// exportFunctions gives the named functions external linkage, so that LLVM
+// passes keep them, and returns their previous linkage.
+func exportFunctions(mod llvm.Module, names []string) linkageSnapshot {
+	snapshot := make(linkageSnapshot, len(names))
+	for _, name := range names {
+		fn := mod.NamedFunction(name)
+		// A declaration is already external, and globaldce may remove it.
+		if fn.IsNil() || fn.IsDeclaration() {
+			continue
+		}
+		snapshot[fn] = fn.Linkage()
+		fn.SetLinkage(llvm.ExternalLinkage)
+	}
+	return snapshot
+}
+
+// restore gives each function its previous linkage.
+func (snapshot linkageSnapshot) restore() {
+	for fn, linkage := range snapshot {
+		fn.SetLinkage(linkage)
+	}
 }
