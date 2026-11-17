@@ -134,12 +134,12 @@ TEST_PACKAGES_LINUX := \
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
 
 # os/user requires t.Skip() support
+# time takes more than 25 minutes on Windows.
 TEST_PACKAGES_WINDOWS := \
 	compress/flate \
 	io/ioutil \
 	mime \
 	testing/fstest \
-	time \
 	$(nil)
 
 
