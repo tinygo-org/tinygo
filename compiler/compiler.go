@@ -3979,7 +3979,12 @@ func onlyUsedForTypeInfo(v ssa.Value) bool {
 	}
 	found := false
 	for _, ref := range *refs {
-		if _, ok := ref.(*ssa.DebugRef); ok {
+		if dr, ok := ref.(*ssa.DebugRef); ok {
+			// A named variable (y := *x) means the load is observable in Go,
+			// so it must still happen (and may panic).
+			if _, isIdent := dr.Expr.(*ast.Ident); isIdent {
+				return false
+			}
 			continue
 		}
 		call, ok := ref.(*ssa.Call)

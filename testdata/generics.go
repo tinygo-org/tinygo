@@ -18,6 +18,9 @@ func main() {
 
 	println("sizeof:", int(sizeofNil[[3]int64]())) // unsafe.Sizeof doesn't evaluate its operand
 
+	_, panicked := sizeofVar[[3]int64]()
+	println("sizeof var panicked:", panicked)
+
 	testa.Test()
 	testb.Test()
 }
@@ -37,6 +40,13 @@ func (c *C[V]) F() {}
 
 // Test for https://github.com/tinygo-org/tinygo/issues/3002
 func SliceOp[S ~[]E, E any](s S) {}
+
+func sizeofVar[T any]() (n uintptr, panicked bool) {
+	defer func() { panicked = recover() != nil }()
+	var x *T
+	y := *x // this load happens in Go and panics
+	return unsafe.Sizeof(y), false
+}
 
 func sizeofNil[T any]() uintptr {
 	var x *T
