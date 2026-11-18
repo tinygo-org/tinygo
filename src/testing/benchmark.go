@@ -462,13 +462,46 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 	return true
 }
 
+// Set by tinygo test at link time.
+var (
+	benchPkgName string
+	benchCPUName string
+)
+
+var benchLabelsDone bool
+
+// printBenchLabels prints the goos/goarch/pkg/cpu header once, before the first
+// benchmark result.
+func printBenchLabels() {
+	if benchLabelsDone {
+		return
+	}
+	benchLabelsDone = true
+	fmt.Printf("goos: %s\n", runtime.GOOS)
+	fmt.Printf("goarch: %s\n", runtime.GOARCH)
+	if benchPkgName != "" {
+		fmt.Printf("pkg: %s\n", benchPkgName)
+	}
+	if benchCPUName != "" {
+		fmt.Printf("cpu: %s\n", benchCPUName)
+	}
+}
+
 // processBench runs bench b and prints the results.
 func (b *B) processBench(ctx *benchContext) {
 	benchName := b.name
+	if ctx != nil {
+		printBenchLabels()
+	}
+	// Like go test, only append the CPU count when it isn't 1.
+	procsSuffix := ""
+	if n := runtime.NumCPU(); n != 1 {
+		procsSuffix = "-" + strconv.Itoa(n)
+	}
 
 	for i := 0; i < flagCount; i++ {
 		if ctx != nil {
-			fmt.Printf("%-*s\t", ctx.maxLen, benchName)
+			fmt.Printf("%-*s\t", ctx.maxLen+len(procsSuffix), benchName+procsSuffix)
 		}
 		r := b.doBench()
 		if b.failed {

@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -267,6 +269,18 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 		flags = append(flags, "-test.shuffle="+testConfig.Shuffle)
 	}
 
+	// Set the benchmark header values at link time.
+	testingGlobals := map[string]string{"benchPkgName": strings.TrimSuffix(pkgName, ".test")}
+	if isNativeRun(config) {
+		if name := hostCPUName(); name != "" {
+			testingGlobals["benchCPUName"] = name
+		}
+	}
+	globals := map[string]map[string]string{}
+	maps.Copy(globals, options.GlobalValues)
+	globals["testing"] = testingGlobals
+	options.GlobalValues = globals
+
 	logToStdout := testConfig.Verbose || testConfig.BenchRegexp != ""
 
 	var buf bytes.Buffer
@@ -339,6 +353,36 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 		fmt.Fprintf(w, "FAIL\t%s\t%.3fs\n", importPath, duration.Seconds())
 	}
 	return passed, err
+}
+
+// isNativeRun reports whether the test binary runs on this machine, not on an
+// emulator or baremetal target.
+func isNativeRun(config *compileopts.Config) bool {
+	return config.GOOS() == runtime.GOOS && config.GOARCH() == runtime.GOARCH &&
+		config.Target.Emulator == "" && !slices.Contains(config.BuildTags(), "baremetal")
+}
+
+// hostCPUName returns the host CPU model name, or an empty string if unknown.
+func hostCPUName() string {
+	switch runtime.GOOS {
+	case "darwin":
+		out, err := exec.Command("sysctl", "-n", "machdep.cpu.brand_string").Output()
+		if err == nil {
+			return strings.TrimSpace(string(out))
+		}
+	case "linux":
+		data, err := os.ReadFile("/proc/cpuinfo")
+		if err != nil {
+			return ""
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			key, value, ok := strings.Cut(line, ":")
+			if ok && (strings.TrimSpace(key) == "model name" || strings.TrimSpace(key) == "Model") {
+				return strings.TrimSpace(value)
+			}
+		}
+	}
+	return ""
 }
 
 // validateOutputFormat checks if the output file extension matches the expected format
@@ -2121,7 +2165,11 @@ func main() {
 
 		// Build and run the tests concurrently.
 		// This uses an additional semaphore to reduce the memory usage.
+		// Run benchmarks one package at a time, like go test.
 		testSema := make(chan struct{}, cap(options.Semaphore))
+		if testConfig.BenchRegexp != "" {
+			testSema = make(chan struct{}, 1)
+		}
 		for i, pkg := range explicitPkgNames {
 			buf := &bufs[i]
 			testSema <- struct{}{}
