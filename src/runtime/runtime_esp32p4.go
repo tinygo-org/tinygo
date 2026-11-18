@@ -47,12 +47,6 @@ func init() {
 	machine.InitSerial()
 }
 
-func abort() {
-	for {
-		riscv.Asm("wfi")
-	}
-}
-
 // interruptInit initializes the interrupt controller.
 //
 // The ESP32-P4 uses a hybrid interrupt architecture:

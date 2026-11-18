@@ -3,7 +3,6 @@
 package runtime
 
 import (
-	"device"
 	"device/esp"
 	"machine"
 	"unsafe"
@@ -112,15 +111,5 @@ func nanosecondsToTicks(ns int64) timeUnit {
 func sleepTicks(d timeUnit) {
 	sleepUntil := ticks() + d
 	for ticks() < sleepUntil {
-	}
-}
-
-func exit(code int) {
-	abort()
-}
-
-func abort() {
-	for {
-		device.Asm("waiti 0")
 	}
 }
