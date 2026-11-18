@@ -101,6 +101,7 @@ SECTIONS
         *(.wifirxiram*)
         *(.wifiorslpiram*)
         *(.coexiram*)
+        *(.high_perf_code_iram1*)
         *(.text.handleInterruptASM) /* must be in SRAM, within JAL range of _vector_table */
         . = ALIGN(256);
         *(.text.exception_vectors)
