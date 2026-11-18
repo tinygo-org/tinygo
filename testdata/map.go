@@ -363,6 +363,11 @@ func ptrmaps() {
 	m2[unsafe.Pointer(&a)] = 100
 	println("unsafe ptr map:", m2[unsafe.Pointer(&a)])
 
+	// Pointer-to-pointer keys in an interface map.
+	pa := &a
+	m3 := map[any]int{&pa: 7}
+	println("ptr ptr any map:", m3[&pa])
+
 	// Struct keys with padding: the hash/equal must operate per-field
 	// and not include padding bytes. Only test when padding actually
 	// exists (e.g., not on AVR where alignment is 1).

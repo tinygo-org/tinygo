@@ -87,6 +87,7 @@ ptr map len: 3
 ptr map a: 10
 ptr map deleted: false
 unsafe ptr map: 100
+ptr ptr any map: 7
 padded key lookup: 100
 padded key equal: true
 blank key lookup: 200

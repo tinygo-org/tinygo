@@ -1348,6 +1348,10 @@ func typeImplementsMethodSet(concreteType, assertedMethodSet unsafe.Pointer) boo
 
 // Comparable returns whether values of this type can be compared to each other.
 func (t *RawType) Comparable() bool {
+	if t.ptrtag() != 0 {
+		// Tagged pointer types are pointers, which are always comparable.
+		return true
+	}
 	return (t.meta & flagComparable) == flagComparable
 }
 

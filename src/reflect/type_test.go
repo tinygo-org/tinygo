@@ -823,3 +823,14 @@ func TestCanSeqFunction(t *testing.T) {
 		})
 	}
 }
+
+// TinyGo stores pointer-to-pointer types as tagged pointers.
+func TestPointerToPointerComparable(t *testing.T) {
+	var p *int
+	pp := &p
+	for _, typ := range []reflect.Type{reflect.TypeOf(pp), reflect.TypeOf(&pp)} {
+		if !typ.Comparable() {
+			t.Errorf("TypeOf(%v).Comparable() = false, want true", typ)
+		}
+	}
+}
