@@ -358,6 +358,17 @@ func IsNoCapture(attr llvm.Attribute) bool {
 	return true
 }
 
+// CapturesAtMostNullness reports whether attr is captures(none) or
+// captures(address_is_null). See https://llvm.org/docs/LangRef.html#pointer-capture.
+func CapturesAtMostNullness(attr llvm.Attribute) bool {
+	if attr.IsNil() || llvm.VersionMajor < 21 {
+		return IsNoCapture(attr)
+	}
+	// Bits 4-7 and 0-3 hold the components captured by other uses and by returns,
+	// and AddressIsNull is bit 0 of each (CaptureInfo::toIntValue, llvm/Support/ModRef.h).
+	return attr.GetEnumValue()&^0x11 == 0
+}
+
 // UnsignedRangeAttribute returns a range attribute that limits an integer of
 // the given width to [0, max]. It returns a nil attribute before LLVM 19 or when max+1 does not fit.
 func UnsignedRangeAttribute(ctx llvm.Context, bits uint, max uint64) llvm.Attribute {

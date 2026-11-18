@@ -313,7 +313,7 @@ func (a *escapeAnalysis) callValueEscapesAt(call, value llvm.Value, allowReturn 
 		}
 		matched = true
 		index := i + 1 // param attributes start at 1
-		nocapture := llvmutil.IsNoCapture(called.GetEnumAttributeAtIndex(index, kindNoCapture))
+		nocapture := llvmutil.CapturesAtMostNullness(called.GetEnumAttributeAtIndex(index, kindNoCapture))
 		returnedParam := !called.GetEnumAttributeAtIndex(index, kindReturned).IsNil()
 		if returnedParam {
 			result.returned = true
