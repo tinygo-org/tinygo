@@ -1,7 +1,7 @@
 {
 	"inherits": ["avr"],
 	"cpu": "atmega328pb",
-	"build-tags": ["atmega328pb", "atmega", "avr5"],
+	"build-tags": ["atmega328pb", "atmega", "machine.uart", "avr5"],
 	"ldflags": [
 		"--defsym=_bootloader_size=512",
 		"--defsym=_stack_size=512"

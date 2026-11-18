@@ -1,7 +1,7 @@
 {
     "inherits": ["avr"],
     "cpu": "atmega1280",
-    "build-tags": ["atmega1280", "atmega"],
+    "build-tags": ["atmega1280", "atmega", "machine.uart"],
     "serial": "uart",
     "ldflags": [
         "--defsym=_stack_size=512"
