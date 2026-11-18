@@ -1,4 +1,4 @@
-//go:build esp32p4 && !serial.usb
+//go:build esp32p4 && serial.uart
 
 package machine
 
