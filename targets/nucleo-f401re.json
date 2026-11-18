@@ -1,6 +1,6 @@
 {
-  "inherits": ["cortex-m4"],
-  "build-tags": ["nucleof401re", "stm32f401", "stm32f4", "stm32"],
+  "inherits": ["stm32f4"],
+  "build-tags": ["nucleof401re", "stm32f401"],
   "serial": "uart",
   "linkerscript": "targets/stm32f401.ld",
   "extra-files": [

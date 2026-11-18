@@ -1,13 +1,6 @@
 {
-    "inherits": [
-        "cortex-m0plus"
-    ],
-    "build-tags": [
-        "stm32l031",
-        "stm32l0x1",
-        "stm32l0",
-        "stm32"
-    ],
+    "inherits": ["stm32l0"],
+    "build-tags": ["stm32l031", "stm32l0x1"],
     "linkerscript": "targets/stm32l031x6.ld",
     "extra-files": [
         "src/device/stm32/stm32l0x1.s"

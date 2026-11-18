@@ -1,6 +1,6 @@
 {
-    "inherits": ["cortex-m0"],
-    "build-tags": ["nucleol031k6", "stm32l031", "stm32l0x1", "stm32l0", "stm32"],
+    "inherits": ["stm32l0"],
+    "build-tags": ["nucleol031k6", "stm32l031", "stm32l0x1"],
     "serial": "uart",
     "linkerscript": "targets/stm32l031k6.ld",
     "extra-files": [

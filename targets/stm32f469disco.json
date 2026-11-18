@@ -1,6 +1,6 @@
 {
-  "inherits": ["cortex-m4"],
-  "build-tags": ["stm32f469disco", "stm32f469", "stm32f4", "stm32"],
+  "inherits": ["stm32f4"],
+  "build-tags": ["stm32f469disco", "stm32f469"],
   "serial": "uart",
   "linkerscript": "targets/stm32f469.ld",
   "extra-files": [

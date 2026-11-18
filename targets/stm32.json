@@ -1,0 +1,4 @@
+{
+	"inheritable-only": true,
+	"build-tags": ["stm32"]
+}

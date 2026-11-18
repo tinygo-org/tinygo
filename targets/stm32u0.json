@@ -1,0 +1,5 @@
+{
+	"inherits": ["cortex-m0plus", "stm32"],
+	"inheritable-only": true,
+	"build-tags": ["stm32u0"]
+}
