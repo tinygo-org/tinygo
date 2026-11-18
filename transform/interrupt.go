@@ -44,12 +44,7 @@ func LowerInterrupts(mod llvm.Module) []error {
 
 			// Get the interrupt number from the initializer
 			initializer := global.Initializer()
-			interrupt := initializer.Operand(2)
-			// Interrupt{0} is stored as a zeroinitializer, which has no operands.
-			var num int64
-			if interrupt.IsAConstantAggregateZero().IsNil() {
-				num = interrupt.Operand(0).SExtValue()
-			}
+			num := initializer.AggregateElement(2).AggregateElement(0).SExtValue()
 			pkg := packageFromInterruptHandle(global)
 
 			handles, exists := handleMap[num]
@@ -94,8 +89,8 @@ func LowerInterrupts(mod llvm.Module) []error {
 			builder.SetInsertPointBefore(call)
 			for _, handler := range handlers {
 				initializer := handler.Initializer()
-				context := builder.CreateExtractValue(initializer, 0, "")
-				funcPtr := builder.CreateExtractValue(initializer, 1, "").Operand(0)
+				context := initializer.AggregateElement(0)
+				funcPtr := initializer.AggregateElement(1).Operand(0)
 				builder.CreateCall(funcPtr.GlobalValueType(), funcPtr, []llvm.Value{
 					num,
 					context,
