@@ -35,9 +35,11 @@ func initTimer() {
 }
 
 func ticks() timeUnit {
-	// First, update the LO and HI register pair by writing any value to the
-	// register. This allows reading the pair atomically.
-	esp.TIMG0.T0UPDATE.Set(0)
+	// Latch the counter into LO and HI, and wait until the latch is done.
+	// See timer_ll_trigger_soft_capture in ESP-IDF esp_hal_timg.
+	esp.TIMG0.T0UPDATE.Set(1)
+	for esp.TIMG0.T0UPDATE.Get() != 0 {
+	}
 	// Then read the two 32-bit parts of the timer.
 	return timeUnit(uint64(esp.TIMG0.T0LO.Get()) | uint64(esp.TIMG0.T0HI.Get())<<32)
 }
