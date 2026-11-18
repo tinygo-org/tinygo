@@ -1,4 +1,4 @@
-//go:build tinygo.riscv && virt && qemu
+//go:build tinygo.riscv && virt
 
 package runtime
 
