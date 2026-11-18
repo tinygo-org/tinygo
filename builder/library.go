@@ -322,10 +322,11 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 // with the correct ISA extensions for each target (e.g. rv32imc for
 // ESP32-C3 which lacks the atomic extension).
 func riscvMarch(config *compileopts.Config, defaultMarch string) string {
+	march := defaultMarch
 	for _, flag := range config.Target.CFlags {
 		if strings.HasPrefix(flag, "-march=") {
-			return flag[len("-march="):]
+			march = flag[len("-march="):]
 		}
 	}
-	return defaultMarch
+	return march
 }
