@@ -49,6 +49,29 @@ func TestGetTargetSpecs_InheritableOnlyTargetsExcluded(t *testing.T) {
 	}
 }
 
+func TestLoadTarget_ExtraFilesExclude(t *testing.T) {
+	spec, err := LoadTarget(&Options{Target: "esp32p4-generic"})
+	if err != nil {
+		t.Fatal("LoadTarget failed:", err)
+	}
+
+	for _, file := range spec.ExtraFiles {
+		if file == "src/internal/task/task_stack_tinygoriscv.S" {
+			t.Errorf("extra file %q should be excluded", file)
+		}
+	}
+	found := false
+	for _, file := range spec.ExtraFiles {
+		if file == "src/internal/task/task_stack_esp32p4.S" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("ESP32-P4 task stack assembly is missing from extra files")
+	}
+}
+
 func TestLoadTarget_InheritableOnlyTargetStillLoadable(t *testing.T) {
 	// Inheritable-only targets should still be loadable directly (for building).
 	_, err := LoadTarget(&Options{Target: "esp32"})
