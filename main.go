@@ -1173,13 +1173,9 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 	}
 	defer flasher.Close()
 
-	chipName := flasher.ChipName()
-	offset := uint32(0x0)
-	if chipName == "ESP32" {
-		offset = 0x1000
-	}
-	if strings.HasPrefix(chipName, "ESP32-P4") {
-		offset = 0x2000
+	offset, ok := flasher.BootloaderFlashOffset()
+	if !ok {
+		return fmt.Errorf("could not determine bootloader flash offset")
 	}
 
 	// Read the firmware binary
