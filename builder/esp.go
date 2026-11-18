@@ -23,6 +23,55 @@ type espImageSegment struct {
 	data []byte
 }
 
+const (
+	// ESP32-P4 maps flash at 0x40000000 and ends the IROM window at
+	// SOC_IROM_HIGH (64 MB).  TCM and PSRAM are outside this window and are
+	// loaded by the ROM bootloader as ordinary segments.
+	esp32p4FlashBase = 0x40000000
+	esp32p4FlashEnd  = 0x44000000
+	// The image starts at flash offset 0x2000, so image offset = VMA -
+	// esp32p4FlashBase - esp32p4ImageBase.
+	esp32p4ImageBase = 0x2000
+)
+
+func isESP32P4FlashAddress(addr uint32) bool {
+	return addr >= esp32p4FlashBase && addr < esp32p4FlashEnd
+}
+
+// esp32p4FlashImageOffset converts a flash-mapped VMA to an offset in the
+// image file.  The image is flashed at 0x2000 and the L2 cache maps
+// flash[0x10000] to VMA 0x40010000.
+func esp32p4FlashImageOffset(addr uint32) (int, bool) {
+	if !isESP32P4FlashAddress(addr) || addr < esp32p4FlashBase+esp32p4ImageBase {
+		return 0, false
+	}
+	return int(addr - esp32p4FlashBase - esp32p4ImageBase), true
+}
+
+// appendESP32P4FlashSegments appends flash-mapped segments at their
+// VMA-derived image offsets.  Gaps between segments are padded so that each
+// segment keeps the address the linker assigned to it.  Segments are sorted by
+// address first, and an error is returned if one overlaps previously written
+// data.
+func appendESP32P4FlashSegments(out *bytes.Buffer, segs []*espImageSegment) error {
+	sorted := make([]*espImageSegment, len(segs))
+	copy(sorted, segs)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].addr < sorted[j].addr })
+
+	for _, seg := range sorted {
+		target, ok := esp32p4FlashImageOffset(seg.addr)
+		if !ok {
+			return fmt.Errorf("ESP32-P4: flash segment address 0x%x is outside the flash-mapped window", seg.addr)
+		}
+		if out.Len() > target {
+			return fmt.Errorf("ESP32-P4: flash segment at 0x%x overlaps previous data (image offset 0x%x)", seg.addr, target)
+		}
+		out.Write(make([]byte, target-out.Len()))
+		out.Write(seg.data)
+	}
+	return nil
+}
+
 // makeESPFirmwareImage converts an input ELF file to an image file for an ESP32 or
 // ESP8266 chip. This is a special purpose image format just for the ESP chip
 // family, and is parsed by the on-chip mask ROM bootloader.
@@ -120,10 +169,9 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		segments = ramSegments
 
 	case "esp32p4":
-		// Flash window from SOC_IROM_LOW to SOC_IROM_HIGH in ESP-IDF soc.h.
 		var ramSegments []*espImageSegment
 		for _, seg := range segments {
-			if seg.addr >= 0x40000000 && seg.addr < 0x44000000 {
+			if isESP32P4FlashAddress(seg.addr) {
 				flashSegments = append(flashSegments, seg)
 			} else {
 				ramSegments = append(ramSegments, seg)
@@ -522,19 +570,13 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		}
 	}
 
-	// ESP32-P4 flash is mapped 1:1 at 0x40000000 by the startup code and this
-	// image starts at flash offset 0x2000. See src/device/esp/esp32p4.S.
-	if chip == "esp32p4" {
-		sort.SliceStable(flashSegments, func(i, j int) bool {
-			return flashSegments[i].addr < flashSegments[j].addr
-		})
-		for _, seg := range flashSegments {
-			offset := int(seg.addr-0x40000000) - 0x2000
-			if outf.Len() > offset {
-				return fmt.Errorf("ESP32-P4: segment at 0x%x overlaps the previous one", seg.addr)
-			}
-			outf.Write(make([]byte, offset-outf.Len()))
-			outf.Write(seg.data)
+	// ESP32-P4 flash-mapped segments are written at VMA-derived flash
+	// offsets after the SRAM image.  The startup code relies on the L2 cache
+	// mapping flash[0x10000] to VMA 0x40010000, so the padding between
+	// segments must preserve each segment's VMA.
+	if chip == "esp32p4" && len(flashSegments) > 0 {
+		if err := appendESP32P4FlashSegments(outf, flashSegments); err != nil {
+			return err
 		}
 	}
 
