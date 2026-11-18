@@ -95,14 +95,6 @@ func init() {
 	machine.InitSerial()
 }
 
-func abort() {
-	print("abort called\n")
-	// lock up forever
-	for {
-		device.Asm("waiti 0")
-	}
-}
-
 // interruptInit installs the Xtensa vector table by writing its address
 // to the VECBASE special register and ensures all CPU interrupts are
 // initially disabled.

@@ -79,13 +79,6 @@ func init() {
 	machine.InitSerial()
 }
 
-func abort() {
-	// lock up forever
-	for {
-		riscv.Asm("wfi")
-	}
-}
-
 // interruptInit initialize the interrupt controller and called from runtime once.
 func interruptInit() {
 	mie := riscv.DisableInterrupts()

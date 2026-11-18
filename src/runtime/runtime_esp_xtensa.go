@@ -1,8 +1,12 @@
-//go:build esp32 && !qemu
+//go:build esp && xtensa && !qemu
 
 package runtime
 
 import "device"
+
+func exit(code int) {
+	abort()
+}
 
 func abort() {
 	for {
