@@ -63,6 +63,56 @@ func TestAllocsSharedCalls(t *testing.T) {
 	}
 }
 
+func TestAllocsCapturesAttribute(t *testing.T) {
+	t.Parallel()
+	if llvm.VersionMajor < 21 {
+		t.Skip("captures attribute needs LLVM 21")
+	}
+	for _, tc := range []struct {
+		captures string
+		value    uint64 // CaptureInfo::toIntValue in llvm/Support/ModRef.h
+		stack    bool
+	}{
+		{"none", 0x00, true},
+		{"address_is_null", 0x11, true},
+		{"ret: address_is_null", 0x01, true},
+		{"address", 0x33, false},
+		{"provenance", 0xcc, false},
+	} {
+		t.Run(tc.captures, func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			mod := ctx.NewModule("captures")
+			defer mod.Dispose()
+			mod.SetDataLayout("e-p:64:64")
+			builder := ctx.NewBuilder()
+			defer builder.Dispose()
+
+			intType := ctx.Int32Type()
+			ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+			checkType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+			check := llvm.AddFunction(mod, "check", checkType)
+			check.AddAttributeAtIndex(1, ctx.CreateEnumAttribute(llvm.AttributeKindID("captures"), tc.value))
+
+			allocType := llvm.FunctionType(ptrType, []llvm.Type{intType, ptrType}, false)
+			alloc := llvm.AddFunction(mod, "runtime.alloc", allocType)
+			root := llvm.AddFunction(mod, "root", llvm.FunctionType(ctx.VoidType(), nil, false))
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(root, "entry"))
+			ptr := builder.CreateCall(allocType, alloc, []llvm.Value{llvm.ConstInt(intType, 4, false), llvm.ConstNull(ptrType)}, "ptr")
+			builder.CreateCall(checkType, check, []llvm.Value{ptr}, "")
+			builder.CreateRetVoid()
+
+			transform.OptimizeAllocs(mod, nil, 256, nil)
+			if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+				t.Fatal(err)
+			}
+			if stack := alloc.FirstUse().IsNil(); stack != tc.stack {
+				t.Errorf("stack allocated = %t, want %t:\n%s", stack, tc.stack, mod.String())
+			}
+		})
+	}
+}
+
 func TestAllocsAggregateEdges(t *testing.T) {
 	t.Parallel()
 
