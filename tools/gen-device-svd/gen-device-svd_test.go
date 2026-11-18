@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestParseBitfieldsDimensionedSingleBit(t *testing.T) {
 	dim := "2"
@@ -79,5 +84,37 @@ func TestProcessClusterSizeDim1(t *testing.T) {
 	}
 	if got := p.Registers[0].ElementSize; got != 8 {
 		t.Errorf("cluster ElementSize = %d, want 8", got)
+	}
+}
+
+func TestWriteGoSharedInterrupt(t *testing.T) {
+	device := &Device{
+		Metadata: &Metadata{Name: "TEST", NameLower: "test"},
+		Interrupts: []*Interrupt{
+			{Name: "APB_ADC", HandlerName: "APB_ADC_IRQHandler", Value: 71},
+			{Name: "TEMPERATURE_SENSOR", HandlerName: "TEMPERATURE_SENSOR_IRQHandler", Value: 71},
+			{Name: "MCPWM0", HandlerName: "MCPWM0_IRQHandler", Value: 72},
+		},
+	}
+	dir := t.TempDir()
+	if err := writeGo(dir, device, "software"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "test.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(data)
+
+	for _, name := range []string{"APB_ADC", "TEMPERATURE_SENSOR", "MCPWM0"} {
+		if !strings.Contains(out, "IRQ_"+name+" = ") {
+			t.Errorf("missing constant IRQ_%s", name)
+		}
+	}
+	if got := strings.Count(out, "\tcase IRQ_"); got != 2 {
+		t.Errorf("got %d cases in HandleInterrupt, want 2", got)
+	}
+	if strings.Contains(out, "case IRQ_TEMPERATURE_SENSOR:") {
+		t.Errorf("HandleInterrupt has a second case for interrupt 71")
 	}
 }

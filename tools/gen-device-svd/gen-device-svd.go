@@ -1237,10 +1237,16 @@ func writeGo(outdir string, device *Device, interruptSystem string) error {
 
 	interruptHandlerMap := make(map[string]*Interrupt)
 	var interruptHandlers []*Interrupt
+	interruptValues := make(map[int]bool)
+	var interruptCases []*Interrupt
 	for _, intr := range device.Interrupts {
 		if _, ok := interruptHandlerMap[intr.HandlerName]; !ok {
 			interruptHandlerMap[intr.HandlerName] = intr
 			interruptHandlers = append(interruptHandlers, intr)
+		}
+		if !interruptValues[intr.Value] {
+			interruptValues[intr.Value] = true
+			interruptCases = append(interruptCases, intr)
 		}
 	}
 
@@ -1306,7 +1312,7 @@ func interrupt{{.Name}}() {
 {{- if eq .interruptSystem "software"}}
 func HandleInterrupt(num int) {
 	switch num {
-	{{- range .interruptHandlers}}
+	{{- range .interruptCases}}
 	case IRQ_{{.Name}}:
 		callHandlers(IRQ_{{.Name}})
 	{{- end}}
@@ -1340,6 +1346,7 @@ var (
 		"interruptMax":      maxInterruptValue,
 		"interruptSystem":   interruptSystem,
 		"interruptHandlers": interruptHandlers,
+		"interruptCases":    interruptCases,
 	})
 	if err != nil {
 		return err
