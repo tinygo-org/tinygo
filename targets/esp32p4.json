@@ -6,7 +6,8 @@
 	"features": "+32bit,+a,+c,+m,+zaamo,+zalrsc,+zmmul,+zicsr,+zifencei,-relax",
 	"build-tags": [
 		"esp32p4",
-		"esp"
+		"esp",
+		"machine.uart"
 	],
 	"serial": "uart",
 	"rtlib": "compiler-rt",

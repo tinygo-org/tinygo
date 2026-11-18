@@ -6,6 +6,7 @@
     "gc": "none",
     "serial": "uart",
     "build-tags": [
-        "py32"
+        "py32",
+        "machine.uart"
     ]
 }
