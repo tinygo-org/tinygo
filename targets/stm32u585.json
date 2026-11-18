@@ -1,12 +1,6 @@
 {
-  "inherits": [
-    "cortex-m33"
-  ],
-  "build-tags": [
-    "stm32u585",
-    "stm32u5",
-    "stm32"
-  ],
+  "inherits": ["stm32u5"],
+  "build-tags": ["stm32u585"],
   "extra-files": [
     "src/device/stm32/stm32u585.s"
   ],
