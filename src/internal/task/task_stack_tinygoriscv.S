@@ -1,4 +1,4 @@
-//go:build tinygo
+//go:build tinygo && !esp32p4
 
 #if __riscv_xlen == 64
 #define REGSIZE 8

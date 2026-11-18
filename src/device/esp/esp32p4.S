@@ -1,6 +1,6 @@
-// Minimal bootloader for the ESP32-P4. It sets up the flash cache/MMU, and
-// then continues with the generic RISC-V initialization code which in turn
-// calls runtime.main.
+// Minimal bootloader for the ESP32-P4. It initializes the FPU, sets up the
+// flash cache/MMU, and then continues with the generic RISC-V initialization
+// code which in turn calls runtime.main.
 //
 // Written in assembly to ensure it is entirely in IRAM and does not
 // accidentally call functions stored in IROM (flash).
@@ -9,6 +9,7 @@
 //   - Unified I/D SRAM (L2MEM) at 0x4FF00000
 //   - Unified flash mapping at 0x40000000 (both IROM and DROM)
 //   - L1 I-cache + L1 D-cache + L2 cache hierarchy
+//   - Hardware FPU (RV32IMAFC)
 //
 // Based on the ESP32-C6 startup (esp32c6.S) adapted for P4 cache API.
 
@@ -44,6 +45,11 @@ call_start_cpu0:
     lui t3, 0x40000       // t3 = (1 << 30) = SWD_DISABLE bit
     or t2, t2, t3
     sw t2, 0x1c(t0)       // LP_WDT.SWD_CONFIG |= SWD_DISABLE
+
+    // Enable FPU: set MSTATUS.FS = Initial (01)
+    // Must be done before any float instructions execute.
+    li t0, (1 << 13)
+    csrs mstatus, t0
 
     // Enable UART0 clock chain so ROM UART keeps working and TinyGo can use it.
     // HP_SYS_CLKRST base = 0x500E6000.
