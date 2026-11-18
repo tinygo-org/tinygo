@@ -28,6 +28,14 @@ build tools to be built. Go is of course necessary to build TinyGo itself.
 The rest of this guide assumes you're running Linux, but it should be equivalent
 on a different system like Mac.
 
+TinyGo itself is not built, released, or tested on `linux/mips` or
+`linux/mipsle` hosts. Release binaries are produced only for `linux/amd64`,
+`linux/arm`, and `linux/arm64`, the cross compilers configured in
+`make/config.mk` cover only ARM hosts, and no CI job runs the compiler on a
+MIPS host. These architectures remain supported *targets*: TinyGo can build
+programs for `linux/mips` and `linux/mipsle` from a supported host. Compiler-side
+code therefore does not need to handle a MIPS host.
+
 ## Using GNU Make
 
 The static build of TinyGo is driven by GNUmakefile, which includes the topic
