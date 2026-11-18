@@ -1842,7 +1842,7 @@ func main() {
 	// stack size calculation and features like -size=short, -print-allocs=,
 	// etc. The -no-debug flag is used to strip it at link time. But for TinyGo
 	// development it can be useful to not emit debug information at all.
-	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, use -no-debug instead")
+	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, skip DWARF generation in the compiler (-no-debug implies this)")
 
 	var flagDeps, flagTest bool
 	if command == "help" || command == "list" {

@@ -249,7 +249,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 		DefaultStackSize:   config.StackSize(),
 		MaxStackAlloc:      config.MaxStackAlloc(),
 		NeedsStackObjects:  config.NeedsStackObjects(),
-		Debug:              !config.Options.SkipDWARF, // emit DWARF except when -internal-nodwarf is passed
+		Debug:              config.Debug() && !config.Options.SkipDWARF, // emit DWARF unless -no-debug or -internal-nodwarf is passed
 		Nobounds:           config.Options.Nobounds,
 		PanicStrategy:      config.PanicStrategy(),
 		PanicUnwind:        config.PanicUnwind(),
