@@ -5,7 +5,7 @@
 	"target-abi": "lp64",
 	"build-tags": ["tinygo.riscv64"],
 	"scheduler": "tasks",
-	"default-stack-size": 2048,
+	"default-stack-size": 8192,
 	"cflags": [
 		"-march=rv64gc"
 	],
