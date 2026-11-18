@@ -79,9 +79,9 @@ static void* start_wrapper(void *arg) {
     void *args = state->args;
     current_task = state->task;
 
-    // Save the current stack pointer in the goroutine state, for the GC.
-    int stackAddr;
-    *(state->stackTop) = (uintptr_t)(&stackAddr);
+    // Save the stack top for the GC. Use the frame address: args may lie above any
+    // local and may be the only reference to the goroutine's closure.
+    *(state->stackTop) = (uintptr_t)__builtin_frame_address(0);
 
     // Notify the caller that the thread has successfully started and
     // initialized.
