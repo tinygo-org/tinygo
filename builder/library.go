@@ -318,14 +318,16 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 
 // riscvMarch returns the -march value for RISC-V library compilation.
 // It extracts the value from the target's cflags if present, otherwise
-// falls back to the provided default. This ensures libraries are compiled
-// with the correct ISA extensions for each target (e.g. rv32imc for
-// ESP32-C3 which lacks the atomic extension).
+// falls back to the provided default. If there are multiple -march flags,
+// the last one wins, matching how compilers handle repeated options. This
+// lets an inheriting target override its parent's ISA, such as ESP32-P4
+// replacing rv32imac with rv32imafc.
 func riscvMarch(config *compileopts.Config, defaultMarch string) string {
+	march := defaultMarch
 	for _, flag := range config.Target.CFlags {
 		if strings.HasPrefix(flag, "-march=") {
-			return flag[len("-march="):]
+			march = flag[len("-march="):]
 		}
 	}
-	return defaultMarch
+	return march
 }
