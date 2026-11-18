@@ -1,0 +1,4 @@
+{
+	"inherits": ["esp32p4"],
+	"build-tags": ["esp32p4_generic"]
+}
