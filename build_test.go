@@ -654,7 +654,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// limited amount of memory.
 				continue
 
-			case "aggregatestorage.go", "stringfrombytes_stress.go":
+			case "aggregatestorage.go", "stringfrombytes_stress.go", "sync-contention.go", "goroutine-waves.go":
 				// Needs more RAM than AVR has.
 				continue
 
