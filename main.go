@@ -1178,6 +1178,9 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 	if chipName == "ESP32" {
 		offset = 0x1000
 	}
+	if strings.HasPrefix(chipName, "ESP32-P4") {
+		offset = 0x2000
+	}
 
 	// Read the firmware binary
 	data, err := os.ReadFile(tmppath)
