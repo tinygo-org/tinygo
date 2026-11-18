@@ -1,4 +1,4 @@
-//go:build tinygo
+//go:build tinygo && !esp32p4
 
 .section .text.tinygo_startTask
 .global  tinygo_startTask
