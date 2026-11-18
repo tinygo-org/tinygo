@@ -2,7 +2,7 @@
 	"llvm-target":   "wasm32-unknown-wasip3",
 	"cpu":           "generic",
 	"features":      "+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,+atomics,-multivalue,-reference-types",
-	"build-tags":    ["tinygo.wasm", "wasip3", "wasip1"],
+	"build-tags":    ["tinygo.wasm", "tinygo.wasi", "wasip3", "wasip1"],
 	"buildmode":     "c-shared",
 	"goos":          "wasip3",
 	"goarch":        "wasm",
