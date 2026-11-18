@@ -2,9 +2,11 @@ package compileopts
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"testing"
@@ -46,6 +48,52 @@ func TestGetTargetSpecs_InheritableOnlyTargetsExcluded(t *testing.T) {
 		if _, ok := specs[name]; !ok {
 			t.Errorf("board target %q should appear in GetTargetSpecs", name)
 		}
+	}
+}
+
+func TestApplyExtraFilesExclude(t *testing.T) {
+	spec := &TargetSpec{
+		ExtraFiles:        []string{"base.S", "replace.S", "keep.S"},
+		ExtraFilesExclude: []string{"replace.S", "missing.S"},
+	}
+	spec.applyExtraFilesExclude()
+
+	want := []string{"base.S", "keep.S"}
+	if !slices.Equal(spec.ExtraFiles, want) {
+		t.Errorf("ExtraFiles = %v, want %v", spec.ExtraFiles, want)
+	}
+}
+
+func TestLoadTarget_ExtraFilesExclude(t *testing.T) {
+	dir := t.TempDir()
+	basePath := filepath.Join(dir, "base.json")
+	if err := os.WriteFile(basePath, []byte(`{"extra-files":["base.S","replace.S","keep.S"]}`), 0o666); err != nil {
+		t.Fatal(err)
+	}
+
+	child, err := json.Marshal(map[string]any{
+		"inherits":            []string{basePath},
+		"extra-files-exclude": []string{"replace.S"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	childPath := filepath.Join(dir, "child.json")
+	if err := os.WriteFile(childPath, child, 0o666); err != nil {
+		t.Fatal(err)
+	}
+
+	spec, err := LoadTarget(&Options{Target: childPath})
+	if err != nil {
+		t.Fatal("LoadTarget failed:", err)
+	}
+
+	want := []string{"base.S", "keep.S"}
+	if !slices.Equal(spec.ExtraFiles, want) {
+		t.Errorf("ExtraFiles = %v, want %v", spec.ExtraFiles, want)
+	}
+	if want := []string{"replace.S"}; !slices.Equal(spec.ExtraFilesExclude, want) {
+		t.Errorf("ExtraFilesExclude = %v, want %v", spec.ExtraFilesExclude, want)
 	}
 }
 
