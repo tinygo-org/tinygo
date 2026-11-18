@@ -282,14 +282,15 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 	}
 
 	if !useUpstreamNetOsPoll(config) {
-		// Not hosted Linux (wasm, baremetal, other GOOS): keep TinyGo's own
-		// net, os and internal/poll, which are needed there.
+		// Not hosted linux/amd64 (wasm, baremetal, other GOOS, other linux
+		// architectures): keep TinyGo's own net, os and internal/poll, which
+		// are needed there.
 		paths["internal/poll/"] = false
 		paths["net/"] = true
 		paths["net/http/"] = false
 		paths["os/"] = true
 	}
-	// Hosted Linux: no entries for these packages, so the merged GOROOT takes
+	// Hosted linux/amd64: no entries for these packages, so the merged GOROOT takes
 	// Go's own net, os and internal/poll instead of the TinyGo versions.
 	// TinyGo's reduced os/net do not provide the full API surface (for example
 	// net.DialUnix, UnixConn.ReadMsgUnix, os.File.ReadFrom), which programs
