@@ -33,7 +33,7 @@ func TestGetTargetSpecs_InheritableOnlyTargetsExcluded(t *testing.T) {
 	}
 
 	// Inheritable-only processor-level targets should not appear in the listing.
-	inheritableOnlyTargets := []string{"esp32", "esp32c3", "esp32s3", "esp8266", "rp2040", "rp2350", "rp2350b"}
+	inheritableOnlyTargets := []string{"esp32", "esp32c3", "esp32s3", "esp8266", "rp2040", "rp2350", "rp2350b", "riscv-base", "riscv32-base"}
 	for _, name := range inheritableOnlyTargets {
 		if _, ok := specs[name]; ok {
 			t.Errorf("inheritable-only target %q should not appear in GetTargetSpecs", name)
@@ -45,6 +45,39 @@ func TestGetTargetSpecs_InheritableOnlyTargetsExcluded(t *testing.T) {
 	for _, name := range boardTargets {
 		if _, ok := specs[name]; !ok {
 			t.Errorf("board target %q should appear in GetTargetSpecs", name)
+		}
+	}
+}
+
+func TestRISCVTaskStackInheritance(t *testing.T) {
+	const genericTaskStack = "src/internal/task/task_stack_tinygoriscv.S"
+
+	for _, name := range []string{"riscv-base", "riscv32-base"} {
+		spec, err := LoadTarget(&Options{Target: name})
+		if err != nil {
+			t.Fatalf("LoadTarget(%q): %v", name, err)
+		}
+		if !spec.InheritableOnly {
+			t.Errorf("%s should be inheritable-only", name)
+		}
+		if slices.Contains(spec.ExtraFiles, genericTaskStack) {
+			t.Errorf("%s should not include %s", name, genericTaskStack)
+		}
+		for _, file := range []string{"src/device/riscv/start.S", "src/runtime/asm_riscv.S", "src/device/riscv/handleinterrupt.S"} {
+			if !slices.Contains(spec.ExtraFiles, file) {
+				t.Errorf("%s is missing shared RISC-V file %s", name, file)
+			}
+		}
+	}
+
+	// Targets that use the generic RISC-V task stack must keep inheriting it.
+	for _, name := range []string{"riscv", "riscv32", "esp32c3", "esp32c6", "esp32h2", "riscv-qemu", "fe310", "tkey", "riscv64"} {
+		spec, err := LoadTarget(&Options{Target: name})
+		if err != nil {
+			t.Fatalf("LoadTarget(%q): %v", name, err)
+		}
+		if !slices.Contains(spec.ExtraFiles, genericTaskStack) {
+			t.Errorf("%s is missing %s", name, genericTaskStack)
 		}
 	}
 }
