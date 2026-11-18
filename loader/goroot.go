@@ -256,15 +256,11 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 		"internal/futex/":                 false,
 		"internal/fuzz/":                  false,
 		"internal/itoa/":                  false,
-		"internal/poll/":                  false,
 		"internal/reflectlite/":           false,
 		"internal/gclayout":               false,
 		"internal/task/":                  false,
 		"internal/wasi/":                  false,
 		"machine/":                        false,
-		"net/":                            true,
-		"net/http/":                       false,
-		"os/":                             true,
 		"reflect/":                        false,
 		"runtime/":                        false,
 		"sync/":                           true,
@@ -285,7 +281,34 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 		paths["internal/syscall/unix/"] = false
 	}
 
+	if !useUpstreamNetOsPoll(config) {
+		// Not hosted Linux (wasm, baremetal, other GOOS): keep TinyGo's own
+		// net, os and internal/poll, which are needed there.
+		paths["internal/poll/"] = false
+		paths["net/"] = true
+		paths["net/http/"] = false
+		paths["os/"] = true
+	}
+	// Hosted Linux: no entries for these packages, so the merged GOROOT takes
+	// Go's own net, os and internal/poll instead of the TinyGo versions.
+	// TinyGo's reduced os/net do not provide the full API surface (for example
+	// net.DialUnix, UnixConn.ReadMsgUnix, os.File.ReadFrom), which programs
+	// ported from gc need.
+
 	return paths
+}
+
+// useUpstreamNetOsPoll returns whether the merged GOROOT should take the
+// upstream Go net, os and internal/poll packages instead of the TinyGo
+// overrides. This is only done on hosted linux/amd64, where the full Go
+// standard library is expected to work and the epoll netpoller exists;
+// TinyGo's own os/net remain in use on wasm, baremetal, other GOOS and
+// other linux architectures.
+func useUpstreamNetOsPoll(config *compileopts.Config) bool {
+	// Only hosted linux/amd64: the epoll netpoller that upstream os and
+	// internal/poll need at run time currently exists only there. Other
+	// linux architectures keep TinyGo's own os/net.
+	return config.GOOS() == "linux" && config.GOARCH() == "amd64" && !needsSyscallPackage(config.BuildTags())
 }
 
 // symlink creates a symlink or something similar. On Unix-like systems, it
