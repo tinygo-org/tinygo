@@ -118,6 +118,18 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 			}
 		}
 		segments = ramSegments
+
+	case "esp32p4":
+		// Flash window from SOC_IROM_LOW to SOC_IROM_HIGH in ESP-IDF soc.h.
+		var ramSegments []*espImageSegment
+		for _, seg := range segments {
+			if seg.addr >= 0x40000000 && seg.addr < 0x44000000 {
+				flashSegments = append(flashSegments, seg)
+			} else {
+				ramSegments = append(ramSegments, seg)
+			}
+		}
+		segments = ramSegments
 	}
 
 	// ESP32 flash XIP: compute where the DROM segment will be placed in flash
@@ -504,6 +516,22 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 			offset := int(seg.addr & 0x7FFFFF)
 			if outf.Len() > offset {
 				return fmt.Errorf("ESP32-C3: segment at 0x%x overlaps the previous one", seg.addr)
+			}
+			outf.Write(make([]byte, offset-outf.Len()))
+			outf.Write(seg.data)
+		}
+	}
+
+	// ESP32-P4 flash is mapped 1:1 at 0x40000000 by the startup code and this
+	// image starts at flash offset 0x2000. See src/device/esp/esp32p4.S.
+	if chip == "esp32p4" {
+		sort.SliceStable(flashSegments, func(i, j int) bool {
+			return flashSegments[i].addr < flashSegments[j].addr
+		})
+		for _, seg := range flashSegments {
+			offset := int(seg.addr-0x40000000) - 0x2000
+			if outf.Len() > offset {
+				return fmt.Errorf("ESP32-P4: segment at 0x%x overlaps the previous one", seg.addr)
 			}
 			outf.Write(make([]byte, offset-outf.Len()))
 			outf.Write(seg.data)
