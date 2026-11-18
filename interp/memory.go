@@ -225,7 +225,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 		case llvm.StructTypeKind:
 			numElements := llvmType.StructElementTypesCount()
 			for i := range numElements {
-				element := mv.r.builder.CreateExtractValue(llvmValue, i, "")
+				element := llvmValue.AggregateElement(i)
 				err := mv.markExternal(element, mark)
 				if err != nil {
 					return err
@@ -234,7 +234,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 		case llvm.ArrayTypeKind:
 			numElements := llvmType.ArrayLength()
 			for i := range numElements {
-				element := mv.r.builder.CreateExtractValue(llvmValue, i, "")
+				element := llvmValue.AggregateElement(i)
 				err := mv.markExternal(element, mark)
 				if err != nil {
 					return err
@@ -1225,7 +1225,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				if !field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r) {
+				if !field.set(llvmValue.AggregateElement(i), r) {
 					return false
 				}
 			}
@@ -1238,7 +1238,7 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 				field := rawValue{
 					buf: v.buf[offset:],
 				}
-				if !field.set(r.builder.CreateExtractValue(llvmValue, i, ""), r) {
+				if !field.set(llvmValue.AggregateElement(i), r) {
 					return false
 				}
 			}
