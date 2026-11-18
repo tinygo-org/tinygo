@@ -42,6 +42,12 @@ func main() {
 	esp.LP_WDT.SWD_WPROTECT.Set(0x50D83AA1)
 	esp.LP_WDT.SWD_CONF.SetBits(1 << 30) // SWD_DISABLE bit
 
+	// Turn off the APM access filters, so DMA masters such as the WiFi MAC can
+	// reach memory. Same as pre_init() in esp-hal esp-hal/src/soc/esp32c6/mod.rs.
+	esp.HP_APM.FUNC_CTRL.Set(0)
+	esp.LP_APM.FUNC_CTRL.Set(0)
+	esp.LP_APM0.FUNC_CTRL.Set(0)
+
 	// Change CPU frequency to 160MHz from SPLL (480MHz).
 	//
 	// Clock tree: SPLL (480MHz) → HP root → CPU / AHB / APB
