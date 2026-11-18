@@ -17,6 +17,7 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/diagnostics"
 	"github.com/tinygo-org/tinygo/goenv"
+	"tinygo.org/x/go-llvm"
 )
 
 func TestReflectMethodReferences(t *testing.T) {
@@ -428,6 +429,9 @@ func TestBuild(t *testing.T) {
 			runGCStackTests(t, optionsFromTarget("wasip2", sema))
 		})
 		t.Run("WASIp3", func(t *testing.T) {
+			if llvm.VersionMajor < 23 {
+				t.Skipf("wasip3 requires LLVM 23 or newer, have %s", llvm.Version)
+			}
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasip3", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasip3", sema), t)
