@@ -620,7 +620,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			}
 		}
 		if options.GOOS == "linux" && (options.GOARCH == "mips" || options.GOARCH == "mipsle") {
-			if name == "atomic.go" || name == "timers.go" {
+			if name == "atomic.go" || name == "timers.go" || name == "sync-contention.go" || name == "goroutine-waves.go" {
 				// 64-bit atomic operations aren't currently supported on MIPS.
 				continue
 			}
