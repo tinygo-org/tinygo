@@ -6,9 +6,7 @@
 		"tkey"
 	],
 	"features": "+32bit,+c,+zmmul,-relax",
-	"cflags": [
-		"-march=rv32iczmmul"
-	],
+	"arch": "rv32iczmmul",
 	"linkerscript": "targets/tkey.ld",
 	"scheduler": "none",
 	"gc": "conservative",

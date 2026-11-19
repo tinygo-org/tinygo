@@ -4,6 +4,7 @@
 	],
 	"inheritable-only": true,
 	"features": "+32bit,+c,+m,+zmmul,-relax",
+	"arch": "rv32imc",
 	"build-tags": [
 		"esp32c3",
 		"esp",
@@ -16,9 +17,6 @@
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
 	"default-stack-size": 8192,
-	"cflags": [
-		"-march=rv32imc"
-	],
 	"linkerscript": "targets/esp32c3.ld",
 	"extra-files": [
 		"src/device/esp/esp32c3.S"

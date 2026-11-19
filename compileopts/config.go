@@ -356,6 +356,9 @@ func (c *Config) LibraryPath(name string) string {
 	if c.ABI() != "" {
 		archname += "-" + c.ABI()
 	}
+	if c.Target.Arch != "" {
+		archname += "-" + c.Target.Arch
+	}
 	if c.Target.SoftFloat {
 		archname += "-softfloat"
 	}
@@ -461,6 +464,9 @@ func (c *Config) CFlags(libclang bool) []string {
 	// Set the -mabi flag, if needed.
 	if c.ABI() != "" {
 		cflags = append(cflags, "-mabi="+c.ABI())
+	}
+	if c.Target.Arch != "" {
+		cflags = append(cflags, "-march="+c.Target.Arch)
 	}
 	return cflags
 }
