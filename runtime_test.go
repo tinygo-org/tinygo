@@ -342,3 +342,91 @@ func TestTimerChannelGC(t *testing.T) {
 	options.Scheduler = "tasks"
 	runTest("timer_gc.go", options, t, nil, nil)
 }
+
+func TestHeapMmapNoReserve(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS != "linux" || *testTarget != "" {
+		t.Skip("requires Linux host target")
+	}
+	if mode, err := os.ReadFile("/proc/sys/vm/overcommit_memory"); err == nil && strings.TrimSpace(string(mode)) == "2" {
+		t.Skip("Linux ignores MAP_NORESERVE when vm.overcommit_memory is 2")
+	}
+
+	options := optionsFromTarget("", sema)
+	options.GC = "conservative"
+	options.Scheduler = "tasks"
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	src := t.TempDir() + "/main.go"
+	err = os.WriteFile(src, []byte(`package main
+
+import (
+	"os"
+	"slices"
+	"strconv"
+	"strings"
+	"unsafe"
+)
+
+var sink *int
+
+func main() {
+	sink = new(int)
+	ptr := uint64(uintptr(unsafe.Pointer(sink)))
+	data, err := os.ReadFile("/proc/self/smaps")
+	if err != nil {
+		println("read smaps:", err.Error())
+		os.Exit(1)
+	}
+	inHeapVMA := false
+	for _, line := range strings.Split(string(data), "\n") {
+		if !inHeapVMA {
+			fields := strings.Fields(line)
+			if len(fields) == 0 {
+				continue
+			}
+			startStr, endStr, ok := strings.Cut(fields[0], "-")
+			if !ok {
+				continue
+			}
+			start, err1 := strconv.ParseUint(startStr, 16, 64)
+			end, err2 := strconv.ParseUint(endStr, 16, 64)
+			if err1 == nil && err2 == nil && ptr >= start && ptr < end {
+				inHeapVMA = true
+			}
+			continue
+		}
+		if after, ok := strings.CutPrefix(line, "VmFlags:"); ok {
+			if !slices.Contains(strings.Fields(after), "nr") {
+				println("missing nr in VmFlags:", after)
+				os.Exit(1)
+			}
+			println("MAP_NORESERVE ok")
+			return
+		}
+	}
+	println("heap VMA not found")
+	os.Exit(1)
+}
+`), 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	output := &bytes.Buffer{}
+	_, err = buildAndRun(src, config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, _ *builder.BuildResult) error {
+		cmd.Stdout = output
+		cmd.Stderr = output
+		return cmd.Run()
+	})
+	if err != nil {
+		t.Fatalf("program failed: %v\n%s", err, output.String())
+	}
+	if !strings.Contains(output.String(), "MAP_NORESERVE ok") {
+		t.Fatalf("unexpected output:\n%s", output.String())
+	}
+}
