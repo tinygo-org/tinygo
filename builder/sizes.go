@@ -502,6 +502,9 @@ func loadProgramSize(path string, packagePathMap map[string]string) (*programSiz
 						Align:   section.Addralign,
 						Type:    memoryStack,
 					})
+				} else if section.Name == ".psram" {
+					// External PSRAM is not internal SRAM, so do not count it
+					// towards internal RAM usage.
 				} else if section.Flags&elf.SHF_WRITE != 0 {
 					// Regular .bss section. Zero-initialized RAM is always
 					// writable, so require SHF_WRITE here.
