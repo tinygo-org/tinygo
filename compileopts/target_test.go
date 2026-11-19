@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -54,6 +55,26 @@ func TestLoadTarget_InheritableOnlyTargetStillLoadable(t *testing.T) {
 	_, err := LoadTarget(&Options{Target: "esp32"})
 	if err != nil {
 		t.Errorf("LoadTarget should still load inheritable-only target esp32: %v", err)
+	}
+}
+
+// Library builds use the first -march flag, so a target must not inherit one
+// and then add another.
+func TestTargetSpecsSingleMArch(t *testing.T) {
+	specs, err := GetTargetSpecs()
+	if err != nil {
+		t.Fatal("GetTargetSpecs failed:", err)
+	}
+	for name, spec := range specs {
+		var marchs []string
+		for _, flag := range spec.CFlags {
+			if strings.HasPrefix(flag, "-march=") {
+				marchs = append(marchs, flag)
+			}
+		}
+		if len(marchs) > 1 {
+			t.Errorf("target %s has more than one -march flag: %v", name, marchs)
+		}
 	}
 }
 

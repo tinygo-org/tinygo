@@ -112,6 +112,17 @@ func (c *Config) ABI() string {
 	return c.Target.ABI
 }
 
+// MArch returns the value of the -march flag in the target cflags, or "" if
+// there is none.
+func (c *Config) MArch() string {
+	for _, flag := range c.Target.CFlags {
+		if march, ok := strings.CutPrefix(flag, "-march="); ok {
+			return march
+		}
+	}
+	return ""
+}
+
 // GOOS returns the GOOS of the target. This might not always be the actual OS:
 // for example, bare-metal targets will usually pretend to be linux to get the
 // standard library to compile.
@@ -355,6 +366,9 @@ func (c *Config) LibraryPath(name string) string {
 	}
 	if c.ABI() != "" {
 		archname += "-" + c.ABI()
+	}
+	if c.MArch() != "" {
+		archname += "-" + c.MArch()
 	}
 	if c.Target.SoftFloat {
 		archname += "-softfloat"

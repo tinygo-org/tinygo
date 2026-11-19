@@ -6,9 +6,6 @@
 	"build-tags": ["tinygo.riscv32"],
 	"scheduler": "tasks",
 	"default-stack-size": 2048,
-	"cflags": [
-		"-march=rv32imac"
-	],
 	"ldflags": [
 		"-melf32lriscv",
 		"-mllvm", "-enable-machine-outliner=never"

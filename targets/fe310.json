@@ -4,6 +4,9 @@
 	],
 	"cpu": "sifive-e31",
 	"features": "+32bit,+a,+c,+m,+zaamo,+zalrsc,+zmmul,-relax",
+	"cflags": [
+		"-march=rv32imac"
+	],
 	"build-tags": [
 		"fe310",
 		"sifive"

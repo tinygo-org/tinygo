@@ -4,6 +4,9 @@
 	],
 	"inheritable-only": true,
 	"features": "+32bit,+a,+c,+m,+zaamo,+zalrsc,+zmmul,-relax",
+	"cflags": [
+		"-march=rv32imac"
+	],
 	"build-tags": [
 		"esp32h2",
 		"esp"
