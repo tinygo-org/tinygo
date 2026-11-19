@@ -1,5 +1,5 @@
 {
 	"inherits": ["cortex-m3", "stm32"],
 	"inheritable-only": true,
-	"build-tags": ["stm32f1"]
+	"build-tags": ["stm32f1", "machine.spi"]
 }

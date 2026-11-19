@@ -6,6 +6,7 @@
 	"build-tags": [
 		"k210",
 		"machine.uart",
+		"machine.spi",
 		"kendryte"
 	],
 	"code-model": "medium"

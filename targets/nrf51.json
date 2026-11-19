@@ -1,6 +1,6 @@
 {
 	"inherits": ["cortex-m0"],
-	"build-tags": ["nrf51822", "nrf51", "nrf", "machine.uart"],
+	"build-tags": ["nrf51822", "nrf51", "nrf", "machine.uart", "machine.spi"],
 	"cflags": [
 		"-DNRF51",
 		"-I{root}/lib/CMSIS/CMSIS/Include",
