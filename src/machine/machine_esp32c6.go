@@ -329,9 +329,8 @@ func (uart *UART) Configure(config UARTConfig) error {
 		config.BaudRate = 115200
 	}
 	if uart.Bus == esp.UART0 && config.TX == 0 && config.RX == 0 {
-		// Default UART0 pins. See ESP-IDF soc/esp32c6/include/soc/uart_pins.h.
-		config.TX = GPIO16
-		config.RX = GPIO17
+		config.TX = UART0_TX_PIN
+		config.RX = UART0_RX_PIN
 	}
 	if config.TX == config.RX {
 		return errSamePins
