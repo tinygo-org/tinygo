@@ -108,6 +108,7 @@ func TestBuild(t *testing.T) {
 		"signal.go",
 		"signalnotify.go",
 		"slice.go",
+		"slicebounds.go",
 		"slicegrow.go",
 		"sort.go",
 		"stdlib.go",
@@ -641,6 +642,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 
 			case "aggregatestorage.go", "stringfrombytes_stress.go":
 				// Needs more RAM than AVR has.
+				continue
+
+			case "slicebounds.go":
+				// Reslicing returns wrong lengths on AVR, also without the len <= cap assume.
 				continue
 
 			case "map_bigkey.go":
