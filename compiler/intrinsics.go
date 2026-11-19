@@ -131,7 +131,9 @@ func (b *builder) createKeepAliveImpl() {
 // createAbiEscapeImpl implements the generic internal/abi.Escape function. It
 // currently only supports pointer types.
 func (b *builder) createAbiEscapeImpl() {
-	b.createFunctionStart(true)
+	if !b.createFunctionStart(true) {
+		return
+	}
 
 	// The first parameter is assumed to be a pointer. This is checked at the
 	// call site of createAbiEscapeImpl.

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
 	"go/token"
 	"go/types"
 	"hash/crc32"
@@ -335,6 +336,9 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 	// Create the *ssa.Program. This does not yet build the entire SSA of the
 	// program so it's pretty fast and doesn't need to be parallelized.
 	program := lprogram.LoadSSA()
+	if err := validateLinkHooks(lprogram, program.Fset); err != nil {
+		return nil, err
+	}
 	buildProgram := sync.OnceFunc(program.Build)
 
 	// Add jobs to compile each package.
@@ -647,12 +651,18 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			// module on every call.
 			linker := llvm.NewLinker(mod)
 			defer linker.Dispose()
+			symbolCounts := map[string]linkSymbolCounts{}
 			for _, pkgJob := range packageJobs {
 				pkgMod, err := ctx.ParseBitcodeFile(pkgJob.result)
 				if err != nil {
 					return fmt.Errorf("failed to load bitcode file: %w", err)
 				}
-				err = linkPackageModule(linker, mod, pkgMod)
+				err = linkPackageModule(
+					linker,
+					mod,
+					pkgMod,
+					symbolCounts,
+				)
 				if err != nil {
 					return fmt.Errorf("failed to link module: %w", err)
 				}
@@ -698,24 +708,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			// non-exported functions by setting the visibility to hidden or
 			// (for thunks) to linkonce_odr linkage. Change the linkage here to
 			// internal to benefit much more from interprocedural optimizations.
-			for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-				if fn.Visibility() == llvm.HiddenVisibility {
-					fn.SetVisibility(llvm.DefaultVisibility)
-					fn.SetLinkage(llvm.InternalLinkage)
-				} else if fn.Linkage() == llvm.LinkOnceODRLinkage {
-					fn.SetLinkage(llvm.InternalLinkage)
-				}
-			}
-
-			// Do the same for globals.
-			for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
-				if global.Visibility() == llvm.HiddenVisibility {
-					global.SetVisibility(llvm.DefaultVisibility)
-					global.SetLinkage(llvm.InternalLinkage)
-				} else if global.Linkage() == llvm.LinkOnceODRLinkage {
-					global.SetLinkage(llvm.InternalLinkage)
-				}
-			}
+			internalizeModule(mod)
 
 			if config.Options.PrintIR {
 				fmt.Println("; Generated LLVM IR:")
@@ -1377,6 +1370,11 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 	return outfile.Name(), outfile.Close()
 }
 
+type linkSymbolCounts struct {
+	weak   int
+	strong int
+}
+
 // linkPackageModule links pkgMod into mod.
 //
 // Resolve duplicate function definitions before linking. This can happen when
@@ -1385,18 +1383,381 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 // runtime. In that case, keep the existing (runtime) definition by weakening
 // the new one's linkage so the LLVM linker discards it in favor of the
 // existing one. Internal functions never clash, the linker renames them.
-func linkPackageModule(linker llvm.Linker, mod, pkgMod llvm.Module) error {
+func linkPackageModule(
+	linker llvm.Linker,
+	mod llvm.Module,
+	pkgMod llvm.Module,
+	counts map[string]linkSymbolCounts,
+) error {
+	if counts == nil {
+		counts = map[string]linkSymbolCounts{}
+	}
 	for fn := pkgMod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-		if fn.IsDeclaration() || fn.Linkage() == llvm.InternalLinkage || fn.Linkage() == llvm.PrivateLinkage {
+		if fn.IsDeclaration() {
 			continue
 		}
-		existing := mod.NamedFunction(fn.Name())
+		linkage := fn.Linkage()
+		if linkage == llvm.InternalLinkage || linkage == llvm.PrivateLinkage {
+			continue
+		}
+		name := fn.Name()
+		c := counts[name]
+		switch linkage {
+		case llvm.WeakAnyLinkage:
+			c.weak++
+		case llvm.ExternalLinkage:
+			c.strong++
+		}
+		counts[name] = c
+
+		if c.weak > 1 {
+			return fmt.Errorf("duplicate weak definition of %s", name)
+		}
+		if c.weak >= 1 && c.strong > 1 {
+			return fmt.Errorf("multiple strong definitions overriding weak %s", name)
+		}
+
+		existing := mod.NamedFunction(name)
 		if existing.IsNil() || existing.IsDeclaration() {
 			continue
 		}
-		fn.SetLinkage(llvm.LinkOnceODRLinkage)
+		// Demote only non-weak collisions so strong overrides win over weak.
+		if c.weak == 0 {
+			fn.SetLinkage(llvm.LinkOnceODRLinkage)
+		}
 	}
 	return linker.LinkModule(pkgMod)
+}
+
+func internalizeModule(mod llvm.Module) {
+	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+		if fn.Visibility() == llvm.HiddenVisibility || fn.Linkage() == llvm.WeakAnyLinkage {
+			fn.SetVisibility(llvm.DefaultVisibility)
+			fn.SetLinkage(llvm.InternalLinkage)
+		} else if fn.Linkage() == llvm.LinkOnceODRLinkage {
+			fn.SetLinkage(llvm.InternalLinkage)
+		}
+	}
+	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		if global.Visibility() == llvm.HiddenVisibility {
+			global.SetVisibility(llvm.DefaultVisibility)
+			global.SetLinkage(llvm.InternalLinkage)
+		} else if global.Linkage() == llvm.LinkOnceODRLinkage {
+			global.SetLinkage(llvm.InternalLinkage)
+		}
+	}
+}
+
+type linkHookTarget struct {
+	sig    *types.Signature
+	isWeak bool
+	pos    token.Pos
+}
+
+type declHookInfo struct {
+	linkName         string
+	isWeak           bool
+	hasWeak          bool
+	hasLinkDirective bool
+}
+
+// validateLinkHooks checks Go signature identity and duplicate overrides for
+// runtime/machine //go:weak hooks and plain bodyless hook declarations.
+func validateLinkHooks(lprogram *loader.Program, fset *token.FileSet) error {
+	return validateLinkHooksFromPackages(lprogram.Sorted(), fset)
+}
+
+func validateLinkHooksFromPackages(pkgs []*loader.Package, fset *token.FileSet) error {
+	hooks, errs := collectLinkHooks(pkgs, fset)
+	if len(hooks) == 0 {
+		return newMultiError(errs, "")
+	}
+	strongOverrides := map[string]token.Pos{}
+	for _, pkg := range pkgs {
+		if pkg.Pkg == nil || len(pkg.Files) == 0 {
+			continue
+		}
+		methods := packageMethodsByPos(pkg.Pkg)
+		for _, file := range pkg.Files {
+			for _, d := range file.Decls {
+				decl, ok := d.(*ast.FuncDecl)
+				if !ok || decl.Body == nil {
+					continue
+				}
+				fn, defSig := funcObjectForDecl(pkg.Pkg, methods, decl)
+				if defSig == nil {
+					continue
+				}
+				info := parseDeclHookPragmas(
+					pkg.Pkg,
+					file,
+					decl,
+					fn,
+				)
+				if info.hasWeak {
+					continue
+				}
+				target, isHook := hooks[info.linkName]
+				if !isHook {
+					continue
+				}
+				normDefSig := normalizeHookSignature(defSig)
+				normTargetSig := normalizeHookSignature(target.sig)
+				if !types.Identical(normDefSig, normTargetSig) {
+					errs = append(errs, types.Error{
+						Fset: fset,
+						Pos:  decl.Pos(),
+						Msg: fmt.Sprintf(
+							"signature of %s (%s) does not match %s (%s, declared at %s)",
+							info.linkName,
+							normDefSig,
+							info.linkName,
+							normTargetSig,
+							fset.Position(target.pos),
+						),
+					})
+				}
+				if !target.isWeak {
+					continue
+				}
+				if prevPos, seen := strongOverrides[info.linkName]; seen {
+					errs = append(errs, types.Error{
+						Fset: fset,
+						Pos:  decl.Pos(),
+						Msg: fmt.Sprintf(
+							"duplicate strong override for weak function %s (previous override at %s)",
+							info.linkName,
+							fset.Position(prevPos),
+						),
+					})
+					continue
+				}
+				strongOverrides[info.linkName] = decl.Pos()
+			}
+		}
+	}
+	return newMultiError(errs, "")
+}
+
+func collectLinkHooks(pkgs []*loader.Package, fset *token.FileSet) (map[string]linkHookTarget, []error) {
+	hooks := map[string]linkHookTarget{}
+	errs := []error{}
+	for _, pkg := range pkgs {
+		if pkg.Pkg == nil || len(pkg.Files) == 0 {
+			continue
+		}
+		pkgPath := pkg.Pkg.Path()
+		if pkgPath != "runtime" && pkgPath != "machine" {
+			continue
+		}
+		methods := packageMethodsByPos(pkg.Pkg)
+		for _, file := range pkg.Files {
+			for _, d := range file.Decls {
+				decl, ok := d.(*ast.FuncDecl)
+				if !ok {
+					continue
+				}
+				fn, sig := funcObjectForDecl(pkg.Pkg, methods, decl)
+				if sig == nil {
+					continue
+				}
+				info := parseDeclHookPragmas(
+					pkg.Pkg,
+					file,
+					decl,
+					fn,
+				)
+				if decl.Body != nil {
+					if !info.isWeak {
+						continue
+					}
+					if existing, exists := hooks[info.linkName]; exists && existing.isWeak {
+						errs = append(errs, types.Error{
+							Fset: fset,
+							Pos:  decl.Pos(),
+							Msg: fmt.Sprintf(
+								"duplicate //go:weak definition for %s (previous definition at %s)",
+								info.linkName,
+								fset.Position(existing.pos),
+							),
+						})
+						continue
+					}
+					hooks[info.linkName] = linkHookTarget{sig: sig, isWeak: true, pos: decl.Pos()}
+					continue
+				}
+				if info.hasLinkDirective || info.hasWeak {
+					continue
+				}
+				if _, exists := hooks[info.linkName]; !exists {
+					hooks[info.linkName] = linkHookTarget{sig: sig, isWeak: false, pos: decl.Pos()}
+				}
+			}
+		}
+	}
+	return hooks, errs
+}
+
+func packageMethodsByPos(pkg *types.Package) map[token.Pos]*types.Func {
+	methods := map[token.Pos]*types.Func{}
+	scope := pkg.Scope()
+	for _, name := range scope.Names() {
+		tn, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok || tn.IsAlias() {
+			continue
+		}
+		named, ok := tn.Type().(*types.Named)
+		if !ok {
+			continue
+		}
+		for i := range named.NumMethods() {
+			m := named.Method(i)
+			methods[m.Pos()] = m
+		}
+	}
+	return methods
+}
+
+func normalizeHookSignature(sig *types.Signature) *types.Signature {
+	if sig == nil || sig.Recv() == nil {
+		return sig
+	}
+	params := make([]*types.Var, 0, 1+sig.Params().Len())
+	params = append(params, sig.Recv())
+	for v := range sig.Params().Variables() {
+		params = append(params, v)
+	}
+	typeParams := make([]*types.TypeParam, 0, sig.RecvTypeParams().Len()+sig.TypeParams().Len())
+	for tp := range sig.RecvTypeParams().TypeParams() {
+		typeParams = append(typeParams, tp)
+	}
+	for tp := range sig.TypeParams().TypeParams() {
+		typeParams = append(typeParams, tp)
+	}
+	return types.NewSignatureType(
+		nil,
+		nil,
+		typeParams,
+		types.NewTuple(params...),
+		sig.Results(),
+		sig.Variadic(),
+	)
+}
+
+func funcObjectForDecl(pkg *types.Package, methods map[token.Pos]*types.Func, decl *ast.FuncDecl) (*types.Func, *types.Signature) {
+	if decl.Name.Name == "_" {
+		return nil, nil
+	}
+	if decl.Recv == nil {
+		if decl.Name.Name == "init" {
+			return nil, nil
+		}
+		obj, ok := pkg.Scope().Lookup(decl.Name.Name).(*types.Func)
+		if !ok {
+			return nil, nil
+		}
+		sig, _ := obj.Type().(*types.Signature)
+		return obj, sig
+	}
+	obj := methods[decl.Name.Pos()]
+	if obj == nil {
+		return nil, nil
+	}
+	sig, _ := obj.Type().(*types.Signature)
+	return obj, sig
+}
+
+func parseDeclHookPragmas(
+	pkg *types.Package,
+	file *ast.File,
+	decl *ast.FuncDecl,
+	fn *types.Func,
+) declHookInfo {
+	pkgPath := pkg.Path()
+	hasUnsafe := slices.Contains(pkg.Imports(), types.Unsafe)
+	linkName := pkgPath + "." + decl.Name.Name
+	if fn != nil {
+		linkName = fn.FullName()
+	}
+
+	pragmas := []*ast.Comment{}
+	hasWasmExport := false
+	if decl.Doc != nil {
+		for _, comment := range decl.Doc.List {
+			text := comment.Text
+			if strings.HasPrefix(text, "//go:") || strings.HasPrefix(text, "//export ") {
+				pragmas = append(pragmas, comment)
+				if strings.HasPrefix(text, "//go:wasmexport ") {
+					hasWasmExport = true
+				}
+			}
+		}
+	}
+
+	hasDocLinkname := false
+	for _, comment := range pragmas {
+		if isLinknameCommentForFunc(comment.Text, decl.Name.Name) {
+			hasDocLinkname = true
+			break
+		}
+	}
+	if !hasDocLinkname && decl.Recv == nil {
+		for _, group := range file.Comments {
+			if group == decl.Doc {
+				continue
+			}
+			for _, comment := range group.List {
+				if isLinknameCommentForFunc(comment.Text, decl.Name.Name) {
+					pragmas = append(pragmas, comment)
+				}
+			}
+		}
+	}
+
+	info := declHookInfo{linkName: linkName}
+	for _, comment := range pragmas {
+		parts := strings.Fields(comment.Text)
+		switch parts[0] {
+		case "//export", "//go:export":
+			if len(parts) != 2 {
+				continue
+			}
+			info.hasLinkDirective = true
+			if !hasWasmExport {
+				info.linkName = parts[1]
+			}
+		case "//go:wasmimport":
+			if len(parts) != 3 {
+				continue
+			}
+			info.hasLinkDirective = true
+		case "//go:linkname", "//go:linknamestd":
+			if len(parts) != 3 || parts[1] != decl.Name.Name {
+				continue
+			}
+			if hasUnsafe {
+				info.linkName = parts[2]
+				info.hasLinkDirective = true
+			}
+		case "//go:weak":
+			if len(parts) != 1 {
+				continue
+			}
+			info.hasWeak = true
+			if decl.Body != nil && (pkgPath == "runtime" || pkgPath == "machine") {
+				info.isWeak = true
+			}
+		}
+	}
+	return info
+}
+
+func isLinknameCommentForFunc(text, funcName string) bool {
+	if !strings.HasPrefix(text, "//go:linkname ") && !strings.HasPrefix(text, "//go:linknamestd ") {
+		return false
+	}
+	parts := strings.Fields(text)
+	return len(parts) == 3 && parts[1] == funcName
 }
 
 // optimizeProgram runs a series of optimizations and transformations that are

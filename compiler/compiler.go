@@ -106,6 +106,7 @@ type context struct {
 	functionABIs                map[functionABIKey]functionABI
 	astComments                 map[string]astGlobalInfo
 	cgoImportDynamic            map[string]string // //go:cgo_import_dynamic local name -> remote symbol
+	weakOverridden              map[string]bool
 	embedGlobals                map[string][]*loader.EmbedFile
 	pkg                         *types.Package
 	loaderPkg                   *loader.Package // current package being compiled (for AST access)
@@ -135,6 +136,7 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 		functionABIs:     map[functionABIKey]functionABI{},
 		astComments:      map[string]astGlobalInfo{},
 		cgoImportDynamic: map[string]string{},
+		weakOverridden:   map[string]bool{},
 	}
 
 	c.ctx = llvm.NewContext()
@@ -1211,25 +1213,70 @@ func (c *context) getEmbedFileString(file *loader.EmbedFile) llvm.Value {
 	return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
 }
 
+// clearFunctionBody erases all basic blocks from b.llvmFn before compiling a strong override.
+func (b *builder) clearFunctionBody() {
+	for bb := b.llvmFn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+		for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+			if inst.Type().TypeKind() != llvm.VoidTypeKind {
+				inst.ReplaceAllUsesWith(llvm.Undef(inst.Type()))
+			}
+		}
+	}
+	for bb := b.llvmFn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+		for inst := bb.LastInstruction(); !inst.IsNil(); inst = bb.LastInstruction() {
+			inst.EraseFromParentAsInstruction()
+		}
+	}
+	for bb := b.llvmFn.FirstBasicBlock(); !bb.IsNil(); bb = b.llvmFn.FirstBasicBlock() {
+		bb.EraseFromParent()
+	}
+}
+
 // Start defining a function so that it can be filled with instructions: load
 // parameters, create basic blocks, and set up debug information.
 // This is separated out from createFunction() so that it is also usable to
 // define compiler intrinsics like the atomic operations in sync/atomic.
-func (b *builder) createFunctionStart(intrinsic bool) {
+func (b *builder) createFunctionStart(intrinsic bool) bool {
 	if b.dumpSSA {
 		fmt.Printf("\nfunc %s:\n", b.fn)
 	}
 	if !b.llvmFn.IsDeclaration() {
-		errValue := b.llvmFn.Name() + " redeclared in this program"
-		fnPos := getPosition(b.llvmFn)
-		if fnPos.IsValid() {
-			errValue += "\n\tprevious declaration at " + fnPos.String()
+		alreadyOverridden := b.weakOverridden[b.info.linkName]
+		existingIsWeak := b.llvmFn.Linkage() == llvm.WeakAnyLinkage
+		isWeakAfterStrong := b.info.isWeak() && !existingIsWeak && !alreadyOverridden
+		isStrongAfterWeak := !b.info.isWeak() && existingIsWeak && !alreadyOverridden
+		if !isWeakAfterStrong && !isStrongAfterWeak {
+			errValue := b.llvmFn.Name() + " redeclared in this program"
+			fnPos := getPosition(b.llvmFn)
+			if fnPos.IsValid() {
+				errValue += "\n\tprevious declaration at " + fnPos.String()
+			}
+			b.addError(b.fn.Pos(), errValue)
+			return false
 		}
-		b.addError(b.fn.Pos(), errValue)
-		return
+		expectedType, _, _ := b.llvmFunctionSignature(b.fn, b.info)
+		if expectedType != b.llvmFn.GlobalValueType() {
+			b.addError(b.fn.Pos(), fmt.Sprintf("signature of %s does not match previous definition", b.info.linkName))
+			return false
+		}
+		b.weakOverridden[b.info.linkName] = true
+		if isWeakAfterStrong {
+			return false
+		}
+		b.clearFunctionBody()
+		b.llvmFn.SetLinkage(llvm.ExternalLinkage)
+		b.llvmFn.SetVisibility(llvm.DefaultVisibility)
+		b.llvmFn.SetSection("")
+		b.llvmFn.SetUnnamedAddr(false)
+		b.llvmFn.RemoveEnumFunctionAttribute(llvm.AttributeKindID("inlinehint"))
+		b.llvmFn.RemoveEnumFunctionAttribute(llvm.AttributeKindID("noinline"))
+		b.llvmFn.RemoveStringAttributeAtIndex(-1, "tinygo-noruntime")
 	}
 
 	b.addStandardDefinedAttributes(b.llvmFn)
+	if b.info.isWeak() {
+		b.llvmFn.SetLinkage(llvm.WeakAnyLinkage)
+	}
 	if b.info.isNoRuntime() {
 		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-noruntime", ""))
 	}
@@ -1426,13 +1473,16 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// because runtime.trackPointer is replaced by an alloca store.
 		b.stackChainAlloca = b.CreateAlloca(b.i8, "stackalloc")
 	}
+	return true
 }
 
 // createFunction builds the LLVM IR implementation for this function. The
 // function must not yet be defined, otherwise this function will create a
 // diagnostic.
 func (b *builder) createFunction() {
-	b.createFunctionStart(false)
+	if !b.createFunctionStart(false) {
+		return
+	}
 
 	// Fill blocks with instructions.
 	b.loweringBody = true
