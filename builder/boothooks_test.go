@@ -29,6 +29,12 @@ type bootHooksBuildSpec struct {
 func TestBootHooks(t *testing.T) {
 	t.Parallel()
 
+	const testSocInit0Block = `//go:linkname testSocInit0 runtime.socInit0
+func testSocInit0() {
+	recordStage(1)
+}
+
+`
 	hooksMainSrc := `package main
 
 import _ "unsafe"
@@ -57,12 +63,7 @@ func recordStage(stage uint32) {
 	stageCount++
 }
 
-//go:linkname testSocInit0 runtime.socInit0
-func testSocInit0() {
-	recordStage(1)
-}
-
-//go:linkname testBoardInit0 runtime.boardInit0
+` + testSocInit0Block + `//go:linkname testBoardInit0 runtime.boardInit0
 func testBoardInit0() {
 	recordStage(2)
 }
@@ -102,13 +103,14 @@ func main() {}
 		t.Parallel()
 
 		cases := []struct {
-			name          string
-			target        string
-			goos          string
-			goarch        string
-			scheduler     string
-			goroutineInit bool
-			checkCores    bool
+			name                 string
+			target               string
+			goos                 string
+			goarch               string
+			scheduler            string
+			goroutineInit        bool
+			checkCores           bool
+			skipSocInit0Override bool
 		}{
 			{
 				name:          "tasks",
@@ -122,11 +124,12 @@ func main() {}
 				scheduler: "none",
 			},
 			{
-				name:          "cores",
-				target:        "pico",
-				scheduler:     "cores",
-				goroutineInit: true,
-				checkCores:    true,
+				name:                 "cores",
+				target:               "pico",
+				scheduler:            "cores",
+				goroutineInit:        true,
+				checkCores:           true,
+				skipSocInit0Override: true,
 			},
 			{
 				name:          "asyncify",
@@ -145,7 +148,11 @@ func main() {}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
-				dir := writeBootHooksTestModule(t, hooksMainSrc)
+				src := hooksMainSrc
+				if tc.skipSocInit0Override {
+					src = strings.Replace(src, testSocInit0Block, "", 1)
+				}
+				dir := writeBootHooksTestModule(t, src)
 				outLL := filepath.Join(t.TempDir(), "out.ll")
 				buildBootHooksTarget(t, bootHooksBuildSpec{
 					dir:       dir,

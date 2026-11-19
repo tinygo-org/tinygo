@@ -380,8 +380,12 @@ func buffered() int {
 // machineInit is provided by package machine.
 func machineInit()
 
-func init() {
+//go:linkname rp2SocInit0 runtime.socInit0
+func rp2SocInit0() {
 	machineInit()
+}
+
+func init() {
 	startPSRAM()
 
 	machine.InitSerial()
