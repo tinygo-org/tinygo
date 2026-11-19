@@ -111,6 +111,9 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 				}
 			},
 		)
+		if errs := CheckNoHeapInit(mod); len(errs) > 0 {
+			return errs
+		}
 		OptimizeStringToBytes(mod)
 		OptimizeStringFromBytes(mod)
 		OptimizeStringEqual(mod)
@@ -132,6 +135,9 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		err = mod.RunPasses("globaldce", llvm.TargetMachine{}, po)
 		if err != nil {
 			return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
+		}
+		if errs := CheckNoHeapInit(mod); len(errs) > 0 {
+			return errs
 		}
 	}
 

@@ -119,6 +119,15 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 		initCalls = append(initCalls, inst)
 	}
 
+	for _, name := range []string{"runtime.hwInit0", "runtime.hwInit1"} {
+		fn := mod.NamedFunction(name)
+		if !fn.IsNil() && !fn.IsDeclaration() {
+			if err := r.markExternalBootHook(fn); err != nil {
+				return err
+			}
+		}
+	}
+
 	// Run initializers for each package. Once the package initializer is
 	// finished, the call to the package initializer can be removed.
 	for _, call := range initCalls {
@@ -249,6 +258,18 @@ func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug 
 		r.builder.SetCurrentDebugLocation(subprogram.SubprogramLine(), 0, subprogram, llvm.Metadata{})
 	}
 
+	for f := mod.FirstFunction(); !f.IsNil(); f = llvm.NextFunction(f) {
+		if f.IsDeclaration() {
+			continue
+		}
+		name := f.Name()
+		if strings.HasPrefix(name, "runtime.socInit") || strings.HasPrefix(name, "runtime.boardInit") {
+			if err := r.markExternalBootHook(f); err != nil {
+				return err
+			}
+		}
+	}
+
 	// Run the initializer, filling the .init.tmp function.
 	if r.debug {
 		fmt.Fprintln(os.Stderr, "interp:", fn.Name())
@@ -332,6 +353,167 @@ func (r *runner) markExternalLoad(llvmValue llvm.Value) error {
 		}
 	}
 	return nil
+}
+
+// markExternalBootHook protects globals written by boot hooks without blocking
+// interp from folding globals that the hooks only read.
+func (r *runner) markExternalBootHook(fn llvm.Value) error {
+	mem := memoryView{r: r}
+	visited := map[llvm.Value]bool{}
+	if err := mem.markBootHookFunc(fn, visited); err != nil {
+		return err
+	}
+	for index, obj := range mem.objects {
+		if obj.marked > r.objects[index].marked {
+			r.objects[index].marked = obj.marked
+		}
+	}
+	return nil
+}
+
+func (mv *memoryView) markBootHookFunc(fn llvm.Value, visited map[llvm.Value]bool) error {
+	if fn.IsNil() || fn.IsDeclaration() || visited[fn] {
+		return nil
+	}
+	visited[fn] = true
+	for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
+		for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+			if err := mv.markBootHookInst(inst, visited); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (mv *memoryView) markBootHookInst(inst llvm.Value, visited map[llvm.Value]bool) error {
+	if isBranch(inst) || inst.InstructionOpcode() == llvm.Switch {
+		return nil
+	}
+	switch inst.InstructionOpcode() {
+	case llvm.Load:
+		return mv.markReadOnlyPointer(inst.Operand(0))
+	case llvm.ICmp:
+		return nil
+	case llvm.GetElementPtr, llvm.BitCast:
+		if isReadOnlyPtrUseChain(inst, map[llvm.Value]bool{}) {
+			return nil
+		}
+	case llvm.Call, llvm.Invoke:
+		callee := inst.CalledValue()
+		if !callee.IsAFunction().IsNil() {
+			fnName := callee.Name()
+			if strings.HasPrefix(fnName, "llvm.dbg.") || strings.HasPrefix(fnName, "llvm.lifetime.") {
+				return nil
+			}
+			if isMemcpyOrMemmove(fnName) {
+				if err := mv.markExternal(inst.Operand(0), 2); err != nil {
+					return err
+				}
+				return mv.markReadOnlyPointer(inst.Operand(1))
+			}
+		}
+		for i := range inst.OperandsCount() {
+			op := inst.Operand(i)
+			if !op.IsABasicBlock().IsNil() {
+				continue
+			}
+			if !callee.IsAFunction().IsNil() && op == callee {
+				continue
+			}
+			if err := mv.markExternal(op, 2); err != nil {
+				return err
+			}
+		}
+		if !callee.IsAFunction().IsNil() {
+			return mv.markBootHookFunc(callee, visited)
+		}
+		return mv.markExternal(callee, 2)
+	}
+
+	for i := range inst.OperandsCount() {
+		if err := mv.markExternal(inst.Operand(i), 2); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (mv *memoryView) markReadOnlyPointer(val llvm.Value) error {
+	for {
+		if val.IsUndef() || val.IsNull() {
+			return nil
+		}
+		if !val.IsAInstruction().IsNil() {
+			switch val.InstructionOpcode() {
+			case llvm.GetElementPtr, llvm.BitCast:
+				val = val.Operand(0)
+				continue
+			}
+			return nil
+		}
+		if !val.IsAConstantExpr().IsNil() {
+			switch val.Opcode() {
+			case llvm.GetElementPtr, llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt:
+				val = val.Operand(0)
+				continue
+			}
+		}
+		break
+	}
+	if val.IsAGlobalVariable().IsNil() {
+		return nil
+	}
+	objectIndex := mv.r.getValue(val).(pointerValue).index()
+	obj := mv.get(objectIndex)
+	if obj.buffer != nil {
+		return mv.markExternalPointers(obj.buffer)
+	}
+	if initializer := val.Initializer(); !initializer.IsNil() {
+		return mv.markExternal(initializer, 2)
+	}
+	return nil
+}
+
+func isReadOnlyPtrUseChain(val llvm.Value, seen map[llvm.Value]bool) bool {
+	if seen[val] {
+		return true
+	}
+	seen[val] = true
+	for use := val.FirstUse(); !use.IsNil(); use = use.NextUse() {
+		user := use.User()
+		if user.IsAInstruction().IsNil() {
+			return false
+		}
+		switch user.InstructionOpcode() {
+		case llvm.Load:
+			if user.Operand(0) != val {
+				return false
+			}
+		case llvm.ICmp:
+			// Pointer comparisons (such as nil checks) never mutate or escape the pointee.
+		case llvm.GetElementPtr, llvm.BitCast:
+			if user.Operand(0) != val || !isReadOnlyPtrUseChain(user, seen) {
+				return false
+			}
+		case llvm.Call:
+			callee := user.CalledValue()
+			if callee.IsAFunction().IsNil() || !isMemcpyOrMemmove(callee.Name()) {
+				return false
+			}
+			// Only source operand 1 is read-only; aliasing with dst operand 0 writes.
+			if user.Operand(0) == val || user.Operand(1) != val {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isMemcpyOrMemmove(name string) bool {
+	return strings.HasPrefix(name, "llvm.memcpy.") || strings.HasPrefix(name, "llvm.memmove.")
 }
 
 // These must stay the same as the generators in src/runtime/algorithm.go, so
