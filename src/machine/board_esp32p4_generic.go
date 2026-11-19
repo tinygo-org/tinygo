@@ -6,8 +6,10 @@ package machine
 // UART0 uses the ESP32-P4 default pins; I2C uses the pins from the Waveshare
 // ESP32-P4-Nano board file.
 const (
-	UART_TX_PIN = GPIO37
-	UART_RX_PIN = GPIO38
+	UART0_TX_PIN = GPIO37
+	UART0_RX_PIN = GPIO38
+	UART_TX_PIN  = UART0_TX_PIN
+	UART_RX_PIN  = UART0_RX_PIN
 
 	SDA_PIN = GPIO7
 	SCL_PIN = GPIO8

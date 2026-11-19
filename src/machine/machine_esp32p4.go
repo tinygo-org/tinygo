@@ -361,41 +361,30 @@ type registerSet struct {
 	gpioMatrixSignal uint32
 }
 
-func (uart *UART) Configure(config UARTConfig) error {
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
-	if config.TX == 0 && config.RX == 0 {
-		config.TX = UART_TX_PIN
-		config.RX = UART_RX_PIN
-	}
-	if config.TX == config.RX {
-		return errSamePins
-	}
-	switch {
-	case uart.Bus == esp.UART0:
-		return uart.configure(config, registerSet{
+func busFor(bus *esp.UART_Type) registerSet {
+	switch bus {
+	case esp.UART0:
+		return registerSet{
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART0_INT_MAP,
 			gpioMatrixSignal: uartSignalU0,
-		})
-	case uart.Bus == esp.UART1:
-		return uart.configure(config, registerSet{
+		}
+	case esp.UART1:
+		return registerSet{
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART1_INT_MAP,
 			gpioMatrixSignal: uartSignalU1,
-		})
+		}
+	default:
+		return registerSet{}
 	}
-	return errWrongUART
 }
 
 func (uart *UART) configure(config UARTConfig, regs registerSet) error {
-	initUARTClock(uart.Bus)
-
 	// Disable TX/RX clock during configuration.
 	uart.Bus.SetCLK_CONF_TX_SCLK_EN(0)
 	uart.Bus.SetCLK_CONF_RX_SCLK_EN(0)
 
 	uart.SetBaudRate(config.BaudRate)
-	uart.SetFormat(defaultDataBits, defaultStopBit, defaultParity)
+	uart.setFormat(defaultDataBits, defaultStopBit, defaultParity)
 
 	// Set UART mode (disable RS485 and IrDA).
 	uart.Bus.SetRS485_CONF_SYNC_RS485_EN(0)
@@ -422,13 +411,15 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 	return nil
 }
 
-func (uart *UART) SetFormat(dataBits, stopBits int, parity UARTParity) error {
-	if dataBits < 5 {
-		return errWrongBitSize
+// uartSync copies the configuration registers into the UART core clock domain.
+// See ESP-IDF hal/esp32p4/include/hal/uart_ll.h uart_ll_update.
+func uartSync(bus *esp.UART_Type) {
+	bus.SetREG_UPDATE(1)
+	for bus.GetREG_UPDATE() != 0 {
 	}
-	if stopBits > 1 {
-		return errWrongStopBitSize
-	}
+}
+
+func (uart *UART) setFormat(dataBits, stopBits int, parity UARTParity) {
 	uart.Bus.SetCONF0_SYNC_BIT_NUM(uint32(dataBits - 5))
 	uart.Bus.SetCONF0_SYNC_STOP_BIT_NUM(uint32(stopBits))
 	switch parity {
@@ -441,12 +432,11 @@ func (uart *UART) SetFormat(dataBits, stopBits int, parity UARTParity) error {
 		uart.Bus.SetCONF0_SYNC_PARITY_EN(1)
 		uart.Bus.SetCONF0_SYNC_PARITY(1)
 	}
-	return nil
 }
 
 // initUARTClock enables and configures the UART clock via HP_SYS_CLKRST.
 // On ESP32-P4, UART clock control is in HP_SYS_CLKRST (not PCR like ESP32-C6).
-func initUARTClock(bus *esp.UART_Type) {
+func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 	switch bus {
 	case esp.UART0:
 		// Enable bus clocks for UART0 (matches uart_ll_enable_bus_clock):
@@ -507,31 +497,11 @@ func (uart *UART) SetBaudRate(baudRate uint32) {
 	}
 }
 
-func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
-	config.RX.Configure(PinConfig{Mode: PinInputPullup})
-	config.TX.Configure(PinConfig{Mode: PinInputPullup})
-
-	// GPIO_FUNC_OUT_SEL_CFG uses OEN_SEL=0 by default, meaning the GPIO ENABLE
-	// register gates the pad driver. Configure(PinInputPullup) clears ENABLE, so
-	// we must re-enable output for TX before the peripheral can drive the line.
-	// This mirrors the IDF's gpio_set_level() call prior to connecting the signal.
-	if config.TX < 32 {
-		esp.GPIO.ENABLE_W1TS.Set(1 << config.TX)
+func uartEnableTX(pin Pin) {
+	if pin < 32 {
+		esp.GPIO.ENABLE_W1TS.Set(1 << pin)
 	} else {
-		esp.GPIO.ENABLE1_W1TS.Set(1 << (config.TX - 32))
-	}
-
-	// Link TX with GPIO matrix signal.
-	if config.InvertTX {
-		config.TX.outFunc().Set(regs.gpioMatrixSignal | esp.GPIO_FUNC_OUT_SEL_CFG_INV_SEL)
-	} else {
-		config.TX.outFunc().Set(regs.gpioMatrixSignal)
-	}
-	// Link RX with GPIO matrix signal and route via GPIO matrix.
-	if config.InvertRX {
-		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX) | esp.GPIO_FUNC_IN_SEL_CFG_IN_INV_SEL)
-	} else {
-		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX))
+		esp.GPIO.ENABLE1_W1TS.Set(1 << (pin - 32))
 	}
 }
 
