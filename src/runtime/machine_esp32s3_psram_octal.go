@@ -1,4 +1,4 @@
-//go:build esp32s3 && numa_psram_octal
+//go:build esp32s3 && machine.psram
 
 // Octal SPI (OPI) PSRAM support for ESP32-S3 (e.g. ESP32-S3-WROOM-1U-N16R8,
 // combo modules with in-package Octal PSRAM). Octal PSRAM uses 8 data
@@ -6,7 +6,7 @@
 // single-rate Quad PSRAM; the two are not interchangeable and use different
 // GPIOs (Octal adds D4-D7+DQS on GPIO33-37, on top of the CS1/D0-D3 pins
 // shared with flash). Shared linker symbols, MMU/ROM-call helpers, and the
-// address map are documented in runtime_esp32_psram.go.
+// address map are documented in machine_esp32xx_psram.go.
 //
 // Unlike its own Quad PSRAM driver, ESP-IDF does not hand-roll the Octal
 // DTR command sequence in C -- it delegates entirely to a mask-ROM
@@ -218,7 +218,7 @@ func initPSRAM() string {
 
 	// Disable DCache before touching the SPI0 cache-facing registers and
 	// the MMU table below (see the Cache_Disable_DCache doc comment in
-	// runtime_esp32_psram.go).
+	// machine_esp32xx_psram.go).
 	romCacheDisableDCache()
 
 	// Enable SPI0's CS1 output for its cache-triggered SRAM (PSRAM)

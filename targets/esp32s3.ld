@@ -42,7 +42,7 @@ MEMORY
 
     /* External PSRAM: upper half of the DBUS cache window, MMU entries
      * 256-511 (linear pages of 0x3D000000..0x3DFFFFFF), mapped at runtime
-     * by runtime_esp32_psram*.go. Disjoint from all flash entries. */
+     * by machine_esp32*_psram*.go. Disjoint from all flash entries. */
     PSRAM (rw): ORIGIN = 0x3D000000, LENGTH = 16M
 }
 
