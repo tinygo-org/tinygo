@@ -1404,6 +1404,10 @@ func linkPackageModule(linker llvm.Linker, mod, pkgMod llvm.Module) error {
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
+	if _, speedLevel, _ := config.OptLevel(); speedLevel == 0 && slices.Contains(config.BuildTags(), "esp32") && slices.Contains(config.BuildTags(), "machine.psram") {
+		// The ESP32 PSRAM start-up must run from IRAM, which needs the inliner.
+		return errors.New("PSRAM targets need -opt=1 or higher")
+	}
 	if err := transform.PrepareRuntimeStartup(mod); err != nil {
 		return err
 	}
