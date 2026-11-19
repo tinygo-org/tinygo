@@ -24,6 +24,18 @@ func stringCompareUnequal(s1, s2 string) bool {
 	return s1 != s2
 }
 
+func stringCompareEmpty(s string) bool {
+	return s == ""
+}
+
+func stringCompareNotEmpty(s string) bool {
+	return s != ""
+}
+
+func stringCompareEmptyLeft(s string) bool {
+	return "" == s
+}
+
 func byteSliceStringCompareEqual(s1, s2 []byte) bool {
 	return string(s1) == string(s2)
 }
