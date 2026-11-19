@@ -1815,6 +1815,7 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full, html)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
+	printBoundsString := flag.String("print-bounds", "", "regular expression of functions or source files for which remaining (non-elided) bounds checks should be printed")
 	printAllocsCoverString := flag.String("print-allocs-cover", "", "like -print-allocs, but in go coverage tool format")
 	printCommands := flag.Bool("x", false, "Print commands")
 	flagJSON := flag.Bool("json", false, "print output in JSON format")
@@ -1920,6 +1921,15 @@ func main() {
 		}
 	}
 
+	var printBounds *regexp.Regexp
+	if *printBoundsString != "" {
+		printBounds, err = regexp.Compile(*printBoundsString)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+
 	var ocdCommands []string
 	if *ocdCommandsString != "" {
 		ocdCommands = strings.Split(*ocdCommandsString, ",")
@@ -1965,6 +1975,7 @@ func main() {
 		PrintStacks:             *printStacks,
 		PrintAllocs:             printAllocs,
 		PrintAllocsCover:        printAllocsCover,
+		PrintBounds:             printBounds,
 		Tags:                    []string(tags),
 		TestConfig:              testConfig,
 		GlobalValues:            globalVarValues,

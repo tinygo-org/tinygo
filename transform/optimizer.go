@@ -49,6 +49,10 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		return errs
 	}
 
+	if config.Options.PrintBounds != nil {
+		protectBoundsPanics(mod)
+	}
+
 	// run a check of all of our code
 	if config.VerifyIR() {
 		errs := ircheck.Module(mod)
@@ -191,6 +195,12 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		if err := mod.RunPasses("globaldce", llvm.TargetMachine{}, cleanupOptions); err != nil {
 			return []error{fmt.Errorf("could not run final globaldce pass: %w", err)}
 		}
+	}
+
+	if config.Options.PrintBounds != nil {
+		PrintBoundsChecks(mod, config.Options.PrintBounds, func(pos token.Position, kind string) {
+			fmt.Fprintln(os.Stderr, FormatBoundsCheck(pos, kind))
+		})
 	}
 
 	if config.Scheduler() == "none" {

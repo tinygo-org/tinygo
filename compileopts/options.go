@@ -54,6 +54,7 @@ type Options struct {
 	Nobounds                bool
 	PrintSizes              string
 	PrintAllocs             *regexp.Regexp // regexp string
+	PrintBounds             *regexp.Regexp // regexp of functions for which remaining bounds checks are printed
 	PrintAllocsCover        bool           // emit allocs in go coverage tool format
 	PrintStacks             bool
 	Tags                    []string
