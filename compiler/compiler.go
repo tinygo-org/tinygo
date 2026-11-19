@@ -3220,6 +3220,29 @@ func isByteSliceToStringConvert(value ssa.Value) bool {
 	return ok && element.Kind() == types.Byte
 }
 
+// nonEmptyOperand returns the other operand when x or y is a constant empty
+// string, because comparing with "" only needs the length of the other one.
+func nonEmptyOperand(x, y llvm.Value) (llvm.Value, bool) {
+	if isEmptyStringConst(y) {
+		return x, true
+	}
+	if isEmptyStringConst(x) {
+		return y, true
+	}
+	return llvm.Value{}, false
+}
+
+func isEmptyStringConst(v llvm.Value) bool {
+	if !v.IsAConstantAggregateZero().IsNil() {
+		return true
+	}
+	if v.IsAConstantStruct().IsNil() {
+		return false
+	}
+	length := v.Operand(1)
+	return !length.IsAConstantInt().IsNil() && length.ZExtValue() == 0
+}
+
 // createBinOp creates a LLVM binary operation (add, sub, mul, etc) for a Go
 // binary operation. This is almost a direct mapping, but there are some subtle
 // differences such as the requirement in LLVM IR that both sides must have the
@@ -3493,11 +3516,20 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			switch op {
 			case token.ADD: // +
 				return b.createRuntimeCall("stringConcat", []llvm.Value{x, y}, ""), nil
-			case token.EQL: // ==
-				return b.createRuntimeCall("stringEqual", []llvm.Value{x, y}, ""), nil
-			case token.NEQ: // !=
+			case token.EQL, token.NEQ: // ==, !=
+				if s, ok := nonEmptyOperand(x, y); ok {
+					pred := llvm.IntEQ
+					if op == token.NEQ {
+						pred = llvm.IntNE
+					}
+					length := b.CreateExtractValue(s, 1, "")
+					return b.CreateICmp(pred, length, llvm.ConstNull(length.Type()), ""), nil
+				}
 				result := b.createRuntimeCall("stringEqual", []llvm.Value{x, y}, "")
-				return b.CreateNot(result, ""), nil
+				if op == token.NEQ {
+					result = b.CreateNot(result, "")
+				}
+				return result, nil
 			case token.LSS: // x < y
 				return b.createRuntimeCall("stringLess", []llvm.Value{x, y}, ""), nil
 			case token.LEQ: // x <= y becomes NOT (y < x)

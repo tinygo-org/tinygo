@@ -89,6 +89,27 @@ entry:
 }
 
 ; Function Attrs: nounwind
+define hidden i1 @main.stringCompareEmpty(ptr readonly %s.data, i32 range(i32 0, -2147483648) %s.len, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq i32 %s.len, 0
+  ret i1 %0
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.stringCompareNotEmpty(ptr readonly %s.data, i32 range(i32 0, -2147483648) %s.len, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp ne i32 %s.len, 0
+  ret i1 %0
+}
+
+; Function Attrs: nounwind
+define hidden i1 @main.stringCompareEmptyLeft(ptr readonly %s.data, i32 range(i32 0, -2147483648) %s.len, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq i32 %s.len, 0
+  ret i1 %0
+}
+
+; Function Attrs: nounwind
 define hidden i1 @main.byteSliceStringCompareEqual(ptr %s1.data, i32 range(i32 0, -2147483648) %s1.len, i32 range(i32 0, -2147483648) %s1.cap, ptr %s2.data, i32 range(i32 0, -2147483648) %s2.len, i32 range(i32 0, -2147483648) %s2.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
@@ -162,7 +183,7 @@ entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #4
   call void @runtime.trackPointer(ptr null, ptr nonnull %stackalloc, ptr undef) #4
-  %0 = call i1 @runtime.stringEqual(ptr %s.data, i32 %s.len, ptr null, i32 0, ptr undef) #4
+  %0 = icmp eq i32 %s.len, 0
   ret i1 %0
 }
 
