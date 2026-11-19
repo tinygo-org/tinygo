@@ -895,6 +895,11 @@ func (m *M) shuffle() error {
 
 // Run runs the tests. It returns an exit code to pass to os.Exit.
 func (m *M) Run() (code int) {
+	if isBaremetal {
+		// Give the serial monitor time to connect.
+		time.Sleep(2 * time.Second)
+	}
+
 	defer func() {
 		code = m.exitCode
 	}()
