@@ -856,14 +856,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 	// contain things like the interrupt vector table and low level operations
 	// such as stack switching.
 	for _, path := range config.ExtraFiles() {
-		abspath := filepath.Join(root, path)
+		abspath, trimPath := extraFilePaths(root, path)
 		job := &compileJob{
 			description: "compile extra file " + path,
 			run: func(job *compileJob) error {
 				var compileConfig *cFileCompileConfig
 				if config.TrimPath() {
 					compileConfig = &cFileCompileConfig{
-						recordedPath: config.CSourcePath(filepath.Join("github.com/tinygo-org/tinygo", path)),
+						recordedPath: config.CSourcePath(trimPath),
 					}
 				}
 				result, err := compileAndCacheCFile(abspath, tmpdir, config.CFlags(false), compileConfig, config.Options.PrintCommands)
@@ -2429,4 +2429,13 @@ func gitVCSStamp(dir, modPath string) (version, settings string, gitErr error) {
 	sb.WriteString("build\tvcs.time=" + commitTime.Format(time.RFC3339Nano) + "\n")
 	sb.WriteString("build\tvcs.modified=" + strconv.FormatBool(modified) + "\n")
 	return version, sb.String(), nil
+}
+
+// extraFilePaths resolves an extra C or assembly source path and its trimpath
+// source location, preserving TINYGOROOT-relative lookups for built-in files.
+func extraFilePaths(root, path string) (abspath, trimPath string) {
+	if filepath.IsAbs(path) {
+		return path, path
+	}
+	return filepath.Join(root, path), filepath.Join("github.com/tinygo-org/tinygo", path)
 }

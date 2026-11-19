@@ -75,6 +75,7 @@ type TargetSpec struct {
 	RelocationModel  string   `json:"relocation-model,omitempty"`
 	WITPackage       string   `json:"wit-package,omitempty"`
 	WITWorld         string   `json:"wit-world,omitempty"`
+	BoardPackage     string   `json:"board-package,omitempty"`
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.
@@ -141,8 +142,13 @@ func (spec *TargetSpec) load(r io.Reader) error {
 //     as well as path to custom files (ex. myAwesomeProject.json)
 func (spec *TargetSpec) loadFromGivenStr(str string) error {
 	path := ""
-	if strings.HasSuffix(str, ".json") {
-		path, _ = filepath.Abs(str)
+	isPath := strings.HasSuffix(str, ".json")
+	if isPath {
+		absPath, err := filepath.Abs(str)
+		if err != nil {
+			return err
+		}
+		path = absPath
 	} else {
 		path = filepath.Join(goenv.Get("TINYGOROOT"), "targets", strings.ToLower(str)+".json")
 	}
@@ -151,7 +157,38 @@ func (spec *TargetSpec) loadFromGivenStr(str string) error {
 		return err
 	}
 	defer fp.Close()
-	return spec.load(fp)
+	if err := spec.load(fp); err != nil {
+		return err
+	}
+	if isPath {
+		spec.resolveRelativePaths(filepath.Dir(path))
+	}
+	return nil
+}
+
+// resolveRelativePaths rewrites relative linkerscript, extra-files, and .json
+// inherits entries to absolute paths when they exist under baseDir.
+func (spec *TargetSpec) resolveRelativePaths(baseDir string) {
+	spec.LinkerScript = resolveFileRelativePath(baseDir, spec.LinkerScript)
+	for i, ef := range spec.ExtraFiles {
+		spec.ExtraFiles[i] = resolveFileRelativePath(baseDir, ef)
+	}
+	for i, inh := range spec.Inherits {
+		if strings.HasSuffix(inh, ".json") {
+			spec.Inherits[i] = resolveFileRelativePath(baseDir, inh)
+		}
+	}
+}
+
+func resolveFileRelativePath(baseDir, path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	cand := filepath.Join(baseDir, filepath.FromSlash(path))
+	if _, err := os.Stat(cand); err == nil {
+		return cand
+	}
+	return path
 }
 
 // resolveInherits loads inherited targets, recursively.

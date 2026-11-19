@@ -156,6 +156,9 @@ func (c *Config) BuildTags() []string {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
 	tags = append(tags, c.Options.Tags...)
+	if c.Target != nil && c.Target.BoardPackage != "" && !slices.Contains(tags, "boardpackage") {
+		tags = append(tags, "boardpackage")
+	}
 	return tags
 }
 
