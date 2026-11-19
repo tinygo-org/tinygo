@@ -327,14 +327,6 @@ var (
 	errWrongStopBitSize = errors.New("UART: invalid bit size")
 )
 
-type UART struct {
-	Bus                  *esp.UART_Type
-	Buffer               *RingBuffer
-	ParityErrorDetected  bool // set when parity error detected
-	DataErrorDetected    bool // set when data corruption detected
-	DataOverflowDetected bool // set when data overflow detected in UART FIFO buffer or RingBuffer
-}
-
 // GPIO matrix signal indices for UART peripherals on the ESP32-P4.
 // Source: ESP-IDF components/soc/esp32p4/include/soc/gpio_sig_map.h
 const (
@@ -342,24 +334,14 @@ const (
 	uartSignalU1 = uint32(13) // UART1_TXD_PAD_OUT_IDX / UART1_RXD_PAD_IN_IDX
 )
 
-const (
-	defaultDataBits = 8
-	defaultStopBit  = 1
-	defaultParity   = ParityNone
-
-	uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
-		esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
-		esp.UART_INT_ENA_FRM_ERR_INT_ENA |
-		esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA |
-		esp.UART_INT_ENA_GLITCH_DET_INT_ENA
-
-	pplClockFreq = 40_000_000 // XTAL clock source (40MHz, always available after ROM boot)
-)
+const pplClockFreq = 40_000_000 // XTAL clock source (40MHz, always available after ROM boot)
 
 type registerSet struct {
 	interruptMapReg  *volatile.Register32
 	gpioMatrixSignal uint32
 }
+
+const cpuInterruptFromUART = 7
 
 func busFor(bus *esp.UART_Type) registerSet {
 	switch bus {
@@ -505,57 +487,6 @@ func uartEnableTX(pin Pin) {
 	}
 }
 
-func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) {
-	// Disable all UART interrupts.
-	uart.Bus.INT_ENA.ClearBits(0x0ffff)
-
-	intrMapReg.Set(7)
-	onceUart.Do(func() {
-		_ = interrupt.New(7, func(i interrupt.Interrupt) {
-			UART0.serveInterrupt(0)
-			UART1.serveInterrupt(1)
-		}).Enable()
-	})
-}
-
-func (uart *UART) serveInterrupt(num int) {
-	interrutFlag := uart.Bus.INT_ST.Get()
-	if (interrutFlag & uartInterrupts) == 0 {
-		return
-	}
-
-	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
-
-	if interrutFlag&esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA > 0 {
-		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
-			b := uart.Bus.GetFIFO_RXFIFO_RD_BYTE()
-			if !uart.Buffer.Put(byte(b & 0xff)) {
-				uart.DataOverflowDetected = true
-			}
-		}
-	}
-	if interrutFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA > 0 {
-		uart.ParityErrorDetected = true
-	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA {
-		uart.DataErrorDetected = true
-	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA {
-		uart.DataOverflowDetected = true
-	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA {
-		uart.DataErrorDetected = true
-	}
-
-	// Clear the UART interrupt status.
-	uart.Bus.INT_CLR.SetBits(interrutFlag)
-	uart.Bus.INT_CLR.ClearBits(interrutFlag)
-	// Re-enable interrupts.
-	uart.Bus.INT_ENA.Set(uartInterrupts)
-}
-
-const uart_empty_thresh_default = 10
-
 func (uart *UART) enableTransmitter() {
 	uart.Bus.SetCONF0_SYNC_TXFIFO_RST(1)
 	uart.Bus.SetCONF0_SYNC_TXFIFO_RST(0)
@@ -593,5 +524,3 @@ func (uart *UART) writeByte(b byte) error {
 	bus.FIFO.Set(uint32(b))
 	return nil
 }
-
-func (uart *UART) flush() {}
