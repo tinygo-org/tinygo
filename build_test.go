@@ -183,6 +183,7 @@ func TestBuild(t *testing.T) {
 		"channel.go",
 		"chanrecover.go",
 		"clearloop.go",
+		"compareorder.go",
 		"coreassign.go",
 		"coreswake.go",
 		"embed/",

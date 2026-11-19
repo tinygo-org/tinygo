@@ -1,0 +1,13 @@
+small struct, int then interface: false
+small struct, interface then int: panic
+large struct, int then interface: false
+large struct, interface then int: panic
+string then interface: false
+interface then interface: false
+nested struct then interface: false
+small array: false
+small array, panic first: panic
+large array: false
+large array, panic first: panic
+array of structs: false
+not equal: true

@@ -3779,11 +3779,11 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			for i := 0; i < int(typ.Len()); i++ {
 				xField := b.CreateExtractValue(x, i, "")
 				yField := b.CreateExtractValue(y, i, "")
-				fieldEqual, err := b.createBinOp(token.EQL, typ.Elem(), typ.Elem(), xField, yField, pos)
+				var err error
+				result, err = b.andEqual(result, typ.Elem(), xField, yField, pos)
 				if err != nil {
 					return llvm.Value{}, err
 				}
-				result = b.CreateAnd(result, fieldEqual, "")
 			}
 		}
 		switch op {
@@ -3808,11 +3808,11 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 			fieldType := typ.Field(i).Type()
 			xField := b.CreateExtractValue(x, i, "")
 			yField := b.CreateExtractValue(y, i, "")
-			fieldEqual, err := b.createBinOp(token.EQL, fieldType, fieldType, xField, yField, pos)
+			var err error
+			result, err = b.andEqual(result, fieldType, xField, yField, pos)
 			if err != nil {
 				return llvm.Value{}, err
 			}
-			result = b.CreateAnd(result, fieldEqual, "")
 		}
 		switch op {
 		case token.EQL: // ==
@@ -3824,6 +3824,56 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 		}
 	default:
 		return llvm.Value{}, b.makeError(pos, "todo: binop type: "+typ.String())
+	}
+}
+
+// andEqual returns result && x == y. A comparison that can panic only runs when
+// result is true, because the spec stops at the first mismatch.
+// https://go.dev/ref/spec#Comparison_operators
+func (b *builder) andEqual(result llvm.Value, typ types.Type, x, y llvm.Value, pos token.Pos) (llvm.Value, error) {
+	if !comparisonMayPanic(typ) {
+		equal, err := b.createBinOp(token.EQL, typ, typ, x, y, pos)
+		if err != nil {
+			return llvm.Value{}, err
+		}
+		return b.CreateAnd(result, equal, ""), nil
+	}
+	prevBlock := b.GetInsertBlock()
+	nextBlock := b.insertBasicBlock("cmp.next")
+	cmpBlock := b.insertBasicBlock("cmp.field")
+	b.CreateCondBr(result, cmpBlock, nextBlock)
+	b.SetInsertPointAtEnd(cmpBlock)
+	equal, err := b.createBinOp(token.EQL, typ, typ, x, y, pos)
+	if err != nil {
+		return llvm.Value{}, err
+	}
+	cmpEnd := b.GetInsertBlock()
+	b.CreateBr(nextBlock)
+	b.SetInsertPointAtEnd(nextBlock)
+	if b.currentBlockInfo != nil {
+		b.currentBlockInfo.exit = nextBlock
+	}
+	phi := b.CreatePHI(b.i1, "")
+	phi.AddIncoming([]llvm.Value{b.i1False, equal}, []llvm.BasicBlock{prevBlock, cmpEnd})
+	return phi, nil
+}
+
+// comparisonMayPanic reports whether comparing two values of type t can panic.
+func comparisonMayPanic(t types.Type) bool {
+	switch t := t.Underlying().(type) {
+	case *types.Interface:
+		return true
+	case *types.Array:
+		return t.Len() > 0 && comparisonMayPanic(t.Elem())
+	case *types.Struct:
+		for i := 0; i < t.NumFields(); i++ {
+			if t.Field(i).Name() != "_" && comparisonMayPanic(t.Field(i).Type()) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
 	}
 }
 
