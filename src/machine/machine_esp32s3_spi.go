@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	// ESP32-S3 PLL clock frequency (same as ESP32-C3)
-	pplClockFreq = 80e6
+	// APB_CLK, MST_CLK_SEL 1. See ESP-IDF hal/esp32s3/include/hal/spi_ll.h spi_ll_master_cal_clock.
+	spiClockFreq = 80_000_000
 
 	// Default SPI frequency - maximum safe speed
-	SPI_DEFAULT_FREQUENCY = 80e6 // 80MHz
+	SPI_DEFAULT_FREQUENCY = 80_000_000 // 80MHz
 )
 
 // ESP32-S3 GPIO Matrix signal indices for SPI - CORRECTED from ESP-IDF gpio_sig_map.h

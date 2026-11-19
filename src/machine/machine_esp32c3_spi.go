@@ -15,6 +15,8 @@ import (
 	"unsafe"
 )
 
+const spiClockFreq = 80_000_000 // APB_CLK, MST_CLK_SEL 1. See ESP-IDF hal/esp32c3/include/hal/spi_ll.h spi_ll_master_cal_clock.
+
 const (
 	FSPICLK_IN_IDX  = uint32(63)
 	FSPICLK_OUT_IDX = uint32(63)
