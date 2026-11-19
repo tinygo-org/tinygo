@@ -27,8 +27,8 @@ const (
 	// NoPtrs but reports the object to the scheduler, which scans the live part.
 	Stack = Layout((0 << sizeShift) | (2 << 1) | 1)
 
-	// Conservative is reserved for stack storage, which does not have an
-	// ordinary Go object layout.
+	// Conservative marks storage without an ordinary Go object layout, such as
+	// a goroutine stack or the shared receive buffer of reflect.Select.
 	Conservative = Layout(2)
 )
 

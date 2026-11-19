@@ -1824,7 +1824,57 @@ func TestChannelReceiveFlags(t *testing.T) {
 	}
 }
 
+func TestChannelSelectRecvAllocs(t *testing.T) {
+	selectAllocs := func(chans ...any) float64 {
+		cases := []SelectCase{{Dir: SelectDefault}}
+		for _, ch := range chans {
+			cases = append(cases, SelectCase{Dir: SelectRecv, Chan: ValueOf(ch)})
+		}
+		return testing.AllocsPerRun(100, func() {
+			Select(cases)
+		})
+	}
+	one := selectAllocs(make(chan int, 1))
+	four := selectAllocs(make(chan int, 1), make(chan string, 1), make(chan [4]int, 1), make(chan *int, 1))
+	if four != one {
+		t.Errorf("Select with four receive cases made %v allocations, with one made %v", four, one)
+	}
+}
+
+//go:noinline
+func sendNewPointer(ch chan *[64]byte) {
+	ch <- &[64]byte{42}
+}
+
 func TestChannelSelect(t *testing.T) {
+	t.Run("shared receive buffer keeps pointers", func(t *testing.T) {
+		strs := make(chan string)
+		ptrs := make(chan *[64]byte)
+		result := make(chan Value, 1)
+		go func() {
+			_, v, _ := Select([]SelectCase{
+				{Dir: SelectRecv, Chan: ValueOf(strs)},
+				{Dir: SelectRecv, Chan: ValueOf(ptrs)},
+			})
+			result <- v
+		}()
+		runtime.Gosched()
+		done := make(chan struct{})
+		go func() {
+			sendNewPointer(ptrs)
+			runtime.GC()
+			for i := 0; i < 100; i++ {
+				sink = new([64]byte)
+			}
+			close(done)
+		}()
+		<-done
+		v := <-result
+		if got := v.Interface().(*[64]byte)[0]; got != 42 {
+			t.Fatalf("received pointer to %d, want 42", got)
+		}
+	})
+
 	t.Run("blocked interface sends", func(t *testing.T) {
 		first := make(chan any)
 		second := make(chan any)
