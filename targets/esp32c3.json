@@ -8,6 +8,7 @@
 		"esp32c3",
 		"esp",
 		"machine.uart",
+		"machine.spi",
 		"espradio"
 	],
 	"serial": "usb",

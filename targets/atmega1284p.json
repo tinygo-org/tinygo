@@ -1,7 +1,7 @@
 {
     "inherits": ["avr"],
     "cpu": "atmega1284p",
-    "build-tags": ["atmega1284p", "atmega", "machine.uart"],
+    "build-tags": ["atmega1284p", "atmega", "machine.uart", "machine.spi"],
     "serial": "uart",
     "ldflags": [
         "--defsym=_bootloader_size=0",
