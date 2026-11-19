@@ -95,6 +95,25 @@ type bitfieldInfo struct {
 	endBit   int64 // may be 0 meaning "until the end of the field"
 }
 
+// recordLayout is the natural layout of the fields of a C struct, in bytes.
+type recordLayout struct {
+	end   int64 // end of the last field
+	align int64 // largest field alignment
+}
+
+func (l *recordLayout) add(end, align int64) {
+	l.end = max(l.end, end)
+	l.align = max(l.align, align)
+}
+
+// size returns the size of the fields without attributes such as packed or aligned.
+func (l *recordLayout) size() int64 {
+	if l.align == 0 {
+		return 0
+	}
+	return (l.end + l.align - 1) / l.align * l.align
+}
+
 // Information about a #cgo noescape line in the source code.
 type noescapingFunc struct {
 	name string

@@ -138,6 +138,16 @@ type _Cgo_struct_types_t struct {
 }
 type _Cgo_types_t = _Cgo_struct_types_t
 type _Cgo_myIntArray = [10]_Cgo_int
+type _Cgo_struct_packed_natural struct {
+	a _Cgo_ushort
+	b _Cgo_uchar
+}
+type _Cgo_struct_aligned16 struct {
+	a _Cgo_char
+	_ [15]byte
+}
+type _Cgo_struct_opaque_bridged struct{}
+type _Cgo_opaque_bridged_ref = *_Cgo_struct_opaque_bridged
 type _Cgo_struct_bitfield_t struct {
 	start        _Cgo_uchar
 	__bitfield_1 _Cgo_uchar

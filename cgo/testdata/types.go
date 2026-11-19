@@ -104,6 +104,16 @@ typedef struct {
 	unsigned char e : 3;
 	// Note that C++ allows bitfields bigger than the underlying type.
 } bitfield_t;
+
+// Structs with attributes. See #6413.
+struct packed_natural {
+	unsigned short a;
+	unsigned char  b;
+} __attribute__((packed));
+struct __attribute__((aligned(16))) aligned16 {
+	char a;
+};
+typedef const struct __attribute__((objc_bridge(id))) opaque_bridged *opaque_bridged_ref;
 */
 import "C"
 
@@ -148,6 +158,11 @@ var (
 
 	// Arrays.
 	_ C.myIntArray
+
+	// Structs with attributes.
+	_ C.struct_packed_natural
+	_ C.struct_aligned16
+	_ C.opaque_bridged_ref
 )
 
 // Test bitfield accesses.
