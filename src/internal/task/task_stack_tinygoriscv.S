@@ -10,6 +10,14 @@
 #define LREG lw
 #endif
 
+#if defined(__riscv_flen) && __riscv_flen == 32
+// fs0-fs11 and fcsr follow the 13 integer registers.
+#define SAVE_FREGS 1
+#define FRAMESIZE 26
+#else
+#define FRAMESIZE 13
+#endif
+
 .section .text.tinygo_startTask
 .global  tinygo_startTask
 .type    tinygo_startTask, %function
@@ -48,7 +56,7 @@ tinygo_swapTaskRISC:
     csrrci t0, mstatus, 8
 
     // Push all callee-saved registers.
-    addi sp, sp, -13*REGSIZE
+    addi sp, sp, -FRAMESIZE*REGSIZE
     SREG ra,  12*REGSIZE(sp)
     SREG s11, 11*REGSIZE(sp)
     SREG s10, 10*REGSIZE(sp)
@@ -62,6 +70,22 @@ tinygo_swapTaskRISC:
     SREG s2,   2*REGSIZE(sp)
     SREG s1,   1*REGSIZE(sp)
     SREG s0,   0*REGSIZE(sp)
+#ifdef SAVE_FREGS
+    fsw  fs0,  13*REGSIZE(sp)
+    fsw  fs1,  14*REGSIZE(sp)
+    fsw  fs2,  15*REGSIZE(sp)
+    fsw  fs3,  16*REGSIZE(sp)
+    fsw  fs4,  17*REGSIZE(sp)
+    fsw  fs5,  18*REGSIZE(sp)
+    fsw  fs6,  19*REGSIZE(sp)
+    fsw  fs7,  20*REGSIZE(sp)
+    fsw  fs8,  21*REGSIZE(sp)
+    fsw  fs9,  22*REGSIZE(sp)
+    fsw  fs10, 23*REGSIZE(sp)
+    fsw  fs11, 24*REGSIZE(sp)
+    frcsr t1
+    SREG t1,   25*REGSIZE(sp)
+#endif
 
     // Save the current stack pointer in oldStack.
     SREG sp,  0(a1)
@@ -88,7 +112,23 @@ tinygo_swapTaskRISC:
     LREG s2,   2*REGSIZE(sp)
     LREG s1,   1*REGSIZE(sp)
     LREG s0,   0*REGSIZE(sp)
-    addi sp, sp, 13*REGSIZE
+#ifdef SAVE_FREGS
+    flw  fs0,  13*REGSIZE(sp)
+    flw  fs1,  14*REGSIZE(sp)
+    flw  fs2,  15*REGSIZE(sp)
+    flw  fs3,  16*REGSIZE(sp)
+    flw  fs4,  17*REGSIZE(sp)
+    flw  fs5,  18*REGSIZE(sp)
+    flw  fs6,  19*REGSIZE(sp)
+    flw  fs7,  20*REGSIZE(sp)
+    flw  fs8,  21*REGSIZE(sp)
+    flw  fs9,  22*REGSIZE(sp)
+    flw  fs10, 23*REGSIZE(sp)
+    flw  fs11, 24*REGSIZE(sp)
+    LREG t1,   25*REGSIZE(sp)
+    fscsr t1
+#endif
+    addi sp, sp, FRAMESIZE*REGSIZE
 
     // Restore the interrupt-enable state.
     andi t0, t0, 8
