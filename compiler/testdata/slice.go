@@ -97,3 +97,7 @@ func SliceAfterLenGuard(p []byte) []byte {
 	}
 	return nil
 }
+
+func SliceWithoutLenUse(p []byte, n int) []byte {
+	return p[:n]
+}

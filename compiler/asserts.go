@@ -311,3 +311,30 @@ func (b *builder) createLenCapAssume(oldLen, oldCap llvm.Value) {
 	}
 	b.CreateCall(assume.GlobalValueType(), assume, []llvm.Value{b.CreateICmp(llvm.IntULE, oldLen, oldCap, "")}, "")
 }
+
+// lenIsUsed returns whether the length of slice v has a use other than
+// reslicing. Without one, the assume keeps an otherwise dead length alive.
+func lenIsUsed(v ssa.Value) bool {
+	refs := v.Referrers()
+	if refs == nil {
+		return false
+	}
+	for _, ref := range *refs {
+		switch ref := ref.(type) {
+		case *ssa.IndexAddr:
+			return true
+		case *ssa.Slice:
+			if ref.High == nil {
+				return true
+			}
+		case *ssa.Call:
+			if builtin, ok := ref.Call.Value.(*ssa.Builtin); ok {
+				switch builtin.Name() {
+				case "len", "copy", "append":
+					return true
+				}
+			}
+		}
+	}
+	return false
+}

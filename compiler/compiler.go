@@ -3081,7 +3081,7 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			oldPtr := b.CreateExtractValue(value, 0, "")
 			oldLen := b.CreateExtractValue(value, 1, "")
 			oldCap := b.CreateExtractValue(value, 2, "")
-			if expr.High != nil || expr.Max != nil {
+			if (expr.High != nil || expr.Max != nil) && lenIsUsed(expr.X) {
 				b.createLenCapAssume(oldLen, oldCap)
 			}
 			if high.IsNil() {

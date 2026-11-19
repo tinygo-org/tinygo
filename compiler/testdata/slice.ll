@@ -123,8 +123,6 @@ declare void @runtime.slicePanic(ptr) #0
 ; Function Attrs: nounwind
 define hidden void @main.sliceRange(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, i32 %low, i32 %high, ptr %context) unnamed_addr #1 {
 entry:
-  %0 = icmp samesign ule i32 %ints.len, %ints.cap
-  call void @llvm.assume(i1 %0)
   %slice.lowhigh = icmp ugt i32 %low, %high
   %slice.highmax = icmp ugt i32 %high, %ints.cap
   %slice.lowmax = or i1 %slice.lowhigh, %slice.highmax
@@ -141,14 +139,9 @@ unwind.return:                                    ; preds = %slice.throw
   ret void
 }
 
-; Function Attrs: nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: write)
-declare void @llvm.assume(i1 noundef) #5
-
 ; Function Attrs: nounwind
 define hidden void @main.sliceRangeMax(ptr %ints.data, i32 range(i32 0, 1073741824) %ints.len, i32 range(i32 0, 1073741824) %ints.cap, i32 %low, i32 %high, i32 %max, ptr %context) unnamed_addr #1 {
 entry:
-  %0 = icmp samesign ule i32 %ints.len, %ints.cap
-  call void @llvm.assume(i1 %0)
   %slice.lowhigh = icmp ugt i32 %low, %high
   %slice.highmax = icmp ugt i32 %high, %max
   %slice.lowmax = or i1 %slice.lowhigh, %slice.highmax
@@ -447,6 +440,29 @@ if.done:                                          ; preds = %entry
   ret { ptr, i32, i32 } zeroinitializer
 
 slice.throw:                                      ; preds = %if.then
+  call void @runtime.slicePanic(ptr undef) #6
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %slice.throw
+  ret { ptr, i32, i32 } undef
+}
+
+; Function Attrs: nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: write)
+declare void @llvm.assume(i1 noundef) #5
+
+; Function Attrs: nounwind
+define hidden { ptr, i32, i32 } @main.SliceWithoutLenUse(ptr %p.data, i32 range(i32 0, -2147483648) %p.len, i32 range(i32 0, -2147483648) %p.cap, i32 %n, ptr %context) unnamed_addr #1 {
+entry:
+  %slice.highmax = icmp ugt i32 %n, %p.cap
+  br i1 %slice.highmax, label %slice.throw, label %slice.next
+
+slice.next:                                       ; preds = %entry
+  %0 = insertvalue { ptr, i32, i32 } undef, ptr %p.data, 0
+  %1 = insertvalue { ptr, i32, i32 } %0, i32 %n, 1
+  %2 = insertvalue { ptr, i32, i32 } %1, i32 %p.cap, 2
+  ret { ptr, i32, i32 } %2
+
+slice.throw:                                      ; preds = %entry
   call void @runtime.slicePanic(ptr undef) #6
   br label %unwind.return
 
