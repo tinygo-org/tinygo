@@ -1,4 +1,4 @@
-//go:build esp32s3 || (esp32c3 && !m5stamp_c3)
+//go:build esp32s3 || esp32c3
 
 // Shared regI2C-based ADC calibration helpers for ESP32-S3 and ESP32-C3.
 //

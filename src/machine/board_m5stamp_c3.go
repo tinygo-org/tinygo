@@ -46,6 +46,29 @@ const (
 	UART_RX_PIN = U0RXD
 )
 
+// Analog pins
+const (
+	A0 = IO0
+	A1 = IO1
+	A2 = IO2
+	A3 = IO3
+	A4 = IO4
+	A5 = IO5
+)
+
+// I2C pins. See arduino-esp32 variants/m5stack_stamp_c3/pins_arduino.h.
+const (
+	SDA_PIN = IO8
+	SCL_PIN = IO9
+)
+
+// SPI pins. See arduino-esp32 variants/m5stack_stamp_c3/pins_arduino.h.
+const (
+	SPI_SCK_PIN = IO4
+	SPI_SDO_PIN = IO6
+	SPI_SDI_PIN = IO5
+)
+
 const (
 	WS2812 = IO2
 )
