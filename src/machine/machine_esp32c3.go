@@ -318,6 +318,10 @@ func (uart *UART) Configure(config UARTConfig) error {
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
 	}
+	if uart.Bus == esp.UART0 && config.TX == 0 && config.RX == 0 {
+		config.TX = UART0_TX_PIN
+		config.RX = UART0_RX_PIN
+	}
 	if config.TX == config.RX {
 		return errSamePins
 	}
