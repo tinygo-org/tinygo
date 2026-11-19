@@ -158,6 +158,9 @@ func (c *Config) BuildTags() []string {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
 	tags = append(tags, c.Options.Tags...)
+	if c.Target != nil && c.Target.BoardPackage != "" && !slices.Contains(tags, "boardpackage") {
+		tags = append(tags, "boardpackage")
+	}
 	return tags
 }
 
@@ -560,6 +563,9 @@ func (c *Config) LDFlags() []string {
 	var ldflags []string
 	for _, flag := range c.Target.LDFlags {
 		ldflags = append(ldflags, strings.ReplaceAll(flag, "{root}", root))
+	}
+	if c.Target.LinkerScript != "" && filepath.IsAbs(c.Target.LinkerScript) {
+		ldflags = append(ldflags, "-L", filepath.Dir(c.Target.LinkerScript))
 	}
 	ldflags = append(ldflags, "-L", root)
 	if c.Target.LinkerScript != "" {

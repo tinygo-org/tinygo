@@ -1,0 +1,6 @@
+{
+	"inherits": ["../parent/base.json"],
+	"linkerscript": "board.ld",
+	"extra-files": ["board_init.c", "common.c"],
+	"board-package": "example.com/myboard"
+}
