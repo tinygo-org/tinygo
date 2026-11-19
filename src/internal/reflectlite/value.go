@@ -2834,6 +2834,9 @@ func (v Value) send(x Value, nonBlocking bool, method string) bool {
 	return true
 }
 
+// The channel queue keeps pointers to these locals, so they are heap allocated.
+// Not inlining keeps that allocation out of the fast path in send.
+//
 //go:noinline
 func (v Value) sendBlocking(x Value) {
 	var iface interface{}
@@ -2863,6 +2866,9 @@ func (v Value) recv(nonBlocking bool, method string) (Value, bool) {
 	return v.recvBlocking(value)
 }
 
+// The channel queue keeps a pointer to op, so it is heap allocated.
+// Not inlining keeps that allocation out of the fast path in recv.
+//
 //go:noinline
 func (v Value) recvBlocking(value Value) (Value, bool) {
 	var op channelOp
