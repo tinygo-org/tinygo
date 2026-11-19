@@ -9,6 +9,8 @@ import (
 	"unsafe"
 )
 
+const spiClockFreq = 40_000_000 // XTAL_CLK, GPSPI2_CLK_SRC_SEL 0. See ESP-IDF hal/esp32p4/include/hal/spi_ll.h spi_ll_set_clk_source.
+
 // GPIO matrix signals for GPSPI2. See ESP-IDF
 // components/soc/esp32p4/include/soc/gpio_sig_map.h.
 const (
