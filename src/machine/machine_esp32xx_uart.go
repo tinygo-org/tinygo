@@ -2,7 +2,33 @@
 
 package machine
 
-import "device/esp"
+import (
+	"device/esp"
+	"runtime/interrupt"
+	"runtime/volatile"
+)
+
+type UART struct {
+	Bus                  *esp.UART_Type
+	Buffer               *RingBuffer
+	ParityErrorDetected  bool // set when parity error detected
+	DataErrorDetected    bool // set when data corruption detected
+	DataOverflowDetected bool // set when data overflow detected in UART FIFO buffer or RingBuffer
+}
+
+const (
+	defaultDataBits = 8
+	defaultStopBit  = 1
+	defaultParity   = ParityNone
+
+	uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
+		esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
+		esp.UART_INT_ENA_FRM_ERR_INT_ENA |
+		esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA |
+		esp.UART_INT_ENA_GLITCH_DET_INT_ENA
+
+	uart_empty_thresh_default = 10
+)
 
 func (uart *UART) Configure(config UARTConfig) error {
 	if config.BaudRate == 0 {
@@ -63,3 +89,56 @@ func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
 		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX))
 	}
 }
+
+func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) {
+	// Disable all UART interrupts
+	uart.Bus.INT_ENA.ClearBits(0x0ffff)
+
+	intrMapReg.Set(cpuInterruptFromUART)
+	onceUart.Do(func() {
+		_ = interrupt.New(cpuInterruptFromUART, func(i interrupt.Interrupt) {
+			UART0.serveInterrupt(0)
+			UART1.serveInterrupt(1)
+		}).Enable()
+	})
+}
+
+func (uart *UART) serveInterrupt(num int) {
+	// get interrupt status
+	interruptFlag := uart.Bus.INT_ST.Get()
+	if (interruptFlag & uartInterrupts) == 0 {
+		return
+	}
+
+	// block UART interrupts while processing
+	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
+
+	if interruptFlag&esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA > 0 {
+		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
+			b := uart.Bus.GetFIFO_RXFIFO_RD_BYTE()
+			if !uart.Buffer.Put(byte(b & 0xff)) {
+				uart.DataOverflowDetected = true
+			}
+		}
+	}
+	if interruptFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA > 0 {
+		uart.ParityErrorDetected = true
+	}
+	if 0 != interruptFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA {
+		uart.DataErrorDetected = true
+	}
+	if 0 != interruptFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA {
+		uart.DataOverflowDetected = true
+	}
+	if 0 != interruptFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA {
+		uart.DataErrorDetected = true
+	}
+
+	// Clear the UART interrupt status
+	uart.Bus.INT_CLR.SetBits(interruptFlag)
+	uart.Bus.INT_CLR.ClearBits(interruptFlag)
+	// Enable interrupts
+	uart.Bus.INT_ENA.Set(uartInterrupts)
+}
+
+func (uart *UART) flush() {}
