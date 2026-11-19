@@ -436,3 +436,240 @@ func TestRecordedPath(t *testing.T) {
 		t.Fatalf("GOPATH DebugPrefixMap() = %q, want %q", got, want)
 	}
 }
+
+func TestLoadBoardPackageAutoImport(t *testing.T) {
+	t.Setenv("GOFLAGS", "")
+	_, minor, err := goenv.GetGorootVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	writeTestModule := func(t *testing.T, mainSrc string) string {
+		t.Helper()
+		dir := t.TempDir()
+		files := map[string]string{
+			"go.mod":             "module example.com/boardauto\n\ngo 1.25.0\n",
+			"go.work":            "go 1.25.0\n\nuse .\n",
+			"myboard/dep/dep.go": "package dep\n\nvar Ready bool\n\nfunc init() {\n\tReady = true\n}\n",
+			"myboard/board.go":   "package myboard\n\nimport \"example.com/boardauto/myboard/dep\"\n\nvar BoardReady bool\n\nfunc init() {\n\tBoardReady = dep.Ready\n}\n",
+			"cmd/app/main.go":    mainSrc,
+		}
+		for name, content := range files {
+			full := filepath.Join(dir, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(full, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
+	}
+
+	makeConfig := func(dir, boardPkg string) *compileopts.Config {
+		return &compileopts.Config{
+			Options: &compileopts.Options{Directory: dir},
+			Target: &compileopts.TargetSpec{
+				GOOS:         runtime.GOOS,
+				GOARCH:       runtime.GOARCH,
+				BoardPackage: boardPkg,
+			},
+			GoMinorVersion: minor,
+		}
+	}
+
+	for _, tc := range []struct {
+		name      string
+		input     string
+		mainSrc   string
+		wantMain  string
+		boardPath string
+	}{
+		{
+			name:      "implicit import from package path",
+			input:     "./cmd/app",
+			mainSrc:   "package main\n\nfunc main() {}\n",
+			wantMain:  "example.com/boardauto/cmd/app",
+			boardPath: "example.com/boardauto/myboard",
+		},
+		{
+			name:      "explicit import already present",
+			input:     "./cmd/app",
+			mainSrc:   "package main\n\nimport _ \"example.com/boardauto/myboard\"\n\nfunc main() {}\n",
+			wantMain:  "example.com/boardauto/cmd/app",
+			boardPath: "example.com/boardauto/myboard",
+		},
+		{
+			name:      "go file input",
+			input:     "./cmd/app/main.go",
+			mainSrc:   "package main\n\nfunc main() {}\n",
+			wantMain:  "command-line-arguments",
+			boardPath: "example.com/boardauto/myboard",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeTestModule(t, tc.mainSrc)
+			t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+			config := makeConfig(dir, tc.boardPath)
+
+			program, err := Load(config, tc.input, types.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := program.Parse(); err != nil {
+				t.Fatal(err)
+			}
+			// Verify Parse remains idempotent with the synthetic import present.
+			if err := program.Parse(); err != nil {
+				t.Fatal(err)
+			}
+
+			mainPkg := program.MainPkg()
+			if mainPkg == nil || mainPkg.ImportPath != tc.wantMain {
+				t.Fatalf("MainPkg() = %v, want %q", mainPkg, tc.wantMain)
+			}
+
+			indexByPath := make(map[string]int, len(program.Sorted()))
+			for i, pkg := range program.Sorted() {
+				indexByPath[pkg.ImportPath] = i
+			}
+			depIdx, hasDep := indexByPath["example.com/boardauto/myboard/dep"]
+			boardIdx, hasBoard := indexByPath[tc.boardPath]
+			mainIdx, hasMain := indexByPath[tc.wantMain]
+			if !hasDep || !hasBoard || !hasMain {
+				t.Fatalf("missing packages in Sorted: dep=%v board=%v main=%v", hasDep, hasBoard, hasMain)
+			}
+			if !(depIdx < boardIdx && boardIdx < mainIdx) {
+				t.Fatalf("unexpected package order: dep=%d board=%d main=%d", depIdx, boardIdx, mainIdx)
+			}
+
+			foundImport := false
+			for _, imp := range mainPkg.Pkg.Imports() {
+				if imp.Path() == tc.boardPath {
+					foundImport = true
+					break
+				}
+			}
+			if !foundImport {
+				t.Errorf("mainPkg.Pkg.Imports() = %v, missing %q", mainPkg.Pkg.Imports(), tc.boardPath)
+			}
+
+			ssaProg := program.LoadSSA()
+			if ssaProg.ImportedPackage(tc.boardPath) == nil {
+				t.Errorf("SSA program missing board package %q", tc.boardPath)
+			}
+		})
+	}
+
+	t.Run("analysis skips board package auto import", func(t *testing.T) {
+		dir := writeTestModule(t, "package main\n\nfunc main() {}\n")
+		t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+		config := makeConfig(dir, "example.com/boardauto/myboard")
+
+		program, err := load(
+			config,
+			[]string{"./cmd/app"},
+			types.Config{},
+			true,
+			nil,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if program.Packages["example.com/boardauto/myboard"] != nil {
+			t.Errorf("analysis load unexpectedly included board package")
+		}
+	})
+
+	t.Run("compile test binary auto imports board package", func(t *testing.T) {
+		dir := writeTestModule(t, "package app\n")
+		testFile := filepath.Join(dir, "cmd", "app", "main_test.go")
+		if err := os.WriteFile(testFile, []byte("package app\nimport \"testing\"\nfunc TestApp(t *testing.T) {}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+		config := makeConfig(dir, "example.com/boardauto/myboard")
+		config.TestConfig.CompileTestBinary = true
+
+		program, err := Load(config, "./cmd/app", types.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := program.Parse(); err != nil {
+			t.Fatal(err)
+		}
+		mainPkg := program.MainPkg()
+		wantMain := "example.com/boardauto/cmd/app.test"
+		if mainPkg == nil || mainPkg.ImportPath != wantMain {
+			t.Fatalf("MainPkg() = %v, want %q", mainPkg, wantMain)
+		}
+		if program.Packages["example.com/boardauto/myboard"] == nil {
+			t.Fatal("missing board package in program")
+		}
+		foundImport := false
+		for _, imp := range mainPkg.Pkg.Imports() {
+			if imp.Path() == "example.com/boardauto/myboard" {
+				foundImport = true
+				break
+			}
+		}
+		if !foundImport {
+			t.Errorf("mainPkg.Pkg.Imports() = %v, missing board package", mainPkg.Pkg.Imports())
+		}
+	})
+
+	t.Run("compile test binary skips non-test dependency without cycle", func(t *testing.T) {
+		dir := writeTestModule(t, "package main\n\nfunc main() {}\n")
+		t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+		config := makeConfig(dir, "example.com/boardauto/myboard")
+		config.TestConfig.CompileTestBinary = true
+
+		program, err := Load(config, "./myboard/dep", types.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := program.Parse(); err != nil {
+			t.Fatal(err)
+		}
+		depPkg := program.MainPkg()
+		if depPkg == nil || depPkg.ImportPath != "example.com/boardauto/myboard/dep" {
+			t.Fatalf("MainPkg() = %v, want example.com/boardauto/myboard/dep", depPkg)
+		}
+		if slices.Contains(depPkg.Imports, "example.com/boardauto/myboard") {
+			t.Errorf("depPkg.Imports = %v, unexpectedly injected board package", depPkg.Imports)
+		}
+	})
+
+	t.Run("standard package test resolves external board package", func(t *testing.T) {
+		dir := writeTestModule(t, "package main\n\nfunc main() {}\n")
+		t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+		config := makeConfig(dir, "example.com/boardauto/myboard")
+		config.TestConfig.CompileTestBinary = true
+		config.TestConfig.StandardPackage = true
+
+		program, err := Load(config, "fmt", types.Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := program.Parse(); err != nil {
+			t.Fatal(err)
+		}
+		mainPkg := program.MainPkg()
+		if mainPkg == nil || mainPkg.ImportPath != "fmt.test" {
+			t.Fatalf("MainPkg() = %v, want fmt.test", mainPkg)
+		}
+		if program.Packages["example.com/boardauto/myboard"] == nil {
+			t.Fatal("missing external board package when StandardPackage is true")
+		}
+		foundImport := false
+		for _, imp := range mainPkg.Pkg.Imports() {
+			if imp.Path() == "example.com/boardauto/myboard" {
+				foundImport = true
+				break
+			}
+		}
+		if !foundImport {
+			t.Errorf("fmt.test Imports() = %v, missing external board package", mainPkg.Pkg.Imports())
+		}
+	})
+}

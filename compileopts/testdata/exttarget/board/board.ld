@@ -1,0 +1,1 @@
+/* board linker script placeholder */
