@@ -1360,6 +1360,19 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		result = r.builder.CreateSRem(operands[0], operands[1], inst.name)
 	case llvm.ZExt:
 		result = r.builder.CreateZExt(operands[0], inst.llvmInst.Type(), inst.name)
+	case llvm.GetElementPtr, llvm.Select:
+		// Runtime code can write to objects through the result.
+		for _, op := range operands {
+			err := mem.markExternalStore(op)
+			if err != nil {
+				return r.errorAt(inst, err)
+			}
+		}
+		if inst.opcode == llvm.Select {
+			result = r.builder.CreateSelect(operands[0], operands[1], operands[2], inst.name)
+		} else {
+			result = r.builder.CreateGEP(inst.llvmInst.GEPSourceElementType(), operands[0], operands[1:], inst.name)
+		}
 	default:
 		if inst.branch || inst.opcode == llvm.Switch || inst.opcode == llvm.IndirectBr {
 			return r.rollbackAt(inst, "branch on a value not known at compile time")
