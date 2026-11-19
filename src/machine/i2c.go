@@ -1,4 +1,4 @@
-//go:build !baremetal || atmega || nrf || sam || stm32 || fe310 || k210 || rp2040 || rp2350 || mimxrt1062 || esp32c3 || esp32 || esp32c6 || esp32s3 || esp32p4
+//go:build !baremetal || machine.i2c
 
 package machine
 

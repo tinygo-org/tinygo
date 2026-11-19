@@ -8,7 +8,8 @@
 		"esp32p4",
 		"esp",
 		"machine.uart",
-		"machine.spi"
+		"machine.spi",
+		"machine.i2c"
 	],
 	"serial": "uart",
 	"rtlib": "compiler-rt",

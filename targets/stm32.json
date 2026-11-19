@@ -1,4 +1,4 @@
 {
 	"inheritable-only": true,
-	"build-tags": ["stm32", "machine.uart"]
+	"build-tags": ["stm32", "machine.uart", "machine.i2c"]
 }

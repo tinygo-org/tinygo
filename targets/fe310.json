@@ -8,6 +8,7 @@
 		"fe310",
 		"sifive",
 		"machine.uart",
-		"machine.spi"
+		"machine.spi",
+		"machine.i2c"
 	]
 }
