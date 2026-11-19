@@ -14,6 +14,8 @@ package compiler
 //     frames.
 
 import (
+	"go/ast"
+	"go/token"
 	"go/types"
 	"strconv"
 	"strings"
@@ -50,12 +52,7 @@ func (b *builder) hasDeferFrame() bool {
 // called from within the entry block when this function contains deferred
 // calls.
 func (b *builder) deferInitFunc() {
-	// Some setup.
-	b.deferFuncs = make(map[*ssa.Function]int)
-	b.deferInvokeFuncs = make(map[string]int)
-	b.deferClosureFuncs = make(map[*ssa.Function]int)
-	b.deferExprFuncs = make(map[ssa.Value]int)
-	b.deferBuiltinFuncs = make(map[ssa.Value]deferBuiltin)
+	yieldDefers := b.deferInitCallbacks()
 
 	if b.hasDeferFrame() {
 		// Set up the defer frame with the current stack pointer.
@@ -83,6 +80,101 @@ func (b *builder) deferInitFunc() {
 		b.deferPtr = b.CreateAlloca(b.dataPtrType, "deferPtr")
 		b.CreateStore(b.dataPtrNull, b.deferPtr)
 	}
+
+	if yieldDefers {
+		// SSA lifting removes RunDefers when all defers are in loop bodies.
+		hasRunDefers := false
+		for _, block := range b.fn.Blocks {
+			for _, instr := range block.Instrs {
+				if _, ok := instr.(*ssa.RunDefers); ok {
+					hasRunDefers = true
+				}
+			}
+		}
+		if !hasRunDefers {
+			b.runDefersBefore = runDefersBefore(b.fn)
+		}
+	}
+}
+
+// runDefersBefore returns where each return of fn runs its deferred calls,
+// before it reloads the results. The recover block shows which loads those are.
+func runDefersBefore(fn *ssa.Function) map[ssa.Instruction]bool {
+	results := make(map[ssa.Value]bool)
+	recoverInstrs := fn.Recover.Instrs
+	if ret, ok := recoverInstrs[len(recoverInstrs)-1].(*ssa.Return); ok {
+		for _, result := range ret.Results {
+			if load, ok := result.(*ssa.UnOp); ok && load.Op == token.MUL {
+				results[load.X] = true
+			}
+		}
+	}
+
+	before := make(map[ssa.Instruction]bool)
+	for _, block := range fn.Blocks {
+		if block == fn.Recover {
+			continue
+		}
+		i := len(block.Instrs) - 1
+		if _, ok := block.Instrs[i].(*ssa.Return); !ok {
+			continue
+		}
+		for i > 0 {
+			load, ok := block.Instrs[i-1].(*ssa.UnOp)
+			if !ok || load.Op != token.MUL || !results[load.X] {
+				break
+			}
+			i--
+		}
+		before[block.Instrs[i]] = true
+	}
+	return before
+}
+
+// deferInitCallbacks registers the defers in the loop bodies of the enclosing
+// function first, so all of them agree on rundefers cases. It reports if any.
+func (b *builder) deferInitCallbacks() bool {
+	b.deferFuncs = make(map[*ssa.Function]int)
+	b.deferInvokeFuncs = make(map[string]int)
+	b.deferClosureFuncs = make(map[*ssa.Function]int)
+	b.deferExprFuncs = make(map[ssa.Value]int)
+	b.deferBuiltinFuncs = make(map[ssa.Value]deferBuiltin)
+
+	owner := b.fn
+	for isYieldFunc(owner) {
+		owner = owner.Parent()
+	}
+	defers := yieldDefers(owner)
+	for _, instr := range defers {
+		b.deferCallback(instr)
+	}
+	return len(defers) > 0
+}
+
+// isYieldFunc reports whether fn is the body of a range-over-func loop.
+func isYieldFunc(fn *ssa.Function) bool {
+	_, ok := fn.Syntax().(*ast.RangeStmt)
+	return ok
+}
+
+// yieldDefers returns the defers in the range-over-func loop bodies of fn.
+// They are pushed onto the defer stack of fn.
+func yieldDefers(fn *ssa.Function) []*ssa.Defer {
+	var defers []*ssa.Defer
+	for _, anon := range fn.AnonFuncs {
+		if !isYieldFunc(anon) {
+			continue
+		}
+		for _, block := range anon.Blocks {
+			for _, instr := range block.Instrs {
+				if instr, ok := instr.(*ssa.Defer); ok {
+					defers = append(defers, instr)
+				}
+			}
+		}
+		defers = append(defers, yieldDefers(anon)...)
+	}
+	return defers
 }
 
 // createLandingPad fills in the landing pad block. This block runs the deferred
@@ -412,26 +504,76 @@ func (b *builder) loadDeferredCallParams(structType llvm.Type, ptr llvm.Value) [
 	return values
 }
 
-// createDefer emits a single defer instruction, to be run when this function
-// returns.
-func (b *builder) createDefer(instr *ssa.Defer) {
-	b.markRuntimeFeatureUse(&instr.Call)
-
-	// The pointer to the previous defer struct, which we will replace to
-	// make a linked list.
-	next := b.CreateLoad(b.dataPtrType, b.deferPtr, "defer.next")
-
-	var values llvmValueList
+// deferCallback returns the rundefers switch case that runs the call deferred
+// by instr, adding a new case if needed.
+func (b *builder) deferCallback(instr *ssa.Defer) int {
 	if instr.Call.IsInvoke() {
-		// Method call on an interface.
-
-		// Get callback type number.
 		key := b.getInvokeFunctionName(&instr.Call)
 		if _, ok := b.deferInvokeFuncs[key]; !ok {
 			b.deferInvokeFuncs[key] = len(b.allDeferFuncs)
 			b.allDeferFuncs = append(b.allDeferFuncs, &instr.Call)
 		}
-		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferInvokeFuncs[key]), false)
+		return b.deferInvokeFuncs[key]
+	}
+	switch value := instr.Call.Value.(type) {
+	case *ssa.Function:
+		if _, ok := b.deferFuncs[value]; !ok {
+			b.deferFuncs[value] = len(b.allDeferFuncs)
+			b.allDeferFuncs = append(b.allDeferFuncs, value)
+		}
+		return b.deferFuncs[value]
+	case *ssa.MakeClosure:
+		fn := value.Fn.(*ssa.Function)
+		if _, ok := b.deferClosureFuncs[fn]; !ok {
+			b.deferClosureFuncs[fn] = len(b.allDeferFuncs)
+			b.allDeferFuncs = append(b.allDeferFuncs, value)
+		}
+		return b.deferClosureFuncs[fn]
+	case *ssa.Builtin:
+		if _, ok := b.deferBuiltinFuncs[value]; !ok {
+			var argTypes []types.Type
+			for _, arg := range instr.Call.Args {
+				argTypes = append(argTypes, arg.Type())
+			}
+			b.deferBuiltinFuncs[value] = deferBuiltin{
+				callName: value.Name(),
+				pos:      value.Pos(),
+				argTypes: argTypes,
+				callback: len(b.allDeferFuncs),
+			}
+			b.allDeferFuncs = append(b.allDeferFuncs, value)
+		}
+		return b.deferBuiltinFuncs[value].callback
+	default:
+		if _, ok := b.deferExprFuncs[value]; !ok {
+			b.deferExprFuncs[value] = len(b.allDeferFuncs)
+			b.allDeferFuncs = append(b.allDeferFuncs, &instr.Call)
+		}
+		return b.deferExprFuncs[value]
+	}
+}
+
+// createDefer emits a single defer instruction, to be run when this function
+// returns.
+func (b *builder) createDefer(instr *ssa.Defer) {
+	b.markRuntimeFeatureUse(&instr.Call)
+
+	// A defer in a range-over-func loop body goes on the defer stack of the
+	// enclosing function, so it must outlive this function.
+	deferPtr := b.deferPtr
+	yield := isYieldFunc(b.fn)
+	if yield {
+		deferPtr = b.getValue(instr.DeferStack, getPos(instr))
+	}
+
+	// The pointer to the previous defer struct, which we will replace to
+	// make a linked list.
+	next := b.CreateLoad(b.dataPtrType, deferPtr, "defer.next")
+
+	callback := llvm.ConstInt(b.uintptrType, uint64(b.deferCallback(instr)), false)
+	var values llvmValueList
+	if instr.Call.IsInvoke() {
+		// Method call on an interface.
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by the call parameters).
@@ -444,11 +586,6 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 
 	} else if callee, ok := instr.Call.Value.(*ssa.Function); ok {
 		// Regular function call.
-		if _, ok := b.deferFuncs[callee]; !ok {
-			b.deferFuncs[callee] = len(b.allDeferFuncs)
-			b.allDeferFuncs = append(b.allDeferFuncs, callee)
-		}
-		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferFuncs[callee]), false)
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
@@ -467,55 +604,24 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		closure := b.getValue(instr.Call.Value, getPos(instr))
 		context := b.CreateExtractValue(closure, 0, "")
 
-		// Get the callback number.
-		fn := makeClosure.Fn.(*ssa.Function)
-		if _, ok := b.deferClosureFuncs[fn]; !ok {
-			b.deferClosureFuncs[fn] = len(b.allDeferFuncs)
-			b.allDeferFuncs = append(b.allDeferFuncs, makeClosure)
-		}
-		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferClosureFuncs[fn]), false)
-
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by all parameters including the
 		// context pointer).
 		values = newLLVMValueList(callback, next)
-		abi := b.getFunctionABI(fn.Signature, false)
+		abi := b.getFunctionABI(makeClosure.Fn.(*ssa.Function).Signature, false)
 		values.append(b.getCallArguments(instr.Call.Args, abi.params)...)
 		values.append(context)
 
-	} else if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
-		var argTypes []types.Type
-		var argValues []llvm.Value
-		for _, arg := range instr.Call.Args {
-			argTypes = append(argTypes, arg.Type())
-			argValues = append(argValues, b.getValue(arg, getPos(instr)))
-		}
-
-		if _, ok := b.deferBuiltinFuncs[instr.Call.Value]; !ok {
-			b.deferBuiltinFuncs[instr.Call.Value] = deferBuiltin{
-				callName: builtin.Name(),
-				pos:      builtin.Pos(),
-				argTypes: argTypes,
-				callback: len(b.allDeferFuncs),
-			}
-			b.allDeferFuncs = append(b.allDeferFuncs, instr.Call.Value)
-		}
-		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferBuiltinFuncs[instr.Call.Value].callback), false)
-
+	} else if _, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
 		values = newLLVMValueList(callback, next)
-		values.append(argValues...)
+		for _, arg := range instr.Call.Args {
+			values.append(b.getValue(arg, getPos(instr)))
+		}
 
 	} else {
 		funcValue := b.getValue(instr.Call.Value, getPos(instr))
-
-		if _, ok := b.deferExprFuncs[instr.Call.Value]; !ok {
-			b.deferExprFuncs[instr.Call.Value] = len(b.allDeferFuncs)
-			b.allDeferFuncs = append(b.allDeferFuncs, &instr.Call)
-		}
-
-		callback := llvm.ConstInt(b.uintptrType, uint64(b.deferExprFuncs[instr.Call.Value]), false)
 
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields, followed by all parameters including the
@@ -538,7 +644,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 	if instr.Block() != b.currentBlock {
 		panic("block mismatch")
 	}
-	if !b.isInLoop() {
+	if !yield && !b.isInLoop() {
 		// This can safely use a stack allocation.
 		alloca = llvmutil.CreateEntryBlockAlloca(b.Builder, deferredCallType, "defer.alloca")
 	} else {
@@ -555,7 +661,19 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 	b.CreateStore(deferredCall, alloca)
 
 	// Push it on top of the linked list by replacing deferPtr.
-	b.CreateStore(alloca, b.deferPtr)
+	b.CreateStore(alloca, deferPtr)
+}
+
+// createRunDefersBlock branches to a block that will run all deferred functions
+// once they are all known.
+func (b *builder) createRunDefersBlock() {
+	run := b.insertBasicBlock("rundefers.block")
+	b.CreateBr(run)
+	b.runDefersBlock = append(b.runDefersBlock, run)
+
+	after := b.insertBasicBlock("rundefers.after")
+	b.SetInsertPointAtEnd(after)
+	b.afterDefersBlock = append(b.afterDefersBlock, after)
 }
 
 // createRunDefers emits code to run all deferred functions.
