@@ -203,7 +203,7 @@ func TestInterpLargeArray(t *testing.T) {
 }
 
 // TestInterpPartialPointer checks that a global which holds part of a pointer
-// is reported as an error instead of being written out as zero.
+// is stored at run time instead of being written out as zero.
 func TestInterpPartialPointer(t *testing.T) {
 	t.Parallel()
 	ctx := llvm.NewContext()
@@ -218,8 +218,11 @@ func TestInterpPartialPointer(t *testing.T) {
 	}
 	defer mod.Dispose()
 
-	if err := Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false); err != errUnsupportedInst {
-		t.Errorf("expected %v, got %v", errUnsupportedInst, err)
+	if err := Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(mod.String(), "store i16 %n, ptr @main.n") {
+		t.Errorf("store of a partial pointer is not done at run time:\n%s", mod.String())
 	}
 }
 
