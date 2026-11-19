@@ -4,6 +4,7 @@ package interp
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -117,6 +118,12 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 			return errorAt(inst, "interp: expected all instructions in "+initAll.Name()+" to be direct calls")
 		}
 		initCalls = append(initCalls, inst)
+	}
+
+	// Whole-program Run checks hwInit0/hwInit1 after PrepareRuntimeStartup links
+	// them to socInit*/boardInit*, while per-package RunFunc checks the hook names directly.
+	if err := r.markExternalBootHooks(mod, "runtime.hwInit0", "runtime.hwInit1"); err != nil {
+		return err
 	}
 
 	// Run initializers for each package. Once the package initializer is
@@ -249,6 +256,16 @@ func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug 
 		r.builder.SetCurrentDebugLocation(subprogram.SubprogramLine(), 0, subprogram, llvm.Metadata{})
 	}
 
+	if err := r.markExternalBootHooks(
+		mod,
+		"runtime.socInit0",
+		"runtime.socInit1",
+		"runtime.boardInit0",
+		"runtime.boardInit1",
+	); err != nil {
+		return err
+	}
+
 	// Run the initializer, filling the .init.tmp function.
 	if r.debug {
 		fmt.Fprintln(os.Stderr, "interp:", fn.Name())
@@ -332,6 +349,424 @@ func (r *runner) markExternalLoad(llvmValue llvm.Value) error {
 		}
 	}
 	return nil
+}
+
+func (r *runner) markExternalBootHooks(mod llvm.Module, names ...string) error {
+	for _, name := range names {
+		fn := mod.NamedFunction(name)
+		if !fn.IsNil() && !fn.IsDeclaration() {
+			if err := r.markExternalBootHook(fn); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// markExternalBootHook protects globals written by boot hooks without blocking
+// interp from folding globals that the hooks only read.
+func (r *runner) markExternalBootHook(fn llvm.Value) error {
+	mem := memoryView{r: r}
+	visited := map[llvm.Value]bool{}
+	if err := mem.markBootHookFunc(fn, visited); err != nil {
+		return err
+	}
+	for index, obj := range mem.objects {
+		if obj.marked > r.objects[index].marked {
+			r.objects[index].marked = obj.marked
+		}
+	}
+	return nil
+}
+
+func (mv *memoryView) markBootHookFunc(fn llvm.Value, visited map[llvm.Value]bool) error {
+	if fn.IsNil() || fn.IsDeclaration() || visited[fn] {
+		return nil
+	}
+	visited[fn] = true
+	fnName := fn.Name()
+	for bb := range llvmutil.BasicBlocks(fn) {
+		for inst := range llvmutil.Instructions(bb) {
+			if err := mv.markBootHookInst(fnName, inst, visited); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (mv *memoryView) markBootHookInst(callerName string, inst llvm.Value, visited map[llvm.Value]bool) error {
+	if isBranch(inst) || inst.InstructionOpcode() == llvm.Switch {
+		return nil
+	}
+	switch inst.InstructionOpcode() {
+	case llvm.Load:
+		if inst.Type().TypeKind() == llvm.PointerTypeKind && !isReadOnlyPtrUseChain(inst, map[llvm.Value]bool{}, map[llvm.Value]bool{}, true) {
+			return mv.markBootHookValue(inst.Operand(0), visited)
+		}
+		return mv.markReadOnlyPointer(inst.Operand(0), visited)
+	case llvm.ICmp:
+		return nil
+	case llvm.GetElementPtr, llvm.BitCast:
+		if isReadOnlyPtrUseChain(inst, map[llvm.Value]bool{}, map[llvm.Value]bool{}, false) {
+			return nil
+		}
+	case llvm.Call, llvm.Invoke:
+		callee := inst.CalledValue()
+		if callee.IsAInlineAsm().IsNil() {
+			if callee.IsAFunction().IsNil() {
+				return errorAt(inst, "interp: indirect call is not allowed in boot hook (in "+callerName+")")
+			}
+			fnName := callee.Name()
+			if isReadOnlyMetadataCall(fnName) {
+				return nil
+			}
+			if strings.HasPrefix(fnName, "interface:") {
+				return errorAt(inst, "interp: interface call is not allowed in boot hook (in "+callerName+")")
+			}
+			if isMemcpyOrMemmove(fnName) {
+				if err := mv.markBootHookValue(inst.Operand(0), visited); err != nil {
+					return err
+				}
+				return mv.markReadOnlyPointer(inst.Operand(1), visited)
+			}
+		}
+		for i := range inst.OperandsCount() {
+			op := inst.Operand(i)
+			if !op.IsABasicBlock().IsNil() {
+				continue
+			}
+			if !callee.IsAFunction().IsNil() && op == callee {
+				continue
+			}
+			if err := mv.markBootHookValue(op, visited); err != nil {
+				return err
+			}
+		}
+		if !callee.IsAFunction().IsNil() {
+			if skipBootHookCalleeBody(callee.Name()) {
+				return nil
+			}
+			return mv.markBootHookFunc(callee, visited)
+		}
+		return mv.markBootHookValue(callee, visited)
+	}
+
+	for i := range inst.OperandsCount() {
+		if err := mv.markBootHookValue(inst.Operand(i), visited); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (mv *memoryView) markReadOnlyPointer(val llvm.Value, visited map[llvm.Value]bool) error {
+	for {
+		if val.IsUndef() || val.IsNull() {
+			return nil
+		}
+		if !val.IsAInstruction().IsNil() {
+			switch val.InstructionOpcode() {
+			case llvm.GetElementPtr, llvm.BitCast:
+				val = val.Operand(0)
+				continue
+			}
+			return nil
+		}
+		if !val.IsAConstantExpr().IsNil() {
+			switch val.Opcode() {
+			case llvm.GetElementPtr, llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt:
+				val = val.Operand(0)
+				continue
+			}
+		}
+		break
+	}
+	if val.IsAGlobalVariable().IsNil() {
+		return nil
+	}
+	objectIndex := mv.r.getValue(val).(pointerValue).index()
+	obj := mv.get(objectIndex)
+	if obj.buffer != nil {
+		return mv.markExternalPointers(obj.buffer)
+	}
+	if initializer := val.Initializer(); !initializer.IsNil() {
+		return mv.markBootHookValue(initializer, visited)
+	}
+	return nil
+}
+
+// markBootHookValue keeps reachable functions and constant descriptors in boot-hook mode.
+func (mv *memoryView) markBootHookValue(llvmValue llvm.Value, visited map[llvm.Value]bool) error {
+	if llvmValue.IsUndef() || llvmValue.IsNull() {
+		return nil
+	}
+	if !llvmValue.IsAInstruction().IsNil() || !llvmValue.IsAArgument().IsNil() || !llvmValue.IsAInlineAsm().IsNil() {
+		return nil
+	}
+	if !llvmValue.IsAGlobalValue().IsNil() {
+		if !llvmValue.IsAFunction().IsNil() {
+			return mv.markBootHookFunc(llvmValue, visited)
+		}
+		if !llvmValue.IsAGlobalVariable().IsNil() {
+			if !llvmValue.IsGlobalConstant() {
+				return mv.markExternalStore(llvmValue)
+			}
+			if visited[llvmValue] {
+				return nil
+			}
+			visited[llvmValue] = true
+			if initializer := llvmValue.Initializer(); !initializer.IsNil() {
+				return mv.markBootHookValue(initializer, visited)
+			}
+			return nil
+		}
+		return nil
+	}
+	if !llvmValue.IsAConstantExpr().IsNil() {
+		switch llvmValue.Opcode() {
+		case llvm.IntToPtr, llvm.PtrToInt, llvm.BitCast, llvm.GetElementPtr:
+			return mv.markBootHookValue(llvmValue.Operand(0), visited)
+		case llvm.Add, llvm.Sub, llvm.Mul, llvm.UDiv, llvm.SDiv, llvm.URem, llvm.SRem, llvm.Shl, llvm.LShr, llvm.AShr, llvm.And, llvm.Or, llvm.Xor:
+			if err := mv.markBootHookValue(llvmValue.Operand(0), visited); err != nil {
+				return err
+			}
+			return mv.markBootHookValue(llvmValue.Operand(1), visited)
+		default:
+			return fmt.Errorf("interp: unknown constant expression '%s'", instructionNameMap[llvmValue.Opcode()])
+		}
+	}
+
+	llvmType := llvmValue.Type()
+	switch llvmType.TypeKind() {
+	case llvm.IntegerTypeKind, llvm.FloatTypeKind, llvm.DoubleTypeKind, llvm.VectorTypeKind:
+		return nil
+	case llvm.StructTypeKind:
+		numElements := llvmType.StructElementTypesCount()
+		for i := range numElements {
+			if err := mv.markBootHookValue(llvmValue.AggregateElement(i), visited); err != nil {
+				return err
+			}
+		}
+		return nil
+	case llvm.ArrayTypeKind:
+		numElements := llvmType.ArrayLength()
+		for i := range numElements {
+			if err := mv.markBootHookValue(llvmValue.AggregateElement(i), visited); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return errors.New("interp: unknown type kind in markBootHookValue")
+	}
+}
+
+func isReadOnlyPtrUseChain(val llvm.Value, seen, allocaSeen map[llvm.Value]bool, allowVolatileStore bool) bool {
+	if seen[val] {
+		return true
+	}
+	seen[val] = true
+	for user := range llvmutil.Uses(val) {
+		if user.IsAInstruction().IsNil() {
+			return false
+		}
+		switch user.InstructionOpcode() {
+		case llvm.Load:
+			if user.Operand(0) != val {
+				return false
+			}
+			if !isScalarType(user.Type()) && !isReadOnlyPtrUseChain(user, seen, allocaSeen, allowVolatileStore) {
+				return false
+			}
+		case llvm.Store:
+			if user.Operand(0) == val {
+				dst := stripLocalAllocaOffsets(user.Operand(1))
+				if dst.IsAAllocaInst().IsNil() || !isReadOnlyAllocaUseChain(dst, seen, allocaSeen, allowVolatileStore) {
+					return false
+				}
+				continue
+			}
+			// Volatile stores target MMIO registers when reached through a loaded pointer.
+			if !allowVolatileStore || !user.IsVolatile() || user.Operand(1) != val {
+				return false
+			}
+		case llvm.ICmp:
+			// Pointer comparisons (such as nil checks) never mutate or escape the pointee.
+		case llvm.GetElementPtr, llvm.BitCast:
+			if user.Operand(0) != val || !isReadOnlyPtrUseChain(user, seen, allocaSeen, allowVolatileStore) {
+				return false
+			}
+		case llvm.InsertValue:
+			if (user.Operand(0) != val && user.Operand(1) != val) || !isReadOnlyPtrUseChain(user, seen, allocaSeen, allowVolatileStore) {
+				return false
+			}
+		case llvm.ExtractValue:
+			if !isScalarType(user.Type()) && !isReadOnlyPtrUseChain(user, seen, allocaSeen, allowVolatileStore) {
+				return false
+			}
+		case llvm.PHI:
+			if !isReadOnlyPtrUseChain(user, seen, allocaSeen, allowVolatileStore) {
+				return false
+			}
+		case llvm.Select:
+			if user.Operand(0) == val || !isReadOnlyPtrUseChain(user, seen, allocaSeen, allowVolatileStore) {
+				return false
+			}
+		case llvm.Ret:
+			fn := user.InstructionParent().Parent()
+			for call := range llvmutil.Uses(fn) {
+				if call.IsAInstruction().IsNil() {
+					return false
+				}
+				op := call.InstructionOpcode()
+				if (op != llvm.Call && op != llvm.Invoke) || call.CalledValue() != fn {
+					return false
+				}
+				if !isReadOnlyPtrUseChain(call, seen, allocaSeen, allowVolatileStore) {
+					return false
+				}
+			}
+		case llvm.Call, llvm.Invoke:
+			callee := user.CalledValue()
+			if callee.IsAFunction().IsNil() {
+				return false
+			}
+			fnName := callee.Name()
+			if isReadOnlyMetadataCall(fnName) {
+				continue
+			}
+			if isMemcpyOrMemmove(fnName) {
+				// Only source operand 1 is read-only; aliasing with dst operand 0 writes.
+				if user.Operand(0) == val || user.Operand(1) != val {
+					return false
+				}
+				continue
+			}
+			if callee.IsDeclaration() {
+				if allowVolatileStore && isVolatileRegisterMethod(fnName) {
+					continue
+				}
+				return false
+			}
+			if callee.GlobalValueType().IsFunctionVarArg() {
+				return false
+			}
+			for i := range user.OperandsCount() {
+				op := user.Operand(i)
+				if op != val || op == callee {
+					continue
+				}
+				if i >= callee.ParamsCount() || !isReadOnlyPtrUseChain(callee.Param(i), seen, allocaSeen, allowVolatileStore) {
+					return false
+				}
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isReadOnlyAllocaUseChain(cur llvm.Value, seen, allocaSeen map[llvm.Value]bool, allowVolatileStore bool) bool {
+	if allocaSeen[cur] {
+		return true
+	}
+	allocaSeen[cur] = true
+	for user := range llvmutil.Uses(cur) {
+		if user.IsAInstruction().IsNil() {
+			return false
+		}
+		switch user.InstructionOpcode() {
+		case llvm.GetElementPtr, llvm.BitCast:
+			if user.Operand(0) != cur || !isReadOnlyAllocaUseChain(user, seen, allocaSeen, allowVolatileStore) {
+				return false
+			}
+		case llvm.Store:
+			if user.Operand(0) == cur || user.Operand(1) != cur {
+				return false
+			}
+		case llvm.Load:
+			if user.Operand(0) != cur {
+				return false
+			}
+			if !isScalarType(user.Type()) && !isReadOnlyPtrUseChain(user, seen, allocaSeen, allowVolatileStore) {
+				return false
+			}
+		case llvm.ICmp:
+		case llvm.Call, llvm.Invoke:
+			callee := user.CalledValue()
+			if callee.IsAFunction().IsNil() || !isReadOnlyMetadataCall(callee.Name()) {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func stripLocalAllocaOffsets(val llvm.Value) llvm.Value {
+	for !val.IsNil() && !val.IsAInstruction().IsNil() {
+		switch val.InstructionOpcode() {
+		case llvm.GetElementPtr, llvm.BitCast:
+			val = val.Operand(0)
+			continue
+		}
+		break
+	}
+	return val
+}
+
+func isScalarType(t llvm.Type) bool {
+	switch t.TypeKind() {
+	case llvm.IntegerTypeKind, llvm.FloatTypeKind, llvm.DoubleTypeKind, llvm.VectorTypeKind:
+		return true
+	}
+	return false
+}
+
+func isReadOnlyMetadataCall(name string) bool {
+	return name == "runtime.trackPointer" ||
+		name == "llvm.assume" ||
+		strings.HasPrefix(name, "llvm.dbg.") ||
+		strings.HasPrefix(name, "llvm.lifetime.")
+}
+
+func isVolatileRegisterMethod(name string) bool {
+	return strings.HasPrefix(name, "(*runtime/volatile.Register")
+}
+
+func isMemcpyOrMemmove(name string) bool {
+	return strings.HasPrefix(name, "llvm.memcpy.") || strings.HasPrefix(name, "llvm.memmove.")
+}
+
+// skipBootHookCalleeBody reports runtime allocator and panic helpers whose
+// bodies should not be walked during boot-hook analysis.
+func skipBootHookCalleeBody(name string) bool {
+	switch name {
+	case "runtime.alloc",
+		"runtime.alloc_noheap",
+		"runtime.alloc_zero",
+		"runtime._panic",
+		"runtime.runtimePanic",
+		"runtime.runtimePanicAt",
+		"runtime.runtimePanicSchedulerDisabled",
+		"runtime.runtimeFatal",
+		"runtime.abort",
+		"runtime.nilPanic",
+		"runtime.nilMapPanic",
+		"runtime.lookupPanic",
+		"runtime.slicePanic",
+		"runtime.sliceToArrayPointerPanic",
+		"runtime.unsafeSlicePanic",
+		"runtime.chanMakePanic",
+		"runtime.negativeShiftPanic",
+		"runtime.divideByZeroPanic",
+		"runtime.blockingPanic":
+		return true
+	}
+	return false
 }
 
 // These must stay the same as the generators in src/runtime/algorithm.go, so
