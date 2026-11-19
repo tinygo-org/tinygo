@@ -18,6 +18,11 @@ func GetRNG() (uint32, error) {
 		return readRNG(CPUFrequency() / peripheralClock * 16), nil
 	}
 
+	// The SAR ADC entropy source needs I2S0, so leave it alone if a driver has its clock on.
+	if esp.DPORT.GetPERIP_CLK_EN_I2S0_CLK_EN() != 0 {
+		return 0, ErrClockRNG
+	}
+
 	testMux := esp.RTC_CNTL.TEST_MUX.Get()
 	startForce := esp.SENS.SAR_START_FORCE.Get()
 	measWait2 := esp.SENS.SAR_MEAS_WAIT2.Get()
@@ -29,7 +34,6 @@ func GetRNG() (uint32, error) {
 	patt2 := esp.APB_CTRL.APB_SARADC_SAR2_PATT_TAB2.Get()
 	patt3 := esp.APB_CTRL.APB_SARADC_SAR2_PATT_TAB3.Get()
 	patt4 := esp.APB_CTRL.APB_SARADC_SAR2_PATT_TAB4.Get()
-	i2sClk := esp.DPORT.GetPERIP_CLK_EN_I2S0_CLK_EN()
 
 	esp.RTC_CNTL.SetTEST_MUX_DTEST_RTC(2)
 	esp.RTC_CNTL.SetTEST_MUX_ENT_RTC(1)
@@ -69,7 +73,7 @@ func GetRNG() (uint32, error) {
 	esp.I2S0.SetCONF_RX_START(0)
 	esp.DPORT.SetPERIP_RST_EN_I2S0_RST(1)
 	esp.DPORT.SetPERIP_RST_EN_I2S0_RST(0)
-	esp.DPORT.SetPERIP_CLK_EN_I2S0_CLK_EN(i2sClk)
+	esp.DPORT.SetPERIP_CLK_EN_I2S0_CLK_EN(0)
 
 	esp.APB_CTRL.APB_SARADC_SAR2_PATT_TAB1.Set(patt1)
 	esp.APB_CTRL.APB_SARADC_SAR2_PATT_TAB2.Set(patt2)
