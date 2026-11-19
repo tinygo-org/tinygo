@@ -430,6 +430,13 @@ func (f *cgoFile) createASTNode(name string, c clangCursor) (ast.Node, any) {
 	}
 }
 
+// Return whether this cursor is a typedef, like this:
+//
+//	typedef unsigned char flag_t;
+func (f *cgoFile) isTypedef(c clangCursor) bool {
+	return C.tinygo_clang_getCursorKind(c) == C.CXCursor_TypedefDecl
+}
+
 // Return whether this is a macro that's also function-like, like this:
 //
 //	#define add(a, b) (a+b)
