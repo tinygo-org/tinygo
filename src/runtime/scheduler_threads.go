@@ -21,9 +21,11 @@ var (
 // Because we just use OS threads, we don't need to do anything special here. We
 // can just initialize everything and run main.main on the main thread.
 func run() {
+	hwInit0()
 	initRand()
 	initHeap()
 	task.Init(stackTop)
+	hwInit1()
 	initAll()
 	callMain()
 }

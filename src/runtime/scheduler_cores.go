@@ -249,10 +249,12 @@ func sleep(duration int64) {
 // This function is called on the first core in the system. It will wake up the
 // other cores when ready.
 func run() {
+	hwInit0()
 	initRand()
 	initHeap()
 
 	go func() {
+		hwInit1()
 		// Package initializers are currently run single-threaded.
 		// This might help with registering interrupts and such.
 		initAll()
