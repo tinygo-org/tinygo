@@ -314,9 +314,11 @@ func sleep(duration int64) {
 // run is called by the program entry point to execute the go program.
 // With a scheduler, init and the main function are invoked in a goroutine before starting the scheduler.
 func run() {
+	hwInit0()
 	initRand()
 	initHeap()
 	go func() {
+		hwInit1()
 		initAll()
 		callMain()
 		mainExited = true
