@@ -76,6 +76,7 @@ type TargetSpec struct {
 	RelocationModel  string   `json:"relocation-model,omitempty"`
 	WITPackage       string   `json:"wit-package,omitempty"`
 	WITWorld         string   `json:"wit-world,omitempty"`
+	BoardPackage     string   `json:"board-package,omitempty"`
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.
@@ -142,8 +143,13 @@ func (spec *TargetSpec) load(r io.Reader) error {
 //     as well as path to custom files (ex. myAwesomeProject.json)
 func (spec *TargetSpec) loadFromGivenStr(str string) error {
 	path := ""
-	if strings.HasSuffix(str, ".json") {
-		path, _ = filepath.Abs(str)
+	isPath := strings.HasSuffix(str, ".json")
+	if isPath {
+		absPath, err := filepath.Abs(str)
+		if err != nil {
+			return err
+		}
+		path = absPath
 	} else {
 		path = filepath.Join(goenv.Get("TINYGOROOT"), "targets", strings.ToLower(str)+".json")
 	}
@@ -152,7 +158,89 @@ func (spec *TargetSpec) loadFromGivenStr(str string) error {
 		return err
 	}
 	defer fp.Close()
-	return spec.load(fp)
+	if err := spec.load(fp); err != nil {
+		return err
+	}
+	if isPath && isExternalTargetPath(path) {
+		if err := spec.resolveRelativePaths(filepath.Dir(path)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isExternalTargetPath(absPath string) bool {
+	builtinDir := filepath.Join(goenv.Get("TINYGOROOT"), "targets")
+	if absBuiltin, err := filepath.Abs(builtinDir); err == nil {
+		builtinDir = absBuiltin
+	}
+	rel, err := filepath.Rel(builtinDir, absPath)
+	if err != nil {
+		return true
+	}
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// TargetDir returns the absolute directory of an external target .json file,
+// or "" for built-in targets.
+func (c *Config) TargetDir() string {
+	if c == nil || c.Options == nil || !strings.HasSuffix(c.Options.Target, ".json") {
+		return ""
+	}
+	absPath, err := filepath.Abs(c.Options.Target)
+	if err != nil || !isExternalTargetPath(absPath) {
+		return ""
+	}
+	return filepath.Dir(absPath)
+}
+
+// resolveRelativePaths rewrites relative linkerscript, extra-files, and .json
+// inherits entries to absolute paths when they exist under baseDir.
+func (spec *TargetSpec) resolveRelativePaths(baseDir string) error {
+	var err error
+	spec.LinkerScript, err = resolveFileRelativePath(baseDir, "linkerscript", spec.LinkerScript)
+	if err != nil {
+		return err
+	}
+	for i, ef := range spec.ExtraFiles {
+		spec.ExtraFiles[i], err = resolveFileRelativePath(baseDir, "extra-files", ef)
+		if err != nil {
+			return err
+		}
+	}
+	for i, inh := range spec.Inherits {
+		if strings.HasSuffix(inh, ".json") {
+			spec.Inherits[i] = resolveInheritRelativePath(baseDir, inh)
+		}
+	}
+	return nil
+}
+
+func resolveFileRelativePath(baseDir, field, p string) (string, error) {
+	if p == "" || filepath.IsAbs(p) {
+		return p, nil
+	}
+	rel := filepath.FromSlash(p)
+	cand := filepath.Join(baseDir, rel)
+	if _, err := os.Stat(cand); err == nil {
+		return cand, nil
+	}
+	root := goenv.Get("TINYGOROOT")
+	if _, err := os.Stat(filepath.Join(root, rel)); err == nil {
+		return p, nil
+	}
+	return "", fmt.Errorf("%s %q not found in %s or TINYGOROOT (%s)", field, p, baseDir, root)
+}
+
+func resolveInheritRelativePath(baseDir, p string) string {
+	if p == "" || filepath.IsAbs(p) {
+		return p
+	}
+	cand := filepath.Join(baseDir, filepath.FromSlash(p))
+	if _, err := os.Stat(cand); err == nil {
+		return cand
+	}
+	return p
 }
 
 // resolveInherits loads inherited targets, recursively.
