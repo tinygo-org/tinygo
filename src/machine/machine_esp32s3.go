@@ -25,6 +25,21 @@ func CurrentCore() int {
 //go:linkname currentCPU runtime.currentCPU
 func currentCPU() uint32
 
+//go:linkname esp32s3PSRAM runtime.esp32s3PSRAM
+func esp32s3PSRAM() (uintptr, int)
+
+// PSRAM returns a slice covering the remaining external PSRAM after any
+// static //go:section .psram variables. Returns nil if PSRAM is not enabled.
+// The returned memory is not zero-initialized and is not scanned by the GC,
+// so it must not be used to store pointers.
+func PSRAM() []byte {
+	start, length := esp32s3PSRAM()
+	if length == 0 {
+		return nil
+	}
+	return unsafe.Slice((*byte)(unsafe.Pointer(start)), length)
+}
+
 // NumCores returns number of cores available on the device.
 func NumCores() int { return 2 }
 
