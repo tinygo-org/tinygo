@@ -1,7 +1,7 @@
 {
 	"inherits": ["cortex-m4"],
 	"default-stack-size": 8192,
-	"build-tags": ["nrf52840", "nrf", "machine.uart", "machine.spi"],
+	"build-tags": ["nrf52840", "nrf", "machine.uart", "machine.spi", "machine.i2c"],
 	"cflags": [
 		"-DNRF52840_XXAA",
 		"-I{root}/lib/CMSIS/CMSIS/Include",

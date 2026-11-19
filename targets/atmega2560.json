@@ -1,7 +1,7 @@
 {
     "inherits": ["avr"],
     "cpu": "atmega2560",
-    "build-tags": ["atmega2560", "atmega", "machine.uart", "machine.spi"],
+    "build-tags": ["atmega2560", "atmega", "machine.uart", "machine.spi", "machine.i2c"],
     "serial": "uart",
     "ldflags": [
         "--defsym=_stack_size=512"

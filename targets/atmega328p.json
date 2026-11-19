@@ -1,7 +1,7 @@
 {
 	"inherits": ["avr"],
 	"cpu": "atmega328p",
-	"build-tags": ["atmega328p", "atmega", "machine.uart", "machine.spi"],
+	"build-tags": ["atmega328p", "atmega", "machine.uart", "machine.spi", "machine.i2c"],
 	"serial": "uart",
 	"linkerscript": "src/device/avr/atmega328p.ld",
 	"extra-files": [

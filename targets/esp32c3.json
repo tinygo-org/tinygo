@@ -9,6 +9,7 @@
 		"esp",
 		"machine.uart",
 		"machine.spi",
+		"machine.i2c",
 		"espradio"
 	],
 	"serial": "usb",

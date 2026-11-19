@@ -1,7 +1,7 @@
 {
     "inherits": ["cortex-m33"],
     "inheritable-only": true,
-    "build-tags": ["rp2350", "machine.uart", "machine.spi", "rp"],
+    "build-tags": ["rp2350", "machine.uart", "machine.spi", "machine.i2c", "rp"],
     "scheduler": "tasks",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",

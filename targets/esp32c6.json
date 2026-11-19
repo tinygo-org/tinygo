@@ -8,6 +8,7 @@
 		"esp32c6",
 		"esp",
 		"machine.uart",
+		"machine.i2c",
 		"espradio"
 	],
 	"serial": "usb",
