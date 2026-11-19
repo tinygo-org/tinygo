@@ -1,7 +1,7 @@
 {
     "inherits": ["cortex-m0plus"],
     "inheritable-only": true,
-    "build-tags": ["rp2040", "rp"],
+    "build-tags": ["rp2040", "rp", "socinit"],
     "scheduler": "tasks",
     "flash-1200-bps-reset": "true",
     "flash-method": "msd",

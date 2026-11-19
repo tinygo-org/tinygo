@@ -13,6 +13,10 @@ func CPUFrequency() uint32 {
 	return cpuFreq
 }
 
+func xtalFreqHz() uint32 {
+	return xoscFreq * MHz
+}
+
 // clockIndex identifies a hardware clock
 type clockIndex uint8
 
@@ -42,10 +46,6 @@ type clock struct {
 	cix clockIndex
 }
 
-// The delay in seconds for core voltage adjustments to
-// settle. Taken from the Pico SDK.
-const _VREG_VOLTAGE_AUTO_ADJUST_DELAY = 1 / 1e3
-
 // clock returns the clock identified by cix.
 func (clks *clocksType) clock(cix clockIndex) clock {
 	return clock{
@@ -65,7 +65,7 @@ func (clks *clocksType) clock(cix clockIndex) clock {
 // no constraints on its inputs.
 //
 // Not all clocks have both types of mux.
-func (clk *clock) hasGlitchlessMux() bool {
+func (clk clock) hasGlitchlessMux() bool {
 	return clk.cix == clkSys || clk.cix == clkRef
 }
 
@@ -73,7 +73,7 @@ func (clk *clock) hasGlitchlessMux() bool {
 // and the auxiliary clock source auxsrc
 // and finally setting the clock frequency to freq
 // given the input clock source frequency srcFreq.
-func (clk *clock) configure(src, auxsrc, srcFreq, freq uint32) {
+func (clk clock) configure(src, auxsrc, srcFreq, freq uint32) {
 	if freq > srcFreq {
 		panic("clock frequency cannot be greater than source frequency")
 	}
@@ -148,7 +148,7 @@ var pllsysFB, pllsysPD1, pllsysPD2 uint32
 // Note that the entire init function is computed at compile time
 // by interp.
 func init() {
-	fb, _, pd1, pd2, err := calcPLLDivs(pllSearch{LockRefDiv: 1}, xoscFreq*MHz, cpuFreq, MHz)
+	fb, _, pd1, pd2, err := calcPLLDivs(pllSearch{LockRefDiv: 1}, uint64(xtalFreqHz()), cpuFreq, MHz)
 	if err != nil {
 		panic(err)
 	}
@@ -159,8 +159,10 @@ func init() {
 //
 // Must be called before any other clock function.
 func (clks *clocksType) init() {
+	xtalHz := xtalFreqHz()
+
 	// Start the watchdog tick
-	Watchdog.startTick(xoscFreq)
+	Watchdog.startTick(xtalHz / MHz)
 
 	// Disable resus that may be enabled from previous software
 	rp.CLOCKS.SetCLK_SYS_RESUS_CTRL_CLEAR(0)
@@ -189,13 +191,13 @@ func (clks *clocksType) init() {
 	cref := clks.clock(clkRef)
 	cref.configure(rp.CLOCKS_CLK_REF_CTRL_SRC_XOSC_CLKSRC,
 		0, // No aux mux
-		xoscFreq,
-		xoscFreq)
+		xtalHz,
+		xtalHz)
 
 	if adjustCoreVoltage() {
 		// Wait for the voltage to settle.
-		const cycles = _VREG_VOLTAGE_AUTO_ADJUST_DELAY * xoscFreq * MHz
-		for i := 0; i < cycles; i++ {
+		cycles := xtalHz / 1000
+		for i := uint32(0); i < cycles; i++ {
 			arm.Asm("nop")
 		}
 	}

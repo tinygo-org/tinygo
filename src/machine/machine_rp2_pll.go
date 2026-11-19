@@ -33,7 +33,8 @@ var (
 //
 // Post Divider 2, postDiv2 with range 1-7.
 func (pll *pll) init(refdiv, fbdiv, postDiv1, postDiv2 uint32) {
-	refFreq := xoscFreq / refdiv
+	xtalMHz := xtalFreqHz() / MHz
+	refFreq := xtalMHz / refdiv
 
 	// What are we multiplying the reference clock by to get the vco freq
 	// (The regs are called div, because you divide the vco output and compare it to the refclk)
@@ -57,7 +58,7 @@ func (pll *pll) init(refdiv, fbdiv, postDiv1, postDiv2 uint32) {
 	}
 
 	// Check that reference frequency is no greater than vcoFreq / 16
-	vcoFreq := calcVCO(xoscFreq, fbdiv, refdiv)
+	vcoFreq := calcVCO(xtalMHz, fbdiv, refdiv)
 	if refFreq > vcoFreq/16 {
 		panic("reference frequency should not be greater than vco frequency divided by 16")
 	}
