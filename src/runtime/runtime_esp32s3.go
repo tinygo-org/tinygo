@@ -75,7 +75,7 @@ func main() {
 		clearbss()
 	}
 
-	// Initialize PSRAM if numa_psram_* build tag is enabled.
+	// Initialize PSRAM if the machine.psram build tag is set.
 	if err := initPSRAM(); err != "" {
 		psramInitErr = err
 		volatile.StoreUint8(&psramInitFailed, 1)
@@ -100,14 +100,7 @@ func main() {
 var (
 	psramInitFailed uint8
 	psramInitErr    string
-	psramFreeStart  uintptr
-	psramFreeLen    int
 )
-
-func esp32s3PSRAM() (uintptr, int) {
-	return uintptr(volatile.LoadUint32((*uint32)(unsafe.Pointer(&psramFreeStart)))),
-		int(volatile.LoadUint32((*uint32)(unsafe.Pointer(&psramFreeLen))))
-}
 
 func init() {
 	// Initialize UART.
@@ -115,7 +108,7 @@ func init() {
 	// Use volatile load so compile-time interp does not fold this away before
 	// main() runs initPSRAM(). Note: with -serial=usb, the host may miss this
 	// panic if the port is not yet open.
-	if volatile.LoadUint8(&psramInitFailed) != 0 {
+	if hasPSRAM && volatile.LoadUint8(&psramInitFailed) != 0 {
 		panic(psramInitErr)
 	}
 }

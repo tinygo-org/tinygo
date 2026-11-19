@@ -1,8 +1,8 @@
-//go:build esp32s3 && numa_psram_octal
+//go:build esp32s3 && machine.psram
 
 // Shared PSRAM support for ESP32-S3: linker symbols, MMU/ROM-call helpers,
 // and address-map documentation for the Octal SPI driver
-// (runtime_esp32_psram_octal.go, build tag numa_psram_octal).
+// (machine_esp32s3_psram_octal.go, build tag machine.psram).
 // Everything protocol-specific (SPI1 command sequencing, chip ID/mode
 // register parsing, SPI0 cache-phase configuration) lives in that file.
 //
@@ -36,7 +36,23 @@
 //	that no stale cache lines survive the remap.
 package runtime
 
-import "unsafe"
+import (
+	"runtime/volatile"
+	"unsafe"
+)
+
+const hasPSRAM = true
+
+var (
+	psramFreeStart uintptr
+	psramFreeLen   int
+)
+
+// machinePSRAM returns the PSRAM left after the .psram section, for machine.PSRAM.
+func machinePSRAM() (uintptr, int) {
+	return uintptr(volatile.LoadUint32((*uint32)(unsafe.Pointer(&psramFreeStart)))),
+		int(volatile.LoadUint32((*uint32)(unsafe.Pointer(&psramFreeLen))))
+}
 
 //go:extern _spsram
 var _spsram [0]byte
