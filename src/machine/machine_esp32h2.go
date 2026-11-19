@@ -309,41 +309,30 @@ type registerSet struct {
 	gpioMatrixSignal uint32
 }
 
-func (uart *UART) Configure(config UARTConfig) error {
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
-	if uart.Bus == esp.UART0 && config.TX == 0 && config.RX == 0 {
-		config.TX = UART0_TX_PIN
-		config.RX = UART0_RX_PIN
-	}
-	if config.TX == config.RX {
-		return errSamePins
-	}
-	switch {
-	case uart.Bus == esp.UART0:
-		return uart.configure(config, registerSet{
+func busFor(bus *esp.UART_Type) registerSet {
+	switch bus {
+	case esp.UART0:
+		return registerSet{
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART0_INTR_MAP,
 			gpioMatrixSignal: 6,
-		})
-	case uart.Bus == esp.UART1:
-		return uart.configure(config, registerSet{
+		}
+	case esp.UART1:
+		return registerSet{
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART1_INTR_MAP,
 			gpioMatrixSignal: 9,
-		})
+		}
+	default:
+		return registerSet{}
 	}
-	return errWrongUART
 }
 
 func (uart *UART) configure(config UARTConfig, regs registerSet) error {
-	initUARTClock(uart.Bus)
-
 	// - disable TX/RX clock to make sure the UART transmitter or receiver is not at work during configuration
 	uart.Bus.SetCLK_CONF_TX_SCLK_EN(0)
 	uart.Bus.SetCLK_CONF_SCLK_EN(0)
 
 	uart.SetBaudRate(config.BaudRate)
-	uart.SetFormat(defaultDataBits, defaultStopBit, defaultParity)
+	uart.setFormat(defaultDataBits, defaultStopBit, defaultParity)
 
 	// - set UART mode
 	uart.Bus.SetRS485_CONF_RS485_EN(0)
@@ -367,13 +356,15 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 	return nil
 }
 
-func (uart *UART) SetFormat(dataBits, stopBits int, parity UARTParity) error {
-	if dataBits < 5 {
-		return errWrongBitSize
+// uartSync copies the configuration registers into the UART core clock domain.
+// See ESP-IDF hal/esp32h2/include/hal/uart_ll.h uart_ll_update.
+func uartSync(bus *esp.UART_Type) {
+	bus.SetREG_UPDATE(1)
+	for bus.GetREG_UPDATE() != 0 {
 	}
-	if stopBits > 1 {
-		return errWrongStopBitSize
-	}
+}
+
+func (uart *UART) setFormat(dataBits, stopBits int, parity UARTParity) {
 	// - data length
 	uart.Bus.SetCONF0_BIT_NUM(uint32(dataBits - 5))
 	// - stop bit
@@ -389,10 +380,9 @@ func (uart *UART) SetFormat(dataBits, stopBits int, parity UARTParity) error {
 		uart.Bus.SetCONF0_PARITY_EN(1)
 		uart.Bus.SetCONF0_PARITY(1)
 	}
-	return nil
 }
 
-func initUARTClock(bus *esp.UART_Type) {
+func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 	// The UART clock is in PCR. SCLK_SEL 3 is the 32MHz XTAL.
 	// See ESP-IDF esp_hal_uart/esp32h2/include/hal/uart_ll.h uart_ll_set_sclk.
 	switch bus {
@@ -444,23 +434,7 @@ func (uart *UART) SetBaudRate(baudRate uint32) {
 	}
 }
 
-func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
-	config.RX.Configure(PinConfig{Mode: PinInputPullup})
-	config.TX.Configure(PinConfig{Mode: PinInputPullup})
-
-	// link TX with GPIO signal X (technical reference manual, GPIO matrix)
-	if config.InvertTX {
-		config.TX.outFunc().Set(regs.gpioMatrixSignal | esp.GPIO_FUNC_OUT_SEL_CFG_INV_SEL)
-	} else {
-		config.TX.outFunc().Set(regs.gpioMatrixSignal)
-	}
-	// link RX with GPIO signal X and route signals via GPIO matrix
-	if config.InvertRX {
-		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX) | esp.GPIO_FUNC_IN_SEL_CFG_IN_INV_SEL)
-	} else {
-		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX))
-	}
-}
+func uartEnableTX(pin Pin) {}
 
 func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) {
 	// Disable all UART interrupts
