@@ -459,3 +459,19 @@ func (uart *UART) writeByte(b byte) error {
 	uart.Bus.FIFO.Set(uint32(b))
 	return nil
 }
+
+// GetRNG returns 32-bit random numbers from the ESP32-C6 true random number generator.
+// The noise sources are RC_FAST_CLK and the SAR ADC, ESP32-C6 TRM v1.1 chapter 22.
+func GetRNG() (ret uint32, err error) {
+	if esp.LP_PERI.GetCLK_EN_RNG_CK_EN() == 0 {
+		esp.LP_PERI.SetCLK_EN_RNG_CK_EN(1)
+	}
+	if esp.LP_CLKRST.GetCLK_TO_HP_ICG_HP_FOSC() == 0 {
+		esp.LP_CLKRST.SetCLK_TO_HP_ICG_HP_FOSC(1)
+	}
+	if esp.PCR.GetSARADC_CLKM_CONF_SARADC_CLKM_EN() == 0 {
+		esp.PCR.SetSARADC_CONF_SARADC_REG_CLK_EN(1)
+		esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1)
+	}
+	return esp.LP_PERI.GetRNG_DATA(), nil
+}
