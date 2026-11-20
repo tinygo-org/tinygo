@@ -703,6 +703,20 @@ const PSRAMFramebufferBytes = 1024 * 600 * 2
 // psramFramebufferPages is the number of 64KB MMU pages needed for one frame.
 const psramFramebufferPages = (PSRAMFramebufferBytes + psramPageSize - 1) / psramPageSize
 
+//go:extern _psram_end
+var _psram_end [0]byte
+
+// psramMappedPages returns the number of 64KB MMU pages in the linker-defined
+// PSRAM window. The P4 linker script provides a 32MB default, which a target
+// may override with psram-size.
+func psramMappedPages() uint32 {
+	end := uintptr(unsafe.Pointer(&_psram_end))
+	if end <= PSRAMBase {
+		return 0
+	}
+	return uint32((end - PSRAMBase) / psramPageSize)
+}
+
 // InitPSRAM80MHz performs the full AP-Hex PSRAM bring-up used by the working
 // CrowPanel V1.2 example: MPLL=320MHz, PSRAM bus=80MHz, x16 hex mode,
 // 2048-byte pages, DLL enabled, then chip mode-register init over MSPI3.
@@ -727,7 +741,7 @@ func InitPSRAM80MHz() bool {
 	// Now configure the system controller (MSPI2) for cache/AXI access and map
 	// the physical pages into the CPU data address space.
 	ConfigurePSRAMController()
-	MapPSRAM(psramVAddrBase, 0, psramFramebufferPages)
+	MapPSRAM(psramVAddrBase, 0, psramMappedPages())
 
 	return PSRAMValidate(psramVAddrBase, PSRAMFramebufferBytes)
 }
