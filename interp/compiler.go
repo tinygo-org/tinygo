@@ -80,8 +80,8 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 		params:     llvmFn.Params(),
 		attributes: llvmutil.ReadFunctionUsageAttributes(llvmFn),
 	}
-	if llvmFn.IsDeclaration() {
-		// Nothing to do.
+	if llvmFn.IsDeclaration() || llvmFn.Linkage() == llvm.WeakAnyLinkage {
+		// Weak definitions can be overridden during LTO linking.
 		return fn
 	}
 
