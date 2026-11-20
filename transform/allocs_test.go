@@ -276,3 +276,36 @@ func TestAllocs2(t *testing.T) {
 	}
 	checkGolden(t, goldenFile+".cover", got.String())
 }
+
+func TestAllocsRuntimeCallers(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	buf, err := llvm.NewMemoryBufferFromFile("testdata/allocs-runtime-callers.ll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+
+	count := func(re string) (n int, reasons string) {
+		transform.OptimizeAllocs(mod, regexp.MustCompile(re), 256, func(_ token.Position, reason string) {
+			n++
+			reasons += reason + "\n"
+		})
+		return
+	}
+	// The allocation is reported once at each of the two calls from main.
+	n, reasons := count(`^main\.`)
+	if n != 2 || !strings.Contains(reasons, "allocated in runtime.grow") {
+		t.Errorf("^main\\.: got %d reports, want 2 mentioning runtime.grow:\n%s", n, reasons)
+	}
+	// Matching the runtime function itself still reports the allocation.
+	if n, reasons = count(`^runtime\.grow$`); n != 1 || strings.Contains(reasons, "allocated in") {
+		t.Errorf("^runtime.grow$: got %d reports, want 1 plain report:\n%s", n, reasons)
+	}
+}
