@@ -1,0 +1,4 @@
+{
+	"inherits": ["esp32-generic"],
+	"build-tags": ["machine.psram"]
+}

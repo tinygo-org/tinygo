@@ -1,7 +1,7 @@
 package main
 
 // This example demonstrates how to use external PSRAM on supported targets
-// (e.g., -target=esp32s3-psram-octal).
+// (e.g., -target=esp32s3-psram-octal or -target=esp32-psram).
 //
 // Variables placed in the `.psram` section via the `//go:section .psram`
 // pragma are stored in external PSRAM rather than internal SRAM.
