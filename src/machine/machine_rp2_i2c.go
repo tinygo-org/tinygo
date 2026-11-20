@@ -199,7 +199,7 @@ func (i2c *I2C) SetBaudRate(br uint32) error {
 	i2c.Bus.IC_FS_SCL_HCNT.Set(hcnt)
 	i2c.Bus.IC_FS_SCL_LCNT.Set(lcnt)
 
-	i2c.Bus.IC_FS_SPKLEN.Set(u32max(1, lcnt/16))
+	i2c.Bus.IC_FS_SPKLEN.Set(max(1, lcnt/16))
 
 	i2c.Bus.IC_SDA_HOLD.ReplaceBits(sdaTxHoldCnt<<rp.I2C0_IC_SDA_HOLD_IC_SDA_TX_HOLD_Pos, rp.I2C0_IC_SDA_HOLD_IC_SDA_TX_HOLD_Msk, 0)
 	i2c.enable()
