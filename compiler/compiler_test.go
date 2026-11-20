@@ -15,9 +15,9 @@ import (
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/internal/ir"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"

@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"

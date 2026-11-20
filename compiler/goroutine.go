@@ -7,7 +7,7 @@ import (
 	"go/token"
 	"go/types"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
