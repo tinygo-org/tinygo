@@ -567,7 +567,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 				if pkgInit.IsNil() {
 					panic("init not found for " + pkg.Pkg.Path())
 				}
-				err := interp.RunFunc(pkgInit, config.Options.InterpTimeout, config.Options.InterpMaxLoopIterations, config.DumpSSA())
+				err := interp.RunFunc(pkgInit, config.Options.InterpTimeout, config.Options.InterpMaxLoopIterations, config.Options.InterpMaxHashmapOperations, config.DumpSSA())
 				if err != nil {
 					return err
 				}
@@ -1429,7 +1429,7 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	if err := transform.PrepareRuntimeStartup(mod); err != nil {
 		return err
 	}
-	err := interp.Run(mod, config.Options.InterpTimeout, config.Options.InterpMaxLoopIterations, config.DumpSSA())
+	err := interp.Run(mod, config.Options.InterpTimeout, config.Options.InterpMaxLoopIterations, config.Options.InterpMaxHashmapOperations, config.DumpSSA())
 	if err != nil {
 		return err
 	}

@@ -12,12 +12,13 @@ import (
 // module must outlive the output job on a target without automatic stack sizes.
 func TestPrintStacksWithoutAutomaticStackSize(t *testing.T) {
 	options := compileopts.Options{
-		Target:                  "wasip1",
-		Opt:                     "z",
-		Semaphore:               sema,
-		InterpTimeout:           60 * time.Second,
-		InterpMaxLoopIterations: interp.DefaultMaxInterpBlockEntries,
-		PrintStacks:             true,
+		Target:                     "wasip1",
+		Opt:                        "z",
+		Semaphore:                  sema,
+		InterpTimeout:              60 * time.Second,
+		InterpMaxLoopIterations:    interp.DefaultMaxInterpBlockEntries,
+		InterpMaxHashmapOperations: interp.DefaultMaxInterpHashmapOperations,
+		PrintStacks:                true,
 	}
 	target, err := compileopts.LoadTarget(&options)
 	if err != nil {
