@@ -46,6 +46,9 @@ MEMORY
      * A single region covers both IROM (code) and DROM (rodata).
      */
     FLASH (rx)  : ORIGIN = 0x40000000, LENGTH = 64M
+
+    /* External PSRAM, mapped at the P4 PSRAM virtual base. */
+    PSRAM (rw)  : ORIGIN = 0x48000000, LENGTH = 32M
 }
 
 /* The entry point. It is set in the image flashed to the chip, so must be
@@ -160,6 +163,14 @@ SECTIONS
         . = ALIGN (4);
     } > FLASH
 
+    .psram (NOLOAD) : ALIGN(4)
+    {
+        _spsram = ABSOLUTE(.);
+        *(.psram .psram.*)
+        . = ALIGN(16);
+        _epsram = ABSOLUTE(.);
+    } > PSRAM
+
     /DISCARD/ :
     {
         *(.eh_frame)     /* we don't do exception handling in C */
@@ -181,6 +192,9 @@ SECTIONS
  * (.iram lies between them and contains only code; scanning it is harmless
  *  for the conservative GC.)
  */
+_psram_start = ORIGIN(PSRAM);
+_psram_end = ORIGIN(PSRAM) + LENGTH(PSRAM);
+
 _globals_start = _sdata;
 _globals_end = _ebss;
 
