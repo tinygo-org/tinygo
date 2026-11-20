@@ -329,7 +329,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 						panic("unknown type: " + elementType.String())
 					}
 				}
-			case llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt:
+			case llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt, llvmutil.PtrToAddr:
 				// Bitcasts are usually used to cast a pointer from one type to
 				// another leaving the pointer itself intact.
 				inst.name = llvmInst.Name()
@@ -482,18 +482,19 @@ var instructionNameMap = [...]string{
 	llvm.AtomicRMW:     "atomicrmw",
 
 	// Cast Operators
-	llvm.Trunc:    "trunc",
-	llvm.ZExt:     "zext",
-	llvm.SExt:     "sext",
-	llvm.FPToUI:   "fptoui",
-	llvm.FPToSI:   "fptosi",
-	llvm.UIToFP:   "uitofp",
-	llvm.SIToFP:   "sitofp",
-	llvm.FPTrunc:  "fptrunc",
-	llvm.FPExt:    "fpext",
-	llvm.PtrToInt: "ptrtoint",
-	llvm.IntToPtr: "inttoptr",
-	llvm.BitCast:  "bitcast",
+	llvm.Trunc:         "trunc",
+	llvm.ZExt:          "zext",
+	llvm.SExt:          "sext",
+	llvm.FPToUI:        "fptoui",
+	llvm.FPToSI:        "fptosi",
+	llvm.UIToFP:        "uitofp",
+	llvm.SIToFP:        "sitofp",
+	llvm.FPTrunc:       "fptrunc",
+	llvm.FPExt:         "fpext",
+	llvm.PtrToInt:      "ptrtoint",
+	llvmutil.PtrToAddr: "ptrtoaddr",
+	llvm.IntToPtr:      "inttoptr",
+	llvm.BitCast:       "bitcast",
 
 	// Other Operators
 	llvm.ICmp:           "icmp",
