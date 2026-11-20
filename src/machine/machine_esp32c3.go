@@ -286,7 +286,7 @@ var (
 	errWrongStopBitSize = errors.New("UART: invalid bit size")
 )
 
-const pplClockFreq = 80e6
+const uartClockFreq = 80_000_000 // APB_CLK, SCLK_SEL 1. See ESP-IDF hal/esp32c3/include/hal/uart_ll.h uart_ll_set_sclk.
 
 type registerSet struct {
 	interruptMapReg  *volatile.Register32
@@ -406,8 +406,8 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 func (uart *UART) SetBaudRate(baudRate uint32) {
 	// based on esp-idf
 	max_div := uint32((1 << 12) - 1)
-	sclk_div := (pplClockFreq + (max_div * baudRate) - 1) / (max_div * baudRate)
-	clk_div := (pplClockFreq << 4) / (baudRate * sclk_div)
+	sclk_div := (uartClockFreq + (max_div * baudRate) - 1) / (max_div * baudRate)
+	clk_div := (uartClockFreq << 4) / (baudRate * sclk_div)
 	uart.Bus.SetCLKDIV(clk_div >> 4)
 	uart.Bus.SetCLKDIV_FRAG(clk_div & 0xf)
 	uart.Bus.SetCLK_CONF_SCLK_DIV_NUM(sclk_div - 1)

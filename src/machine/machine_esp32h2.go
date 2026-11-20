@@ -282,7 +282,7 @@ var (
 	errWrongStopBitSize = errors.New("UART: invalid bit size")
 )
 
-const uartClockFreq = 32e6
+const uartClockFreq = 32_000_000 // XTAL_CLK, PCR SCLK_SEL 3. See ESP-IDF hal/esp32h2/include/hal/uart_ll.h uart_ll_set_sclk.
 
 type registerSet struct {
 	interruptMapReg  *volatile.Register32

@@ -297,7 +297,8 @@ var (
 	errWrongStopBitSize = errors.New("UART: invalid bit size")
 )
 
-const pplClockFreq = 80e6
+// ESP-IDF hal/esp32c6/include/hal/uart_ll.h uart_ll_set_sclk maps SCLK_SEL 3 to the 40 MHz XTAL_CLK, not 80 MHz.
+const uartClockFreq = 80_000_000
 
 type registerSet struct {
 	interruptMapReg  *volatile.Register32
@@ -420,8 +421,8 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 func (uart *UART) SetBaudRate(baudRate uint32) {
 	// based on esp-idf
 	max_div := uint32((1 << 12) - 1)
-	sclk_div := (pplClockFreq + (max_div * baudRate) - 1) / (max_div * baudRate)
-	clk_div := (pplClockFreq << 4) / (baudRate * sclk_div)
+	sclk_div := (uartClockFreq + (max_div * baudRate) - 1) / (max_div * baudRate)
+	clk_div := (uartClockFreq << 4) / (baudRate * sclk_div)
 	uart.Bus.SetCLKDIV(clk_div >> 4)
 	uart.Bus.SetCLKDIV_FRAG(clk_div & 0xf)
 	// On C6, the SCLK divisor is in the PCR register.

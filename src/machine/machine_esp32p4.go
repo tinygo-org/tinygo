@@ -334,7 +334,7 @@ const (
 	uartSignalU1 = uint32(13) // UART1_TXD_PAD_OUT_IDX / UART1_RXD_PAD_IN_IDX
 )
 
-const pplClockFreq = 40_000_000 // XTAL clock source (40MHz, always available after ROM boot)
+const uartClockFreq = 40_000_000 // XTAL_CLK, CLK_SRC_SEL 0. See ESP-IDF hal/esp32p4/include/hal/uart_ll.h uart_ll_set_sclk.
 
 type registerSet struct {
 	interruptMapReg  *volatile.Register32
@@ -466,8 +466,8 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 
 func (uart *UART) SetBaudRate(baudRate uint32) {
 	max_div := uint32((1 << 12) - 1)
-	sclk_div := (pplClockFreq + (max_div * baudRate) - 1) / (max_div * baudRate)
-	clk_div := (pplClockFreq << 4) / (baudRate * sclk_div)
+	sclk_div := (uartClockFreq + (max_div * baudRate) - 1) / (max_div * baudRate)
+	clk_div := (uartClockFreq << 4) / (baudRate * sclk_div)
 	uart.Bus.SetCLKDIV_SYNC_CLKDIV(clk_div >> 4)
 	uart.Bus.SetCLKDIV_SYNC_CLKDIV_FRAG(clk_div & 0xf)
 	// Set the SCLK divisor in HP_SYS_CLKRST.
