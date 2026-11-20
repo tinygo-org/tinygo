@@ -2,9 +2,10 @@
     "inherits": [
         "rp2350b"
     ],
-    "build-tags": ["pico_plus2"],
+    "build-tags": ["pico_plus2", "machine.psram"],
     "ldflags": [
-        "--defsym=__flash_size=16M"
+        "--defsym=__flash_size=16M",
+        "--defsym=__psram_size=8M"
     ],
     "serial-port": ["2e8a:000F"],
     "default-stack-size": 8192

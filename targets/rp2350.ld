@@ -12,12 +12,25 @@ MEMORY
     SRAM5 : ORIGIN = 0x20081000, LENGTH = 4k
     FLASH_TEXT (rx) : ORIGIN = 0x10000000, LENGTH = __flash_size
     RAM (rwx)       : ORIGIN = 0x20000000, LENGTH = 512k
+    /* Uncached alias of QMI window 1 (CS1), XIP_NOCACHE_NOALLOC_BASE + 16M.
+       See RP2350 datasheet section 4.4.1. A board with PSRAM sets machine.psram and __psram_size. */
+    PSRAM (rw)      : ORIGIN = 0x15000000, LENGTH = DEFINED(__psram_size) ? __psram_size : 0
 }
 
 _stack_size = 2K;
 
 SECTIONS
 {
+    .psram (NOLOAD) : ALIGN(4)
+    {
+        _spsram = ABSOLUTE(.);
+        *(.psram .psram.*)
+        . = ALIGN(4);
+        _epsram = ABSOLUTE(.);
+    } > PSRAM
 }
+
+_psram_start = ORIGIN(PSRAM);
+_psram_end = ORIGIN(PSRAM) + LENGTH(PSRAM);
 
 INCLUDE "targets/arm.ld"
