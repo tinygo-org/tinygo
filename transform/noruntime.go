@@ -78,8 +78,7 @@ func isNoRuntime(fn llvm.Value) bool {
 // that uses value, directly or through constants and globals.
 func runtimeUse(value llvm.Value, visited map[llvm.Value]bool) llvm.Value {
 	visited[value] = true
-	for use := value.FirstUse(); !use.IsNil(); use = use.NextUse() {
-		user := use.User()
+	for user := range getUses(value) {
 		if visited[user] {
 			continue
 		}

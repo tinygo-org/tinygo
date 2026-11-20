@@ -36,8 +36,7 @@ func hasFlag(call, param llvm.Value, kind string) bool {
 // isReadOnly returns true if the given value (which must be of pointer type) is
 // never stored to, and false if this cannot be proven.
 func isReadOnly(value llvm.Value) bool {
-	uses := getUses(value)
-	for _, use := range uses {
+	for use := range getUses(value) {
 		switch {
 		case !use.IsAGetElementPtrInst().IsNil():
 			if !isReadOnly(use) {

@@ -23,7 +23,7 @@ func OptimizeStringToBytes(mod llvm.Module) {
 		return
 	}
 
-	for _, call := range getUses(stringToBytes) {
+	for _, call := range getAllUses(stringToBytes) {
 		strptr := call.Operand(0)
 		strlen := call.Operand(1)
 
@@ -31,7 +31,7 @@ func OptimizeStringToBytes(mod llvm.Module) {
 
 		var pointerUses []llvm.Value
 		canConvertPointer := true
-		for _, use := range getUses(call) {
+		for _, use := range getAllUses(call) {
 			if use.IsAExtractValueInst().IsNil() {
 				// Expected an extractvalue, but this is something else.
 				canConvertPointer = false
@@ -87,7 +87,7 @@ func OptimizeStringEqual(mod llvm.Module) {
 	builder := mod.Context().NewBuilder()
 	defer builder.Dispose()
 
-	for _, call := range getUses(stringEqual) {
+	for _, call := range getAllUses(stringEqual) {
 		str1len := call.Operand(1)
 		str2len := call.Operand(3)
 
@@ -114,10 +114,10 @@ func OptimizeStringFromBytes(mod llvm.Module) {
 		return
 	}
 
-	for _, call := range getUses(stringFromBytes) {
+	for _, call := range getAllUses(stringFromBytes) {
 		var strLen, strPtr []llvm.Value
 		ok := true
-		for _, use := range getUses(call) {
+		for use := range getUses(call) {
 			if use.IsAExtractValueInst().IsNil() {
 				ok = false
 				break
@@ -156,13 +156,12 @@ func OptimizeStringFromBytes(mod llvm.Module) {
 // when only calls read it, none keep it and nothing writes before the last read.
 func isTransientReadOnlyPointer(conversion, ptr llvm.Value) bool {
 	block := conversion.InstructionParent()
-	uses := getUses(ptr)
-	if len(uses) == 0 {
+	if !hasUses(ptr) {
 		return true
 	}
 	pending := make(map[llvm.Value]bool)
 	source := originOf(conversion.Operand(0))
-	for _, use := range uses {
+	for use := range getUses(ptr) {
 		if isTrackPointer(use, ptr) {
 			// The copy needs no GC root once it is removed.
 			continue
@@ -418,7 +417,7 @@ func allocaEscapes(ptr llvm.Value, seen map[llvm.Value]bool) bool {
 		return false
 	}
 	seen[ptr] = true
-	for _, use := range getUses(ptr) {
+	for use := range getUses(ptr) {
 		switch {
 		case !use.IsALoadInst().IsNil():
 		case !use.IsAStoreInst().IsNil():

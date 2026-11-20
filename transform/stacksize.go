@@ -19,7 +19,7 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) ([]string
 	var functions []llvm.Value // ptrtoint values of functions
 	var functionNames []string
 	var functionValues []llvm.Value // direct references to functions
-	for _, use := range getUses(mod.NamedFunction("internal/task.getGoroutineStackSize")) {
+	for _, use := range getAllUses(mod.NamedFunction("internal/task.getGoroutineStackSize")) {
 		if use.FirstUse().IsNil() {
 			// Apparently this stack size isn't used.
 			use.EraseFromParentAsInstruction()

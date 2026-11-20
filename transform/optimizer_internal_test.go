@@ -83,7 +83,7 @@ func TestBlockGlobalAllocPromotionUses(t *testing.T) {
 	if marker.IsNil() {
 		t.Fatal("allocation marker was not created")
 	}
-	if uses := getUses(marker); len(uses) != 1 {
+	if uses := getAllUses(marker); len(uses) != 1 {
 		t.Fatalf("got %d marker uses, want 1", len(uses))
 	}
 }

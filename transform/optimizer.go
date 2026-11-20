@@ -207,7 +207,7 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		// Check only after temporary ABI roots have been removed and dead code
 		// eliminated. Otherwise, a dead function kept alive solely to prevent
 		// argument promotion can produce a spurious scheduler error.
-		if uses := getUses(mod.NamedFunction("internal/task.start")); len(uses) > 0 {
+		if uses := getAllUses(mod.NamedFunction("internal/task.start")); len(uses) > 0 {
 			errs := []error{}
 			for _, call := range uses {
 				errs = append(errs, errorAt(call, "attempted to start a goroutine without a scheduler"))
@@ -283,7 +283,7 @@ func lowerRuntimeStartupCheck(mod llvm.Module, checkName, markerName, featureNam
 		return false
 	}
 
-	for _, use := range getUses(check) {
+	for _, use := range getAllUses(check) {
 		if use.IsACallInst().IsNil() || use.CalledValue() != check {
 			panic("unexpected use of runtime startup check")
 		}
@@ -295,7 +295,7 @@ func lowerRuntimeStartupCheck(mod llvm.Module, checkName, markerName, featureNam
 	}
 	check.EraseFromParentAsFunction()
 	if !marker.IsNil() {
-		for _, use := range getUses(marker) {
+		for _, use := range getAllUses(marker) {
 			if use.IsACallInst().IsNil() || use.CalledValue() != marker {
 				panic("unexpected use of runtime feature marker")
 			}
@@ -329,7 +329,7 @@ func blockGlobalAllocPromotion(mod llvm.Module) {
 		if alloc.IsNil() {
 			continue
 		}
-		for _, call := range getUses(alloc) {
+		for call := range getUses(alloc) {
 			if call.IsACallInst().IsNil() || call.CalledValue() != alloc {
 				continue
 			}
@@ -368,7 +368,7 @@ func removeGlobalAllocPromotionMarker(mod llvm.Module) {
 	if marker.IsNil() {
 		return
 	}
-	for _, call := range getUses(marker) {
+	for _, call := range getAllUses(marker) {
 		call.EraseFromParentAsInstruction()
 	}
 	marker.EraseFromParentAsFunction()

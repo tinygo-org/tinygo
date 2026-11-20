@@ -45,14 +45,14 @@ func PrintBoundsChecks(mod llvm.Module, re *regexp.Regexp, logger func(token.Pos
 		if fn.IsNil() {
 			continue
 		}
-		for _, call := range getUses(fn) {
+		for call := range getUses(fn) {
 			if call.IsACallInst().IsNil() || call.CalledValue() != fn {
 				continue
 			}
 			block := call.InstructionParent()
 			fnName := block.Parent().Name()
 			// Find the branches that lead to the throw block.
-			for _, use := range getUses(block.AsValue()) {
+			for use := range getUses(block.AsValue()) {
 				if use.IsABranchInst().IsNil() {
 					continue
 				}

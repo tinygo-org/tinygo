@@ -23,7 +23,7 @@ func AddUnwindAssumptions(mod llvm.Module) bool {
 	functions := make(map[llvm.Value]struct{})
 	// Suspension-safe catchers call unwindPending indirectly and are
 	// intentionally absent from this set.
-	for _, call := range getUses(unwind) {
+	for call := range getUses(unwind) {
 		if call.IsACallInst().IsNil() || call.CalledValue() != unwind {
 			continue
 		}

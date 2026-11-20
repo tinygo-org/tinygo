@@ -1,28 +1,34 @@
 package transform
 
 import (
+	"iter"
 	"slices"
 
 	"tinygo.org/x/go-llvm"
 )
 
-// Return a list of values (actually, instructions) where this value is used as
-// an operand.
-func getUses(value llvm.Value) []llvm.Value {
-	if value.IsNil() {
-		return nil
+// getUses returns the values (actually, instructions) where this value is used
+// as an operand. Use getAllUses if the loop body changes the use list.
+func getUses(value llvm.Value) iter.Seq[llvm.Value] {
+	return func(yield func(llvm.Value) bool) {
+		if value.IsNil() {
+			return
+		}
+		for use := value.FirstUse(); !use.IsNil(); use = use.NextUse() {
+			if !yield(use.User()) {
+				return
+			}
+		}
 	}
-	var uses []llvm.Value
-	use := value.FirstUse()
-	for !use.IsNil() {
-		uses = append(uses, use.User())
-		use = use.NextUse()
-	}
-	return uses
+}
+
+// getAllUses returns the uses of value as a slice.
+func getAllUses(value llvm.Value) []llvm.Value {
+	return slices.Collect(getUses(value))
 }
 
 // hasUses returns whether the given value has any uses. It is equivalent to
-// getUses(value) != nil but faster.
+// getAllUses(value) != nil but faster.
 func hasUses(value llvm.Value) bool {
 	if value.IsNil() {
 		return false

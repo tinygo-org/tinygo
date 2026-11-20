@@ -20,11 +20,11 @@ func OptimizeMaps(mod llvm.Module) {
 		if makeFunc.IsNil() {
 			return
 		}
-		for _, makeInst := range getUses(makeFunc) {
+		for _, makeInst := range getAllUses(makeFunc) {
 			updateInsts := []llvm.Value{}
 			unknownUses := false
 
-			for _, use := range getUses(makeInst) {
+			for use := range getUses(makeInst) {
 				if use := use.IsACallInst(); !use.IsNil() {
 					switch use.CalledValue() {
 					case hashmapBinarySet, hashmapStringSet, hashmapGenericSet:

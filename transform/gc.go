@@ -17,7 +17,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	if alloc.IsNil() {
 		// Nothing to. Make sure all remaining bits and pieces for stack
 		// chains are neutralized.
-		for _, call := range getUses(mod.NamedFunction("runtime.trackPointer")) {
+		for _, call := range getAllUses(mod.NamedFunction("runtime.trackPointer")) {
 			call.EraseFromParentAsInstruction()
 		}
 		stackChainStart := mod.NamedGlobal("runtime.stackChainStart")
@@ -102,7 +102,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		// This may be reached in a weird scenario where we call runtime.alloc but the garbage collector is unreachable.
 		// This can be accomplished by allocating 0 bytes.
 		// There is no point in tracking anything.
-		for _, use := range getUses(trackPointer) {
+		for _, use := range getAllUses(trackPointer) {
 			use.EraseFromParentAsInstruction()
 		}
 		return hasGlobalRoots
@@ -502,7 +502,7 @@ func markParentFunctions(marked map[llvm.Value]struct{}, fn llvm.Value) {
 	for len(worklist) != 0 {
 		fn := worklist[len(worklist)-1]
 		worklist = worklist[:len(worklist)-1]
-		for _, use := range getUses(fn) {
+		for use := range getUses(fn) {
 			if use.IsACallInst().IsNil() || use.CalledValue() != fn {
 				// Not the parent function.
 				continue

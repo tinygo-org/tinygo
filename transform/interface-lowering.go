@@ -334,7 +334,7 @@ func (p *lowerInterfacesPass) run() error {
 	// Replace each type assert with an actual type comparison or (if the type
 	// assert is impossible) the constant false.
 	llvmFalse := llvm.ConstInt(p.ctx.Int1Type(), 0, false)
-	for _, use := range getUses(p.mod.NamedFunction("runtime.typeAssert")) {
+	for _, use := range getAllUses(p.mod.NamedFunction("runtime.typeAssert")) {
 		actualType := use.Operand(0)
 		name := strings.TrimPrefix(use.Operand(1).Name(), "reflect/types.typeid:")
 		gepOffset := uint64(0)
@@ -471,7 +471,7 @@ func (p *lowerInterfacesPass) run() error {
 			newGlobal.SetLinkage(t.typecode.Linkage())
 			newGlobal.SetGlobalConstant(true)
 			newGlobal.SetAlignment(t.typecode.Alignment())
-			for _, use := range getUses(t.typecode) {
+			for _, use := range getAllUses(t.typecode) {
 				if !use.IsAConstantExpr().IsNil() {
 					opcode := use.Opcode()
 					if opcode == llvm.GetElementPtr && use.OperandsCount() == 3 {
@@ -587,7 +587,7 @@ func (p *lowerInterfacesPass) pruneUnusedMethodMetadata() error {
 // typecodes. A typecode that is only the element of a different typecode (for
 // example chan T or *T) is not boxable.
 func isBoxable(value llvm.Value) bool {
-	for _, use := range getUses(value) {
+	for use := range getUses(value) {
 		if !use.IsAGlobalVariable().IsNil() {
 			if !strings.HasPrefix(use.Name(), "reflect/types.type:") {
 				return true
