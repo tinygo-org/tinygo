@@ -9,8 +9,7 @@
 		"esp",
 		"machine.uart",
 		"machine.spi",
-		"machine.i2c",
-		"machine.psram"
+		"machine.i2c"
 	],
 	"serial": "uart",
 	"rtlib": "compiler-rt",
