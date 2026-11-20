@@ -24,7 +24,7 @@ var (
 )
 
 // SetIRQ enables or disables this PWM slice's wrap interrupt.
-func (pwm *pwmGroup) SetIRQ(enabled bool) {
+func (pwm *PWM) SetIRQ(enabled bool) {
 	mask := uint32(1) << pwm.peripheral()
 	if enabled {
 		pwmIRQSet.INTE.Set(mask)
@@ -34,18 +34,18 @@ func (pwm *pwmGroup) SetIRQ(enabled bool) {
 }
 
 // ClearIRQ clears this PWM slice's pending wrap and forced interrupts.
-func (pwm *pwmGroup) ClearIRQ() {
+func (pwm *PWM) ClearIRQ() {
 	mask := uint32(1) << pwm.peripheral()
 	pwmIRQClear.INTF.Set(mask)
 	pwmIRQ.INTR.Set(mask)
 }
 
 // ForceIRQ forces an interrupt request for this PWM slice.
-func (pwm *pwmGroup) ForceIRQ() {
+func (pwm *PWM) ForceIRQ() {
 	pwmIRQSet.INTF.Set(uint32(1) << pwm.peripheral())
 }
 
 // IsIRQSet reports whether this slice has a pending enabled or forced interrupt.
-func (pwm *pwmGroup) IsIRQSet() bool {
+func (pwm *PWM) IsIRQSet() bool {
 	return pwmIRQ.INTS.Get()&(uint32(1)<<pwm.peripheral()) != 0
 }

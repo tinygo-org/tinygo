@@ -7,25 +7,6 @@ import (
 	"runtime/interrupt"
 )
 
-var (
-	UART0  = &_UART0
-	_UART0 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART0,
-	}
-
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART1,
-	}
-)
-
-func init() {
-	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
-	UART1.Interrupt = interrupt.New(rp.IRQ_UART1_IRQ, _UART1.handleInterrupt)
-}
-
 // UART on the RP2040.
 type UART struct {
 	Buffer    *RingBuffer
@@ -35,18 +16,15 @@ type UART struct {
 
 // Configure the UART.
 func (uart *UART) Configure(config UARTConfig) error {
+	if err := defaultUARTPins(&config); err != nil {
+		return err
+	}
+
 	initUART(uart)
 
 	// Default baud rate to 115200.
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
-	}
-
-	// Use default pins if pins are not set.
-	if config.TX == 0 && config.RX == 0 {
-		// use default pins
-		config.TX = UART_TX_PIN
-		config.RX = UART_RX_PIN
 	}
 
 	uart.SetBaudRate(config.BaudRate)
@@ -202,9 +180,9 @@ func initUART(uart *UART) {
 	unresetBlockWait(resetVal)
 }
 
-// handleInterrupt should be called from the appropriate interrupt handler for
+// HandleInterrupt should be called from the appropriate interrupt handler for
 // this UART instance.
-func (uart *UART) handleInterrupt(interrupt.Interrupt) {
+func (uart *UART) HandleInterrupt(interrupt.Interrupt) {
 	for !uart.Bus.UARTFR.HasBits(rp.UART0_UARTFR_RXFE) {
 		uart.Receive(byte((uart.Bus.UARTDR.Get() & 0xFF)))
 	}

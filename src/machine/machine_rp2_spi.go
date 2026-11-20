@@ -8,16 +8,6 @@ import (
 	"unsafe"
 )
 
-// SPI on the RP2040
-var (
-	SPI0 = &SPI{
-		Bus: rp.SPI0,
-	}
-	SPI1 = &SPI{
-		Bus: rp.SPI1,
-	}
-)
-
 // SPIConfig is used to store config info for SPI.
 type SPIConfig struct {
 	Frequency uint32
@@ -157,19 +147,7 @@ func (spi *SPI) GetBaudRate() uint32 {
 // No pin configuration is needed of SCK, SDO and SDI needed after calling Configure.
 func (spi *SPI) Configure(config SPIConfig) error {
 	const defaultBaud uint32 = 4 * MHz
-	if config.SCK == 0 && config.SDO == 0 && config.SDI == 0 {
-		// set default pins if config zero valued or invalid clock pin supplied.
-		switch spi.Bus {
-		case rp.SPI0:
-			config.SCK = SPI0_SCK_PIN
-			config.SDO = SPI0_SDO_PIN
-			config.SDI = SPI0_SDI_PIN
-		case rp.SPI1:
-			config.SCK = SPI1_SCK_PIN
-			config.SDO = SPI1_SDO_PIN
-			config.SDI = SPI1_SDI_PIN
-		}
-	}
+	defaultSPIPins(&config, spi.Bus)
 	if err := spi.validPins(config); err != nil {
 		return err
 	}

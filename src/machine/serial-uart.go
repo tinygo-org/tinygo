@@ -1,4 +1,4 @@
-//go:build baremetal && serial.uart
+//go:build baremetal && serial.uart && !boardpackage
 
 package machine
 

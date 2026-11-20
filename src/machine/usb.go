@@ -1,5 +1,7 @@
 //go:build sam || nrf52840 || rp2040 || rp2350 || stm32f4 || stm32f7 || stm32h7 || mimxrt1062 || (esp32s3 && usbotg) || (ra4m1 && serial.usb)
 
+// Keep this chip build tag aligned with usb_identity_board.go.
+
 package machine
 
 import (
@@ -62,7 +64,8 @@ func usbVendorID() uint16 {
 		return usb.VendorID
 	}
 
-	return usb_VID
+	vid, _, _, _ := defaultUSBIdentity()
+	return vid
 }
 
 func usbProductID() uint16 {
@@ -70,7 +73,8 @@ func usbProductID() uint16 {
 		return usb.ProductID
 	}
 
-	return usb_PID
+	_, pid, _, _ := defaultUSBIdentity()
+	return pid
 }
 
 func usbManufacturer() string {
@@ -78,7 +82,8 @@ func usbManufacturer() string {
 		return usb.Manufacturer
 	}
 
-	return usb_STRING_MANUFACTURER
+	_, _, manufacturer, _ := defaultUSBIdentity()
+	return manufacturer
 }
 
 func usbProduct() string {
@@ -86,7 +91,8 @@ func usbProduct() string {
 		return usb.Product
 	}
 
-	return usb_STRING_PRODUCT
+	_, _, _, product := defaultUSBIdentity()
+	return product
 }
 
 func usbSerial() string {

@@ -47,10 +47,10 @@ func (a ADC) Get() uint16 {
 
 // GetADCChannel returns the channel associated with the ADC pin.
 func (a ADC) GetADCChannel() (c ADCChannel, err error) {
-	if a.Pin < ADC0 {
+	if a.Pin < adc0Pin {
 		return 0, errors.New("no ADC channel for pin value")
 	}
-	return ADCChannel(a.Pin - ADC0), nil
+	return ADCChannel(a.Pin - adc0Pin), nil
 }
 
 // Configure sets the channel's associated pin to analog input mode.
@@ -110,5 +110,5 @@ func waitForReady() {
 
 // The Pin method returns the GPIO Pin associated with the ADC mux channel, if it has one.
 func (c ADCChannel) Pin() (p Pin, err error) {
-	return Pin(c) + ADC0, nil
+	return Pin(c) + adc0Pin, nil
 }

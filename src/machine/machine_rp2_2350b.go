@@ -27,26 +27,11 @@ const (
 	GPIO47 Pin = 47 // peripherals: PWM11 channel B, I2C1 SCL
 )
 
-// Analog pins on 2350b.
+// Analog pin base and internal temperature channel on RP2350B.
 const (
-	ADC0 Pin = GPIO40
-	ADC1 Pin = GPIO41
-	ADC2 Pin = GPIO42
-	ADC3 Pin = GPIO43
-	ADC4 Pin = GPIO44
-	ADC5 Pin = GPIO45
-	ADC6 Pin = GPIO46
-	ADC7 Pin = GPIO47
+	adc0Pin Pin = GPIO40
 	// Ninth ADC channel.
 	thermADC = 48
-)
-
-// Additional PWMs on the RP2350B.
-var (
-	PWM8  = getPWMGroup(8)
-	PWM9  = getPWMGroup(9)
-	PWM10 = getPWMGroup(10)
-	PWM11 = getPWMGroup(11)
 )
 
 // validPins confirms that the SPI pin selection is a legitimate one
