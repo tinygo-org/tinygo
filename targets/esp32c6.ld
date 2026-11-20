@@ -94,6 +94,7 @@ SECTIONS
     {
         *(.init)      /* call_start_cpu0 (before flash is mapped) */
         *(.iram*)     /* code that must run from IRAM */
+        *(.text.iram.*)
         *(.wifislprxiram*)
         *(.wifiextrairam*)
         *(.wifi0iram*)

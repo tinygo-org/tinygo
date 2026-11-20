@@ -105,6 +105,7 @@ SECTIONS
     .iram : ALIGN(4)
     {
         *(.iram*)
+        *(.text.iram.*)
         *(.wifislprxiram*)
         *(.wifiextrairam*)
         *(.wifi0iram*)
