@@ -23,11 +23,11 @@ func TestNoRuntime(t *testing.T) {
 //go:noruntime
 func calc(n int) int { return n * 7 }
 func main() { println(result) }`, false},
-		{"loop-limit", `var result = calc(1001)
+		{"loop-limit", `var result = calc(4097)
 //go:noruntime
 func calc(n int) int { sum := 0; for i := 0; i < n; i++ { sum += i }; return sum }
 func main() { println(result) }`, true},
-		{"loop-below-limit", `var result = calc(999)
+		{"loop-below-limit", `var result = calc(4095)
 //go:noruntime
 func calc(n int) int { sum := 0; for i := 0; i < n; i++ { sum += i }; return sum }
 func main() { println(result) }`, false},
@@ -187,6 +187,7 @@ func testNoRuntime(t *testing.T, target, scheduler string, tests []noRuntimeTest
 					options.Opt = opt
 					options.Scheduler = scheduler
 					options.InterpMaxLoopIterations = interp.DefaultMaxInterpBlockEntries
+					options.InterpMaxHashmapOperations = interp.DefaultMaxInterpHashmapOperations
 					config, err := builder.NewConfig(&options)
 					if err != nil {
 						t.Fatal(err)

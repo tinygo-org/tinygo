@@ -73,10 +73,10 @@ func TestInterpFunctionUsageAttributes(t *testing.T) {
 				builder.CreateCall(typ, other, nil, "")
 				builder.CreateRetVoid()
 				resultName = initAll.Name()
-				if err := Run(mod, time.Second, DefaultMaxInterpBlockEntries, false); err != nil {
+				if err := Run(mod, time.Second, DefaultMaxInterpBlockEntries, DefaultMaxInterpHashmapOperations, false); err != nil {
 					t.Fatal(err)
 				}
-			} else if err := RunFunc(init, time.Second, DefaultMaxInterpBlockEntries, false); err != nil {
+			} else if err := RunFunc(init, time.Second, DefaultMaxInterpBlockEntries, DefaultMaxInterpHashmapOperations, false); err != nil {
 				t.Fatal(err)
 			}
 			result := mod.NamedFunction(resultName)
@@ -122,7 +122,7 @@ func runTest(t *testing.T, pathPrefix string) {
 	defer mod.Dispose()
 
 	// Perform the transform.
-	err = Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false)
+	err = Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, DefaultMaxInterpHashmapOperations, false)
 	if err != nil {
 		if err, match := err.(*Error); match {
 			println(err.Error())
@@ -181,7 +181,7 @@ func TestInterpLargeArray(t *testing.T) {
 	defer mod.Dispose()
 
 	start := time.Now()
-	if err := Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false); err != nil {
+	if err := Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, DefaultMaxInterpHashmapOperations, false); err != nil {
 		t.Fatal(err)
 	}
 	if d := time.Since(start); d > 30*time.Second {
@@ -218,7 +218,7 @@ func TestInterpPartialPointer(t *testing.T) {
 	}
 	defer mod.Dispose()
 
-	if err := Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, false); err != errUnsupportedInst {
+	if err := Run(mod, 10*time.Minute, DefaultMaxInterpBlockEntries, DefaultMaxInterpHashmapOperations, false); err != errUnsupportedInst {
 		t.Errorf("expected %v, got %v", errUnsupportedInst, err)
 	}
 }
@@ -258,7 +258,7 @@ exit:
 	}
 	defer mod.Dispose()
 
-	r := newRunner(mod, time.Minute, 10, false)
+	r := newRunner(mod, time.Minute, 10, DefaultMaxInterpHashmapOperations, false)
 	defer r.dispose()
 	_, _, runErr := r.run(r.getFunction(mod.NamedFunction("fill")), []value{literalValue{uint64(100)}}, nil, nil, 0)
 	if runErr == nil {
@@ -268,6 +268,59 @@ exit:
 		t.Errorf("expected a recoverable error, got %v", runErr.Err)
 	}
 	if want := ": interp: loop ran too many iterations (in fill)"; !strings.HasSuffix(runErr.Error(), want) {
+		t.Errorf("expected an error ending in %q, got %q", want, runErr.Error())
+	}
+}
+
+func TestInterpHashmapOperationLimit(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "hashmap-limit.ll")
+	ir := `target datalayout = "e-p:64:64-i64:64-n8:16:32:64"
+target triple = "x86_64--linux"
+
+define void @runtime.hashmapStringSet(ptr, ptr, ptr) {
+entry:
+  ret void
+}
+
+define void @set() {
+entry:
+  call void @runtime.hashmapStringSet(ptr null, ptr null, ptr null)
+  ret void
+}
+
+define void @fill() {
+entry:
+  call void @set()
+  call void @set()
+  ret void
+}
+`
+	if err := os.WriteFile(path, []byte(ir), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	buf, err := llvm.NewMemoryBufferFromFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+
+	r := newRunner(mod, time.Minute, 0, 1, false)
+	defer r.dispose()
+	_, _, runErr := r.run(r.getFunction(mod.NamedFunction("fill")), nil, nil, nil, 0)
+	if runErr == nil {
+		t.Fatal("expected the hashmap operation limit to stop interpretation")
+	}
+	if !isRecoverableError(runErr.Err) {
+		t.Errorf("expected a recoverable error, got %v", runErr.Err)
+	}
+	if want := ": interp: hashmap operation limit reached (in set)"; !strings.HasSuffix(runErr.Error(), want) {
 		t.Errorf("expected an error ending in %q, got %q", want, runErr.Error())
 	}
 }

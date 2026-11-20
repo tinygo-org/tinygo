@@ -19,10 +19,17 @@ import (
 // basic block may be entered during interpretation of one function call. This
 // limits how far the interpreter will unroll or evaluate loops before deferring
 // the init function to runtime.
-const DefaultMaxInterpBlockEntries = 1000
+const DefaultMaxInterpBlockEntries = 4096
+
+// DefaultMaxInterpHashmapOperations is the default maximum number of
+// mutating hashmap operations that one initializer may evaluate.
+const DefaultMaxInterpHashmapOperations = 1000
 
 func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames []value, depth int) (value, memoryView, *Error) {
 	mem := memoryView{r: r, parent: parentMem}
+	if parentMem == nil {
+		r.hashmapOperations = 0
+	}
 	mem.attributes = mem.attributes.Merge(fn.attributes)
 	frames = slices.Grow(frames, len(fn.locals))[:len(fn.locals)] // make room for this call's slots; a reallocation copies nothing
 	locals, frames := frames, frames[len(fn.locals):]             // take this call's slots from the head, keep the free space after them for children
@@ -294,6 +301,12 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 				return nil, mem, r.errorAt(inst, err)
 			}
 			callFn := r.getFunction(fnPtr.llvmValue(&mem))
+			if isMutatingHashmapOperation(callFn.name) {
+				r.hashmapOperations++
+				if r.maxHashmapOperations > 0 && r.hashmapOperations > r.maxHashmapOperations {
+					return nil, mem, r.errorAt(inst, errHashmapOperationLimit)
+				}
+			}
 			switch {
 			case callFn.name == "runtime.trackPointer":
 				// Allocas and such are created as globals, so don't need a
@@ -637,6 +650,12 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 				}
 				retval, callMem, callErr := r.run(callFn, operands[1:], &mem, frames, depth+1)
 				if callErr != nil {
+					if callErr.Err == errHashmapOperationLimit {
+						// This is an initializer-wide budget. Do not recover by
+						// emitting only the operation that exceeded it at runtime.
+						callMem.revert()
+						return nil, mem, callErr
+					}
 					if isRecoverableError(callErr.Err) {
 						// This error can be recovered by doing the call at
 						// runtime instead of at compile time. But we need to
@@ -1111,6 +1130,21 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 		}
 	}
 	return nil, mem, r.errorAt(bb.instructions[len(bb.instructions)-1], errors.New("interp: reached end of basic block without terminator"))
+}
+
+func isMutatingHashmapOperation(name string) bool {
+	switch name {
+	case "runtime.hashmapBinarySet",
+		"runtime.hashmapGenericSet",
+		"runtime.hashmapStringSet",
+		"runtime.hashmapBinaryDelete",
+		"runtime.hashmapGenericDelete",
+		"runtime.hashmapStringDelete",
+		"runtime.hashmapClear":
+		return true
+	default:
+		return false
+	}
 }
 
 // Interpret an icmp instruction. Doesn't have side effects, only returns the
