@@ -1,0 +1,17 @@
+MEMORY
+{
+    FLASH : ORIGIN = 0x10000000, LENGTH = 4M
+    SRAM : ORIGIN = 0x20000000, LENGTH = 512k
+    SRAM4 : ORIGIN = 0x20080000, LENGTH = 4k
+    SRAM5 : ORIGIN = 0x20081000, LENGTH = 4k
+    FLASH_TEXT (rx) : ORIGIN = 0x10000000, LENGTH = 4M
+    RAM (rwx)       : ORIGIN = 0x20000000, LENGTH = 512k
+}
+
+_stack_size = 2K;
+
+SECTIONS
+{
+}
+
+INCLUDE "targets/arm.ld"
