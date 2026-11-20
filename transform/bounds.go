@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -42,17 +43,14 @@ func PrintBoundsChecks(mod llvm.Module, re *regexp.Regexp, logger func(token.Pos
 	seen := map[report]struct{}{}
 	for _, bp := range boundsPanics {
 		fn := mod.NamedFunction(bp.name)
-		if fn.IsNil() {
-			continue
-		}
-		for _, call := range getUses(fn) {
+		for call := range llvmutil.Uses(fn) {
 			if call.IsACallInst().IsNil() || call.CalledValue() != fn {
 				continue
 			}
 			block := call.InstructionParent()
 			fnName := block.Parent().Name()
 			// Find the branches that lead to the throw block.
-			for _, use := range getUses(block.AsValue()) {
+			for use := range llvmutil.Uses(block.AsValue()) {
 				if use.IsABranchInst().IsNil() {
 					continue
 				}

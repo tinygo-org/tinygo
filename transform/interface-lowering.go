@@ -590,7 +590,7 @@ func (p *lowerInterfacesPass) pruneUnusedMethodMetadata() error {
 // typecodes. A typecode that is only the element of a different typecode (for
 // example chan T or *T) is not boxable.
 func isBoxable(value llvm.Value) bool {
-	for _, use := range getUses(value) {
+	for use := range llvmutil.Uses(value) {
 		if !use.IsAGlobalVariable().IsNil() {
 			if !strings.HasPrefix(use.Name(), "reflect/types.type:") {
 				return true

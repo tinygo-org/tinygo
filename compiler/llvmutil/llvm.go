@@ -110,6 +110,21 @@ func Instructions(bb llvm.BasicBlock) iter.Seq[llvm.Value] {
 	}
 }
 
+// Uses returns an iterator over the users of value. The loop body must not
+// change the use list of value. Use slices.Collect first if it does.
+func Uses(value llvm.Value) iter.Seq[llvm.Value] {
+	return func(yield func(llvm.Value) bool) {
+		if value.IsNil() {
+			return
+		}
+		for use := value.FirstUse(); !use.IsNil(); use = use.NextUse() {
+			if !yield(use.User()) {
+				return
+			}
+		}
+	}
+}
+
 // InterfaceStub describes a function that the compiler declares for an
 // interface method call or type assert, which interface lowering defines.
 type InterfaceStub struct {

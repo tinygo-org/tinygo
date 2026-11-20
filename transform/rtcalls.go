@@ -117,7 +117,7 @@ func OptimizeStringFromBytes(mod llvm.Module) {
 	for _, call := range getUses(stringFromBytes) {
 		var strLen, strPtr []llvm.Value
 		ok := true
-		for _, use := range getUses(call) {
+		for use := range llvmutil.Uses(call) {
 			if use.IsAExtractValueInst().IsNil() {
 				ok = false
 				break
@@ -156,13 +156,12 @@ func OptimizeStringFromBytes(mod llvm.Module) {
 // when only calls read it, none keep it and nothing writes before the last read.
 func isTransientReadOnlyPointer(conversion, ptr llvm.Value) bool {
 	block := conversion.InstructionParent()
-	uses := getUses(ptr)
-	if len(uses) == 0 {
+	if !hasUses(ptr) {
 		return true
 	}
 	pending := make(map[llvm.Value]bool)
 	source := originOf(conversion.Operand(0))
-	for _, use := range uses {
+	for use := range llvmutil.Uses(ptr) {
 		if isTrackPointer(use, ptr) {
 			// The copy needs no GC root once it is removed.
 			continue
@@ -418,7 +417,7 @@ func allocaEscapes(ptr llvm.Value, seen map[llvm.Value]bool) bool {
 		return false
 	}
 	seen[ptr] = true
-	for _, use := range getUses(ptr) {
+	for use := range llvmutil.Uses(ptr) {
 		switch {
 		case !use.IsALoadInst().IsNil():
 		case !use.IsAStoreInst().IsNil():

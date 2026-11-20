@@ -343,10 +343,7 @@ func blockGlobalAllocPromotion(mod llvm.Module) {
 	var marked bool
 	for _, name := range []string{"runtime.alloc", "runtime.alloc_noheap"} {
 		alloc := mod.NamedFunction(name)
-		if alloc.IsNil() {
-			continue
-		}
-		for _, call := range getUses(alloc) {
+		for call := range llvmutil.Uses(alloc) {
 			if call.IsACallInst().IsNil() || call.CalledValue() != alloc {
 				continue
 			}

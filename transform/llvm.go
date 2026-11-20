@@ -3,22 +3,14 @@ package transform
 import (
 	"slices"
 
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
 // Return a list of values (actually, instructions) where this value is used as
 // an operand.
 func getUses(value llvm.Value) []llvm.Value {
-	if value.IsNil() {
-		return nil
-	}
-	var uses []llvm.Value
-	use := value.FirstUse()
-	for !use.IsNil() {
-		uses = append(uses, use.User())
-		use = use.NextUse()
-	}
-	return uses
+	return slices.Collect(llvmutil.Uses(value))
 }
 
 // hasUses returns whether the given value has any uses. It is equivalent to

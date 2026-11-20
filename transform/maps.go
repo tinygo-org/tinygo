@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -24,7 +25,7 @@ func OptimizeMaps(mod llvm.Module) {
 			updateInsts := []llvm.Value{}
 			unknownUses := false
 
-			for _, use := range getUses(makeInst) {
+			for use := range llvmutil.Uses(makeInst) {
 				if use := use.IsACallInst(); !use.IsNil() {
 					switch use.CalledValue() {
 					case hashmapBinarySet, hashmapStringSet, hashmapGenericSet:
