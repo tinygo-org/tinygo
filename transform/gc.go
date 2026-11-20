@@ -502,7 +502,7 @@ func markParentFunctions(marked map[llvm.Value]struct{}, fn llvm.Value) {
 	for len(worklist) != 0 {
 		fn := worklist[len(worklist)-1]
 		worklist = worklist[:len(worklist)-1]
-		for _, use := range getUses(fn) {
+		for use := range llvmutil.Uses(fn) {
 			if use.IsACallInst().IsNil() || use.CalledValue() != fn {
 				// Not the parent function.
 				continue

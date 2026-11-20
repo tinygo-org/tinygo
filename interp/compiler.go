@@ -94,8 +94,14 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 		if frame.IsAAllocaInst().IsNil() || stack.IsACallInst().IsNil() || !strings.HasPrefix(stack.CalledValue().Name(), "llvm.stacksave") {
 			continue
 		}
-		use := stack.FirstUse()
-		if !use.IsNil() && use.User() == inst && use.NextUse().IsNil() {
+		onlyUse := true
+		for user := range llvmutil.Uses(stack) {
+			if user != inst {
+				onlyUse = false
+				break
+			}
+		}
+		if onlyUse {
 			fn.deferFrame = frame
 			fn.deferStack = stack
 		}

@@ -147,7 +147,7 @@ func reportHeapAlloc(heapalloc llvm.Value, reason string, re *regexp.Regexp, log
 	for len(work) > 0 {
 		callee := work[len(work)-1]
 		work = work[:len(work)-1]
-		for _, call := range getUses(callee) {
+		for call := range llvmutil.Uses(callee) {
 			if call.IsACallInst().IsNil() || call.CalledValue() != callee {
 				continue
 			}
@@ -237,8 +237,7 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 		a.results[key] = result
 	}()
 
-	uses := getUses(value)
-	for _, use := range uses {
+	for use := range llvmutil.Uses(value) {
 		if use.IsAInstruction().IsNil() {
 			panic("expected instruction use")
 		}
