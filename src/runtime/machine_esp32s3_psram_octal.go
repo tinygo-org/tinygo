@@ -117,11 +117,11 @@ func setPSRAMClockDivider(n, h, l uint32) {
 //  1. CS1 pin select, CS timing, fixed low-speed clock.
 //  2. Mode register (MR0) init: fixed read latency.
 //  3. Connectivity check via a sync write/read of a reference word.
-//  4. Read vendor ID (MR1) and density (MR2), validate and size the MMU window.
+//  4. Read the vendor ID (MR1) to check the chip.
 //  5. Configure SPI0's cache-facing read/write command phases for Octal DTR.
-//  6. Map PSRAM into the MMU, zero-initialize .psram BSS.
+//  6. Map the __psram_size bytes the target declares into the MMU.
 func initPSRAM() string {
-	psramStart, _, psramMmuPagesCap := psramWindow()
+	psramStart, _, mmuPages := psramWindow()
 
 	// Enable SPI0/SPI1 peripheral clock and clear resets.
 	esp.SYSTEM.SetPERIP_CLK_EN0_SPI01_CLK_EN(1)
@@ -176,38 +176,9 @@ func initPSRAM() string {
 	}
 
 	mr1 := readPSRAMModeReg(0x1) // vendor id
-	mr2 := readPSRAMModeReg(0x2) // density / dev id / gb
 	vendorID := mr1 & 0x1f
 	if vendorID != opiVendorIDAP && vendorID != opiVendorIDUnilc {
 		return "PSRAM init failed: unrecognized vendor id"
-	}
-
-	// Density encoding (esp_psram_impl_octal.c:372-376): 0x1=4MB, 0x3=8MB,
-	// 0x5=16MB, in 64KB pages. Chips reporting 0x7 (32MB) or 0x6 (64MB)
-	// fall through unmatched and are simply capped at psramMmuPagesCap,
-	// same as any chip bigger than the window: targets/esp32s3.ld only
-	// reserves a 16M PSRAM window, so there's nothing a bigger case value
-	// could map to.
-	density := mr2 & 0x7
-	mmuPages := psramMmuPagesCap
-	switch density {
-	case 0x1:
-		if mmuPages > 64 {
-			mmuPages = 64 // 4MB
-		}
-	case 0x3:
-		if mmuPages > 128 {
-			mmuPages = 128 // 8MB
-		}
-	case 0x5:
-		if mmuPages > 256 {
-			mmuPages = 256 // 16MB
-		}
-	}
-
-	epsram := uintptr(unsafe.Pointer(&_epsram))
-	if epsram > psramStart && epsram-psramStart > uintptr(mmuPages)*65536 {
-		return "PSRAM init failed: .psram section exceeds detected chip size"
 	}
 
 	// Perform DQS / MSPI delay timing calibration to upgrade Octal PSRAM to
@@ -271,14 +242,6 @@ func initPSRAM() string {
 		return "PSRAM init failed: Cache_Dbus_MMU_Set error"
 	}
 
-	if err := zeroInitPSRAM(); err != "" {
-		return err
-	}
-
-	if psramEnd := psramStart + uintptr(mmuPages)*65536; psramEnd > epsram {
-		psramFreeStart = epsram
-		psramFreeLen = int(psramEnd - epsram)
-	}
 	return ""
 }
 

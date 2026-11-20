@@ -1,6 +1,7 @@
 {
 	"inherits": ["esp32s3-generic"],
 	"build-tags": ["machine.psram"],
+	"ldflags": ["--defsym=__psram_size=8M"],
 	"flash-method": "esp32flash",
 	"serial": "uart"
 }
