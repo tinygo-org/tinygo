@@ -209,7 +209,7 @@ report-stdlib-tests-pass:
 	@rm $(jointmp).*
 
 # Standard library packages that pass tests quickly on the current platform
-TEST_PACKAGES_HOST_FULL_ONLY := internal/synctest testing/synctest
+TEST_PACKAGES_HOST_FULL_ONLY := internal/synctest testing/synctest ./tests/stackbuffer
 ifeq ($(uname),Darwin)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_DARWIN)
 TEST_PACKAGES_HOST_FULL_ONLY += io/fs
@@ -229,7 +229,7 @@ TEST_ADDITIONAL_FLAGS ?=
 TEST_OPTIONS_crypto/dsa := -short
 TEST_OPTIONS_crypto/sha256 := -skip='^(TestExtraMethods|TestAllocations|TestAllocatonsWithTypeAsserts)$$'
 TEST_OPTIONS_crypto/sha512 := -skip='^(TestExtraMethods|TestAllocations)$$'
-TEST_OPTIONS_strconv := -skip='^(TestCountMallocs|TestAllocationsFromBytes)$$'
+TEST_OPTIONS_strconv := -skip='^TestCountMallocs$$'
 TEST_OPTIONS_unicode/utf16 := -skip='^(TestAllocationsDecode)$$'
 TEST_OPTIONS_mime := -skip='^TestLookupMallocs$$'
 TEST_OPTIONS_reflect := -skip='^TestMapIterSet$$'
@@ -265,7 +265,7 @@ tinygo-test: TEST_OPTIONS_internal/synctest = -skip='^(TestReflectFuncOf|TestCha
 tinygo-test: TEST_OPTIONS_testing/synctest := -skip='^(TestFatal|TestError|TestVerboseError|TestSkip|TestVerboseSkip|TestHelper|TestHTTPTransport100Continue)$$'
 tinygo-test-fast: HOST_TEST_STACK_SKIP_FLAG = $(TEST_SKIP_FLAG)
 
-tinygo-test-baremetal: TEST_OPTIONS_strconv := -skip='TestCountMallocs|TestAllocationsFromBytes'
+tinygo-test-baremetal: TEST_OPTIONS_strconv := -skip='TestCountMallocs'
 tinygo-test-baremetal: TEST_OPTIONS_unicode/utf16 := -skip='TestAllocationsDecode'
 tinygo-test-baremetal: TEST_OPTIONS_reflect := -skip='TestMapIterSet'
 
