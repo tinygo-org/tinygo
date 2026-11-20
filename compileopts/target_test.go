@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"testing"
@@ -356,4 +357,118 @@ func TestGlibcLinkLibraries(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadTargetExternalRelativePaths(t *testing.T) {
+	boardJSON := filepath.Join("testdata", "exttarget", "board", "board.json")
+	spec, err := LoadTarget(&Options{Target: boardJSON})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	absTestdata, err := filepath.Abs(filepath.Join("testdata", "exttarget"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLinker := filepath.Join(absTestdata, "board", "board.ld")
+	if spec.LinkerScript != wantLinker {
+		t.Errorf("LinkerScript = %q, want %q", spec.LinkerScript, wantLinker)
+	}
+	if spec.BoardPackage != "example.com/myboard" {
+		t.Errorf("BoardPackage = %q, want %q", spec.BoardPackage, "example.com/myboard")
+	}
+	for _, wantFile := range []string{
+		filepath.Join(absTestdata, "parent", "parent_init.c"),
+		filepath.Join(absTestdata, "parent", "common.c"),
+		"src/runtime/fallback_only.c",
+		filepath.Join(absTestdata, "board", "board_init.c"),
+		filepath.Join(absTestdata, "board", "common.c"),
+	} {
+		if !slices.Contains(spec.ExtraFiles, wantFile) {
+			t.Errorf("ExtraFiles = %v, missing %q", spec.ExtraFiles, wantFile)
+		}
+	}
+
+	t.Run("inherit board package", func(t *testing.T) {
+		dir := t.TempDir()
+		childPath := filepath.Join(dir, "child.json")
+		parentAbs := filepath.Join(absTestdata, "parent", "base.json")
+		childJSON := `{"inherits": [` + `"` + filepath.ToSlash(parentAbs) + `"` + `]}`
+		if err := os.WriteFile(childPath, []byte(childJSON), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		childSpec, err := LoadTarget(&Options{Target: childPath})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if childSpec.BoardPackage != "example.com/parentboard" {
+			t.Errorf("BoardPackage = %q, want %q", childSpec.BoardPackage, "example.com/parentboard")
+		}
+	})
+
+	t.Run("external wins over tinygoroot", func(t *testing.T) {
+		dir := t.TempDir()
+		extLinker := filepath.Join(dir, "targets", "pico.ld")
+		if err := os.MkdirAll(filepath.Dir(extLinker), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(extLinker, []byte("/* external */"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		targetPath := filepath.Join(dir, "board.json")
+		targetJSON := `{"inherits": ["pico"], "linkerscript": "targets/pico.ld", "extra-files": ["targets/pico.ld"]}`
+		if err := os.WriteFile(targetPath, []byte(targetJSON), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		extSpec, err := LoadTarget(&Options{Target: targetPath})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if extSpec.LinkerScript != extLinker {
+			t.Errorf("LinkerScript = %q, want %q", extSpec.LinkerScript, extLinker)
+		}
+		if !slices.Contains(extSpec.ExtraFiles, extLinker) {
+			t.Errorf("ExtraFiles = %v, missing %q", extSpec.ExtraFiles, extLinker)
+		}
+	})
+
+	t.Run("tinygoroot fallback", func(t *testing.T) {
+		dir := t.TempDir()
+		targetPath := filepath.Join(dir, "board.json")
+		targetJSON := `{"inherits": ["pico"], "linkerscript": "targets/pico.ld", "extra-files": ["src/runtime/missing_rel.c"]}`
+		if err := os.WriteFile(targetPath, []byte(targetJSON), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		extSpec, err := LoadTarget(&Options{Target: targetPath})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if extSpec.LinkerScript != "targets/pico.ld" {
+			t.Errorf("LinkerScript = %q, want %q", extSpec.LinkerScript, "targets/pico.ld")
+		}
+		if !slices.Contains(extSpec.ExtraFiles, "src/runtime/missing_rel.c") {
+			t.Errorf("ExtraFiles = %v, missing fallback path", extSpec.ExtraFiles)
+		}
+	})
+
+	t.Run("cwd fallback for json inherits", func(t *testing.T) {
+		cwdDir := t.TempDir()
+		targetDir := t.TempDir()
+		cwdParent := filepath.Join(cwdDir, "cwd_parent.json")
+		if err := os.WriteFile(cwdParent, []byte(`{"inherits": ["cortex-m"], "board-package": "example.com/cwd"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		childPath := filepath.Join(targetDir, "child.json")
+		if err := os.WriteFile(childPath, []byte(`{"inherits": ["cwd_parent.json"]}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(cwdDir)
+		extSpec, err := LoadTarget(&Options{Target: childPath})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if extSpec.BoardPackage != "example.com/cwd" {
+			t.Errorf("BoardPackage = %q, want %q", extSpec.BoardPackage, "example.com/cwd")
+		}
+	})
 }

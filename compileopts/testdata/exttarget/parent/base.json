@@ -1,0 +1,6 @@
+{
+	"inherits": ["cortex-m"],
+	"linkerscript": "parent.ld",
+	"extra-files": ["parent_init.c", "common.c", "src/runtime/fallback_only.c"],
+	"board-package": "example.com/parentboard"
+}

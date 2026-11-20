@@ -1,0 +1,1 @@
+/* parent linker script placeholder */
