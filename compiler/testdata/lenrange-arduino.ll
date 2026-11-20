@@ -147,7 +147,7 @@ deref.throw:                                      ; preds = %deref.next, %entry
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.indirectResult(ptr dereferenceable_or_null(1025) %return, ptr %s.data, i16 %s.len, i16 %s.cap, ptr %context) unnamed_addr addrspace(1) #0 {
+define hidden void @main.indirectResult(ptr captures(none) dereferenceable_or_null(1025) %return, ptr %s.data, i16 %s.len, i16 %s.cap, ptr %context) unnamed_addr addrspace(1) #0 {
 entry:
   call addrspace(1) void @llvm.memset.p0.i16(ptr noundef nonnull align 1 dereferenceable(1025) %return, i8 0, i16 1025, i1 false)
   ret void

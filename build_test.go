@@ -66,6 +66,7 @@ func TestBuild(t *testing.T) {
 	t.Parallel()
 
 	tests := []string{
+		"aggregate.go",
 		"aggregatestorage.go",
 		"alias.go",
 		"atomic.go",
@@ -654,6 +655,10 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 
 			case "slicebounds.go":
 				// Reslicing returns wrong lengths on AVR, also without the len <= cap assume.
+				continue
+
+			case "aggregate.go":
+				// Its 33 byte values and goroutines overflow the small AVR stack.
 				continue
 
 			case "map_bigkey.go":

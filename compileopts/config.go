@@ -297,9 +297,12 @@ func (c *Config) StackSize() uint64 {
 	return c.Target.DefaultStackSize
 }
 
+// LargeStackSize is the smallest stack size that allows larger stack allocations.
+const LargeStackSize = 16 * 1024
+
 // MaxStackAlloc returns the size of the maximum allocation to put on the stack vs heap.
 func (c *Config) MaxStackAlloc() uint64 {
-	if c.StackSize() >= 16*1024 {
+	if c.StackSize() >= LargeStackSize {
 		return 1024
 	}
 
