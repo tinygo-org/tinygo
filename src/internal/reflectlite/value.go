@@ -2787,6 +2787,8 @@ func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool) {
 
 	states := make([]chanSelectState, len(cases))
 	defaultIndex := -1
+	var recvSize uintptr
+	var recvLayout unsafe.Pointer
 	for i, c := range cases {
 		switch c.Dir {
 		default:
@@ -2824,7 +2826,19 @@ func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool) {
 			c.Chan.recvCheck("reflect.Select")
 			states[i].ch = c.Chan.pointer()
 			elem := c.Chan.typecode.elem()
-			states[i].recvbuf = alloc(elem.Size(), elem.gcLayout())
+			recvSize = max(recvSize, elem.Size())
+			recvLayout = selectRecvLayout(recvLayout, elem.gcLayout())
+		}
+	}
+
+	// Only the chosen case writes to the receive buffer, so all receive cases
+	// can share one buffer.
+	if recvLayout != nil {
+		recvbuf := alloc(recvSize, recvLayout)
+		for i, c := range cases {
+			if c.Dir == SelectRecv {
+				states[i].recvbuf = recvbuf
+			}
 		}
 	}
 
@@ -2850,6 +2864,18 @@ func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool) {
 		return chosen, chanRecvValue(value), ok
 	}
 	return chosen, Value{}, false
+}
+
+// selectRecvLayout returns a GC layout that covers values with layout a or b.
+func selectRecvLayout(a, b unsafe.Pointer) unsafe.Pointer {
+	switch {
+	case a == nil || a == gclayout.NoPtrs.AsPtr():
+		return b
+	case b == gclayout.NoPtrs.AsPtr() || a == b:
+		return a
+	default:
+		return gclayout.Conservative.AsPtr()
+	}
 }
 
 func (v Value) sendCheck(x Value, method string) {
