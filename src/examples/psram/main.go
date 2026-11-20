@@ -1,10 +1,11 @@
 package main
 
 // This example demonstrates how to use external PSRAM on supported targets
-// (e.g., -target=esp32s3-n16r8-devkit).
+// (e.g., -target=esp32s3-n16r8-devkit or -target=pico-plus2).
 //
 // Variables placed in the `.psram` section via the `//go:section .psram`
 // pragma are stored in external PSRAM rather than internal SRAM.
+// Do not put sync/atomic values or sync types in PSRAM, see machine.PSRAM.
 // Note: importing "unsafe" is required to enable `//go:section`.
 
 import (
