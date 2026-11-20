@@ -1,4 +1,4 @@
-//go:build wasip1
+//go:build wasip1 && !wasip3
 
 // Package poll is a minimal subset of upstream Go's internal/poll, scoped
 // to what is needed to back a wasip1 net implementation on top of

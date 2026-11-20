@@ -319,6 +319,11 @@ tinygo-test-wasip2-slow:
 tinygo-test-wasip2-fast:
 	$(call run-tinygo-tests,$(TEST_PACKAGES_FAST_WASIP2) ./tests/runtime_wasi,-target=wasip2,$(TEST_SKIP_FLAG))
 
+tinygo-test-wasip3-slow:
+	$(call run-tinygo-tests,$(TEST_PACKAGES_SLOW),-target=wasip3,$(TEST_SKIP_FLAG))
+tinygo-test-wasip3-fast:
+	$(call run-tinygo-tests,$(TEST_PACKAGES_FAST_WASIP2) ./tests/runtime_wasi,-target=wasip3,$(TEST_SKIP_FLAG))
+
 tinygo-test-wasip2-sum-slow:
 	TINYGO=$(TINYGO) \
 	TARGET=wasip2 \

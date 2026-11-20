@@ -17,6 +17,7 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/diagnostics"
 	"github.com/tinygo-org/tinygo/goenv"
+	"tinygo.org/x/go-llvm"
 )
 
 func TestReflectMethodReferences(t *testing.T) {
@@ -157,6 +158,7 @@ func TestBuild(t *testing.T) {
 		"go1.21.go",
 		"go1.22/",
 		"go1.23/",
+		"goroutine-waves.go",
 		"goroutines.go",
 		"init.go",
 		"init_multi.go",
@@ -184,6 +186,7 @@ func TestBuild(t *testing.T) {
 		"stringfrombytes.go",
 		"stringfrombytes_stress.go",
 		"structs.go",
+		"sync-contention.go",
 		"testing.go",
 		"timer_node_reuse_gc.go",
 		"timers.go",
@@ -211,7 +214,7 @@ func TestBuild(t *testing.T) {
 		runPlatTests(hostOptions, tests, t)
 		for _, name := range gcStackNativeTests {
 			t.Run(name, func(t *testing.T) {
-				if runtime.GOOS == "windows" && (name == "gcstacks-stale.go" || name == "gcstacks-blocked.go") {
+				if runtime.GOOS == "windows" && (name == "gcstacks-stale.go" || name == "gcstacks-sleepers.go" || name == "gcstacks-blocked.go") {
 					t.Skip("boehm scans whole goroutine stacks with the tasks scheduler")
 				}
 				t.Parallel()
@@ -502,6 +505,15 @@ func TestBuild(t *testing.T) {
 			runGCLivenessTest(optionsFromTarget("wasip2", sema), t)
 			runGCStackTests(t, optionsFromTarget("wasip2", sema))
 		})
+		t.Run("WASIp3", func(t *testing.T) {
+			if llvm.VersionMajor < 23 {
+				t.Skipf("wasip3 requires LLVM 23 or newer, have %s", llvm.Version)
+			}
+			t.Parallel()
+			runPlatTests(optionsFromTarget("wasip3", sema), tests, t)
+			runGCLivenessTest(optionsFromTarget("wasip3", sema), t)
+			runGCStackTests(t, optionsFromTarget("wasip3", sema))
+		})
 	}
 
 	// Linux CI also tests the other Linux architectures without -short, so
@@ -576,6 +588,7 @@ var gcStackNativeTests = []string{
 	"gcstacks-exit.go",
 	"gcstacks-panics.go",
 	"gcstacks-queues.go",
+	"gcstacks-sleepers.go",
 	"gcstacks-stale.go",
 }
 
@@ -595,6 +608,9 @@ func runGCStackTests(t *testing.T, options compileopts.Options) {
 	t.Helper()
 	for _, name := range gcStackTests {
 		t.Run(name, func(t *testing.T) {
+			if options.Target == "wasip3" && (name == "gcstacks-blocked.go" || name == "gcstacks-soak.go") {
+				t.Skip("each goroutine is a thread, which the GC cannot free while it is blocked")
+			}
 			t.Parallel()
 			runTest(name, options, t, nil, nil)
 		})
@@ -681,7 +697,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			}
 		}
 		if options.GOOS == "linux" && (options.GOARCH == "mips" || options.GOARCH == "mipsle") {
-			if name == "atomic.go" || name == "timers.go" {
+			if name == "atomic.go" || name == "timers.go" || name == "sync-contention.go" || name == "goroutine-waves.go" {
 				// 64-bit atomic operations aren't currently supported on MIPS.
 				continue
 			}
@@ -715,7 +731,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// limited amount of memory.
 				continue
 
-			case "aggregatestorage.go", "stringfrombytes_stress.go":
+			case "aggregatestorage.go", "stringfrombytes_stress.go", "sync-contention.go", "goroutine-waves.go":
 				// Needs more RAM than AVR has.
 				continue
 
@@ -758,7 +774,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			default:
 			}
 		}
-		if options.Target == "wasip2" {
+		if options.Target == "wasip2" || options.Target == "wasip3" {
 			switch name {
 			case "cgo/":
 				// waisp2 use our own libc; cgo tests fail
@@ -815,7 +831,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("env.go", options, t, []string{"first", "second"}, []string{"ENV1=VALUE1", "ENV2=VALUE2"})
 		})
 	}
-	if isWebAssembly {
+	// wasip3 requires the threads scheduler.
+	if isWebAssembly && options.Target != "wasip3" {
 		t.Run("alias.go-scheduler-none", func(t *testing.T) {
 			t.Parallel()
 			options := compileopts.Options(options)
@@ -845,7 +862,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Parallel()
 		runTest("recover.go", options, t, nil, nil)
 	})
-	if isWebAssembly {
+	if isWebAssembly && options.Target != "wasip3" {
 		t.Run("recover-explicit.go", func(t *testing.T) {
 			t.Parallel()
 			options := compileopts.Options(options)

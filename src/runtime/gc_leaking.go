@@ -49,6 +49,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	heapptr += size
 	if heapptr < addr {
 		// The allocation size overflowed the heap pointer.
+		gcLock.Unlock()
 		runtimePanic(errOutOfMemory)
 	}
 	for heapptr > heapEnd {
@@ -59,6 +60,8 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			continue
 		}
 		// Failed to make the heap bigger, so we must really be out of memory.
+		// Printing the message can allocate, so do not hold the lock.
+		gcLock.Unlock()
 		runtimeFatal("out of memory")
 	}
 	gcLock.Unlock()

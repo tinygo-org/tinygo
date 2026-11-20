@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"slices"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -72,7 +73,9 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 	if config.PanicUnwind() == "explicit" && !config.SupportsExplicitUnwind() {
 		return nil, fmt.Errorf("explicit panic unwinding is not supported on %s", config.Triple())
 	}
-	if config.PanicUnwind() == "explicit" && config.Scheduler() == "threads" {
+	// Cooperative threads (wasip3) only switch at blocking calls, so a single
+	// unwind signal is enough there.
+	if config.PanicUnwind() == "explicit" && config.Scheduler() == "threads" && !slices.Contains(config.BuildTags(), "wasip3") {
 		return nil, errors.New("explicit panic unwinding is not supported with the threads scheduler")
 	}
 	return config, nil

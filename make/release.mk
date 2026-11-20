@@ -125,7 +125,10 @@ endif
 	@cp -rp lib/wasi-libc/libc-top-half/sources                     build/release/tinygo/lib/wasi-libc/libc-top-half
 	@cp -rp lib/wasi-libc-wasip2-stub.c                             build/release/tinygo/lib
 	@cp -rp lib/wasi-libc-lockfile-stub.c                           build/release/tinygo/lib
+	@cp -rp lib/wasi-libc-wasip3-stub.c                             build/release/tinygo/lib
 	@cp -rp lib/wasi-libc/wasi/p2/wit                                build/release/tinygo/lib/wasi-libc/wasi/p2
+	@mkdir -p build/release/tinygo/lib/wasi-libc/wasi/p3
+	@cp -rp lib/wasi-libc/wasi/p3/wit                               build/release/tinygo/lib/wasi-libc/wasi/p3
 	@cp -rp lib/xtensa/include                                      build/release/tinygo/lib/xtensa
 	@cp -rp ${LLVM_PROJECTDIR}/compiler-rt/lib/builtins build/release/tinygo/lib/compiler-rt-builtins
 	@cp -rp ${LLVM_PROJECTDIR}/compiler-rt/LICENSE.TXT  build/release/tinygo/lib/compiler-rt-builtins

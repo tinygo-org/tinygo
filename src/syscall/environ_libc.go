@@ -1,4 +1,4 @@
-//go:build nintendoswitch || wasip1
+//go:build nintendoswitch || (wasip1 && !wasip3)
 
 package syscall
 
