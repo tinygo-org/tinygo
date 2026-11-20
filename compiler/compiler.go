@@ -2667,6 +2667,87 @@ func (c *context) maxSliceAllocationSize(elementType llvm.Type) uint64 {
 	return min(maxSize, (uint64(1)<<goHeapAddressBits)/elementSize)
 }
 
+// makeSliceCheckIsRedundant returns whether the bounds check for a make
+// can never fail, because len <= cap and cap fits in an allocation.
+func (b *builder) makeSliceCheckIsRedundant(expr *ssa.MakeSlice, elemType llvm.Type, maxAllocationSize uint64) bool {
+	if lc, ok := expr.Len.(*ssa.Const); ok && lc.Value != nil {
+		if cc, ok := expr.Cap.(*ssa.Const); ok && cc.Value != nil {
+			l, lok := constant.Uint64Val(constant.ToInt(lc.Value))
+			c, cok := constant.Uint64Val(constant.ToInt(cc.Value))
+			return lok && cok && l <= c && c <= maxAllocationSize
+		}
+		l, lok := constant.Uint64Val(constant.ToInt(lc.Value))
+		if !lok || l != 0 {
+			return false
+		}
+	} else if !sameLenOrCap(expr.Len, expr.Cap) {
+		return false
+	}
+	return b.capFitsAllocation(expr.Cap, elemType, maxAllocationSize)
+}
+
+// sameLenOrCap returns whether a and b are the same value or equal
+// len/cap calls on the same operand.
+func sameLenOrCap(a, b ssa.Value) bool {
+	if a == b {
+		return true
+	}
+	ca, ok1 := a.(*ssa.Call)
+	cb, ok2 := b.(*ssa.Call)
+	if !ok1 || !ok2 {
+		return false
+	}
+	ba, ok1 := ca.Call.Value.(*ssa.Builtin)
+	bb, ok2 := cb.Call.Value.(*ssa.Builtin)
+	if !ok1 || !ok2 || ba.Name() != bb.Name() || (ba.Name() != "len" && ba.Name() != "cap") {
+		return false
+	}
+	return ca.Call.Args[0] == cb.Call.Args[0]
+}
+
+// capFitsAllocation returns whether v is known to be between 0 and
+// maxAllocationSize.
+func (b *builder) capFitsAllocation(v ssa.Value, elemType llvm.Type, maxAllocationSize uint64) bool {
+	if basic, ok := v.Type().Underlying().(*types.Basic); ok && basic.Info()&types.IsUnsigned != 0 {
+		bits := b.getLLVMType(v.Type()).IntTypeWidth()
+		if bits < 64 && (uint64(1)<<bits)-1 <= maxAllocationSize {
+			return true
+		}
+	}
+
+	if maxAllocationSize != b.maxSliceSize(elemType) {
+		return false
+	}
+	call, ok := v.(*ssa.Call)
+	if !ok {
+		return false
+	}
+	builtin, ok := call.Call.Value.(*ssa.Builtin)
+	if !ok || (builtin.Name() != "len" && builtin.Name() != "cap") {
+		return false
+	}
+	var srcElem types.Type
+	switch arg := call.Call.Args[0].Type().Underlying().(type) {
+	case *types.Basic: // string
+		return arg.Info()&types.IsString != 0 && builtin.Name() == "len"
+	case *types.Slice:
+		srcElem = arg.Elem()
+	case *types.Array:
+		srcElem = arg.Elem()
+	case *types.Pointer:
+		array, ok := arg.Elem().Underlying().(*types.Array)
+		if !ok {
+			return false
+		}
+		srcElem = array.Elem()
+	default:
+		return false
+	}
+	srcSize := b.targetData.TypeAllocSize(b.getLLVMType(srcElem))
+	dstSize := b.targetData.TypeAllocSize(elemType)
+	return srcSize >= dstSize && srcSize > 0
+}
+
 // createExpr translates a Go SSA expression to LLVM IR. This can be zero, one,
 // or multiple LLVM IR instructions and/or runtime calls.
 func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
@@ -2949,7 +3030,9 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 		capType := expr.Cap.Type().Underlying().(*types.Basic)
 		maxAllocationSize := b.maxSliceAllocationSize(llvmElemType)
 		maxSizeValue := llvm.ConstInt(b.uintptrType, maxAllocationSize, false)
-		b.createSliceBoundsCheck(maxSizeValue, sliceLen, sliceCap, sliceCap, lenType, capType, capType, false)
+		if !b.makeSliceCheckIsRedundant(expr, llvmElemType, maxAllocationSize) {
+			b.createSliceBoundsCheck(maxSizeValue, sliceLen, sliceCap, sliceCap, lenType, capType, capType, false)
+		}
 
 		// Allocate the backing array.
 		sliceCapCast, err := b.createConvert(expr.Cap.Type(), types.Typ[types.Uintptr], sliceCap, expr.Pos())
