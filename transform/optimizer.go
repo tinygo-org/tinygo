@@ -45,6 +45,12 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		fn.SetLinkage(llvm.ExternalLinkage)
 	}
 
+	// Without the optimizer no //go:nopanic check is proven, so the checks
+	// panic as usual.
+	if speedLevel == 0 {
+		LowerNoPanic(mod)
+	}
+
 	if errs := CheckNoRuntime(mod); len(errs) != 0 {
 		return errs
 	}
@@ -195,6 +201,10 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		if err := mod.RunPasses("globaldce", llvm.TargetMachine{}, cleanupOptions); err != nil {
 			return []error{fmt.Errorf("could not run final globaldce pass: %w", err)}
 		}
+	}
+
+	if errs := CheckNoPanic(mod); len(errs) != 0 {
+		return errs
 	}
 
 	if config.Options.PrintBounds != nil {
