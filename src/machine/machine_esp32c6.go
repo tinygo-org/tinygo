@@ -419,10 +419,7 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 }
 
 func (uart *UART) SetBaudRate(baudRate uint32) {
-	// based on esp-idf
-	max_div := uint32((1 << 12) - 1)
-	sclk_div := (uartClockFreq + (max_div * baudRate) - 1) / (max_div * baudRate)
-	clk_div := (uartClockFreq << 4) / (baudRate * sclk_div)
+	clk_div, sclk_div := uartDividers(baudRate)
 	uart.Bus.SetCLKDIV(clk_div >> 4)
 	uart.Bus.SetCLKDIV_FRAG(clk_div & 0xf)
 	// On C6, the SCLK divisor is in the PCR register.
