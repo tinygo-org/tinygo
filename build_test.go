@@ -95,6 +95,7 @@ func TestBuild(t *testing.T) {
 		"init_multi.go",
 		"interface-blank.go",
 		"interface.go",
+		"makeslice.go",
 		"json.go",
 		"localtypes/",
 		"localtypes.go",
