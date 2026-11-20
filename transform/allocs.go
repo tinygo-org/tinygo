@@ -186,6 +186,10 @@ func valueEscapesAt(value llvm.Value) llvm.Value {
 	analysis := escapeAnalysis{
 		visiting: make(map[llvm.Value]struct{}),
 		results:  make(map[escapeKey]escapeResult),
+		originFn: value.InstructionParent().Parent(),
+		// An allocation that runs more than once per call reuses its stack
+		// slot, so older objects must not stay reachable through a PHI.
+		originInCycle: value.InstructionParent().InCycle(),
 	}
 	return analysis.valueEscapesAt(value, false).escapeAt
 }
@@ -198,6 +202,13 @@ type escapeKey struct {
 type escapeAnalysis struct {
 	visiting map[llvm.Value]struct{}
 	results  map[escapeKey]escapeResult
+
+	originFn      llvm.Value
+	originInCycle bool
+
+	// cuts counts the PHIs that were reached again while they were still
+	// being checked.
+	cuts int
 }
 
 type escapeResult struct {
@@ -221,6 +232,12 @@ func (r *escapeResult) merge(other escapeResult) bool {
 
 func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (result escapeResult) {
 	if _, ok := a.visiting[value]; ok {
+		if !value.IsAPHINode().IsNil() {
+			// A value flowing around a loop back into the same PHI. The
+			// first visit already checks every use of the PHI.
+			a.cuts++
+			return escapeResult{}
+		}
 		// Recursive call graph while following returned parameters. Treat this
 		// as escaping to keep the analysis conservative and bounded.
 		return escapeResult{escapeAt: value}
@@ -232,9 +249,15 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 		return result
 	}
 	a.visiting[value] = struct{}{}
+	cuts := a.cuts
 	defer func() {
 		delete(a.visiting, value)
-		a.results[key] = result
+		// A result that stopped at a PHI that was still being checked misses
+		// what that PHI reaches, such as a return. It is only right for this
+		// path, so don't reuse it.
+		if a.cuts == cuts {
+			a.results[key] = result
+		}
 	}()
 
 	for use := range llvmutil.Uses(value) {
@@ -247,7 +270,10 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 				return result
 			}
 		case llvm.PHI:
-			if use.InstructionParent().InCycle() {
+			// A PHI in another function runs once per call of the allocating
+			// function, so the object cannot be overwritten through it.
+			if a.originInCycle && use.InstructionParent().Parent() == a.originFn &&
+				use.InstructionParent().InCycle() {
 				return escapeResult{escapeAt: use}
 			}
 			fallthrough
@@ -271,6 +297,17 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 			// Store only escapes when the value is stored to, not when the
 			// value is stored into another value.
 			if use.Operand(0) == value {
+				// Storing into a local stack slot is fine as long as the
+				// pointers loaded from it don't escape either. An allocation
+				// that runs in a loop reuses its stack slot, so the pointer
+				// must not stay reachable in memory across iterations.
+				if slot := use.Operand(1).UnderlyingObject(); !a.originInCycle && !slot.IsAAllocaInst().IsNil() &&
+					slot.InstructionParent().Parent() == use.InstructionParent().Parent() {
+					if !result.merge(a.stackSlotEscapesAt(slot, allowReturn)) {
+						return result
+					}
+					break
+				}
 				return escapeResult{escapeAt: use}
 			}
 		case llvm.Call:
@@ -293,6 +330,51 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 
 	// Checked all uses, and none let the pointer value escape.
 	return result
+}
+
+// stackSlotEscapesAt reports whether a pointer stored in the given alloca can
+// escape. The alloca itself must stay local and every pointer loaded from it
+// must not escape.
+func (a *escapeAnalysis) stackSlotEscapesAt(slot llvm.Value, allowReturn bool) escapeResult {
+	if _, ok := a.visiting[slot]; ok {
+		return escapeResult{escapeAt: slot}
+	}
+	a.visiting[slot] = struct{}{}
+	defer delete(a.visiting, slot)
+
+	var check func(ptr llvm.Value) escapeResult
+	check = func(ptr llvm.Value) escapeResult {
+		var res escapeResult
+		for _, use := range getUses(ptr) {
+			switch use.InstructionOpcode() {
+			case llvm.GetElementPtr:
+				if !res.merge(check(use)) {
+					return res
+				}
+			case llvm.Store:
+				if use.Operand(0) == ptr {
+					// The address of the slot is stored somewhere.
+					return escapeResult{escapeAt: use}
+				}
+			case llvm.Load:
+				if typeHasPointers(use.Type()) {
+					if !res.merge(a.valueEscapesAt(use, allowReturn)) {
+						return res
+					}
+				}
+			case llvm.Call:
+				// Lifetime markers don't let the slot escape.
+				callee := use.CalledValue()
+				if callee.IsAFunction().IsNil() || !strings.HasPrefix(callee.Name(), "llvm.lifetime.") {
+					return escapeResult{escapeAt: use}
+				}
+			default:
+				return escapeResult{escapeAt: use}
+			}
+		}
+		return res
+	}
+	return check(slot)
 }
 
 // callValueEscapesAt returns whether value escapes through this call. It also
