@@ -399,6 +399,17 @@ func CapturesNoProvenance(attr llvm.Attribute) bool {
 	return v&provenance == 0 && (v>>4)&provenance == 0
 }
 
+// PtrToAddr is the opcode of the ptrtoaddr instruction, which converts a
+// pointer to its address without capturing its provenance. It exists since
+// LLVM 22 (LLVMPtrToAddr in llvm-c/Core.h), go-llvm has no name for it yet.
+// The value is unused by older versions.
+const PtrToAddr llvm.Opcode = 69
+
+// HasPtrToAddr reports whether the LLVM version has the ptrtoaddr instruction.
+func HasPtrToAddr() bool {
+	return llvm.VersionMajor >= 22
+}
+
 // UnsignedRangeAttribute returns a range attribute that limits an integer of
 // the given width to [0, max]. It returns a nil attribute before LLVM 19 or when max+1 does not fit.
 func UnsignedRangeAttribute(ctx llvm.Context, bits uint, max uint64) llvm.Attribute {

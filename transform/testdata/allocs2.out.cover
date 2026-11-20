@@ -5,7 +5,6 @@ testdata/allocs2.go:36.1,36.50 1 0
 testdata/allocs2.go:44.1,44.50 1 0
 testdata/allocs2.go:46.1,46.49 1 0
 testdata/allocs2.go:49.1,49.36 1 0
-testdata/allocs2.go:50.1,50.36 1 0
 testdata/allocs2.go:107.1,107.49 1 0
 testdata/allocs2.go:114.1,114.51 1 0
 testdata/allocs2.go:128.1,128.55 1 0
@@ -22,6 +21,6 @@ testdata/allocs2.go:294.1,294.42 1 0
 testdata/allocs2.go:299.1,299.42 1 0
 testdata/allocs2.go:305.1,305.42 1 0
 testdata/allocs2.go:311.1,311.52 1 0
-testdata/allocs2.go:312.1,312.52 1 0
+testdata/allocs2.go:313.1,313.64 1 0
 testdata/allocs2.go:317.1,317.42 1 0
 testdata/allocs2.go:364.1,364.50 1 0

@@ -331,6 +331,11 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 	for i, binding := range expr.Bindings {
 		// The context stores the bound variables.
 		llvmBoundVar := b.getValue(binding, getPos(expr))
+		if b.bindingByValue(expr, i) {
+			// Capture the value instead of a pointer to it.
+			store := b.capturedStore(binding.(*ssa.Alloc))
+			llvmBoundVar = b.getValue(store.Val, getPos(expr))
+		}
 		boundVars[i] = llvmBoundVar
 	}
 

@@ -183,6 +183,7 @@ func TestBuild(t *testing.T) {
 		"channel.go",
 		"chanrecover.go",
 		"clearloop.go",
+		"closurecapture.go",
 		"coreassign.go",
 		"coreswake.go",
 		"embed/",
@@ -759,8 +760,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// limited amount of memory.
 				continue
 
-			case "aggregatestorage.go", "stringfrombytes_stress.go":
+			case "aggregatestorage.go", "closurecapture.go", "stringfrombytes_stress.go":
 				// Needs more RAM than AVR has.
+				continue
+
+			case "sort.go":
+				// The AVR backend clobbers R31R30 when it adjusts SP for stack arguments.
 				continue
 
 			case "slicebounds.go":

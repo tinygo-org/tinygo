@@ -150,6 +150,23 @@ func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value
 	}
 }
 
+// unpackInt reads an integer that emitPointerPack stored in the pointer itself.
+// Since LLVM 22 it uses ptrtoaddr, which does not capture the provenance of
+// the pointer. With ptrtoint LLVM assumes the function captures its context,
+// and the escape analysis then keeps the context of every indirect call of
+// that type on the heap (see transform/functargets.go).
+func (b *builder) unpackInt(ptr llvm.Value, typ llvm.Type) llvm.Value {
+	if !llvmutil.HasPtrToAddr() {
+		return b.CreatePtrToInt(ptr, typ, "unpack.int")
+	}
+	// The result of ptrtoaddr must have the width of the pointer index.
+	addr := b.CreateCast(ptr, llvmutil.PtrToAddr, b.uintptrType, "unpack.addr")
+	if typ.IntTypeWidth() == b.uintptrType.IntTypeWidth() {
+		return addr
+	}
+	return b.CreateTrunc(addr, typ, "unpack.int")
+}
+
 // emitPointerUnpack extracts a list of values packed using emitPointerPack.
 func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []llvm.Value {
 	packedType := b.ctx.StructType(valueTypes, false)
@@ -167,7 +184,7 @@ func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []ll
 		// Packed data stored directly in pointer.
 		if len(valueTypes) == 1 && valueTypes[0].TypeKind() == llvm.IntegerTypeKind {
 			// Keep this cast in SSA form.
-			return []llvm.Value{b.CreatePtrToInt(ptr, valueTypes[0], "unpack.int")}
+			return []llvm.Value{b.unpackInt(ptr, valueTypes[0])}
 		}
 		// Fallback: load it using an alloca.
 		packedAlloc, _ = b.createTemporaryAlloca(b.dataPtrType, "unpack.raw.alloc")

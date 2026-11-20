@@ -27,8 +27,8 @@ declare void @runtime.exitGoroutine(ptr) #0
 ; Function Attrs: nounwind
 define linkonce_odr void @"main.regularFunction$gowrapper"(ptr %0) unnamed_addr #2 {
 entry:
-  %unpack.int = ptrtoint ptr %0 to i32
-  call void @main.regularFunction(i32 %unpack.int, ptr undef) #11
+  %unpack.addr = ptrtoaddr ptr %0 to i32
+  call void @main.regularFunction(i32 %unpack.addr, ptr undef) #11
   call void @runtime.exitGoroutine(ptr undef) #11
   unreachable
 }
@@ -51,8 +51,8 @@ entry:
 ; Function Attrs: nounwind
 define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(ptr %0) unnamed_addr #3 {
 entry:
-  %unpack.int = ptrtoint ptr %0 to i32
-  call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.int, ptr undef)
+  %unpack.addr = ptrtoaddr ptr %0 to i32
+  call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.addr, ptr undef)
   call void @runtime.exitGoroutine(ptr undef) #11
   unreachable
 }
