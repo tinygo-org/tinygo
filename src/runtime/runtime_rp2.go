@@ -382,8 +382,10 @@ func machineInit()
 
 func init() {
 	machineInit()
+	startPSRAM()
 
 	machine.InitSerial()
+	checkPSRAM()
 }
 
 func prerun() {
