@@ -379,6 +379,26 @@ func CapturesAtMostNullness(attr llvm.Attribute) bool {
 	return attr.GetEnumValue()&^0x11 == 0
 }
 
+// CapturesNoProvenance reports whether attr (looked up using the kind returned
+// by NoCaptureAttrName) allows at most the address of the pointer to be
+// captured, but not its provenance. Memory cannot be accessed through an
+// address without provenance, so the pointed-to object is not kept. Before
+// LLVM 21 there is no such distinction and this is the same as IsNoCapture.
+func CapturesNoProvenance(attr llvm.Attribute) bool {
+	if llvm.VersionMajor < 21 {
+		return IsNoCapture(attr)
+	}
+	if attr.IsNil() {
+		return false
+	}
+	// The value holds two sets of CaptureComponents (llvm/Support/ModRef.h),
+	// the one for the return value in the low 4 bits and the one for
+	// everything else in the next 4 bits. Bits 2 and 3 are the provenance.
+	const provenance = 0b1100
+	v := attr.GetEnumValue()
+	return v&provenance == 0 && (v>>4)&provenance == 0
+}
+
 // UnsignedRangeAttribute returns a range attribute that limits an integer of
 // the given width to [0, max]. It returns a nil attribute before LLVM 19 or when max+1 does not fit.
 func UnsignedRangeAttribute(ctx llvm.Context, bits uint, max uint64) llvm.Attribute {

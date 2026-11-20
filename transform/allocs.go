@@ -55,6 +55,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		heapallocs = append(heapallocs, getUses(allocator)...)
 	}
 
+	targets := &funcValueTargets{mod: mod}
 	for _, heapalloc := range heapallocs {
 		logAllocs := printAllocs != nil
 		report := func(reason string) {
@@ -89,7 +90,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 			continue
 		}
 
-		if at := valueEscapesAt(heapalloc); !at.IsNil() {
+		if at := valueEscapesAtWithTargets(heapalloc, targets); !at.IsNil() {
 			if logAllocs {
 				atPos := getPosition(at)
 				msg := "escapes at unknown line"
@@ -181,10 +182,16 @@ func FormatAllocCover(pos token.Position) string {
 	return fmt.Sprintf("%s:%d.1,%d.%d 1 0", pos.Filename, pos.Line, pos.Line, endCol)
 }
 
-// valueEscapesAt returns the instruction where the given value may escape and a
-// nil llvm.Value if it definitely doesn't. The value must be an instruction.
-func valueEscapesAt(value llvm.Value) llvm.Value {
+// valueEscapesAtWithTargets returns the instruction where the given value may
+// escape and a nil llvm.Value if it definitely doesn't. The value must be an
+// instruction. targets holds the functions that indirect calls can reach and
+// is reused across calls. It may be nil.
+func valueEscapesAtWithTargets(value llvm.Value, targets *funcValueTargets) llvm.Value {
+	if targets == nil {
+		targets = &funcValueTargets{mod: value.InstructionParent().Parent().GlobalParent()}
+	}
 	analysis := escapeAnalysis{
+		targets:  targets,
 		visiting: make(map[llvm.Value]visit),
 		results:  make(map[escapeKey]escapeResult),
 		cutAt:    noCut,
@@ -207,6 +214,9 @@ type escapeAnalysis struct {
 
 	originFn      llvm.Value
 	originInCycle bool
+
+	// targets tells what an indirect call can call.
+	targets *funcValueTargets
 
 	// depth counts the callee parameters that are being followed.
 	depth int
@@ -412,7 +422,25 @@ func (a *escapeAnalysis) stackSlotEscapesAt(slot llvm.Value, allowReturn bool) e
 func (a *escapeAnalysis) callValueEscapesAt(call, value llvm.Value, allowReturn bool) escapeResult {
 	called := call.CalledValue()
 	if called.IsAFunction().IsNil() {
-		return escapeResult{escapeAt: call}
+		// Indirect call (a func value or an interface method). The context
+		// is the last argument, and it is only exempt if none of the functions
+		// that can be called keeps it. Operands are the arguments followed by
+		// the called value.
+		contextIndex := call.OperandsCount() - 2
+		isContext := false
+		for i := 0; i < call.OperandsCount()-1; i++ {
+			if call.Operand(i) != value {
+				continue
+			}
+			if i != contextIndex {
+				return escapeResult{escapeAt: call}
+			}
+			isContext = true
+		}
+		if isContext && a.targets.contextCaptured(call) {
+			return escapeResult{escapeAt: call}
+		}
+		return escapeResult{}
 	}
 	kindNoCapture := llvm.AttributeKindID(llvmutil.NoCaptureAttrName())
 	kindReturned := llvm.AttributeKindID("returned")

@@ -142,7 +142,66 @@ define void @indirectCall(ptr %fn) {
   %p = call ptr @runtime.alloc(i32 4, ptr null)
   %result = call %outer @wrap(ptr %p)
   %inner = extractvalue %outer %result, 1
-  call void %fn(%inner %inner)
+  call void %fn(%inner %inner, ptr undef)
+  ret void
+}
+
+; The context of an indirect call only stays local if every function that can
+; be called leaves it alone. The functions of one signature are reached through
+; the tables at the end of the file.
+
+define void @indirectContext(ptr %fn) {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  call void %fn(ptr %p)
+  ret void
+}
+
+; Another function with this signature keeps its context.
+define void @indirectContextKept(ptr %fn) {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  call void %fn(i32 1, ptr %p)
+  ret void
+}
+
+; Returning the context hands it to the caller.
+define void @indirectContextReturned(ptr %fn) {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  %r = call ptr %fn(i64 1, ptr %p)
+  store ptr %r, ptr @pointerSink
+  ret void
+}
+
+; Nothing with this signature has its address taken, so the target is unknown.
+define void @indirectContextUnknown(ptr %fn) {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  call void %fn(i8 1, ptr %p)
+  ret void
+}
+
+define void @contextReader(ptr nocapture %ctx) {
+  %v = load i32, ptr %ctx
+  ret void
+}
+
+define void @contextKeeper(i32 %x, ptr %ctx) {
+  store ptr %ctx, ptr @pointerSink
+  ret void
+}
+
+define void @contextReaderOfKeeperType(i32 %x, ptr nocapture %ctx) {
+  %v = load i32, ptr %ctx
+  ret void
+}
+
+define ptr @contextReturner(i64 %x, ptr %ctx) {
+  ret ptr %ctx
+}
+
+@funcTable = global [4 x ptr] [ptr @contextReader, ptr @contextKeeper, ptr @contextReaderOfKeeperType, ptr @contextReturner]
+
+define void @indirectContextAndArg(ptr %fn) {
+  %p = call ptr @runtime.alloc(i32 4, ptr null)
+  call void %fn(ptr %p, ptr %p)
   ret void
 }
 
