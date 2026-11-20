@@ -819,26 +819,34 @@ func getParams(sig *types.Signature) iter.Seq2[int, *types.Var] {
 // addStandardDeclaredAttributes adds attributes that are set for any function,
 // whether declared or defined.
 func (c *context) addStandardDeclaredAttributes(llvmFn llvm.Value) {
+	for _, attr := range c.standardDeclaredAttrs {
+		llvmFn.AddFunctionAttr(attr)
+	}
+}
+
+// createStandardDeclaredAttributes returns the attributes that
+// addStandardDeclaredAttributes adds.
+func (c *context) createStandardDeclaredAttributes() []llvm.Attribute {
+	var attrs []llvm.Attribute
 	if c.SizeLevel >= 1 {
 		// Set the "optsize" attribute to make slightly smaller binaries at the
 		// cost of minimal performance loss (-Os in Clang).
 		kind := llvm.AttributeKindID("optsize")
-		attr := c.ctx.CreateEnumAttribute(kind, 0)
-		llvmFn.AddFunctionAttr(attr)
+		attrs = append(attrs, c.ctx.CreateEnumAttribute(kind, 0))
 	}
 	if c.SizeLevel >= 2 {
 		// Set the "minsize" attribute to reduce code size even further,
 		// regardless of performance loss (-Oz in Clang).
 		kind := llvm.AttributeKindID("minsize")
-		attr := c.ctx.CreateEnumAttribute(kind, 0)
-		llvmFn.AddFunctionAttr(attr)
+		attrs = append(attrs, c.ctx.CreateEnumAttribute(kind, 0))
 	}
 	if c.CPU != "" {
-		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("target-cpu", c.CPU))
+		attrs = append(attrs, c.ctx.CreateStringAttribute("target-cpu", c.CPU))
 	}
 	if c.Features != "" {
-		llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("target-features", c.Features))
+		attrs = append(attrs, c.ctx.CreateStringAttribute("target-features", c.Features))
 	}
+	return attrs
 }
 
 // addStandardDefinedAttributes adds the set of attributes that are added to
