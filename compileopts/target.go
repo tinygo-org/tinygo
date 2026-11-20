@@ -48,6 +48,7 @@ type TargetSpec struct {
 	CFlags           []string `json:"cflags,omitempty"`
 	LDFlags          []string `json:"ldflags,omitempty"`
 	LinkerScript     string   `json:"linkerscript,omitempty"`
+	PSRAMSize        string   `json:"psram-size,omitempty"` // external PSRAM window size, e.g. 16M; target default is linker-provided
 	ExtraFiles       []string `json:"extra-files,omitempty"`
 	RP2040BootPatch  *bool    `json:"rp2040-boot-patch,omitempty"` // Patch RP2040 2nd stage bootloader checksum
 	BootPatches      []string `json:"boot-patches,omitempty"`      // Bootloader patches to be applied in the order they appear.

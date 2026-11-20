@@ -31,6 +31,8 @@
  * virtual-address-overlap errors.
  */
 
+PROVIDE(__psram_size_default = 32M);
+
 MEMORY
 {
     /* HP L2MEM: unified IRAM/DRAM address space.
@@ -48,7 +50,7 @@ MEMORY
     FLASH (rx)  : ORIGIN = 0x40000000, LENGTH = 64M
 
     /* External PSRAM, mapped at the P4 PSRAM virtual base. */
-    PSRAM (rw)  : ORIGIN = 0x48000000, LENGTH = 32M
+    PSRAM (rw)  : ORIGIN = 0x48000000, LENGTH = DEFINED(__psram_size) ? __psram_size : __psram_size_default
 }
 
 /* The entry point. It is set in the image flashed to the chip, so must be
