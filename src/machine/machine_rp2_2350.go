@@ -14,6 +14,7 @@ const (
 	_NUMBANK0_IRQS   = 6
 	rp2350ExtraReg   = 1
 	_NUMIRQ          = 51
+	numPWMSlices     = 12
 	notimpl          = "rp2350: not implemented"
 	RESETS_RESET_Msk = 0x1fffffff
 	initUnreset      = rp.RESETS_RESET_ADC |

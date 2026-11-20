@@ -13,10 +13,6 @@ func CPUFrequency() uint32 {
 	return cpuFreq
 }
 
-func xtalFreqHz() uint32 {
-	return xoscFreq * MHz
-}
-
 // clockIndex identifies a hardware clock
 type clockIndex uint8
 
@@ -141,20 +137,6 @@ func (clk clock) configure(src, auxsrc, srcFreq, freq uint32) {
 
 }
 
-var pllsysFB, pllsysPD1, pllsysPD2 uint32
-
-// Compute clock dividers.
-//
-// Note that the entire init function is computed at compile time
-// by interp.
-func init() {
-	fb, _, pd1, pd2, err := calcPLLDivs(pllSearch{LockRefDiv: 1}, uint64(xtalFreqHz()), cpuFreq, MHz)
-	if err != nil {
-		panic(err)
-	}
-	pllsysFB, pllsysPD1, pllsysPD2 = uint32(fb), uint32(pd1), uint32(pd2)
-}
-
 // init initializes the clock hardware.
 //
 // Must be called before any other clock function.
@@ -179,12 +161,7 @@ func (clks *clocksType) init() {
 	for !clks.clk[clkRef].selected.HasBits(0x1) {
 	}
 
-	// Configure PLLs
-	//                   REF     FBDIV VCO            POSTDIV
-	// pllSys: 12 / 1 = 12MHz * 125 = 1500MHZ / 6 / 2 = 125MHz
-	// pllUSB: 12 / 1 = 12MHz * 40  = 480 MHz / 5 / 2 =  48MHz
-	pllSys.init(1, pllsysFB, pllsysPD1, pllsysPD2)
-	pllUSB.init(1, 40, 5, 2)
+	configurePLLs(xtalHz)
 
 	// Configure clocks
 	// clkRef = xosc (12MHz) / 1 = 12MHz

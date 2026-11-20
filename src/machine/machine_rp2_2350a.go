@@ -4,12 +4,9 @@ package machine
 
 import "device/rp"
 
-// Analog pins on RP2350a.
+// Analog pin base and internal temperature channel on RP2350A.
 const (
-	ADC0 Pin = GPIO26
-	ADC1 Pin = GPIO27
-	ADC2 Pin = GPIO28
-	ADC3 Pin = GPIO29
+	adc0Pin Pin = GPIO26
 
 	// fifth ADC channel.
 	thermADC = 30

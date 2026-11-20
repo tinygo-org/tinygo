@@ -8,18 +8,6 @@ import (
 	"internal/itoa"
 )
 
-// I2C on the RP2040/RP2350
-var (
-	I2C0  = &_I2C0
-	_I2C0 = I2C{
-		Bus: rp.I2C0,
-	}
-	I2C1  = &_I2C1
-	_I2C1 = I2C{
-		Bus: rp.I2C1,
-	}
-)
-
 // The I2C target implementation is based on the C implementation from
 // here: https://github.com/vmilea/pico_i2c_slave
 
@@ -112,25 +100,15 @@ func (i2c *I2C) Listen(addr uint16) error {
 //	SCL: 3, 7, 11, 15, 19, 27
 func (i2c *I2C) Configure(config I2CConfig) error {
 	const defaultBaud uint32 = 100_000 // 100kHz standard mode
-	if config.SCL == 0 && config.SDA == 0 {
-		// If config pins are zero valued or clock pin is invalid then we set default values.
-		switch i2c.Bus {
-		case rp.I2C0:
-			config.SCL = I2C0_SCL_PIN
-			config.SDA = I2C0_SDA_PIN
-		case rp.I2C1:
-			config.SCL = I2C1_SCL_PIN
-			config.SDA = I2C1_SDA_PIN
-		}
-	}
+	defaultI2CPins(&config, i2c.Bus)
 	var okSCL, okSDA bool
 	switch i2c.Bus {
 	case rp.I2C0:
-		okSCL = (config.SCL+3)%4 == 0
-		okSDA = (config.SDA+4)%4 == 0
+		okSCL = config.SCL < _NUMBANK0_GPIOS && (config.SCL+3)%4 == 0
+		okSDA = config.SDA < _NUMBANK0_GPIOS && (config.SDA+4)%4 == 0
 	case rp.I2C1:
-		okSCL = (config.SCL+1)%4 == 0
-		okSDA = (config.SDA+2)%4 == 0
+		okSCL = config.SCL < _NUMBANK0_GPIOS && (config.SCL+1)%4 == 0
+		okSDA = config.SDA < _NUMBANK0_GPIOS && (config.SDA+2)%4 == 0
 	}
 
 	switch {

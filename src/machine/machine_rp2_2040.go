@@ -13,6 +13,7 @@ const (
 	_NUMBANK0_GPIOS  = 30
 	_NUMBANK0_IRQS   = 4
 	_NUMIRQ          = 32
+	numPWMSlices     = 8
 	rp2350ExtraReg   = 0
 	RESETS_RESET_Msk = 0x01ffffff
 	initUnreset      = rp.RESETS_RESET_ADC |
@@ -46,12 +47,9 @@ const (
 	PinPIO1
 )
 
-// Analog pins on RP2040.
+// Analog pin base and internal temperature channel on RP2040.
 const (
-	ADC0 Pin = GPIO26
-	ADC1 Pin = GPIO27
-	ADC2 Pin = GPIO28
-	ADC3 Pin = GPIO29
+	adc0Pin Pin = GPIO26
 
 	thermADC = 30
 )

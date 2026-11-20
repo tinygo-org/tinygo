@@ -62,7 +62,8 @@ func usbVendorID() uint16 {
 		return usb.VendorID
 	}
 
-	return usb_VID
+	vid, _, _, _ := defaultUSBIdentity()
+	return vid
 }
 
 func usbProductID() uint16 {
@@ -70,7 +71,8 @@ func usbProductID() uint16 {
 		return usb.ProductID
 	}
 
-	return usb_PID
+	_, pid, _, _ := defaultUSBIdentity()
+	return pid
 }
 
 func usbManufacturer() string {
@@ -78,7 +80,8 @@ func usbManufacturer() string {
 		return usb.Manufacturer
 	}
 
-	return usb_STRING_MANUFACTURER
+	_, _, manufacturer, _ := defaultUSBIdentity()
+	return manufacturer
 }
 
 func usbProduct() string {
@@ -86,7 +89,8 @@ func usbProduct() string {
 		return usb.Product
 	}
 
-	return usb_STRING_PRODUCT
+	_, _, _, product := defaultUSBIdentity()
+	return product
 }
 
 func usbSerial() string {

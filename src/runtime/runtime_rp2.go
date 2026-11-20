@@ -362,11 +362,14 @@ func waitForEvents() {
 }
 
 func putchar(c byte) {
+	if serialNil() {
+		return
+	}
 	machine.Serial.WriteByte(c)
 }
 
 func getchar() byte {
-	for machine.Serial.Buffered() == 0 {
+	for serialNil() || machine.Serial.Buffered() == 0 {
 		Gosched()
 	}
 	v, _ := machine.Serial.ReadByte()
@@ -374,6 +377,9 @@ func getchar() byte {
 }
 
 func buffered() int {
+	if serialNil() {
+		return 0
+	}
 	return machine.Serial.Buffered()
 }
 
