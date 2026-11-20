@@ -271,3 +271,466 @@ exit:
 		t.Errorf("expected an error ending in %q, got %q", want, runErr.Error())
 	}
 }
+
+func TestInterpRunFuncBootHooks(t *testing.T) {
+	t.Parallel()
+
+	for _, hookName := range []string{"runtime.boardInit1", "runtime.socInit0"} {
+		t.Run(hookName, func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			mod := ctx.NewModule("board")
+			defer mod.Dispose()
+			mod.SetDataLayout("e-p:64:64-i64:64-n8:16:32:64")
+			builder := ctx.NewBuilder()
+			defer builder.Dispose()
+
+			i32Type := ctx.Int32Type()
+			ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+			// RunFunc protects globals within the hook-defining package module.
+			// Cross-package mutations are deferred to whole-program interp.Run.
+			serialGlobal := llvm.AddGlobal(mod, ptrType, "board.serial")
+			serialGlobal.SetInitializer(llvm.ConstNull(ptrType))
+			roPtrGlobal := llvm.AddGlobal(mod, ptrType, "board.roPtr")
+			roPtrGlobal.SetInitializer(llvm.ConstNull(ptrType))
+			uartGlobal := llvm.AddGlobal(mod, i32Type, "board.uart")
+			uartGlobal.SetInitializer(llvm.ConstInt(i32Type, 42, false))
+			observedGlobal := llvm.AddGlobal(mod, ptrType, "board.observed")
+			observedGlobal.SetInitializer(llvm.ConstNull(ptrType))
+
+			hookType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+			hookFn := llvm.AddFunction(mod, hookName, hookType)
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(hookFn, "entry"))
+			builder.CreateStore(uartGlobal, serialGlobal)
+			roLoaded := builder.CreateLoad(ptrType, roPtrGlobal, "ro")
+			mmioStore := builder.CreateStore(llvm.ConstInt(i32Type, 1, false), roLoaded)
+			mmioStore.SetVolatile(true)
+			builder.CreateRetVoid()
+
+			initFn := llvm.AddFunction(mod, "board.init", hookType)
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(initFn, "entry"))
+			builder.CreateStore(uartGlobal, roPtrGlobal)
+			loaded := builder.CreateLoad(ptrType, serialGlobal, "serial")
+			builder.CreateStore(loaded, observedGlobal)
+			builder.CreateRetVoid()
+
+			if err := RunFunc(
+				initFn,
+				time.Second,
+				DefaultMaxInterpBlockEntries,
+				false,
+			); err != nil {
+				t.Fatal(err)
+			}
+			if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+				t.Fatal(err)
+			}
+
+			if roInit := roPtrGlobal.Initializer(); roInit != uartGlobal {
+				t.Errorf("board.roPtr initializer = %v, want @board.uart", roInit)
+			}
+			updatedInit := mod.NamedFunction("board.init")
+			if updatedInit.IsNil() {
+				t.Fatal("missing board.init")
+			}
+			ir := updatedInit.String()
+			if strings.Contains(ir, "@board.roPtr") {
+				t.Errorf("board.init did not fold store to read-only @board.roPtr:\n%s", ir)
+			}
+			if !strings.Contains(ir, "load ptr, ptr @board.serial") {
+				t.Errorf("board.init folded away runtime load of @board.serial:\n%s", ir)
+			}
+			if !strings.Contains(ir, "store ptr %serial, ptr @board.observed") {
+				t.Errorf("board.init lost runtime store to @board.observed:\n%s", ir)
+			}
+		})
+	}
+}
+
+func TestInterpBootHookICmp(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("board")
+	defer mod.Dispose()
+	mod.SetDataLayout("e-p:64:64-i64:64-n8:16:32:64")
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	i32Type := ctx.Int32Type()
+	arrType := llvm.ArrayType(i32Type, 2)
+	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+
+	roTable := llvm.AddGlobal(mod, arrType, "board.roTable")
+	roTable.SetInitializer(llvm.ConstNull(arrType))
+	roDirect := llvm.AddGlobal(mod, i32Type, "board.roDirect")
+	roDirect.SetInitializer(llvm.ConstNull(i32Type))
+	serialGlobal := llvm.AddGlobal(mod, i32Type, "board.serial")
+	serialGlobal.SetInitializer(llvm.ConstNull(i32Type))
+	observedGlobal := llvm.AddGlobal(mod, i32Type, "board.observed")
+	observedGlobal.SetInitializer(llvm.ConstNull(i32Type))
+
+	hookType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+	hookFn := llvm.AddFunction(mod, "runtime.boardInit0", hookType)
+	hookEntry := ctx.AddBasicBlock(hookFn, "entry")
+	builder.SetInsertPointAtEnd(hookEntry)
+
+	// Cover both instruction-GEP icmp (at non-constant index) and direct-global icmp.
+	idxAlloca := builder.CreateAlloca(i32Type, "idx")
+	builder.CreateStore(llvm.ConstInt(i32Type, 1, false), idxAlloca)
+	dynIdx := builder.CreateLoad(i32Type, idxAlloca, "dynIdx")
+	dynGEP := builder.CreateInBoundsGEP(
+		arrType,
+		roTable,
+		[]llvm.Value{llvm.ConstInt(i32Type, 0, false), dynIdx},
+		"dynElem",
+	)
+	_ = builder.CreateICmp(llvm.IntEQ, dynGEP, llvm.ConstNull(ptrType), "gepIsNull")
+	_ = builder.CreateLoad(i32Type, dynGEP, "elemVal")
+	_ = builder.CreateICmp(llvm.IntEQ, roDirect, llvm.ConstNull(ptrType), "directIsNull")
+	_ = builder.CreateLoad(i32Type, roDirect, "directVal")
+	builder.CreateStore(llvm.ConstInt(i32Type, 7, false), serialGlobal)
+	builder.CreateRetVoid()
+
+	initFn := llvm.AddFunction(mod, "board.init", hookType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(initFn, "entry"))
+	wantTable := llvm.ConstArray(
+		i32Type,
+		[]llvm.Value{llvm.ConstInt(i32Type, 11, false), llvm.ConstInt(i32Type, 22, false)},
+	)
+	builder.CreateStore(wantTable, roTable)
+	builder.CreateStore(llvm.ConstInt(i32Type, 33, false), roDirect)
+	loaded := builder.CreateLoad(i32Type, serialGlobal, "serial")
+	builder.CreateStore(loaded, observedGlobal)
+	builder.CreateRetVoid()
+
+	if err := RunFunc(
+		initFn,
+		time.Second,
+		DefaultMaxInterpBlockEntries,
+		false,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := roTable.Initializer(); got != wantTable {
+		t.Errorf("board.roTable initializer = %v, want %v", got, wantTable)
+	}
+	if got := roDirect.Initializer(); got != llvm.ConstInt(i32Type, 33, false) {
+		t.Errorf("board.roDirect initializer = %v, want 33", got)
+	}
+	ir := mod.NamedFunction("board.init").String()
+	if strings.Contains(ir, "@board.roTable") || strings.Contains(ir, "@board.roDirect") {
+		t.Errorf("board.init did not fold stores to read-only globals:\n%s", ir)
+	}
+	if !strings.Contains(ir, "load i32, ptr @board.serial") {
+		t.Errorf("board.init folded away runtime load of @board.serial:\n%s", ir)
+	}
+}
+
+func TestInterpBootHookConstantCallback(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("board")
+	defer mod.Dispose()
+	mod.SetDataLayout("e-p:64:64-i64:64-n8:16:32:64")
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	i32Type := ctx.Int32Type()
+	i64Type := ctx.Int64Type()
+	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+
+	roPtrGlobal := llvm.AddGlobal(mod, ptrType, "board.roPtr")
+	roPtrGlobal.SetInitializer(llvm.ConstNull(ptrType))
+	uartGlobal := llvm.AddGlobal(mod, i32Type, "board.uart")
+	uartGlobal.SetInitializer(llvm.ConstInt(i32Type, 42, false))
+	writtenGlobal := llvm.AddGlobal(mod, i32Type, "board.written")
+	writtenGlobal.SetInitializer(llvm.ConstNull(i32Type))
+	observedGlobal := llvm.AddGlobal(mod, i32Type, "board.observed")
+	observedGlobal.SetInitializer(llvm.ConstNull(i32Type))
+
+	cbType := llvm.FunctionType(ctx.VoidType(), nil, false)
+	cbFn := llvm.AddFunction(mod, "board.callback", cbType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(cbFn, "entry"))
+	roLoaded := builder.CreateLoad(ptrType, roPtrGlobal, "ro")
+	mmioStore := builder.CreateStore(llvm.ConstInt(i32Type, 1, false), roLoaded)
+	mmioStore.SetVolatile(true)
+	builder.CreateStore(llvm.ConstInt(i32Type, 9, false), writtenGlobal)
+	builder.CreateRetVoid()
+
+	descType := ctx.StructType([]llvm.Type{i64Type}, false)
+	descGlobal := llvm.AddGlobal(mod, descType, "board.descriptor")
+	descGlobal.SetGlobalConstant(true)
+	descGlobal.SetInitializer(ctx.ConstStruct([]llvm.Value{
+		llvm.ConstPtrToInt(cbFn, i64Type),
+	}, false))
+
+	sinkType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+	sinkFn := llvm.AddFunction(mod, "board.sink", sinkType)
+
+	hookType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+	hookFn := llvm.AddFunction(mod, "runtime.boardInit0", hookType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(hookFn, "entry"))
+	builder.CreateCall(sinkType, sinkFn, []llvm.Value{descGlobal}, "")
+	builder.CreateRetVoid()
+
+	initFn := llvm.AddFunction(mod, "board.init", hookType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(initFn, "entry"))
+	builder.CreateStore(uartGlobal, roPtrGlobal)
+	loaded := builder.CreateLoad(i32Type, writtenGlobal, "written")
+	builder.CreateStore(loaded, observedGlobal)
+	builder.CreateRetVoid()
+
+	if err := RunFunc(
+		initFn,
+		time.Second,
+		DefaultMaxInterpBlockEntries,
+		false,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+
+	if roInit := roPtrGlobal.Initializer(); roInit != uartGlobal {
+		t.Errorf("board.roPtr initializer = %v, want @board.uart", roInit)
+	}
+	ir := mod.NamedFunction("board.init").String()
+	if strings.Contains(ir, "@board.roPtr") {
+		t.Errorf("board.init did not fold store to read-only @board.roPtr:\n%s", ir)
+	}
+	if !strings.Contains(ir, "load i32, ptr @board.written") {
+		t.Errorf("board.init folded away runtime load of @board.written:\n%s", ir)
+	}
+}
+
+func TestInterpBootHookWriteThroughLoadedPtr(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("board")
+	defer mod.Dispose()
+	mod.SetDataLayout("e-p:64:64-i64:64-n8:16:32:64")
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	i32Type := ctx.Int32Type()
+	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+	objType := ctx.StructType([]llvm.Type{i32Type, i32Type}, false)
+
+	pkgGlobal := llvm.AddGlobal(mod, ptrType, "board.pkgGlobal")
+	pkgGlobal.SetInitializer(llvm.ConstNull(ptrType))
+	objGlobal := llvm.AddGlobal(mod, objType, "board.obj")
+	objGlobal.SetInitializer(llvm.ConstNull(objType))
+	observedGlobal := llvm.AddGlobal(mod, ptrType, "board.observed")
+	observedGlobal.SetInitializer(llvm.ConstNull(ptrType))
+
+	hookType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+	hookFn := llvm.AddFunction(mod, "runtime.boardInit1", hookType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(hookFn, "entry"))
+	loadedPtr := builder.CreateLoad(ptrType, pkgGlobal, "p")
+	fieldPtr := builder.CreateInBoundsGEP(
+		objType,
+		loadedPtr,
+		[]llvm.Value{llvm.ConstInt(i32Type, 0, false), llvm.ConstInt(i32Type, 1, false)},
+		"field",
+	)
+	builder.CreateStore(llvm.ConstInt(i32Type, 99, false), fieldPtr)
+	builder.CreateRetVoid()
+
+	initFn := llvm.AddFunction(mod, "board.init", hookType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(initFn, "entry"))
+	builder.CreateStore(objGlobal, pkgGlobal)
+	readPtr := builder.CreateLoad(ptrType, pkgGlobal, "p")
+	builder.CreateStore(readPtr, observedGlobal)
+	builder.CreateRetVoid()
+
+	if err := RunFunc(
+		initFn,
+		time.Second,
+		DefaultMaxInterpBlockEntries,
+		false,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+
+	ir := mod.NamedFunction("board.init").String()
+	if !strings.Contains(ir, "store ptr @board.obj, ptr @board.pkgGlobal") {
+		t.Errorf("board.init lost runtime store to @board.pkgGlobal:\n%s", ir)
+	}
+	if !strings.Contains(ir, "load ptr, ptr @board.pkgGlobal") {
+		t.Errorf("board.init folded away runtime load of @board.pkgGlobal:\n%s", ir)
+	}
+}
+
+func TestInterpBootHookRejectsIndirectAndInterfaceCalls(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		iface   bool
+		wantErr string
+	}{
+		{name: "indirect call", iface: false, wantErr: "indirect call is not allowed in boot hook"},
+		{name: "interface call", iface: true, wantErr: "interface call is not allowed in boot hook"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			mod := ctx.NewModule("board")
+			defer mod.Dispose()
+			mod.SetDataLayout("e-p:64:64-i64:64-n8:16:32:64")
+			builder := ctx.NewBuilder()
+			defer builder.Dispose()
+
+			ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+			hookType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+			cbType := llvm.FunctionType(ctx.VoidType(), nil, false)
+
+			hookFn := llvm.AddFunction(mod, "runtime.boardInit1", hookType)
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(hookFn, "entry"))
+			if tc.iface {
+				ifaceFn := llvm.AddFunction(mod, "interface:{Init:func()}", cbType)
+				builder.CreateCall(cbType, ifaceFn, nil, "")
+			} else {
+				builder.CreateCall(cbType, hookFn.Param(0), nil, "")
+			}
+			builder.CreateRetVoid()
+
+			initFn := llvm.AddFunction(mod, "board.init", hookType)
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(initFn, "entry"))
+			builder.CreateRetVoid()
+
+			err := RunFunc(
+				initFn,
+				time.Second,
+				DefaultMaxInterpBlockEntries,
+				false,
+			)
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("got error %v, want substring %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestInterpBootHookVectorConstant(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("board")
+	defer mod.Dispose()
+	mod.SetDataLayout("e-p:64:64-i64:64-n8:16:32:64")
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	i32Type := ctx.Int32Type()
+	vecType := llvm.VectorType(i32Type, 2)
+	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+
+	vecGlobal := llvm.AddGlobal(mod, vecType, "board.vec")
+	vecGlobal.SetGlobalConstant(true)
+	vecGlobal.SetInitializer(llvm.ConstVector([]llvm.Value{
+		llvm.ConstInt(i32Type, 1, false),
+		llvm.ConstInt(i32Type, 2, false),
+	}, false))
+
+	sinkType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+	sinkFn := llvm.AddFunction(mod, "board.sink", sinkType)
+
+	hookType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+	hookFn := llvm.AddFunction(mod, "runtime.boardInit0", hookType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(hookFn, "entry"))
+	builder.CreateCall(sinkType, sinkFn, []llvm.Value{vecGlobal}, "")
+	builder.CreateRetVoid()
+
+	initFn := llvm.AddFunction(mod, "board.init", hookType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(initFn, "entry"))
+	builder.CreateRetVoid()
+
+	if err := RunFunc(
+		initFn,
+		time.Second,
+		DefaultMaxInterpBlockEntries,
+		false,
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInterpBootHookVolatileGEPStore(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("board")
+	defer mod.Dispose()
+	mod.SetDataLayout("e-p:64:64-i64:64-n8:16:32:64")
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	i32Type := ctx.Int32Type()
+	arrType := llvm.ArrayType(i32Type, 4)
+	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+
+	bufGlobal := llvm.AddGlobal(mod, arrType, "board.buf")
+	bufGlobal.SetInitializer(llvm.ConstNull(arrType))
+	observedGlobal := llvm.AddGlobal(mod, i32Type, "board.observed")
+	observedGlobal.SetInitializer(llvm.ConstNull(i32Type))
+
+	hookType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+	hookFn := llvm.AddFunction(mod, "runtime.boardInit1", hookType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(hookFn, "entry"))
+	idxAlloca := builder.CreateAlloca(i32Type, "idx")
+	builder.CreateStore(llvm.ConstInt(i32Type, 1, false), idxAlloca)
+	dynIdx := builder.CreateLoad(i32Type, idxAlloca, "dynIdx")
+	elemPtr := builder.CreateInBoundsGEP(
+		arrType,
+		bufGlobal,
+		[]llvm.Value{llvm.ConstInt(i32Type, 0, false), dynIdx},
+		"elem",
+	)
+	volStore := builder.CreateStore(llvm.ConstInt(i32Type, 1, false), elemPtr)
+	volStore.SetVolatile(true)
+	builder.CreateRetVoid()
+
+	initFn := llvm.AddFunction(mod, "board.init", hookType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(initFn, "entry"))
+	loaded := builder.CreateLoad(i32Type, bufGlobal, "buf0")
+	builder.CreateStore(loaded, observedGlobal)
+	builder.CreateRetVoid()
+
+	if err := RunFunc(
+		initFn,
+		time.Second,
+		DefaultMaxInterpBlockEntries,
+		false,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+
+	ir := mod.NamedFunction("board.init").String()
+	if !strings.Contains(ir, "load i32, ptr @board.buf") {
+		t.Errorf("board.init folded away runtime load of @board.buf:\n%s", ir)
+	}
+}
