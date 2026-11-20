@@ -2729,7 +2729,10 @@ func (b *builder) capFitsAllocation(v ssa.Value, elemType llvm.Type, maxAllocati
 	var srcElem types.Type
 	switch arg := call.Call.Args[0].Type().Underlying().(type) {
 	case *types.Basic: // string
-		return arg.Info()&types.IsString != 0 && builtin.Name() == "len"
+		if arg.Info()&types.IsString == 0 || builtin.Name() != "len" {
+			return false
+		}
+		srcElem = types.Typ[types.Byte]
 	case *types.Slice:
 		srcElem = arg.Elem()
 	case *types.Array:
