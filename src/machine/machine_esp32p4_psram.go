@@ -703,6 +703,13 @@ const PSRAMFramebufferBytes = 1024 * 600 * 2
 // psramFramebufferPages is the number of 64KB MMU pages needed for one frame.
 const psramFramebufferPages = (PSRAMFramebufferBytes + psramPageSize - 1) / psramPageSize
 
+// PSRAMMappedBytes is the PSRAM window exposed through machine.PSRAM().
+// The Nano and CrowPanel boards provide 32MB of external PSRAM.
+const PSRAMMappedBytes = 32 << 20
+
+// psramMappedPages is the number of 64KB MMU pages in PSRAMMappedBytes.
+const psramMappedPages = PSRAMMappedBytes / psramPageSize
+
 // InitPSRAM80MHz performs the full AP-Hex PSRAM bring-up used by the working
 // CrowPanel V1.2 example: MPLL=320MHz, PSRAM bus=80MHz, x16 hex mode,
 // 2048-byte pages, DLL enabled, then chip mode-register init over MSPI3.
@@ -727,7 +734,7 @@ func InitPSRAM80MHz() bool {
 	// Now configure the system controller (MSPI2) for cache/AXI access and map
 	// the physical pages into the CPU data address space.
 	ConfigurePSRAMController()
-	MapPSRAM(psramVAddrBase, 0, psramFramebufferPages)
+	MapPSRAM(psramVAddrBase, 0, psramMappedPages)
 
 	return PSRAMValidate(psramVAddrBase, PSRAMFramebufferBytes)
 }
