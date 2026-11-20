@@ -767,8 +767,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		}
 		if options.GOOS == "windows" {
 			switch name {
-			case "signal.go", "signalnotify.go":
-				// os/signal does not link on Windows.
+			case "signal.go":
+				// The Windows runtime does not deliver signals.
 				continue
 			}
 		}
