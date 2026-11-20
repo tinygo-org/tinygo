@@ -11,6 +11,7 @@ import (
 	"go/token"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"tinygo.org/x/go-llvm"
@@ -54,11 +55,14 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 	}
 
 	for _, heapalloc := range heapallocs {
-		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
+		logAllocs := printAllocs != nil
+		report := func(reason string) {
+			reportHeapAlloc(heapalloc, reason, printAllocs, logger)
+		}
 		if heapalloc.Operand(0).IsAConstantInt().IsNil() {
 			// Do not allocate variable length arrays on the stack.
 			if logAllocs {
-				logger(getPosition(heapalloc), "size is not constant")
+				report("size is not constant")
 			}
 			continue
 		}
@@ -67,8 +71,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		if size > maxStackAlloc {
 			// The maximum size for a stack allocation.
 			if logAllocs {
-				logger(getPosition(heapalloc),
-					fmt.Sprintf("object size %d exceeds maximum stack allocation size %d", size, maxStackAlloc))
+				report(fmt.Sprintf("object size %d exceeds maximum stack allocation size %d", size, maxStackAlloc))
 			}
 			continue
 		}
@@ -92,7 +95,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 				if atPos.Line != 0 {
 					msg = fmt.Sprintf("escapes at line %d", atPos.Line)
 				}
-				logger(getPosition(heapalloc), msg)
+				report(msg)
 			}
 			continue
 		}
@@ -125,6 +128,39 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		// Replace heap alloc with stack alloc.
 		heapalloc.ReplaceAllUsesWith(alloca)
 		heapalloc.EraseFromParentAsInstruction()
+	}
+}
+
+// reportHeapAlloc logs a heap allocation if its function matches the regexp.
+// An allocation inside a runtime function is also logged at the calls to that
+// function from other packages, so for example append is reported at its line.
+func reportHeapAlloc(heapalloc llvm.Value, reason string, re *regexp.Regexp, logger func(token.Position, string)) {
+	fn := heapalloc.InstructionParent().Parent()
+	if re.MatchString(fn.Name()) {
+		logger(getPosition(heapalloc), reason)
+	}
+	if !strings.HasPrefix(fn.Name(), "runtime.") {
+		return
+	}
+	visited := map[llvm.Value]struct{}{fn: {}}
+	work := []llvm.Value{fn}
+	for len(work) > 0 {
+		callee := work[len(work)-1]
+		work = work[:len(work)-1]
+		for _, call := range getUses(callee) {
+			if call.IsACallInst().IsNil() || call.CalledValue() != callee {
+				continue
+			}
+			caller := call.InstructionParent().Parent()
+			if strings.HasPrefix(caller.Name(), "runtime.") {
+				if _, ok := visited[caller]; !ok {
+					visited[caller] = struct{}{}
+					work = append(work, caller)
+				}
+			} else if re.MatchString(caller.Name()) {
+				logger(getPosition(call), fmt.Sprintf("%s, allocated in %s", reason, fn.Name()))
+			}
+		}
 	}
 }
 
