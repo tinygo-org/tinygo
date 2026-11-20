@@ -21,12 +21,10 @@ jobs:
         # macos-15: arm64 (oldest supported version as of 16-10-2026)
         # macos-15-intel: amd64 (last intel version to be supported by github runners)
         # See https://github.com/actions/runner-images/issues/13046
-        os: [macos-15, macos-15-intel]
-        include:
-          - os: macos-15
-            goarch: arm64
-          - os: macos-15-intel
-            goarch: amd64
+        include: >-
+          ${{ fromJSON(github.repository == 'tinygo-org/tinygo'
+          && '[{"os":"macos-15","goarch":"arm64"},{"os":"macos-15-intel","goarch":"amd64"}]'
+          || '[{"os":"macos-15-intel","goarch":"amd64"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Dependencies
@@ -63,6 +61,7 @@ jobs:
     # build-macos. Only build-macos saves that cache. The intel runner only
     # runs the smoke tests below, as the full suite is slow there.
     name: test-macos
+    if: github.repository == 'tinygo-org/tinygo'
     runs-on: macos-15
     steps:
       - name: Install Dependencies
@@ -89,6 +88,7 @@ jobs:
   stdlib-test-macos:
     # Test the standard library, compiled and run on the host itself.
     name: stdlib-test-macos
+    if: github.repository == 'tinygo-org/tinygo'
     needs: build-macos
     runs-on: macos-15
     steps:
@@ -127,14 +127,10 @@ jobs:
     needs: build-macos
     strategy:
       matrix:
-        os: [macos-15, macos-15-intel]
-        include:
-          - os: macos-15
-            goarch: arm64
-            smoketest: smoketest-quick
-          - os: macos-15-intel
-            goarch: amd64
-            smoketest: smoketest-host
+        include: >-
+          ${{ fromJSON(github.repository == 'tinygo-org/tinygo'
+          && '[{"os":"macos-15","goarch":"arm64","smoketest":"smoketest-quick"},{"os":"macos-15-intel","goarch":"amd64","smoketest":"smoketest-host"}]'
+          || '[{"os":"macos-15-intel","goarch":"amd64","smoketest":"smoketest-host"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Dependencies
@@ -169,6 +165,7 @@ jobs:
 
   test-macos-homebrew:
     name: homebrew-install
+    if: github.repository == 'tinygo-org/tinygo'
     runs-on: macos-latest
     strategy:
       matrix:
