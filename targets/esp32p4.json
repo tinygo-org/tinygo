@@ -17,7 +17,8 @@
 	"default-stack-size": 32768,
 	"linkerscript": "targets/esp32p4.ld",
 	"extra-files": [
-		"src/device/esp/esp32p4.S"
+		"src/device/esp/esp32p4.S",
+		"src/device/esp/esp32p4_psram.S"
 	],
 	"binary-format": "esp32p4",
 	"flash-method": "esp32flash",
