@@ -70,6 +70,8 @@ type Config struct {
 // must not contain function-dependent data such as an IR builder.
 type context struct {
 	*Config
+	captureStores               map[*ssa.Alloc]*ssa.Store          // see capture.go
+	closureSites                map[*ssa.Function]*ssa.MakeClosure // see capture.go
 	dumpSSA                     bool
 	mod                         llvm.Module
 	ctx                         llvm.Context
@@ -1410,6 +1412,10 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		freeVarTypes := make([]llvm.Type, len(b.fn.FreeVars))
 		for i, freeVar := range b.fn.FreeVars {
 			freeVarTypes[i] = b.getLLVMType(freeVar.Type())
+			if b.freeVarByValue(freeVar) {
+				// Captured by value, the context holds the value itself.
+				freeVarTypes[i] = b.getLLVMType(freeVar.Type().Underlying().(*types.Pointer).Elem())
+			}
 		}
 
 		// Load each free variable from the context pointer.
@@ -1687,6 +1693,10 @@ func (b *builder) createInstruction(instr ssa.Instruction) {
 	case *ssa.Send:
 		b.createChanSend(instr)
 	case *ssa.Store:
+		if alloc, ok := instr.Addr.(*ssa.Alloc); ok && b.capturedStore(alloc) == instr {
+			// Captured by value, the value is passed on directly.
+			return
+		}
 		llvmAddr := b.getValue(instr.Addr, getPos(instr))
 		b.createNilCheck(instr.Addr, llvmAddr, "store")
 		llvmType := b.getLLVMType(instr.Val.Type())
@@ -2763,6 +2773,10 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 
 	switch expr := expr.(type) {
 	case *ssa.Alloc:
+		if b.capturedStore(expr) != nil {
+			// Captured by value, nothing to allocate. See capture.go.
+			return llvm.ConstNull(b.dataPtrType), nil
+		}
 		typ := b.getLLVMType(expr.Type().Underlying().(*types.Pointer).Elem())
 		size := b.targetData.TypeAllocSize(typ)
 		// Move all "large" allocations to the heap.
@@ -4139,6 +4153,18 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 	if unop.Op == token.MUL {
 		if value := b.createDarwinCgoImportDynamicLoad(unop); !value.IsNil() {
 			return value, nil
+		}
+	}
+	if unop.Op == token.MUL {
+		switch ptr := unop.X.(type) {
+		case *ssa.Alloc:
+			if store := b.capturedStore(ptr); store != nil {
+				return b.getValue(store.Val, getPos(unop)), nil
+			}
+		case *ssa.FreeVar:
+			if b.freeVarByValue(ptr) {
+				return b.locals[ptr], nil
+			}
 		}
 	}
 	x := b.getValue(unop.X, getPos(unop))

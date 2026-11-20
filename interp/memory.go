@@ -195,7 +195,7 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 		}
 	} else if !llvmValue.IsAConstantExpr().IsNil() {
 		switch llvmValue.Opcode() {
-		case llvm.IntToPtr, llvm.PtrToInt, llvm.BitCast, llvm.GetElementPtr:
+		case llvm.IntToPtr, llvm.PtrToInt, llvmutil.PtrToAddr, llvm.Trunc, llvm.BitCast, llvm.GetElementPtr:
 			err := mv.markExternal(llvmValue.Operand(0), mark)
 			if err != nil {
 				return err
@@ -1099,9 +1099,11 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 		switch llvmValue.Opcode() {
 		case llvm.BitCast:
 			return v.set(llvmValue.Operand(0), r)
-		case llvm.IntToPtr, llvm.PtrToInt:
+		case llvm.IntToPtr, llvm.PtrToInt, llvmutil.PtrToAddr, llvm.Trunc:
 			// These truncate or zero-extend when sizes differ.
 			// https://llvm.org/docs/LangRef.html#ptrtoint-to-instruction
+			// A trunc of ptrtoaddr comes from unpacking a small integer from
+			// a constant context (see compiler/llvm.go unpackInt).
 			operand := llvmValue.Operand(0)
 			src := newRawValue(uint32(r.targetData.TypeAllocSize(operand.Type())))
 			if !src.set(operand, r) {

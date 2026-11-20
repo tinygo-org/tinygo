@@ -148,11 +148,12 @@ end:                                              ; preds = %loop
 
 define i32 @testPointerPhiCycle(i1 %condition) {
 entry:
-  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  %stackalloc = alloca [4 x i8], align 4
+  store [4 x i8] zeroinitializer, ptr %stackalloc, align 4
   br label %loop
 
 loop:                                             ; preds = %loop, %entry
-  %selected = phi ptr [ %alloc, %entry ], [ %next, %loop ]
+  %selected = phi ptr [ %stackalloc, %entry ], [ %next, %loop ]
   %next = getelementptr i8, ptr %selected, i32 0
   br i1 %condition, label %loop, label %end
 

@@ -141,6 +141,7 @@ func TestBuild(t *testing.T) {
 		"cgo/",
 		"channel.go",
 		"chanrecover.go",
+		"closurecapture.go",
 		"coreassign.go",
 		"embed/",
 		"finalizer.go",

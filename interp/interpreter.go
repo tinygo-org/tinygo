@@ -849,14 +849,14 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 			if r.debug {
 				r.debugf(depth, "gep: %v -> %v", operands, ptr)
 			}
-		case llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt:
+		case llvm.BitCast, llvm.IntToPtr, llvm.PtrToInt, llvmutil.PtrToAddr:
 			// Various bitcast-like instructions that all keep the same bits
 			// while changing the LLVM type.
 			// Because interp doesn't preserve the type, these operations are
 			// identity operations.
 			if inst.opcode != llvm.BitCast {
 				bits := int(r.pointerSize * 8)
-				if inst.opcode == llvm.PtrToInt {
+				if inst.opcode == llvm.PtrToInt || inst.opcode == llvmutil.PtrToAddr {
 					bits = inst.llvmInst.Type().IntTypeWidth()
 				}
 				if int(operands[0].len(r)*8) != bits {
@@ -1310,6 +1310,8 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 		result = r.builder.CreateBitCast(operands[0], inst.llvmInst.Type(), inst.name)
 	case llvm.PtrToInt:
 		result = r.builder.CreatePtrToInt(operands[0], inst.llvmInst.Type(), inst.name)
+	case llvmutil.PtrToAddr:
+		result = r.builder.CreateCast(operands[0], llvmutil.PtrToAddr, inst.llvmInst.Type(), inst.name)
 	case llvm.IntToPtr:
 		result = r.builder.CreateIntToPtr(operands[0], inst.llvmInst.Type(), inst.name)
 	case llvm.ExtractValue:

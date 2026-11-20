@@ -1,0 +1,9 @@
+named sees 5
+55 3 -1 42
+3 14 9 100 4
+pointers 1180
+285 1 s 2 3
+24 12 60 4
+kept 0 0
+kept 1 10
+kept 2 20

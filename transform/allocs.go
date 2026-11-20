@@ -54,6 +54,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		heapallocs = append(heapallocs, getUses(allocator)...)
 	}
 
+	targets := &funcValueTargets{mod: mod}
 	for _, heapalloc := range heapallocs {
 		logAllocs := printAllocs != nil
 		report := func(reason string) {
@@ -88,7 +89,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 			continue
 		}
 
-		if at := valueEscapesAt(heapalloc); !at.IsNil() {
+		if at := valueEscapesAtWithTargets(heapalloc, targets); !at.IsNil() {
 			if logAllocs {
 				atPos := getPosition(at)
 				msg := "escapes at unknown line"
@@ -183,9 +184,23 @@ func FormatAllocCover(pos token.Position) string {
 // valueEscapesAt returns the instruction where the given value may escape and a
 // nil llvm.Value if it definitely doesn't. The value must be an instruction.
 func valueEscapesAt(value llvm.Value) llvm.Value {
+	return valueEscapesAtWithTargets(value, nil)
+}
+
+// valueEscapesAtWithTargets is valueEscapesAt, reusing the functions that
+// indirect calls can reach across calls. targets may be nil.
+func valueEscapesAtWithTargets(value llvm.Value, targets *funcValueTargets) llvm.Value {
+	if targets == nil {
+		targets = &funcValueTargets{mod: value.InstructionParent().Parent().GlobalParent()}
+	}
 	analysis := escapeAnalysis{
+		targets:  targets,
 		visiting: make(map[llvm.Value]struct{}),
 		results:  make(map[escapeKey]escapeResult),
+		originFn: value.InstructionParent().Parent(),
+		// An allocation that runs more than once per call reuses its stack
+		// slot, so older objects must not stay reachable through a PHI.
+		originInCycle: value.InstructionParent().InCycle(),
 	}
 	return analysis.valueEscapesAt(value, false).escapeAt
 }
@@ -198,6 +213,16 @@ type escapeKey struct {
 type escapeAnalysis struct {
 	visiting map[llvm.Value]struct{}
 	results  map[escapeKey]escapeResult
+
+	originFn      llvm.Value
+	originInCycle bool
+
+	// targets tells what an indirect call can call.
+	targets *funcValueTargets
+
+	// cuts counts the PHIs that were reached again while they were still
+	// being checked.
+	cuts int
 }
 
 type escapeResult struct {
@@ -221,6 +246,12 @@ func (r *escapeResult) merge(other escapeResult) bool {
 
 func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (result escapeResult) {
 	if _, ok := a.visiting[value]; ok {
+		if !value.IsAPHINode().IsNil() {
+			// A value flowing around a loop back into the same PHI. The
+			// first visit already checks every use of the PHI.
+			a.cuts++
+			return escapeResult{}
+		}
 		// Recursive call graph while following returned parameters. Treat this
 		// as escaping to keep the analysis conservative and bounded.
 		return escapeResult{escapeAt: value}
@@ -232,9 +263,15 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 		return result
 	}
 	a.visiting[value] = struct{}{}
+	cuts := a.cuts
 	defer func() {
 		delete(a.visiting, value)
-		a.results[key] = result
+		// A result that stopped at a PHI that was still being checked misses
+		// what that PHI reaches, such as a return. It is only right for this
+		// path, so don't reuse it.
+		if a.cuts == cuts {
+			a.results[key] = result
+		}
 	}()
 
 	for use := range llvmutil.Uses(value) {
@@ -247,7 +284,10 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 				return result
 			}
 		case llvm.PHI:
-			if use.InstructionParent().InCycle() {
+			// A PHI in another function runs once per call of the allocating
+			// function, so the object cannot be overwritten through it.
+			if a.originInCycle && use.InstructionParent().Parent() == a.originFn &&
+				use.InstructionParent().InCycle() {
 				return escapeResult{escapeAt: use}
 			}
 			fallthrough
@@ -271,6 +311,17 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 			// Store only escapes when the value is stored to, not when the
 			// value is stored into another value.
 			if use.Operand(0) == value {
+				// Storing into a local stack slot is fine as long as the
+				// pointers loaded from it don't escape either. An allocation
+				// that runs in a loop reuses its stack slot, so the pointer
+				// must not stay reachable in memory across iterations.
+				if slot := use.Operand(1).UnderlyingObject(); !a.originInCycle && !slot.IsAAllocaInst().IsNil() &&
+					slot.InstructionParent().Parent() == use.InstructionParent().Parent() {
+					if !result.merge(a.stackSlotEscapesAt(slot, allowReturn)) {
+						return result
+					}
+					break
+				}
 				return escapeResult{escapeAt: use}
 			}
 		case llvm.Call:
@@ -295,13 +346,76 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 	return result
 }
 
+// stackSlotEscapesAt reports whether a pointer stored in the given alloca can
+// escape. The alloca itself must stay local and every pointer loaded from it
+// must not escape.
+func (a *escapeAnalysis) stackSlotEscapesAt(slot llvm.Value, allowReturn bool) escapeResult {
+	if _, ok := a.visiting[slot]; ok {
+		return escapeResult{escapeAt: slot}
+	}
+	a.visiting[slot] = struct{}{}
+	defer delete(a.visiting, slot)
+
+	var check func(ptr llvm.Value) escapeResult
+	check = func(ptr llvm.Value) escapeResult {
+		var res escapeResult
+		for _, use := range getUses(ptr) {
+			switch use.InstructionOpcode() {
+			case llvm.GetElementPtr:
+				if !res.merge(check(use)) {
+					return res
+				}
+			case llvm.Store:
+				if use.Operand(0) == ptr {
+					// The address of the slot is stored somewhere.
+					return escapeResult{escapeAt: use}
+				}
+			case llvm.Load:
+				if typeHasPointers(use.Type()) {
+					if !res.merge(a.valueEscapesAt(use, allowReturn)) {
+						return res
+					}
+				}
+			case llvm.Call:
+				// Lifetime markers don't let the slot escape.
+				callee := use.CalledValue()
+				if callee.IsAFunction().IsNil() || !strings.HasPrefix(callee.Name(), "llvm.lifetime.") {
+					return escapeResult{escapeAt: use}
+				}
+			default:
+				return escapeResult{escapeAt: use}
+			}
+		}
+		return res
+	}
+	return check(slot)
+}
+
 // callValueEscapesAt returns whether value escapes through this call. It also
 // handles calls that return value unchanged, as long as the called function does
 // not otherwise capture the parameter and the returned alias does not escape.
 func (a *escapeAnalysis) callValueEscapesAt(call, value llvm.Value, allowReturn bool) escapeResult {
 	called := call.CalledValue()
 	if called.IsAFunction().IsNil() {
-		return escapeResult{escapeAt: call}
+		// Indirect call (a func value or an interface method). The context
+		// is the last argument, and it is only exempt if none of the functions
+		// that can be called keeps it. Operands are the arguments followed by
+		// the called value.
+		contextIndex := call.OperandsCount() - 2
+		isContext := false
+		for i := 0; i < call.OperandsCount()-1; i++ {
+			if call.Operand(i) != value {
+				continue
+			}
+			if i != contextIndex {
+				return escapeResult{escapeAt: call}
+			}
+			isContext = true
+		}
+		if isContext && a.targets.contextCaptured(call) {
+			return escapeResult{escapeAt: call}
+		}
+		return escapeResult{}
 	}
 	kindNoCapture := llvm.AttributeKindID(llvmutil.NoCaptureAttrName())
 	kindReturned := llvm.AttributeKindID("returned")
