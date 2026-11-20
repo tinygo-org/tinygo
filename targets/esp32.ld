@@ -184,6 +184,7 @@ SECTIONS
 
         /* WiFi/BLE blob IRAM sections */
         *(.iram*)
+        *(.literal.iram.* .text.iram.*)
         *(.wifislprxiram*)
         *(.wifiextrairam*)
         *(.wifi0iram*)

@@ -74,6 +74,7 @@ SECTIONS
     {
         *(.init)      /* call_start_cpu0 (before flash is mapped) */
         *(.iram*)     /* code that must run from IRAM */
+        *(.text.iram.*)
         *(.text.handleInterruptASM) /* must be in SRAM, within JAL range of _vector_table */
         . = ALIGN(256);
         *(.text.exception_vectors)
