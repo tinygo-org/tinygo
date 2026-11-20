@@ -1,0 +1,5 @@
+{
+    "inherits": ["rp2040"],
+    "board-package": "example.com/customhw/boards/custom2040",
+    "linkerscript": "memmap.ld"
+}
