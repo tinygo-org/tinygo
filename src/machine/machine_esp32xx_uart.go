@@ -142,3 +142,16 @@ func (uart *UART) serveInterrupt(num int) {
 }
 
 func (uart *UART) flush() {}
+
+// uartDividers gives the baud rate divider, in 1/16 steps, and the source clock
+// divider for baudRate. See ESP-IDF hal/esp32c3/include/hal/uart_ll.h uart_ll_set_baudrate.
+func uartDividers(baudRate uint32) (clkDiv, sclkDiv uint32) {
+	const maxDiv = 1<<12 - 1
+	if baudRate == 0 {
+		baudRate = 115200
+	}
+	baud := uint64(baudRate)
+	sclk := (uartClockFreq + maxDiv*baud - 1) / (maxDiv * baud)
+	clk := (uartClockFreq << 4) / (baud * sclk)
+	return uint32(clk), uint32(sclk)
+}
