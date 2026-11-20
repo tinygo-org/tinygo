@@ -110,22 +110,12 @@ func (spi *SPI) Configure(config SPIConfig) error {
 	spi.Bus.SetUSER_DOUTDIN(1)
 
 	// set spi2 data mode
-	switch config.Mode {
-	case Mode0:
-		spi.Bus.SetMISC_CK_IDLE_EDGE(0)
-		spi.Bus.SetUSER_CK_OUT_EDGE(0)
-	case Mode1:
-		spi.Bus.SetMISC_CK_IDLE_EDGE(0)
-		spi.Bus.SetUSER_CK_OUT_EDGE(1)
-	case Mode2:
-		spi.Bus.SetMISC_CK_IDLE_EDGE(1)
-		spi.Bus.SetUSER_CK_OUT_EDGE(1)
-	case Mode3:
-		spi.Bus.SetMISC_CK_IDLE_EDGE(1)
-		spi.Bus.SetUSER_CK_OUT_EDGE(0)
-	default:
+	mode := spiModeFor(config.Mode)
+	if mode&spiModeValid == 0 {
 		return ErrInvalidSPIMode
 	}
+	spi.Bus.SetMISC_CK_IDLE_EDGE(mode.idleEdge())
+	spi.Bus.SetUSER_CK_OUT_EDGE(mode.outEdge())
 
 	// set spi2 bit order
 	if config.LSBFirst {
