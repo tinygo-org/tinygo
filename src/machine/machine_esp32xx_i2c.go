@@ -62,7 +62,6 @@ func (i2c *I2C) configure(config I2CConfig, bus i2cBus) error {
 	return nil
 }
 
-//go:inline
 func (i2c *I2C) initClock(config I2CConfig) {
 	enableI2CClock(i2c.Bus)
 	// disable interrupts
@@ -74,7 +73,6 @@ func (i2c *I2C) initClock(config I2CConfig) {
 	i2c.Bus.SetCTR_CLK_EN(1)
 }
 
-//go:inline
 func (i2c *I2C) initNoiseFilter() {
 	i2c.Bus.FILTER_CFG.Set(0x377)
 }
@@ -109,7 +107,6 @@ func (i2c *I2C) clearBus(config I2CConfig) {
 	wait()
 }
 
-//go:inline
 func (i2c *I2C) initPins(config I2CConfig, bus i2cBus) {
 	config.SDA.configure(PinConfig{Mode: PinOutput}, bus.sdaOut)
 	inFunc(bus.sdaOut).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDA)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
@@ -152,7 +149,6 @@ func (i2c *I2C) initFrequency(freq uint32) {
 	i2c.Bus.SetSCL_STOP_HOLD_TIME(halfCycle - 1)
 }
 
-//go:inline
 func (i2c *I2C) startMaster() {
 	// FIFO mode for data
 	i2c.Bus.SetFIFO_CONF_NONFIFO_EN(0)
@@ -178,7 +174,6 @@ func (i2c *I2C) startMaster() {
 	i2c.resetMaster()
 }
 
-//go:inline
 func (i2c *I2C) resetMaster() {
 	// Reset the I2C FSM.
 	// On chips where FSM_RST does not self-clear (e.g. ESP32-P4), the FSM
