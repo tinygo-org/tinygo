@@ -244,6 +244,9 @@
 					proc_exit: (code) => {
 						this.exited = true;
 						this.exitCode = code;
+						if (typeof this.exit === "function") {
+							this.exit(code);
+						}
 						this._resolveExitPromise();
 						throw wasmExit;
 					},
