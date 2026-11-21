@@ -144,8 +144,6 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	}
 }
 
-func initI2CExt1Clock() {}
-
 // outFunc returns the FUNCx_OUT_SEL_CFG register used for configuring the
 // output function selection.
 func (p Pin) outFunc() *volatile.Register32 {
