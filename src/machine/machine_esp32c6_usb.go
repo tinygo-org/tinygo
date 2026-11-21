@@ -196,11 +196,12 @@ func (usbdev *USB_DEVICE) Buffered() int {
 	return int(usbdev.Buffer.Used())
 }
 
-// ReadByte returns a byte from the receive ring buffer.
+// ReadByte returns a byte from the receive ring buffer, or an error when it is empty.
 func (usbdev *USB_DEVICE) ReadByte() (byte, error) {
+	usbdev.ensureConfigured()
 	b, ok := usbdev.Buffer.Get()
 	if !ok {
-		return 0, nil
+		return 0, errNoByte
 	}
 	return b, nil
 }
