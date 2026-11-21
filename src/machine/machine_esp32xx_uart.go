@@ -103,6 +103,23 @@ func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) {
 	})
 }
 
+func (uart *UART) enableTransmitter() {
+	uartSetTXFIFORST(uart.Bus, 1)
+	uartSetTXFIFORST(uart.Bus, 0)
+	uart.Bus.SetCONF1_TXFIFO_EMPTY_THRHD(uart_empty_thresh_default)
+}
+
+func (uart *UART) enableReceiver() {
+	uartSetRXFIFORST(uart.Bus, 1)
+	uartSetRXFIFORST(uart.Bus, 0)
+	uart.Bus.SetCONF1_RXFIFO_FULL_THRHD(1)
+	uart.Bus.SetINT_ENA_RXFIFO_FULL_INT_ENA(1)
+	uart.Bus.SetINT_ENA_FRM_ERR_INT_ENA(1)
+	uart.Bus.SetINT_ENA_PARITY_ERR_INT_ENA(1)
+	uart.Bus.SetINT_ENA_GLITCH_DET_INT_ENA(1)
+	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
+}
+
 func (uart *UART) serveInterrupt(num int) {
 	// get interrupt status
 	interruptFlag := uart.Bus.INT_ST.Get()
