@@ -58,7 +58,6 @@ type I2C struct {
 }
 
 var (
-	errInvalidI2CBaudrate  = errors.New("i2c: invalid baudrate")
 	errInvalidTgtAddr      = errors.New("i2c: invalid target address: not in 0..0x80 or is reserved")
 	errI2CGeneric          = errors.New("i2c: generic error")
 	errI2CDisable          = errors.New("i2c: peripheral timeout in disable")

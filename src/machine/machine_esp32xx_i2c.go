@@ -57,7 +57,7 @@ func (i2c *I2C) configure(config I2CConfig, bus i2cBus) error {
 	i2c.initNoiseFilter()
 	i2c.clearBus(config)
 	i2c.initPins(config, bus)
-	i2c.initFrequency(config)
+	i2c.initFrequency(config.Frequency)
 	i2c.startMaster()
 	return nil
 }
@@ -130,13 +130,13 @@ func (i2c *I2C) initPins(config I2CConfig, bus i2cBus) {
 	i2c.Bus.SetCTR_SCL_FORCE_OUT(1)
 }
 
-func (i2c *I2C) initFrequency(config I2CConfig) {
+func (i2c *I2C) initFrequency(freq uint32) {
 	// See ESP-IDF hal/esp32c3/include/hal/i2c_ll.h i2c_ll_master_cal_bus_clk and
 	// i2c_ll_master_set_bus_timing, which are the same on the C3, C6, S3 and P4.
-	clkmDiv := i2cClockFreq/(config.Frequency*1024) + 1
-	halfCycle := i2cClockFreq / clkmDiv / config.Frequency / 2
+	clkmDiv := i2cClockFreq/(freq*1024) + 1
+	halfCycle := i2cClockFreq / clkmDiv / freq / 2
 	waitHigh := halfCycle / 4
-	if config.Frequency >= 80*KHz {
+	if freq >= 80*KHz {
 		waitHigh = halfCycle/2 - 2
 	}
 
@@ -450,6 +450,11 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 }
 
 func (i2c *I2C) SetBaudRate(br uint32) error {
+	if br == 0 {
+		return errInvalidI2CBaudrate
+	}
+	i2c.initFrequency(br)
+	i2c.Bus.SetCTR_CONF_UPGATE(1)
 	return nil
 }
 
