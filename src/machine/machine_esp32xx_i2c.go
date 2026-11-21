@@ -71,7 +71,6 @@ func (i2c *I2C) initClock(config I2CConfig) {
 
 	i2c.Bus.SetCLK_CONF_SCLK_SEL(i2cClockSource)
 	i2c.Bus.SetCLK_CONF_SCLK_ACTIVE(1)
-	i2c.Bus.SetCLK_CONF_SCLK_DIV_NUM(i2cClockFreq / (config.Frequency * 1024))
 	i2c.Bus.SetCTR_CLK_EN(1)
 }
 
@@ -131,34 +130,26 @@ func (i2c *I2C) initPins(config I2CConfig, bus i2cBus) {
 	i2c.Bus.SetCTR_SCL_FORCE_OUT(1)
 }
 
-//go:inline
 func (i2c *I2C) initFrequency(config I2CConfig) {
-
+	// See ESP-IDF hal/esp32c3/include/hal/i2c_ll.h i2c_ll_master_cal_bus_clk and
+	// i2c_ll_master_set_bus_timing, which are the same on the C3, C6, S3 and P4.
 	clkmDiv := i2cClockFreq/(config.Frequency*1024) + 1
-	sclkFreq := i2cClockFreq / clkmDiv
-	halfCycle := sclkFreq / config.Frequency / 2
-	// SCL
-	sclLow := halfCycle
-	sclWaitHigh := uint32(0)
-	if config.Frequency > 50000 {
-		sclWaitHigh = halfCycle / 8 // compensate the time when freq > 50K
+	halfCycle := i2cClockFreq / clkmDiv / config.Frequency / 2
+	waitHigh := halfCycle / 4
+	if config.Frequency >= 80*KHz {
+		waitHigh = halfCycle/2 - 2
 	}
-	sclHigh := halfCycle - sclWaitHigh
-	// SDA
-	sdaHold := halfCycle / 4
-	sda_sample := halfCycle / 2
-	setup := halfCycle
-	hold := halfCycle
 
-	i2c.Bus.SetSCL_LOW_PERIOD(sclLow - 1)
-	i2c.Bus.SetSCL_HIGH_PERIOD(sclHigh)
-	i2c.Bus.SetSCL_HIGH_PERIOD_SCL_WAIT_HIGH_PERIOD(25)
-	i2c.Bus.SetSCL_RSTART_SETUP_TIME(setup)
-	i2c.Bus.SetSCL_STOP_SETUP_TIME(setup)
-	i2c.Bus.SetSCL_START_HOLD_TIME(hold - 1)
-	i2c.Bus.SetSCL_STOP_HOLD_TIME(hold - 1)
-	i2c.Bus.SetSDA_SAMPLE_TIME(sda_sample)
-	i2c.Bus.SetSDA_HOLD_TIME(sdaHold)
+	setI2CClockDiv(i2c.Bus, clkmDiv-1)
+	i2c.Bus.SetSCL_LOW_PERIOD(halfCycle - 1)
+	i2c.Bus.SetSCL_HIGH_PERIOD(halfCycle - waitHigh)
+	i2c.Bus.SetSCL_HIGH_PERIOD_SCL_WAIT_HIGH_PERIOD(waitHigh)
+	i2c.Bus.SetSDA_HOLD_TIME(halfCycle/4 - 1)
+	i2c.Bus.SetSDA_SAMPLE_TIME(halfCycle/2 - 1)
+	i2c.Bus.SetSCL_RSTART_SETUP_TIME(halfCycle - 1)
+	i2c.Bus.SetSCL_STOP_SETUP_TIME(halfCycle - 1)
+	i2c.Bus.SetSCL_START_HOLD_TIME(halfCycle - 1)
+	i2c.Bus.SetSCL_STOP_HOLD_TIME(halfCycle - 1)
 }
 
 //go:inline

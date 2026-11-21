@@ -42,3 +42,11 @@ func enableI2CClock(bus *esp.I2C_Type) {
 		esp.PCR.SetI2C_SCLK_CONF_I2C_SCLK_EN(1)
 	}
 }
+
+// setI2CClockDiv sets the I2C source clock divider, which is in PCR on the C6.
+// See ESP-IDF hal/esp32c6/include/hal/i2c_ll.h i2c_ll_master_set_bus_timing.
+func setI2CClockDiv(bus *esp.I2C_Type, div uint32) {
+	esp.PCR.SetI2C_SCLK_CONF_I2C_SCLK_DIV_NUM(div)
+	esp.PCR.SetI2C_SCLK_CONF_I2C_SCLK_DIV_A(0)
+	esp.PCR.SetI2C_SCLK_CONF_I2C_SCLK_DIV_B(0)
+}
