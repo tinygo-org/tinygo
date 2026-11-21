@@ -30,6 +30,8 @@ type calleeSavedRegs struct {
 	s11 uintptr // x27
 
 	pc uintptr
+
+	fp [numFPREGS]uint32
 }
 
 // archInit runs architecture-specific setup for the goroutine startup.
