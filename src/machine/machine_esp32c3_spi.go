@@ -10,7 +10,6 @@ package machine
 
 import (
 	"device/esp"
-	"errors"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -37,11 +36,6 @@ const (
 	FSPICS5_OUT_IDX = uint32(73)
 )
 
-var (
-	ErrInvalidSPIBus  = errors.New("machine: SPI bus is invalid")
-	ErrInvalidSPIMode = errors.New("machine: SPI mode is invalid")
-)
-
 // Serial Peripheral Interface on the ESP32-C3.
 type SPI struct {
 	Bus *esp.SPI2_Type
@@ -53,13 +47,21 @@ var (
 	SPI0 = SPI2
 )
 
-// Configure and make the SPI peripheral ready to use.
-func (spi *SPI) Configure(config SPIConfig) error {
-	// right now this is only setup to work for the esp32c3 spi2 bus
-	if spi.Bus != esp.SPI2 {
-		return ErrInvalidSPIBus
+func spiBusFor(bus *esp.SPI2_Type) (spiBus, bool) {
+	switch bus {
+	case esp.SPI2:
+		return spiBus{
+			sckOut: FSPICLK_OUT_IDX,
+			sdoOut: FSPID_OUT_IDX,
+			sdiIn:  FSPIQ_IN_IDX,
+			csOut:  FSPICS0_OUT_IDX,
+		}, true
+	default:
+		return spiBus{}, false
 	}
+}
 
+func (spi *SPI) configure(config SPIConfig, bus spiBus) error {
 	// periph module reset
 	esp.SYSTEM.SetPERIP_RST_EN0_SPI2_RST(1)
 	esp.SYSTEM.SetPERIP_RST_EN0_SPI2_RST(0)
@@ -129,22 +131,16 @@ func (spi *SPI) Configure(config SPIConfig) error {
 	// configure SPI bus clock
 	spi.Bus.CLOCK.Set(freqToClockDiv(config.Frequency))
 
-	// Default CS to NoPin so that an unset CS field (zero value = GPIO0)
-	// does not accidentally configure GPIO0 as the chip select output.
-	if config.CS == 0 {
-		config.CS = NoPin
-	}
-
 	// configure esp32c3 gpio pin matrix
 	config.SDI.Configure(PinConfig{Mode: PinInput})
-	inFunc(FSPIQ_IN_IDX).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDI))
+	inFunc(bus.sdiIn).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDI))
 	config.SDO.Configure(PinConfig{Mode: PinOutput})
-	config.SDO.outFunc().Set(FSPID_OUT_IDX)
+	config.SDO.outFunc().Set(bus.sdoOut)
 	config.SCK.Configure(PinConfig{Mode: PinOutput})
-	config.SCK.outFunc().Set(FSPICLK_OUT_IDX)
+	config.SCK.outFunc().Set(bus.sckOut)
 	if config.CS != NoPin {
 		config.CS.Configure(PinConfig{Mode: PinOutput})
-		config.CS.outFunc().Set(FSPICS0_OUT_IDX)
+		config.CS.outFunc().Set(bus.csOut)
 	}
 
 	return nil

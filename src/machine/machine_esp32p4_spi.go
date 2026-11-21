@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/esp"
-	"errors"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -20,11 +19,6 @@ const (
 	SPI2_CS_PAD_OUT_IDX = 62
 )
 
-var (
-	ErrInvalidSPIBus  = errors.New("machine: SPI bus is invalid")
-	ErrInvalidSPIMode = errors.New("machine: SPI mode is invalid")
-)
-
 // SPI is a general purpose SPI controller on the ESP32-P4.
 type SPI struct {
 	Bus *esp.SPI2_Type
@@ -35,12 +29,21 @@ var (
 	SPI2 = &SPI{esp.SPI2}
 )
 
-// Configure and make the SPI peripheral ready to use.
-func (spi *SPI) Configure(config SPIConfig) error {
-	if spi.Bus != esp.SPI2 {
-		return ErrInvalidSPIBus
+func spiBusFor(bus *esp.SPI2_Type) (spiBus, bool) {
+	switch bus {
+	case esp.SPI2:
+		return spiBus{
+			sckOut: SPI2_CK_PAD_OUT_IDX,
+			sdoOut: SPI2_D_PAD_OUT_IDX,
+			sdiIn:  SPI2_Q_PAD_IN_IDX,
+			csOut:  SPI2_CS_PAD_OUT_IDX,
+		}, true
+	default:
+		return spiBus{}, false
 	}
+}
 
+func (spi *SPI) configure(config SPIConfig, bus spiBus) error {
 	// Clock and reset sequence from ESP-IDF esp_hal_gpspi/esp32p4/include/hal/spi_ll.h.
 	esp.HP_SYS_CLKRST.SetSOC_CLK_CTRL1_REG_GPSPI2_SYS_CLK_EN(1)
 	esp.HP_SYS_CLKRST.SetSOC_CLK_CTRL2_REG_GPSPI2_APB_CLK_EN(1)
@@ -87,17 +90,12 @@ func (spi *SPI) Configure(config SPIConfig) error {
 
 	spi.Bus.SPI_CLOCK.Set(freqToClockDiv(config.Frequency))
 
-	// A zero CS is GPIO0, so treat it as unset.
-	if config.CS == 0 {
-		config.CS = NoPin
-	}
-
 	if config.SDI != NoPin {
-		config.SDI.configure(PinConfig{Mode: PinInput}, SPI2_Q_PAD_IN_IDX)
+		config.SDI.configure(PinConfig{Mode: PinInput}, bus.sdiIn)
 	}
-	config.SDO.configure(PinConfig{Mode: PinOutput}, SPI2_D_PAD_OUT_IDX)
-	config.SCK.configure(PinConfig{Mode: PinOutput}, SPI2_CK_PAD_OUT_IDX)
-	config.CS.configure(PinConfig{Mode: PinOutput}, SPI2_CS_PAD_OUT_IDX)
+	config.SDO.configure(PinConfig{Mode: PinOutput}, bus.sdoOut)
+	config.SCK.configure(PinConfig{Mode: PinOutput}, bus.sckOut)
+	config.CS.configure(PinConfig{Mode: PinOutput}, bus.csOut)
 
 	return nil
 }
