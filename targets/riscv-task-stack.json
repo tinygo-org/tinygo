@@ -1,0 +1,6 @@
+{
+	"inheritable-only": true,
+	"extra-files": [
+		"src/internal/task/task_stack_tinygoriscv.S"
+	]
+}
