@@ -43,7 +43,7 @@ func spiBusFor(bus *esp.SPI2_Type) (spiBus, bool) {
 	}
 }
 
-func (spi *SPI) configure(config SPIConfig, bus spiBus) error {
+func (spi *SPI) configure(config SPIConfig, bus spiBus, mode spiMode) error {
 	// Clock and reset sequence from ESP-IDF esp_hal_gpspi/esp32p4/include/hal/spi_ll.h.
 	esp.HP_SYS_CLKRST.SetSOC_CLK_CTRL1_REG_GPSPI2_SYS_CLK_EN(1)
 	esp.HP_SYS_CLKRST.SetSOC_CLK_CTRL2_REG_GPSPI2_APB_CLK_EN(1)
@@ -76,10 +76,6 @@ func (spi *SPI) configure(config SPIConfig, bus spiBus) error {
 	spi.Bus.SetSPI_USER_SPI_USR_MISO(1)
 	spi.Bus.SetSPI_USER_SPI_DOUTDIN(1)
 
-	mode := spiModeFor(config.Mode)
-	if mode&spiModeValid == 0 {
-		return ErrInvalidSPIMode
-	}
 	spi.Bus.SetSPI_MISC_SPI_CK_IDLE_EDGE(mode.idleEdge())
 	spi.Bus.SetSPI_USER_SPI_CK_OUT_EDGE(mode.outEdge())
 
@@ -90,44 +86,6 @@ func (spi *SPI) configure(config SPIConfig, bus spiBus) error {
 
 	spi.Bus.SPI_CLOCK.Set(freqToClockDiv(config.Frequency))
 
-	if config.SDI != NoPin {
-		config.SDI.configure(PinConfig{Mode: PinInput}, bus.sdiIn)
-	}
-	config.SDO.configure(PinConfig{Mode: PinOutput}, bus.sdoOut)
-	config.SCK.configure(PinConfig{Mode: PinOutput}, bus.sckOut)
-	config.CS.configure(PinConfig{Mode: PinOutput}, bus.csOut)
-
-	return nil
-}
-
-// Transfer writes and reads a single byte.
-func (spi *SPI) Transfer(w byte) (byte, error) {
-	spi.Bus.SetSPI_MS_DLEN_SPI_MS_DATA_BITLEN(7)
-	spi.Bus.SPI_W0.Set(uint32(w))
-	spi.start()
-	return byte(spi.Bus.SPI_W0.Get()), nil
-}
-
-// Tx writes w and reads into r. The shorter slice is padded with zeros or
-// its extra input is discarded.
-func (spi *SPI) Tx(w, r []byte) error {
-	toTransfer := max(len(w), len(r))
-	buf := (*[16]volatile.Register32)(unsafe.Pointer(&spi.Bus.SPI_W0))
-	for toTransfer > 0 {
-		chunkSize := min(toTransfer, 64)
-		spiTxFillBuffer(buf, w)
-		spi.Bus.SetSPI_MS_DLEN_SPI_MS_DATA_BITLEN(uint32(chunkSize)*8 - 1)
-		spi.start()
-
-		rxSize := min(chunkSize, len(r))
-		for i := 0; i < rxSize; i++ {
-			r[i] = byte(buf[i/4].Get() >> ((i % 4) * 8))
-		}
-
-		w = w[min(chunkSize, len(w)):]
-		r = r[rxSize:]
-		toTransfer -= chunkSize
-	}
 	return nil
 }
 
@@ -138,4 +96,12 @@ func (spi *SPI) start() {
 	spi.Bus.SetSPI_CMD_SPI_USR(1)
 	for spi.Bus.GetSPI_CMD_SPI_USR() != 0 {
 	}
+}
+
+func (spi *SPI) setBitLen(n uint32) {
+	spi.Bus.SetSPI_MS_DLEN_SPI_MS_DATA_BITLEN(n)
+}
+
+func (spi *SPI) buffer() *[16]volatile.Register32 {
+	return (*[16]volatile.Register32)(unsafe.Pointer(&spi.Bus.SPI_W0))
 }
