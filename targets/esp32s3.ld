@@ -211,6 +211,7 @@ SECTIONS
 
 _psram_start = ORIGIN(PSRAM);
 _psram_end = ORIGIN(PSRAM) + LENGTH(PSRAM);
+ASSERT(LENGTH(PSRAM) <= 16M, "__psram_size is larger than the 16MB PSRAM window")
 
 /* For the garbage collector.
  * _heap_start must be after the DRAM shadow of the IRAM section.
