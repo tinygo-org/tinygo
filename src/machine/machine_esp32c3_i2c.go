@@ -12,17 +12,24 @@ const (
 )
 
 var (
-	I2C0 = &I2C{
-		Bus:     esp.I2C0,
-		funcSCL: I2CEXT0_SCL_OUT_IDX,
-		funcSDA: I2CEXT0_SDA_OUT_IDX,
-		useExt1: false,
-	}
+	I2C0 = &I2C{Bus: esp.I2C0}
 )
 
-// enableI2C0PeriphClock enables the I2C0 peripheral clock via SYSTEM.
-func enableI2C0PeriphClock() {
-	esp.SYSTEM.SetPERIP_RST_EN0_I2C_EXT0_RST(1)
-	esp.SYSTEM.SetPERIP_CLK_EN0_I2C_EXT0_CLK_EN(1)
-	esp.SYSTEM.SetPERIP_RST_EN0_I2C_EXT0_RST(0)
+func i2cBusFor(bus *esp.I2C_Type) i2cBus {
+	switch bus {
+	case esp.I2C0:
+		return i2cBus{sclOut: I2CEXT0_SCL_OUT_IDX, sdaOut: I2CEXT0_SDA_OUT_IDX}
+	default:
+		return i2cBus{}
+	}
+}
+
+// enableI2CClock enables the clock of the I2C bus and resets it.
+func enableI2CClock(bus *esp.I2C_Type) {
+	switch bus {
+	case esp.I2C0:
+		esp.SYSTEM.SetPERIP_RST_EN0_I2C_EXT0_RST(1)
+		esp.SYSTEM.SetPERIP_CLK_EN0_I2C_EXT0_CLK_EN(1)
+		esp.SYSTEM.SetPERIP_RST_EN0_I2C_EXT0_RST(0)
+	}
 }

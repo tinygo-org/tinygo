@@ -34,6 +34,7 @@ var (
 	errI2CSignalStopTimeout  = errors.New("i2c: timeout on signal stop")
 	errI2CAckExpected        = errors.New("i2c: error: expected ACK not NACK")
 	errI2CBusError           = errors.New("i2c: bus error")
+	errI2CInvalidBus         = errors.New("i2c: invalid bus")
 	errI2COverflow           = errors.New("i2c: receive buffer overflow")
 	errI2COverread           = errors.New("i2c: transmit buffer overflow")
 	errI2CNotImplemented     = errors.New("i2c: operation not yet implemented")
