@@ -42,3 +42,9 @@ func enableI2CClock(bus *esp.I2C_Type) {
 		esp.SYSTEM.SetPERIP_RST_EN0_I2C_EXT1_RST(0)
 	}
 }
+
+// setI2CClockDiv sets the I2C source clock divider. See ESP-IDF
+// hal/esp32s3/include/hal/i2c_ll.h i2c_ll_master_set_bus_timing.
+func setI2CClockDiv(bus *esp.I2C_Type, div uint32) {
+	bus.SetCLK_CONF_SCLK_DIV_NUM(div)
+}
