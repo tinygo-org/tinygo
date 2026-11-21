@@ -79,10 +79,6 @@ func SetCPUFrequency(frequency uint32) error {
 	return errors.New("machine: Unsupported CPU frequency selected. Supported: 80, 160, 240 MHz")
 }
 
-var (
-	ErrInvalidSPIBus = errors.New("machine: invalid SPI bus")
-)
-
 const (
 	PinOutput PinMode = iota
 	PinInput
