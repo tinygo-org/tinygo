@@ -1,0 +1,5 @@
+{
+	"inherits": ["esp32-generic"],
+	"build-tags": ["machine.psram"],
+	"ldflags": ["--defsym=__psram_size=4M"]
+}
