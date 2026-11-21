@@ -297,8 +297,7 @@ var (
 	errWrongStopBitSize = errors.New("UART: invalid bit size")
 )
 
-// ESP-IDF hal/esp32c6/include/hal/uart_ll.h uart_ll_set_sclk maps SCLK_SEL 3 to the 40 MHz XTAL_CLK, not 80 MHz.
-const uartClockFreq = 80_000_000
+const uartClockFreq = 80_000_000 // PLL_F80M_CLK, PCR SCLK_SEL 1. See ESP-IDF hal/esp32c6/include/hal/uart_ll.h uart_ll_set_sclk.
 
 type registerSet struct {
 	interruptMapReg  *volatile.Register32
@@ -327,10 +326,6 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 	uart.Bus.SetCLK_CONF_TX_SCLK_EN(0)
 	uart.Bus.SetCLK_CONF_RX_SCLK_EN(0)
 
-	// - default clock source: 1=XTAL_CLK, 2=RC_FAST_CLK, 3=FOSC_CLK
-	//   On C6, SCLK_SEL=1 selects XTAL (40 MHz). Use FOSC (80 MHz) for
-	//   better baud-rate accuracy.
-	uart.Bus.SetCLK_CONF_SCLK_SEL(3) // FOSC_CLK (80 MHz)
 	// reset divisor of the divider via UART_SCLK_DIV_NUM, UART_SCLK_DIV_A, and UART_SCLK_DIV_B
 	uart.Bus.SetCLK_CONF_SCLK_DIV_NUM(0)
 	uart.Bus.SetCLK_CONF_SCLK_DIV_A(0)
@@ -397,7 +392,7 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 		esp.PCR.SetUART0_CONF_UART0_RST_EN(1)
 		esp.PCR.SetUART0_CONF_UART0_RST_EN(0)
 		bus.SetCLK_CONF_RST_CORE(0)
-		// Configure SCLK divisor in PCR
+		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_SEL(1)
 		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_NUM(0)
 		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_A(0)
 		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_B(0)
@@ -408,6 +403,7 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 		esp.PCR.SetUART1_CONF_UART1_RST_EN(1)
 		esp.PCR.SetUART1_CONF_UART1_RST_EN(0)
 		bus.SetCLK_CONF_RST_CORE(0)
+		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_SEL(1)
 		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_NUM(0)
 		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_A(0)
 		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_B(0)
