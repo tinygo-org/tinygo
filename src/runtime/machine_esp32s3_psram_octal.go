@@ -117,7 +117,7 @@ func setPSRAMClockDivider(n, h, l uint32) {
 //  1. CS1 pin select, CS timing, fixed low-speed clock.
 //  2. Mode register (MR0) init: fixed read latency.
 //  3. Connectivity check via a sync write/read of a reference word.
-//  4. Read the vendor ID (MR1) to check the chip.
+//  4. Read the vendor ID (MR1) and density (MR2) to check the chip.
 //  5. Configure SPI0's cache-facing read/write command phases for Octal DTR.
 //  6. Map the __psram_size bytes the target declares into the MMU.
 func initPSRAM() string {
@@ -179,6 +179,23 @@ func initPSRAM() string {
 	vendorID := mr1 & 0x1f
 	if vendorID != opiVendorIDAP && vendorID != opiVendorIDUnilc {
 		return "PSRAM init failed: unrecognized vendor id"
+	}
+
+	// Density in 64KB pages, decoded as in esp_psram_impl_octal.c.
+	// A chip smaller than __psram_size means the wrong target.
+	var chipPages int
+	switch readPSRAMModeReg(0x2) & 0x7 {
+	case 0x1:
+		chipPages = 64
+	case 0x3:
+		chipPages = 128
+	case 0x5:
+		chipPages = 256
+	case 0x6, 0x7:
+		chipPages = 512
+	}
+	if chipPages < mmuPages {
+		return "PSRAM init failed: chip is smaller than the target declares"
 	}
 
 	// Perform DQS / MSPI delay timing calibration to upgrade Octal PSRAM to
