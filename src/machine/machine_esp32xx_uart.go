@@ -62,7 +62,7 @@ func (uart *UART) SetFormat(dataBits, stopBits int, parity UARTParity) error {
 }
 
 func validateFormat(dataBits, stopBits int) error {
-	if dataBits < 5 {
+	if dataBits < 5 || dataBits > 8 {
 		return errWrongBitSize
 	}
 	if stopBits > 1 {
