@@ -159,7 +159,7 @@ func (usbdev *USB_DEVICE) ReadByte() (byte, error) {
 	usbdev.Configure(UARTConfig{})
 	b, ok := usbdev.Buffer.Get()
 	if !ok {
-		return 0, nil
+		return 0, errNoByte
 	}
 	return b, nil
 }
