@@ -342,3 +342,21 @@ func TestTimerChannelGC(t *testing.T) {
 	options.Scheduler = "tasks"
 	runTest("timer_gc.go", options, t, nil, nil)
 }
+
+// TestNetpoll is a scheduler/timer smoke test that builds and links against
+// the internal/poll netpoller (linux/amd64 epoll, see
+// src/runtime/poll_epoll_linux.go) through net.Pipe: an expiring read
+// deadline, a late write waking a parked reader, and Close unblocking a
+// parked read. net.Pipe is in-memory (no fd), so the epoll path itself is not
+// exercised here. os.Exit must link wherever it is reached. The test is
+// linux-only.
+func TestNetpoll(t *testing.T) {
+	t.Parallel()
+
+	switch runtime.GOOS {
+	case "linux":
+	default:
+		t.Skipf("host GOOS %s does not use the linux netpoller", runtime.GOOS)
+	}
+	runTest("netpoll.go", optionsFromTarget("", sema), t, nil, nil)
+}
