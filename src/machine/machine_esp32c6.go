@@ -435,14 +435,6 @@ func uartSetRXFIFORST(bus *esp.UART_Type, value uint32) {
 	bus.SetCONF0_RXFIFO_RST(value)
 }
 
-func (uart *UART) writeByte(b byte) error {
-	for (uart.Bus.STATUS.Get()&esp.UART_STATUS_TXFIFO_CNT_Msk)>>esp.UART_STATUS_TXFIFO_CNT_Pos >= 128 {
-		// Wait until there is space in the transmit buffer.
-	}
-	uart.Bus.FIFO.Set(uint32(b))
-	return nil
-}
-
 // GetRNG returns 32-bit random numbers from the ESP32-C6 true random number generator.
 // The noise sources are RC_FAST_CLK and the SAR ADC, ESP32-C6 TRM v1.1 chapter 22.
 func GetRNG() (ret uint32, err error) {

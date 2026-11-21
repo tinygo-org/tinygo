@@ -492,24 +492,3 @@ func uartSetTXFIFORST(bus *esp.UART_Type, value uint32) {
 func uartSetRXFIFORST(bus *esp.UART_Type, value uint32) {
 	bus.SetCONF0_SYNC_RXFIFO_RST(value)
 }
-
-// uartBus returns the UART register block without trusting the Bus field.
-// A corrupted board global must not take the console down with it.
-func (uart *UART) uartBus() *esp.UART_Type {
-	switch uart {
-	case UART0:
-		return esp.UART0
-	case UART1:
-		return esp.UART1
-	}
-	return uart.Bus
-}
-
-func (uart *UART) writeByte(b byte) error {
-	bus := uart.uartBus()
-	for (bus.STATUS.Get()&esp.UART_STATUS_TXFIFO_CNT_Msk)>>esp.UART_STATUS_TXFIFO_CNT_Pos >= 128 {
-		// Wait until there is space in the transmit buffer.
-	}
-	bus.FIFO.Set(uint32(b))
-	return nil
-}

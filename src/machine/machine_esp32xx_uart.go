@@ -158,6 +158,14 @@ func (uart *UART) serveInterrupt(num int) {
 	uart.Bus.INT_ENA.Set(uartInterrupts)
 }
 
+func (uart *UART) writeByte(b byte) error {
+	for (uart.Bus.STATUS.Get()&esp.UART_STATUS_TXFIFO_CNT_Msk)>>esp.UART_STATUS_TXFIFO_CNT_Pos >= 128 {
+		// Wait until there is space in the transmit buffer.
+	}
+	uart.Bus.FIFO.Set(uint32(b))
+	return nil
+}
+
 func (uart *UART) flush() {}
 
 // uartDividers gives the baud rate divider, in 1/16 steps, and the source clock
