@@ -1381,7 +1381,9 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		if b.Debug && b.fn.Syntax() != nil {
 			dbgParam := b.getLocalVariable(param.Object().(*types.Var))
 			loc := b.GetCurrentDebugLocation()
-			if len(fields) == 1 {
+			if len(fields) == 1 && b.targetData.TypeAllocSize(fields[0].Type()) == 0 {
+				// Zero-sized values have no location, see the DebugRef case.
+			} else if len(fields) == 1 {
 				expr := b.dibuilder.CreateExpression(nil)
 				b.dibuilder.InsertValueAtEnd(fields[0], dbgParam, expr, loc, entryBlock)
 			} else {
@@ -1485,6 +1487,11 @@ func (b *builder) createFunction() {
 					expr = b.dibuilder.CreateExpression([]uint64{0x06}) // DW_OP_deref, DWARF 5 section 2.5.1.3.
 				} else {
 					value = b.getValue(instr.X, getPos(instr))
+					if b.targetData.TypeAllocSize(value.Type()) == 0 {
+						// Zero-sized values have no location. LLVM 22 SelectionDAG
+						// crashes on a dbg_value of a zero-sized constant that is used again.
+						continue
+					}
 				}
 				b.dibuilder.InsertValueAtEnd(value, dbgVar, expr, llvm.DebugLoc{
 					Line:  uint(pos.Line),

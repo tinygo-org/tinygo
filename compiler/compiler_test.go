@@ -499,6 +499,56 @@ func TestLargeAggregateDebugValue(t *testing.T) {
 	}
 }
 
+// Zero-sized values get no debug value. Code generation used to crash in
+// SelectionDAGBuilder::resolveDanglingDebugInfo with LLVM 22.
+func TestZeroSizedDebugValue(t *testing.T) {
+	options := &compileopts.Options{GOOS: "linux", GOARCH: "amd64"}
+	mod, errs := testCompilePackageWithDebug(t, options, "debug-zerosize.go", true)
+	defer mod.Dispose()
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"(main.fns).merge", "main.zeroArray", "main.nestedEmpty"} {
+		fn := mod.NamedFunction(name)
+		if fn.IsNil() {
+			t.Fatalf("function %s not found", name)
+		}
+		for line := range strings.Lines(fn.String()) {
+			if strings.Contains(line, "#dbg_value({}") || strings.Contains(line, "#dbg_value([0 x") || strings.Contains(line, "#dbg_value(%main.nested") || strings.Contains(line, "#dbg_value(%main.empty") {
+				t.Fatalf("%s: debug value for a zero-sized value: %s", name, strings.TrimSpace(line))
+			}
+		}
+	}
+
+	// Code generation must not crash.
+	target, err := compileopts.LoadTarget(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := &compileopts.Config{Options: options, Target: target}
+	machine, err := NewTargetMachine(&Config{
+		Triple:          config.Triple(),
+		Features:        config.Features(),
+		ABI:             config.ABI(),
+		GOOS:            config.GOOS(),
+		GOARCH:          config.GOARCH(),
+		CodeModel:       config.CodeModel(),
+		RelocationModel: config.RelocationModel(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer machine.Dispose()
+	buf, err := machine.EmitToMemoryBuffer(mod, llvm.ObjectFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf.Dispose()
+}
+
 func TestLargeSliceElement(t *testing.T) {
 	options := &compileopts.Options{GOOS: "linux", GOARCH: "amd64"}
 	mod, errs := testCompilePackage(t, options, "slice-large-element.go")
