@@ -22,8 +22,9 @@ func (e *recoverableError) Error() string {
 // These errors are expected during normal execution and can be recovered from
 // by running the affected function at runtime instead of compile time.
 var (
-	errIntegerAsPointer = &recoverableError{reason: "interp: trying to use an integer as a pointer (memory-mapped I/O?)"}
-	errUnsupportedInst  = &recoverableError{reason: "interp: unsupported instruction"}
+	errIntegerAsPointer      = &recoverableError{reason: "interp: trying to use an integer as a pointer (memory-mapped I/O?)"}
+	errUnsupportedInst       = &recoverableError{reason: "interp: unsupported instruction"}
+	errHashmapOperationLimit = &recoverableError{reason: "interp: hashmap operation limit reached"}
 
 	// This is one of the errors that can be returned from toLLVMValue when the
 	// passed type does not fit the data to serialize. It is recoverable by

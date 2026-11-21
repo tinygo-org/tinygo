@@ -310,14 +310,15 @@ func buildBinary(t *testing.T, targetString, pkgName string, trimPath bool) *Bui
 
 func buildBinaryInDir(targetString, pkgName, opt, tmpdir string, trimPath bool) (*BuildResult, error) {
 	options := compileopts.Options{
-		Target:                  targetString,
-		Opt:                     opt,
-		Semaphore:               sema,
-		InterpTimeout:           60 * time.Second,
-		InterpMaxLoopIterations: interp.DefaultMaxInterpBlockEntries,
-		Debug:                   true,
-		VerifyIR:                true,
-		TrimPath:                trimPath,
+		Target:                     targetString,
+		Opt:                        opt,
+		Semaphore:                  sema,
+		InterpTimeout:              60 * time.Second,
+		InterpMaxLoopIterations:    interp.DefaultMaxInterpBlockEntries,
+		InterpMaxHashmapOperations: interp.DefaultMaxInterpHashmapOperations,
+		Debug:                      true,
+		VerifyIR:                   true,
+		TrimPath:                   trimPath,
 		// The GOROOT string is stored in data, so its length must not depend on the host.
 		GlobalValues: map[string]map[string]string{"runtime": {"goroot": "/usr/local/go"}},
 	}
