@@ -8,8 +8,9 @@
  */
 MEMORY
 {
-    /* HP-SRAM. IRAM and DRAM use the same address space. */
-    SRAM (rwx) : ORIGIN = 0x40800000, LENGTH = 320K
+    /* HP-SRAM. IRAM and DRAM use the same address space. ROM .bss and .data start at
+     * 0x4084F380. See ESP-IDF bootloader/subproject/main/ld/esp32h2/bootloader.ld. */
+    SRAM (rwx) : ORIGIN = 0x40800000, LENGTH = 0x4F380
 
     /* DROM and IROM are in separate, non-overlapping address ranges. */
     DROM (r)  : ORIGIN = 0x42800000, LENGTH = 8M /* Data bus (read-only, flash-mapped) */
