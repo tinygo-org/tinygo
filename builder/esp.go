@@ -107,6 +107,18 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		}
 		segments = ramSegments
 
+	case "esp32c6":
+		// IROM at 0x42000000 and DROM at 0x42800000. See targets/esp32c6.ld.
+		var ramSegments []*espImageSegment
+		for _, seg := range segments {
+			if seg.addr >= 0x42000000 && seg.addr < 0x43000000 {
+				flashSegments = append(flashSegments, seg)
+			} else {
+				ramSegments = append(ramSegments, seg)
+			}
+		}
+		segments = ramSegments
+
 	case "esp32s3":
 		// The DBUS cache window runs to 0x3E000000, but its upper half is
 		// reserved for PSRAM (targets/esp32s3.ld), which is never backed by
@@ -509,16 +521,16 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		outf.Write(esp32s3DromSegment.data)
 	}
 
-	// ESP32-C3 IROM and DROM are mapped 1:1, so the offset in the 8 MB flash
-	// address space is the offset in the image. See targets/esp32c3.ld.
-	if chip == "esp32c3" {
+	// ESP32-C3 and ESP32-C6 IROM and DROM are mapped 1:1, so the offset in the
+	// 8 MB flash address space is the offset in the image. See targets/esp32c3.ld.
+	if chip == "esp32c3" || chip == "esp32c6" {
 		sort.SliceStable(flashSegments, func(i, j int) bool {
 			return flashSegments[i].addr&0x7FFFFF < flashSegments[j].addr&0x7FFFFF
 		})
 		for _, seg := range flashSegments {
 			offset := int(seg.addr & 0x7FFFFF)
 			if outf.Len() > offset {
-				return fmt.Errorf("ESP32-C3: segment at 0x%x overlaps the previous one", seg.addr)
+				return fmt.Errorf("%s: segment at 0x%x overlaps the previous one", chip, seg.addr)
 			}
 			outf.Write(make([]byte, offset-outf.Len()))
 			outf.Write(seg.data)
