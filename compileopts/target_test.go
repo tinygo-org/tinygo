@@ -66,7 +66,7 @@ func TestGetTargetSpecs_InheritableOnlyTargetsExcluded(t *testing.T) {
 	}
 
 	// Inheritable-only processor-level targets should not appear in the listing.
-	inheritableOnlyTargets := []string{"esp32", "esp32c3", "esp32s3", "esp8266", "rp2040", "rp2350", "rp2350b", "riscv-base", "riscv32-base"}
+	inheritableOnlyTargets := []string{"esp32", "esp32c3", "esp32s3", "esp8266", "rp2040", "rp2350", "rp2350b", "riscv-base", "riscv32-base", "riscv-task-stack"}
 	for _, name := range inheritableOnlyTargets {
 		if _, ok := specs[name]; ok {
 			t.Errorf("inheritable-only target %q should not appear in GetTargetSpecs", name)
@@ -101,6 +101,17 @@ func TestRISCVTaskStackInheritance(t *testing.T) {
 				t.Errorf("%s is missing shared RISC-V file %s", name, file)
 			}
 		}
+	}
+
+	mixin, err := LoadTarget(&Options{Target: "riscv-task-stack"})
+	if err != nil {
+		t.Fatalf("LoadTarget(riscv-task-stack): %v", err)
+	}
+	if !mixin.InheritableOnly {
+		t.Error("riscv-task-stack should be inheritable-only")
+	}
+	if !slices.Contains(mixin.ExtraFiles, genericTaskStack) {
+		t.Errorf("riscv-task-stack is missing %s", genericTaskStack)
 	}
 
 	// Targets that use the generic RISC-V task stack must keep inheriting it.
