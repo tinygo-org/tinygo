@@ -418,16 +418,6 @@ func uartSetRXFIFORST(bus *esp.UART_Type, value uint32) {
 	bus.SetCONF0_RXFIFO_RST(value)
 }
 
-func (uart *UART) writeByte(b byte) error {
-	for (uart.Bus.STATUS.Get()&esp.UART_STATUS_TXFIFO_CNT_Msk)>>esp.UART_STATUS_TXFIFO_CNT_Pos >= 128 {
-		// Read UART_TXFIFO_CNT from the status register, which indicates how
-		// many bytes there are in the transmit buffer. Wait until there are
-		// less than 128 bytes in this buffer (the default buffer size).
-	}
-	uart.Bus.FIFO.Set(uint32(b))
-	return nil
-}
-
 // GetRNG returns 32-bit random numbers using the ESP32-C3 true random number generator,
 // Random numbers are generated based on the thermal noise in the system and the
 // asynchronous clock mismatch.
