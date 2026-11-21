@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 )
 
 // Conn represents a secured connection. TINYGO: the actual TLS handshake and
@@ -153,5 +154,19 @@ func (d *Dialer) DialContext(ctx context.Context, network, addr string) (net.Con
 // form a certificate chain. On successful return, Certificate.Leaf will
 // be nil because the parsed form of the certificate is not retained.
 func LoadX509KeyPair(certFile, keyFile string) (Certificate, error) {
-	return Certificate{}, errors.New("tls:LoadX509KeyPair not implemented")
+	certPEMBlock, err := os.ReadFile(certFile)
+	if err != nil {
+		return Certificate{}, err
+	}
+	keyPEMBlock, err := os.ReadFile(keyFile)
+	if err != nil {
+		return Certificate{}, err
+	}
+	return X509KeyPair(certPEMBlock, keyPEMBlock)
+}
+
+// Listen creates a TLS listener accepting connections on the given network
+// address using net.Listen.
+func Listen(network, laddr string, config *Config) (net.Listener, error) {
+	return nil, errors.New("tls:Listen not implemented")
 }
