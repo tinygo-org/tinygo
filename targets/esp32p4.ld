@@ -25,9 +25,8 @@
  * This avoids the ROM's watchdog-triggering behaviour of memcpy-ing large
  * flash-mapped segments to their VMA in the flash cache address space.
  *
- * Unlike the ESP32-C6 which has separate IROM (0x42000000) and DROM
- * (0x42800000) address ranges, the ESP32-P4 uses a unified address space at
- * 0x40000000 for both. We use a single FLASH memory region to avoid lld
+ * Like the ESP32-C6, the ESP32-P4 uses one address space for IROM and DROM,
+ * here at 0x40000000. We use a single FLASH memory region to avoid lld
  * virtual-address-overlap errors.
  */
 

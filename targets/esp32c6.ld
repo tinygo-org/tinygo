@@ -5,17 +5,22 @@
  *     address space at 0x40800000, so there is no need for separate DRAM/IRAM
  *     regions.
  *   - It has 16kB of LP-SRAM at 0x50000000 for low-power / RTC use.
- *   - DROM and IROM are in separate, non-overlapping 8MB address ranges:
- *     IROM at 0x42000000 and DROM at 0x42800000.
+ *   - Code and read-only data share one 16MB flash window at 0x42000000.
+ *     See ESP32-C6 Technical Reference Manual, chapter System and Memory,
+ *     section External Memory.
  *   - The MMU works in pages of 64kB, which means the bottom 16 bits of the
- *     address in flash and the address in DROM/IROM need to match.
+ *     address in flash and the address in the flash window need to match.
  *   - Memory in SRAM is loaded at reset by the ROM bootloader.
  *
- * The firmware image segments are sorted by virtual address (by esp.go):
- *   1. .data  (SRAM 0x408...)   - loaded by ROM bootloader
- *   2. .iram  (SRAM 0x408...)   - loaded by ROM bootloader
- *   3. .text  (IROM 0x420...)   - flash-mapped via MMU
- *   4. .rodata (DROM 0x428...)  - flash-mapped via MMU
+ * Flash image layout (by esp.go):
+ *   1. .data   (SRAM 0x408...)  - loaded by ROM bootloader
+ *   2. .iram   (SRAM 0x408...)  - loaded by ROM bootloader
+ *   3. .text   (FLASH 0x420...) - flash-mapped via MMU
+ *   4. .rodata (FLASH 0x420...) - flash-mapped via MMU
+ *
+ * The ROM bootloader rejects a flash-mapped segment larger than 1 MiB, so it
+ * only loads .data and .iram. .text and .rodata follow in flash and
+ * esp32c6.S maps them 1:1.
  *
  * IMPORTANT: SRAM sections (.data, .iram) are defined BEFORE the dummy
  * sections so that SIZEOF() references are backward (not forward). lld may
@@ -31,9 +36,8 @@ MEMORY
      */
     SRAM (rwx) : ORIGIN = 0x40800000, LENGTH = 0x7E610 /* ROM .bss/.data from 0x4087E610, used by WiFi */
 
-    /* DROM and IROM are in separate, non-overlapping address ranges. */
-    DROM (r)  : ORIGIN = 0x42800000, LENGTH = 8M /* Data bus (read-only, flash-mapped) */
-    IROM (rx) : ORIGIN = 0x42000000, LENGTH = 8M /* Instruction bus (flash-mapped) */
+    /* Flash window, shared by code and read-only data. */
+    FLASH (rx) : ORIGIN = 0x42000000, LENGTH = 16M
 }
 
 /* The entry point. It is set in the image flashed to the chip, so must be
@@ -115,58 +119,40 @@ SECTIONS
     _heap_start = ABSOLUTE(.);
     _heap_end = ORIGIN(SRAM) + LENGTH(SRAM);
 
-    /* === IROM sections (flash-mapped code) === */
+    /* === FLASH sections (flash-mapped code and read-only data) === */
 
-    /* Dummy section to align .text virtual address with its flash offset.
-     * In the firmware image, .data and .iram (SRAM) come before .text (IROM).
-     * SIZEOF(.data) and SIZEOF(.iram) are backward references (defined above).
-     * .data may be empty (esp.go skips empty sections), so use a ternary.
-     */
-    .irom_dummy (NOLOAD) : ALIGN(0x10000)
+    /* Size of the RAM part of the image. Header, segments, padding to 16 bytes
+     * and the SHA-256 digest, as written by builder/esp.go. */
+    _ram_image_payload_size =
+        0x18 +
+        SIZEOF(.data) + ((SIZEOF(.data) != 0) ? 0x8 : 0) +
+        SIZEOF(.iram) + 0x8;
+
+    _ram_image_size =
+        _ram_image_payload_size +
+        16 - (_ram_image_payload_size % 16) +
+        0x20;
+
+    /* The ROM only loads the RAM part of the image. .text and .rodata follow
+     * it in flash, so each offset in the flash window is its flash offset. */
+    .flash_dummy (NOLOAD) : ALIGN(4)
     {
-        . += 0x18;                                              /* image header */
-        . += (SIZEOF(.data) > 0) ? (SIZEOF(.data) + 0x8) : 0; /* data segment + header (if non-empty) */
-        . += SIZEOF(.iram) + 0x8;                               /* iram segment + header */
-        . += 0x8;                                               /* text segment header */
-    } > IROM
+        . += _ram_image_size;
+    } > FLASH
 
-    /* Code stored in IROM (flash-mapped).
-     * This is the main program code.
-     */
+    /* Code stored in flash. This is the main program code. */
     .text : ALIGN(4)
     {
         *(.text .text.*)
-        /* Put the .rodata data at a 16-byte aligned flash offset, the same as its address. */
-        . = ALIGN(. + 0x8, 16) - 0x8;
-    } > IROM
+    } > FLASH
 
-    /* === DROM sections (flash-mapped read-only data) === */
-
-    /* Dummy section to align .rodata virtual address with its flash offset.
-     * Segments in the image are sorted by address: SRAM (.data, .iram),
-     * IROM (.text), then DROM (.rodata). So .rodata comes last, and we must
-     * account for all preceding segments.
-     * All SIZEOF() references are backward (sections defined above).
-     */
-    .rodata_dummy (NOLOAD): ALIGN(4)
-    {
-        . += 0x18;                                              /* image header (24 bytes) */
-        . += (SIZEOF(.data) > 0) ? (SIZEOF(.data) + 0x8) : 0; /* data segment + header (if non-empty) */
-        . += SIZEOF(.iram) + 0x8;                               /* iram segment + header */
-        . += SIZEOF(.text) + 0x8;                               /* text segment + header */
-        . += 0x8;                                               /* rodata segment header */
-    } > DROM
-
-    /* Constant global variables, stored in DROM. */
+    /* Constant global variables, stored in flash. */
     .rodata : ALIGN(4)
     {
         *(.rodata*)
         *(.srodata*)
         . = ALIGN (4);
-    } >DROM
-
-    ASSERT(ADDR(.text) == ADDR(.irom_dummy) + SIZEOF(.irom_dummy), ".text address does not match its flash offset")
-    ASSERT(ADDR(.rodata) == ADDR(.rodata_dummy) + SIZEOF(.rodata_dummy), ".rodata address does not match its flash offset")
+    } > FLASH
 
     /DISCARD/ :
     {

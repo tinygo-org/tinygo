@@ -3,6 +3,13 @@
  * and the ROM function addresses are different.
  * See ESP-IDF components/soc/esp32h2/include/soc/soc.h.
  *
+ * Code and read-only data share one 16MB flash window at 0x42000000.
+ * See ESP32-H2 Technical Reference Manual, chapter System and Memory,
+ * section External Memory.
+ *
+ * The ROM bootloader only loads .data and .iram. .text and .rodata follow in
+ * flash and esp32c6.S maps them 1:1. See targets/esp32c6.ld.
+ *
  * Keep .data and .iram before the dummy sections. lld can calculate a wrong
  * value for a forward SIZEOF() reference, and then the image is corrupt.
  */
@@ -12,9 +19,8 @@ MEMORY
      * 0x4084F380. See ESP-IDF bootloader/subproject/main/ld/esp32h2/bootloader.ld. */
     SRAM (rwx) : ORIGIN = 0x40800000, LENGTH = 0x4F380
 
-    /* DROM and IROM are in separate, non-overlapping address ranges. */
-    DROM (r)  : ORIGIN = 0x42800000, LENGTH = 8M /* Data bus (read-only, flash-mapped) */
-    IROM (rx) : ORIGIN = 0x42000000, LENGTH = 8M /* Instruction bus (flash-mapped) */
+    /* Flash window, shared by code and read-only data. */
+    FLASH (rx) : ORIGIN = 0x42000000, LENGTH = 16M
 }
 
 /* The entry point. It is set in the image flashed to the chip, so must be
@@ -88,57 +94,39 @@ SECTIONS
     _heap_start = ABSOLUTE(.);
     _heap_end = ORIGIN(SRAM) + LENGTH(SRAM);
 
-    /* === IROM sections (flash-mapped code) === */
+    /* === FLASH sections (flash-mapped code and read-only data) === */
 
-    /* Dummy section to align .text virtual address with its flash offset.
-     * In the firmware image, .data and .iram (SRAM) come before .text (IROM).
-     * SIZEOF(.data) and SIZEOF(.iram) are backward references (defined above).
-     * .data may be empty (esp.go skips empty sections), so use a ternary.
-     */
-    .irom_dummy (NOLOAD) : ALIGN(0x10000)
+    /* Size of the RAM part of the image. Header, segments, padding to 16 bytes
+     * and the SHA-256 digest, as written by builder/esp.go. */
+    _ram_image_payload_size =
+        0x18 +
+        SIZEOF(.data) + ((SIZEOF(.data) != 0) ? 0x8 : 0) +
+        SIZEOF(.iram) + 0x8;
+
+    _ram_image_size =
+        _ram_image_payload_size +
+        16 - (_ram_image_payload_size % 16) +
+        0x20;
+
+    /* The ROM only loads the RAM part of the image. .text and .rodata follow
+     * it in flash, so each offset in the flash window is its flash offset. */
+    .flash_dummy (NOLOAD) : ALIGN(4)
     {
-        . += 0x18;                                              /* image header */
-        . += (SIZEOF(.data) > 0) ? (SIZEOF(.data) + 0x8) : 0; /* data segment + header (if non-empty) */
-        . += SIZEOF(.iram) + 0x8;                               /* iram segment + header */
-        . += 0x8;                                               /* text segment header */
-    } > IROM
+        . += _ram_image_size;
+    } > FLASH
 
-    /* Code stored in IROM (flash-mapped).
-     * This is the main program code.
-     */
+    /* Code stored in flash. This is the main program code. */
     .text : ALIGN(4)
     {
         *(.text .text.*)
-        /* Put the .rodata data at a 16-byte aligned flash offset, the same as its address. */
-        . = ALIGN(. + 0x8, 16) - 0x8;
-    } > IROM
+    } > FLASH
 
-    /* === DROM sections (flash-mapped read-only data) === */
-
-    /* Dummy section to align .rodata virtual address with its flash offset.
-     * Segments in the image are sorted by address: SRAM (.data, .iram),
-     * IROM (.text), then DROM (.rodata). So .rodata comes last, and we must
-     * account for all preceding segments.
-     * All SIZEOF() references are backward (sections defined above).
-     */
-    .rodata_dummy (NOLOAD): ALIGN(4)
-    {
-        . += 0x18;                                              /* image header (24 bytes) */
-        . += (SIZEOF(.data) > 0) ? (SIZEOF(.data) + 0x8) : 0; /* data segment + header (if non-empty) */
-        . += SIZEOF(.iram) + 0x8;                               /* iram segment + header */
-        . += SIZEOF(.text) + 0x8;                               /* text segment + header */
-        . += 0x8;                                               /* rodata segment header */
-    } > DROM
-
-    /* Constant global variables, stored in DROM. */
+    /* Constant global variables, stored in flash. */
     .rodata : ALIGN(4)
     {
         *(.rodata*)
         . = ALIGN (4);
-    } >DROM
-
-    ASSERT(ADDR(.text) == ADDR(.irom_dummy) + SIZEOF(.irom_dummy), ".text address does not match its flash offset")
-    ASSERT(ADDR(.rodata) == ADDR(.rodata_dummy) + SIZEOF(.rodata_dummy), ".rodata address does not match its flash offset")
+    } > FLASH
 
     /DISCARD/ :
     {
