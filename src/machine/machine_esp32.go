@@ -16,6 +16,17 @@ const deviceName = esp.Device
 
 const peripheralClock = 80000000 // 80MHz
 
+// CurrentCore returns the core number the call was made from.
+func CurrentCore() int {
+	return int(currentCPU())
+}
+
+//go:linkname currentCPU runtime.currentCPU
+func currentCPU() uint32
+
+// NumCores returns number of cores available on the device.
+func NumCores() int { return 2 }
+
 // CPUFrequency returns the current CPU frequency of the chip.
 // Currently it is a fixed frequency but it may allow changing in the future.
 func CPUFrequency() uint32 {

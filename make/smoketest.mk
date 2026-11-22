@@ -507,6 +507,10 @@ smoketest-esp: | build/smoke
 ifneq ($(XTENSA), 0)
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32-generic       examples/machinetest
 	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32-generic -scheduler=cores examples/machinetest
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32-generic -scheduler=cores examples/core-assign
+	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32-coreboard-v2  examples/adc
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32-coreboard-v2  examples/pwm
