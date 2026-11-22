@@ -39,6 +39,10 @@ MEMORY
 
     DROM (r)  : ORIGIN = 0x3F400000, LENGTH = 4M /* Flash data bus (page-aligned) */
     IROM (rx) : ORIGIN = 0x400D0000, LENGTH = 4M /* Flash instruction bus (page-aligned) */
+
+    /* External PSRAM through the cache, ESP32 TRM v5.8 section 4.3.2.2.
+     * A board with PSRAM sets its size with --defsym=__psram_size. */
+    PSRAM (rw) : ORIGIN = 0x3F800000, LENGTH = DEFINED(__psram_size) ? __psram_size : 0
 }
 
 ENTRY(call_start_cpu0)
@@ -211,6 +215,16 @@ SECTIONS
         _text_end = ABSOLUTE(.);
     } >IROM
 
+    /* PSRAM is off when the boot ROM loads the program, so this section is not
+     * loaded. The runtime sets it to zero after it maps the PSRAM. */
+    .psram (NOLOAD) : ALIGN(4)
+    {
+        _spsram = ABSOLUTE(.);
+        *(.psram .psram.*)
+        . = ALIGN(16);
+        _epsram = ABSOLUTE(.);
+    } > PSRAM
+
     /DISCARD/ :
     {
         *(.eh_frame)
@@ -230,6 +244,19 @@ _heap_start = ALIGN(_edata, 16);
 _heap_end = 0x3FFE0000;
 
 _stack_size = 4K;
+
+_psram_start = ORIGIN(PSRAM);
+_psram_end = ORIGIN(PSRAM) + LENGTH(PSRAM);
+ASSERT(LENGTH(PSRAM) <= 4M, "__psram_size is larger than the 4MB PSRAM window")
+
+/* ROM functions and data for the PSRAM start-up, from ESP-IDF
+ * components/esp_rom/esp32/ld/esp32.rom.ld. */
+PROVIDE ( cache_sram_mmu_set_rom = 0x400097f4 );
+PROVIDE ( esp_rom_spiflash_config_clk = 0x40062bc8 );
+PROVIDE ( ets_efuse_get_spiconfig = 0x40008658 );
+PROVIDE ( g_rom_spiflash_dummy_len_plus = 0x3ffae290 );
+PROVIDE ( rom_gpio_matrix_in = 0x40009edc );
+PROVIDE ( rom_gpio_matrix_out = 0x40009f0c );
 
 /* ESP32 ROM-owned PHY DRAM symbols from ESP-IDF esp32.rom.ld.
  * Exposed as linker symbols so firmware code can reference them without
