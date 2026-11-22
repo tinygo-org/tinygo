@@ -40,8 +40,10 @@ TEST_PACKAGES_FAST = \
 	encoding/asn1 \
 	encoding/base32 \
 	encoding/base64 \
+	encoding/binary \
 	encoding/csv \
 	encoding/hex \
+	encoding/pem \
 	expvar \
 	go/ast \
 	go/format \
@@ -50,13 +52,16 @@ TEST_PACKAGES_FAST = \
 	go/version \
 	hash \
 	hash/adler32 \
+	hash/crc32 \
 	hash/crc64 \
 	hash/fnv \
 	html \
+	html/template \
 	image \
 	internal/itoa \
 	internal/profile \
 	internal/reflectlite \
+	maps \
 	math \
 	math/cmplx \
 	net/http/internal/ascii \
@@ -73,6 +78,7 @@ TEST_PACKAGES_FAST = \
 	testing/iotest \
 	text/scanner \
 	text/tabwriter \
+	text/template \
 	text/template/parse \
 	unicode \
 	unicode/utf16 \
@@ -83,7 +89,6 @@ TEST_PACKAGES_FAST = \
 # archive/zip requires os.ReadAt, which is not yet supported on windows
 # bytes requires mmap
 # compress/flate appears to hang on wasi
-# crypto/aes needs reflect.Type.Method(), not yet implemented
 # debug/plan9obj requires os.ReadAt, which is not yet supported on windows
 # encoding/xml takes a minute on linux and gives a stack overflow on wasi
 # io/ioutil requires os.ReadDir, which is not yet supported on wasi
@@ -96,23 +101,56 @@ TEST_PACKAGES_FAST = \
 
 # Additional standard library packages that pass tests on individual platforms
 TEST_PACKAGES_LINUX := \
+	archive/tar \
 	archive/zip \
 	bytes \
 	compress/flate \
+	compress/gzip \
 	context \
 	crypto/aes \
+	crypto/cipher \
 	crypto/ecdh \
+	crypto/ed25519 \
+	crypto/fips140 \
+	crypto/hkdf \
+	crypto/hpke \
+	crypto/mlkem \
 	crypto/mldsa \
+	crypto/pbkdf2 \
+	crypto/rc4 \
+	crypto/rsa \
+	crypto/sha3 \
+	database/sql \
+	debug/buildinfo \
 	debug/dwarf \
+	debug/elf \
 	debug/gosym \
+	debug/pe \
 	debug/plan9obj \
 	encoding/gob \
+	encoding/json \
+	encoding/json/jsontext \
+	encoding/json/v2 \
 	encoding/xml \
+	flag \
+	fmt \
 	go/build/constraint \
+	go/constant \
+	go/doc \
+	go/doc/comment \
 	go/parser \
 	go/printer \
+	image/color \
+	image/draw \
+	image/gif \
+	image/jpeg \
+	image/png \
 	io/ioutil \
 	iter \
+	math/big \
+	math/bits \
+	math/rand \
+	math/rand/v2 \
 	mime \
 	mime/multipart \
 	mime/quotedprintable \
@@ -124,14 +162,24 @@ TEST_PACKAGES_LINUX := \
 	path/filepath \
 	regexp \
 	slices \
+	sort \
 	strings \
 	testing/cryptotest \
 	testing/fstest \
 	testing/quick \
 	time \
+	$(if $(wildcard $(shell $(GO) env GOROOT)/src/uuid),uuid) \
 	$(nil)
 
+# The ARM64 DIT tests need Go assembly for internal/runtime/sys.DITEnabled.
+ifneq ($(shell $(GO) env GOARCH),arm64)
+TEST_PACKAGES_LINUX += crypto/subtle
+endif
+
 TEST_PACKAGES_DARWIN := $(TEST_PACKAGES_LINUX)
+
+# The macOS sync/atomic test exits without a diagnostic.
+TEST_PACKAGES_LINUX += sync/atomic
 
 # os/user requires t.Skip() support
 # time takes more than 25 minutes on Windows.
@@ -155,9 +203,11 @@ TEST_PACKAGES_NONWASM = \
 	embed/internal/embedtest \
 	expvar \
 	go/format \
+	html/template \
 	image \
 	os \
 	testing \
+	text/template \
 	$(nil)
 
 # These packages cannot be tested on baremetal.
@@ -177,6 +227,7 @@ TEST_PACKAGES_NONBAREMETAL = \
 	$(TEST_PACKAGES_NOBOUNDARYSLICES) \
 	crypto/des \
 	encoding/gob \
+	encoding/pem \
 	regexp/syntax \
 	$(nil)
 
@@ -227,11 +278,18 @@ TEST_SKIP_FLAG := -skip='TestAsValidation|TestUnmarshalNestingLimitSlice|TestUnm
 TEST_ADDITIONAL_FLAGS ?=
 
 TEST_OPTIONS_crypto/dsa := -short
+TEST_OPTIONS_crypto/ed25519 := -skip='^TestAllocations$$'
+TEST_OPTIONS_crypto/rsa := -short -skip='^TestAllocations$$'
 TEST_OPTIONS_crypto/sha256 := -skip='^(TestAllocations|TestAllocatonsWithTypeAsserts)$$'
+TEST_OPTIONS_crypto/sha3 := -skip='^TestAllocations$$'
 TEST_OPTIONS_crypto/sha512 := -skip='^TestAllocations$$'
+TEST_OPTIONS_database/sql := -skip='^TestGrabConnAllocs$$'
+TEST_OPTIONS_flag := -skip='^TestDefineAfterSet$$'
 TEST_OPTIONS_fmt := -stack-size=1MB -skip='^TestCountMallocs$$'
+TEST_OPTIONS_sort := -skip='^TestSearchWrappersDontAlloc$$'
 TEST_OPTIONS_strconv := -skip='^(TestCountMallocs|TestAllocationsFromBytes)$$'
 TEST_OPTIONS_unicode/utf16 := -skip='^(TestAllocationsDecode)$$'
+TEST_OPTIONS_math/big := -skip='^TestNewIntAllocs$$'
 TEST_OPTIONS_mime := -skip='^TestLookupMallocs$$'
 TEST_OPTIONS_reflect := -skip='^TestMapIterSet$$'
 TEST_OPTIONS_bytes := -skip='^TestNewBufferShallow$$'
@@ -239,15 +297,31 @@ TEST_OPTIONS_slices := -skip='^(TestGrow|TestInsert|TestConcat)$$'
 TEST_OPTIONS_strings := -skip='^(TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace)$$'
 TEST_OPTIONS_crypto/mldsa := -short -stack-size=1MB -skip='^TestAllocations$$'
 TEST_OPTIONS_encoding/gob := -skip='^(TestIgnoreDepthLimit|TestCountDecodeMallocs)$$'
+TEST_OPTIONS_html/template := -skip='^TestMaxExecDepth$$'
+TEST_OPTIONS_text/template := -skip='^TestMaxExecDepth$$'
 
 tinygo-test tinygo-test-fast: TEST_OPTIONS_time := -skip='^TestTimerGC$$'
 ifeq ($(uname),Darwin)
 # These tests start 1,000 to 5,000 goroutines and can exceed macOS's thread limit.
 # https://go.dev/src/time/sleep_test.go and https://go.dev/src/time/tick_test.go
 tinygo-test tinygo-test-fast: TEST_OPTIONS_time := -skip='^(TestTimerGC|TestStopResult|TestResetResult|TestLongAdjustTimers)$$|^TestZeroTimer$$/^impl=(func|cache)$$'
+# Process creation is a stub on macOS.
+tinygo-test tinygo-test-fast: TEST_OPTIONS_flag := -skip='^(TestDefineAfterSet|TestExitCode)$$'
+tinygo-test tinygo-test-fast: TEST_OPTIONS_math/rand := -skip='^TestDefaultRace$$'
 endif
 tinygo-test tinygo-test-fast: TEST_OPTIONS_go/printer := -stack-size=1MB
 tinygo-test tinygo-test-fast: TEST_OPTIONS_encoding/gob := -stack-size=1MB -skip='^TestCountDecodeMallocs$$'
+tinygo-test tinygo-test-fast: TEST_OPTIONS_encoding/json := -stack-size=20MB -skip='^TestHTTPDecoding$$'
+tinygo-test tinygo-test-fast: TEST_OPTIONS_encoding/json/jsontext := -stack-size=20MB -skip='^TestTokenStringAllocations$$'
+tinygo-test tinygo-test-fast: TEST_OPTIONS_encoding/json/v2 := -stack-size=20MB
+ifeq ($(OS),Windows_NT)
+tinygo-test tinygo-test-fast: TEST_OPTIONS_html/template := -skip='^(TestMaxExecDepth|TestParseZipFS)$$'
+# The Windows host volume mounted as the guest root lacks /dev/null.
+tinygo-test-wasi tinygo-test-wasip1 tinygo-test-wasip1-fast tinygo-test-wasip2-fast: TEST_OPTIONS_html/template := -skip='^(TestMaxExecDepth|TestEmptyTemplateHTML)$$'
+else
+tinygo-test tinygo-test-fast: TEST_OPTIONS_html/template := -stack-size=20MB
+tinygo-test tinygo-test-fast: TEST_OPTIONS_text/template := -stack-size=20MB
+endif
 tinygo-test tinygo-test-fast: TEST_OPTIONS_testing/quick := -stack-size=1MB
 tinygo-test tinygo-test-fast: TEST_OPTIONS_go/build/constraint = $(HOST_TEST_STACK_SKIP_FLAG) -stack-size=1MB
 tinygo-test tinygo-test-fast: TEST_OPTIONS_regexp = $(HOST_TEST_STACK_SKIP_FLAG) -stack-size=1MB
@@ -262,7 +336,13 @@ ifeq ($(OS),Windows_NT)
 # TestWalkDir needs File.Chdir, which is a stub in src/os/file_windows.go.
 tinygo-test: TEST_OPTIONS_io/fs := -stack-size=8MB -skip='^TestWalkDir$$'
 endif
-tinygo-test: TEST_OPTIONS_internal/synctest = -skip='^(TestReflectFuncOf|TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount$(TEST_SYNCTEST_THREAD_LIMIT_SKIP))$$'
+ifeq ($(uname),Linux)
+tinygo-test tinygo-test-fast: TEST_OPTIONS_encoding/asn1 := -stack-size=20MB
+tinygo-test tinygo-test-fast: TEST_OPTIONS_errors :=
+else
+TEST_SYNCTEST_BUBBLE_SKIP := |TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount
+endif
+tinygo-test: TEST_OPTIONS_internal/synctest = -skip='^(TestReflectFuncOf$(TEST_SYNCTEST_BUBBLE_SKIP)$(TEST_SYNCTEST_THREAD_LIMIT_SKIP))$$'
 tinygo-test: TEST_OPTIONS_testing/synctest := -skip='^(TestFatal|TestError|TestVerboseError|TestSkip|TestVerboseSkip|TestHelper|TestHTTPTransport100Continue)$$'
 tinygo-test-fast: HOST_TEST_STACK_SKIP_FLAG = $(TEST_SKIP_FLAG)
 
@@ -284,9 +364,9 @@ $(if $(strip $(filter-out $(call test-packages-with-options,$(1)),$(1))),$(4) $(
 $(foreach package,$(call test-packages-with-options,$(1)),$(call run-tinygo-test-package,$(package),$(2),$(4)))
 endef
 
-# https://go.dev/src/internal/synctest/synctest_test.go creates 100 x 100
-# goroutines, which can exceed macOS's thread limit with the threads scheduler.
-ifeq ($(uname),Darwin)
+# TestWaitGroupManyBubbles can exhaust the Boehm mark stack on Linux
+# or the thread limit on macOS.
+ifneq ($(filter Linux Darwin,$(uname)),)
 TEST_SYNCTEST_THREAD_LIMIT_SKIP := |TestWaitGroupManyBubbles
 endif
 
@@ -297,7 +377,9 @@ tinygo-test:
 	@# TestUnmarshalNestingLimit{Slice,Struct}: encoding/asn1 nesting limit added in
 	@# https://github.com/golang/go/commit/6a6d115f9a7422b2fa081ba6f567eefb4a099462
 	$(call run-tinygo-tests,$(TEST_PACKAGES_HOST) $(TEST_PACKAGES_SLOW) $(TEST_PACKAGES_HOST_FULL_ONLY),$(TEST_ADDITIONAL_FLAGS),$(TEST_SKIP_FLAG))
+ifeq ($(filter encoding/json,$(TEST_PACKAGES_HOST)),)
 	$(TINYGO) test $(TEST_ADDITIONAL_FLAGS) -run='^TestSynctestMarshal$$' encoding/json
+endif
 tinygo-test-fast:
 	$(call run-tinygo-tests,$(TEST_PACKAGES_HOST),,$(TEST_SKIP_FLAG))
 tinygo-bench:
