@@ -5,8 +5,7 @@ package interrupt
 import (
 	"device/riscv"
 	"errors"
-	"runtime/volatile"
-	"unsafe"
+	clic "internal/esp"
 )
 
 //go:extern tinygo_saved_ra
@@ -23,66 +22,10 @@ func In() bool {
 	return interruptDepth[currentCPU()&1] != 0
 }
 
-// CLIC register access for the ESP32-P4.
-// The CLIC is at 0x20800000, with per-interrupt registers at 0x20801000.
-// Each interrupt source has 4 bytes: [ip, ie, attr, ctl].
-const clicBase = 0x20800000
-const clicIntBase = clicBase + 0x1000
-
-// clicExtIntrNumOffset mirrors the CLIC_EXT_INTR_NUM_OFFSET in ESP-IDF: the
-// first 16 CLIC sources are internal, so a CPU interrupt number n lives at
-// CLIC source n+16 (and mcause reports n+16 on dispatch).
-const clicExtIntrNumOffset = 16
-
-// clicSource maps a CPU interrupt number (as used for INTMTX routing and by
-// the rest of TinyGo) to its CLIC per-source register index.
-func clicSource(n uint32) uint32 {
-	return n + clicExtIntrNumOffset
-}
-
-// CLIC priority encoding (NLBITS=3 on ESP32-P4): bits [7:5] hold the level and
-// bits [4:0] are reserved but must be written as 1 (ESP-IDF NLBITS_TO_BYTE).
-const (
-	clicNLBITS      = 3
-	clicMaxPriority = (1 << clicNLBITS) - 1
-	clicLowBits     = (1 << (8 - clicNLBITS)) - 1
-)
-
-func clicEncodePriority(level uint8) uint8 {
-	if level > clicMaxPriority {
-		level = clicMaxPriority
-	}
-	return level<<(8-clicNLBITS) | clicLowBits
-}
-
-func clicSetPriority(n uint32, level uint8) {
-	reg := (*volatile.Register8)(unsafe.Pointer(uintptr(clicIntBase + clicSource(n)*4 + 3)))
-	reg.Set(clicEncodePriority(level))
-}
-
-func clicGetPriority(n uint32) uint8 {
-	reg := (*volatile.Register8)(unsafe.Pointer(uintptr(clicIntBase + clicSource(n)*4 + 3)))
-	return reg.Get() >> (8 - clicNLBITS)
-}
-
-func clicSetEnable(n uint32, enable bool) {
-	reg := (*volatile.Register8)(unsafe.Pointer(uintptr(clicIntBase + clicSource(n)*4 + 1)))
-	if enable {
-		reg.Set(1)
-	} else {
-		reg.Set(0)
-	}
-}
-
-func clicClearPending(n uint32) {
-	reg := (*volatile.Register8)(unsafe.Pointer(uintptr(clicIntBase + clicSource(n)*4)))
-	reg.Set(0)
-}
-
 // Enable registers a CPU interrupt.
-// The ESP32-P4 CLIC supports up to 48 interrupt sources.
+// The ESP32-P4 CLIC supports up to 47 CPU interrupt lines.
 func (i Interrupt) Enable() error {
-	if i.num < 1 || i.num > 47 {
+	if i.num < 1 || i.num > clic.NumInterrupts {
 		return errors.New("interrupt for ESP32-P4 must be in range of 1 through 47")
 	}
 	// The CLIC is per core and peripherals are routed to core 0, so core 1
@@ -98,24 +41,7 @@ func (i Interrupt) Enable() error {
 // enableLocal enables the given CPU interrupt in the CLIC of the calling core.
 func enableLocal(num uint32) {
 	mask := riscv.DisableInterrupts()
-
-	src := clicSource(num)
-
-	// Enable interrupt via CLIC.
-	clicSetEnable(num, true)
-
-	// Set rising-edge triggered. TRIG field is at bits[2:1]; rising edge =
-	// 0b01 << 1 = 0x02. MODE bits [7:6] are read-only and fixed to 0b11, and
-	// SHV (bit 0) stays 0 so dispatch uses the classic MTVEC jump table.
-	attrReg := (*volatile.Register8)(unsafe.Pointer(uintptr(clicIntBase + src*4 + 2)))
-	attrReg.Set(0xC2) // machine mode, rising-edge triggered, non-vectored
-
-	// Set priority above threshold.
-	clicSetPriority(num, defaultThreshold)
-
-	// Clear pending.
-	clicClearPending(num)
-
+	clic.Enable(num, defaultThreshold)
 	riscv.Asm("fence")
 	riscv.EnableInterrupts(mask)
 }
@@ -295,24 +221,20 @@ func callHandler(n int) {
 func handleInterrupt() {
 	mcause := riscv.MCAUSE.Get()
 	exception := mcause&(1<<31) == 0
+	interruptNumber, ok := clic.Line(mcause)
 
-	// The CLIC reports the interrupt vector as source = cpu_number + 16 in
-	// mcause; recover the CPU interrupt number used throughout TinyGo.
-	interruptNumber := uint32(mcause&0x3f) - clicExtIntrNumOffset
-
-	if !exception && interruptNumber > 0 {
+	if !exception && ok {
 		// Save MSTATUS & MEPC, which could be overwritten by another CPU interrupt.
 		mstatus := riscv.MSTATUS.Get()
 		mepc := riscv.MEPC.Get()
 
 		// Temporarily disable this interrupt by lowering its CLIC priority
 		// below the threshold.
-		thresholdSave := clicGetPriority(interruptNumber)
-		clicSetPriority(interruptNumber, disableThreshold)
+		thresholdSave := clic.Priority(interruptNumber)
+		clic.SetPriority(interruptNumber, disableThreshold)
 		riscv.Asm("fence")
 
-		// Clear pending.
-		clicClearPending(interruptNumber)
+		clic.Ack(interruptNumber)
 
 		// Enable CPU interrupts for nesting.
 		riscv.MSTATUS.SetBits(riscv.MSTATUS_MIE)
@@ -330,7 +252,7 @@ func handleInterrupt() {
 		riscv.MSTATUS.ClearBits(riscv.MSTATUS_MIE)
 
 		// Restore interrupt priority to enable interrupt again.
-		clicSetPriority(interruptNumber, thresholdSave)
+		clic.SetPriority(interruptNumber, thresholdSave)
 		riscv.Asm("fence")
 
 		// Restore MCAUSE to the value captured at trap entry.  On the CLIC,

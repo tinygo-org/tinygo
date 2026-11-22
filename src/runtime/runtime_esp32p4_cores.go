@@ -5,6 +5,7 @@ package runtime
 import (
 	"device/esp"
 	"device/riscv"
+	clic "internal/esp"
 	"internal/task"
 	"runtime/interrupt"
 	"sync/atomic"
@@ -117,9 +118,9 @@ func interruptEnableLocal(num uint32)
 func initCrossCoreInterrupt(core uint32) {
 	// The interrupt matrix takes the CLIC source number.
 	if core == 0 {
-		esp.INTERRUPT_CORE0.CPU_INT_FROM_CPU_0_MAP.Set(crossCoreCPUInterrupt + clicExtIntrNumOffset)
+		esp.INTERRUPT_CORE0.CPU_INT_FROM_CPU_0_MAP.Set(crossCoreCPUInterrupt + clic.MatrixOffset)
 	} else {
-		esp.INTERRUPT_CORE1.CPU_INT_FROM_CPU_1_MAP.Set(crossCoreCPUInterrupt + clicExtIntrNumOffset)
+		esp.INTERRUPT_CORE1.CPU_INT_FROM_CPU_1_MAP.Set(crossCoreCPUInterrupt + clic.MatrixOffset)
 	}
 	signalCore(core, 0)
 	if core == 0 {

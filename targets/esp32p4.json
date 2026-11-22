@@ -8,6 +8,7 @@
 	"build-tags": [
 		"esp32p4",
 		"esp",
+		"esp.clic",
 		"machine.uart",
 		"machine.spi",
 		"machine.i2c",

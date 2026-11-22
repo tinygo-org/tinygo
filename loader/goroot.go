@@ -252,6 +252,7 @@ func pathsToOverride(config *compileopts.Config) map[string]bool {
 		"internal/abi/":                   false,
 		"internal/bytealg/":               false,
 		"internal/cm/":                    false,
+		"internal/esp/":                   false,
 		"internal/futex/":                 false,
 		"internal/fuzz/":                  false,
 		"internal/itoa/":                  false,
