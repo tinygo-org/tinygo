@@ -393,14 +393,7 @@ func regi2cRead(block, reg uint8) uint8 {
 	return uint8(ctrl.Get() >> r2cDataSh)
 }
 
-// EnablePSRAMMPLL powers up and programmes the MPLL used as the PSRAM clock
-// source at 400MHz (the 200MHz-bus default).  Prefer EnablePSRAMMPLLFreq for
-// the CrowPanel's 80MHz bus, which needs MPLL=320MHz.
-func EnablePSRAMMPLL() bool {
-	return EnablePSRAMMPLLFreq(400)
-}
-
-// EnablePSRAMMPLLFreq powers up and programmes the MPLL for the requested
+// enablePSRAMMPLLFreq powers up and programmes the MPLL for the requested
 // frequency from the 40MHz XTAL.  ESP-IDF's AP-Hex driver uses 320MHz for an
 // 80MHz PSRAM bus and 400MHz for a 200MHz bus.
 //
@@ -408,7 +401,7 @@ func EnablePSRAMMPLL() bool {
 // powered first: on the P4 this is the internal LDO channel 2 (VO2) at 1.8V
 // (CONFIG_ESP_LDO_CHAN_PSRAM_DOMAIN=2, VOLTAGE=1800mV), plus the 3.3V peripheral
 // rail (LDO4) that feeds the PSRAM I/O on the CrowPanel.
-func EnablePSRAMMPLLFreq(mhz uint32) bool {
+func enablePSRAMMPLLFreq(mhz uint32) bool {
 	if mhz < 20 {
 		return false
 	}
@@ -694,25 +687,14 @@ func PSRAMProbe() uint32 {
 	return rd
 }
 
-// PSRAMBase is the CPU virtual address where InitPSRAM80MHz maps PSRAM0.
-const PSRAMBase = psramVAddrBase
-
-// PSRAMFramebufferBytes is the size of one full 1024x600 RGB565 frame.
-const PSRAMFramebufferBytes = 1024 * 600 * 2
-
-// psramFramebufferPages is the number of 64KB MMU pages needed for one frame.
-const psramFramebufferPages = (PSRAMFramebufferBytes + psramPageSize - 1) / psramPageSize
-
-// InitPSRAM80MHz performs the full AP-Hex PSRAM bring-up used by the working
-// CrowPanel V1.2 example: MPLL=320MHz, PSRAM bus=80MHz, x16 hex mode,
-// 2048-byte pages, DLL enabled, then chip mode-register init over MSPI3.
-// On success it maps enough pages at PSRAMBase for one full 1024x600 RGB565
-// framebuffer and validates a 1MB CPU write/read-back through the cache.
+// initPSRAM performs the AP-Hex PSRAM bring-up: MPLL=320MHz, PSRAM bus=80MHz,
+// x16 hex mode, 2048-byte pages, DLL enabled, then chip mode-register init over
+// MSPI3. It maps the given number of 64KB pages at psramVAddrBase. The runtime
+// calls it at boot with the size the target declares.
 //
-// The function is deliberately non-fatal: callers should print an error and
-// stay in the small on-chip framebuffer path if it returns false.
-func InitPSRAM80MHz() bool {
-	if !EnablePSRAMMPLLFreq(psram80MPLLMHz) {
+//go:linkname initPSRAM runtime.machineInitPSRAM
+func initPSRAM(pages uint32) bool {
+	if !enablePSRAMMPLLFreq(psram80MPLLMHz) {
 		return false
 	}
 	EnablePSRAMModuleClock()
@@ -727,33 +709,7 @@ func InitPSRAM80MHz() bool {
 	// Now configure the system controller (MSPI2) for cache/AXI access and map
 	// the physical pages into the CPU data address space.
 	ConfigurePSRAMController()
-	MapPSRAM(psramVAddrBase, 0, psramFramebufferPages)
-
-	return PSRAMValidate(psramVAddrBase, PSRAMFramebufferBytes)
-}
-
-// PSRAMValidate writes a position-dependent pattern through the cacheable PSRAM
-// mapping, writes the dirty lines back, invalidates them, and reads the pattern
-// again from the device.  This distinguishes a real PSRAM path from a cache hit
-// on stale data.  It is bounded to one framebuffer (1.2MB).
-func PSRAMValidate(addr uintptr, size uintptr) bool {
-	const patternSeed = 0xA5C30000
-	words := int(size / 4)
-
-	for i := 0; i < words; i++ {
-		v := uint32(patternSeed) ^ uint32(i)*0x9E3779B1
-		(*volatile.Register32)(unsafe.Pointer(addr + uintptr(i)*4)).Set(v)
-	}
-	CacheWriteBack(addr, size)
-	CacheInvalidate(addr, size)
-
-	for i := 0; i < words; i++ {
-		want := uint32(patternSeed) ^ uint32(i)*0x9E3779B1
-		got := (*volatile.Register32)(unsafe.Pointer(addr + uintptr(i)*4)).Get()
-		if got != want {
-			return false
-		}
-	}
+	MapPSRAM(psramVAddrBase, 0, pages)
 	return true
 }
 

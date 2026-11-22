@@ -9,13 +9,17 @@
 		"esp",
 		"machine.uart",
 		"machine.spi",
-		"machine.i2c"
+		"machine.i2c",
+		"machine.psram"
 	],
 	"serial": "uart",
 	"rtlib": "compiler-rt",
 	"libc": "picolibc",
 	"default-stack-size": 32768,
 	"linkerscript": "targets/esp32p4.ld",
+	"ldflags": [
+		"--defsym=__psram_size=32M"
+	],
 	"extra-files": [
 		"src/device/esp/esp32p4.S",
 		"src/device/esp/esp32p4_psram.S"
