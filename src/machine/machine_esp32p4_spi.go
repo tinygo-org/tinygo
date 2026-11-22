@@ -43,18 +43,24 @@ func spiBusFor(bus *esp.SPI2_Type) (spiBus, bool) {
 	}
 }
 
-func (spi *SPI) configure(config SPIConfig, bus spiBus, mode spiMode) error {
-	// Clock and reset sequence from ESP-IDF esp_hal_gpspi/esp32p4/include/hal/spi_ll.h.
-	esp.HP_SYS_CLKRST.SetSOC_CLK_CTRL1_REG_GPSPI2_SYS_CLK_EN(1)
-	esp.HP_SYS_CLKRST.SetSOC_CLK_CTRL2_REG_GPSPI2_APB_CLK_EN(1)
-	esp.HP_SYS_CLKRST.SetHP_RST_EN2_REG_RST_EN_SPI2(1)
-	esp.HP_SYS_CLKRST.SetHP_RST_EN2_REG_RST_EN_SPI2(0)
-	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_CLK_SRC_SEL(0) // XTAL
-	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_HS_CLK_DIV_NUM(0)
-	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_MST_CLK_DIV_NUM(0)
-	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_HS_CLK_EN(1)
-	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_MST_CLK_EN(1)
+// enableSPIClock enables and resets the clock of an SPI bus. The sequence is from
+// ESP-IDF esp_hal_gpspi/esp32p4/include/hal/spi_ll.h.
+func enableSPIClock(bus *esp.SPI2_Type) {
+	switch bus {
+	case esp.SPI2:
+		esp.HP_SYS_CLKRST.SetSOC_CLK_CTRL1_REG_GPSPI2_SYS_CLK_EN(1)
+		esp.HP_SYS_CLKRST.SetSOC_CLK_CTRL2_REG_GPSPI2_APB_CLK_EN(1)
+		esp.HP_SYS_CLKRST.SetHP_RST_EN2_REG_RST_EN_SPI2(1)
+		esp.HP_SYS_CLKRST.SetHP_RST_EN2_REG_RST_EN_SPI2(0)
+		esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_CLK_SRC_SEL(0) // XTAL
+		esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_HS_CLK_DIV_NUM(0)
+		esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_MST_CLK_DIV_NUM(0)
+		esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_HS_CLK_EN(1)
+		esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL116_REG_GPSPI2_MST_CLK_EN(1)
+	}
+}
 
+func (spi *SPI) configure(config SPIConfig, bus spiBus, mode spiMode) error {
 	spi.Bus.SPI_SLAVE.Set(0)
 	spi.Bus.SPI_MISC.Set(0)
 	spi.Bus.SPI_USER.Set(0)
