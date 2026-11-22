@@ -150,6 +150,27 @@ call_start_cpu0:
     // automatically, so the call is not needed for normal esptool flashing.
     j _start
 
+// Entry point of core 1, set with ets_set_appcpu_boot_addr. Core 1 runs it
+// from SRAM and calls tinygo_runCore1 on its own stack.
+.section .iram.call_start_cpu1,"ax",@progbits
+.global call_start_cpu1
+.type call_start_cpu1,@function
+call_start_cpu1:
+    .option push
+    .option norelax
+    la gp, __global_pointer$
+    .option pop
+    la sp, _stack1_top
+
+    // Set mstatus.FS to Initial so FPU instructions do not trap.
+    li t0, (1 << 13)
+    csrs mstatus, t0
+
+    call tinygo_runCore1
+1:
+    wfi
+    j 1b
+
 .section .text.exception_vectors
 .global _vector_table
 .type _vector_table,@function

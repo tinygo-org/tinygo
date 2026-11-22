@@ -12,15 +12,15 @@ import (
 //go:extern tinygo_saved_ra
 var tinygo_saved_ra uintptr
 
-// interruptDepth counts nested interrupt handlers.  In() uses it instead of
-// reading mcause, because on the CLIC mcause must retain the pre-interrupt
-// priority so that `mret` can restore the CPU threshold.
-var interruptDepth uint32
+// interruptDepth counts nested interrupt handlers per core. In() uses it
+// instead of reading mcause, because on the CLIC mcause must retain the
+// pre-interrupt priority so that `mret` can restore the CPU threshold.
+var interruptDepth [2]uint32
 
 // In returns whether the system is currently in an interrupt. The CLIC needs
 // mcause to stay valid for mret, so use the software nesting count instead.
 func In() bool {
-	return interruptDepth != 0
+	return interruptDepth[currentCPU()&1] != 0
 }
 
 // CLIC register access for the ESP32-P4.
@@ -85,13 +85,24 @@ func (i Interrupt) Enable() error {
 	if i.num < 1 || i.num > 47 {
 		return errors.New("interrupt for ESP32-P4 must be in range of 1 through 47")
 	}
-	mask := riscv.DisableInterrupts()
-	defer riscv.EnableInterrupts(mask)
+	// The CLIC is per core and peripherals are routed to core 0, so core 1
+	// asks core 0 to enable the line.
+	if currentCPU() != 0 {
+		enableOnCore0(uint32(i.num))
+		return nil
+	}
+	enableLocal(uint32(i.num))
+	return nil
+}
 
-	src := clicSource(uint32(i.num))
+// enableLocal enables the given CPU interrupt in the CLIC of the calling core.
+func enableLocal(num uint32) {
+	mask := riscv.DisableInterrupts()
+
+	src := clicSource(num)
 
 	// Enable interrupt via CLIC.
-	clicSetEnable(uint32(i.num), true)
+	clicSetEnable(num, true)
 
 	// Set rising-edge triggered. TRIG field is at bits[2:1]; rising edge =
 	// 0b01 << 1 = 0x02. MODE bits [7:6] are read-only and fixed to 0b11, and
@@ -100,13 +111,13 @@ func (i Interrupt) Enable() error {
 	attrReg.Set(0xC2) // machine mode, rising-edge triggered, non-vectored
 
 	// Set priority above threshold.
-	clicSetPriority(uint32(i.num), defaultThreshold)
+	clicSetPriority(num, defaultThreshold)
 
 	// Clear pending.
-	clicClearPending(uint32(i.num))
+	clicClearPending(num)
 
 	riscv.Asm("fence")
-	return nil
+	riscv.EnableInterrupts(mask)
 }
 
 // Adding pseudo function calls that is replaced by the compiler with the actual
@@ -117,6 +128,12 @@ func callHandlers(num int)
 
 //go:linkname signalInterrupt runtime.signalInterrupt
 func signalInterrupt()
+
+//go:linkname currentCPU runtime.currentCPU
+func currentCPU() uint32
+
+//go:linkname enableOnCore0 runtime.enableInterruptOnCore0
+func enableOnCore0(num uint32)
 
 const (
 	IRQNUM_1 = 1 + iota
@@ -301,9 +318,10 @@ func handleInterrupt() {
 		riscv.MSTATUS.SetBits(riscv.MSTATUS_MIE)
 
 		// Call registered interrupt handler(s).
-		interruptDepth++
+		core := currentCPU() & 1
+		interruptDepth[core]++
 		callHandler(int(interruptNumber))
-		interruptDepth--
+		interruptDepth[core]--
 
 		// Signal to sleepTicks that an interrupt has occurred.
 		signalInterrupt()
