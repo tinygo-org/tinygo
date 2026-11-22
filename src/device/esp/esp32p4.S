@@ -45,6 +45,10 @@ call_start_cpu0:
     or t2, t2, t3
     sw t2, 0x1c(t0)       // LP_WDT.SWD_CONFIG |= SWD_DISABLE
 
+    // Set mstatus.FS to Initial so FPU instructions do not trap.
+    li t0, (1 << 13)
+    csrs mstatus, t0
+
     // Enable UART0 clock chain so ROM UART keeps working and TinyGo can use it.
     // HP_SYS_CLKRST base = 0x500E6000.
     // All RMW done here in assembly to guarantee lui+lw/sw inline immediates;

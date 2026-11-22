@@ -3,7 +3,8 @@
 		"riscv32"
 	],
 	"inheritable-only": true,
-	"features": "+32bit,+a,+c,+m,+zaamo,+zalrsc,+zmmul,+zicsr,+zifencei,-relax",
+	"arch": "rv32imafc",
+	"features": "+32bit,+a,+c,+f,+m,+zaamo,+zalrsc,+zmmul,+zicsr,+zifencei,-relax",
 	"build-tags": [
 		"esp32p4",
 		"esp",
