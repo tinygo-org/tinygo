@@ -72,6 +72,7 @@ var (
 	sleepWake            [numCPU]atomic.Uint32
 	gcPauseRequest       [numCPU]atomic.Uint32
 	gcSignalWait         [numCPU]atomic.Uint32
+	coreIdle             [numCPU]atomic.Uint32
 )
 
 func crossCoreHandler(interrupt.Interrupt) {
@@ -166,10 +167,12 @@ func schedulerUnlockAndWait() {
 	// unlock is not lost. See the Xtensa ISA Reference Manual, WAITI.
 	// Interrupts stay off from the unlock until the lock is taken again.
 	state := schedulerLock.unlockMasked()
+	coreIdle[core].Store(1)
 	for schedulerWakePending[core].Swap(0) == 0 {
 		device.Asm("waiti 0")
 		interrupt.Disable()
 	}
+	coreIdle[core].Store(0)
 	schedulerLock.lockMasked(state)
 }
 
@@ -214,7 +217,9 @@ func sleepTicksMulticore(d timeUnit) {
 	sleepWake[core].Store(0)
 
 	schedulerLock.Unlock()
+	coreIdle[core].Store(1)
 	sleepTicks(d)
+	coreIdle[core].Store(0)
 	schedulerLock.Lock()
 
 	sleepingCore = 0xff
@@ -243,11 +248,15 @@ func gcInterruptHandler(core uint32) {
 	// Wait until we get a signal to start scanning.
 	gcWaitForSignal(core)
 
-	// Scan the stack(s) of this core.
-	scanCurrentStack()
-	if !task.OnSystemStack() {
-		// Mark system stack.
-		markRoots(task.SystemStack(), coreStackTop(core))
+	// An idle core holds no live pointers, and its stale stack slots and
+	// registers would keep exited goroutines and their stacks alive.
+	if coreIdle[core].Load() == 0 {
+		// Scan the stack(s) of this core.
+		scanCurrentStack()
+		if !task.OnSystemStack() {
+			// Mark system stack.
+			markRoots(task.SystemStack(), coreStackTop(core))
+		}
 	}
 
 	// Signal we've finished scanning.
