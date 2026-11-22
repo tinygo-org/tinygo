@@ -1675,6 +1675,7 @@ func writeGoRegisterBitfieldType(w *bufio.Writer, register *PeripheralField, per
 		} else {
 			funcSuffix = registerName + "_" + bitfield.Name
 		}
+		w.WriteString("//go:inline\n")
 		fmt.Fprintf(w, "func (o *%s) Set%s(%s value uint%d) {\n", typeName, funcSuffix, idxArg, bitSize)
 		if maxMask == bitfield.Mask {
 			fmt.Fprintf(w, "\tvolatile.StoreUint%d(%s, value)\n", bitSize, regAccess)
@@ -1684,6 +1685,7 @@ func writeGoRegisterBitfieldType(w *bufio.Writer, register *PeripheralField, per
 			fmt.Fprintf(w, "\tvolatile.StoreUint%d(%s, volatile.LoadUint%d(%s)&^(0x%x)|value)\n", bitSize, regAccess, bitSize, regAccess, bitfield.Mask)
 		}
 		w.WriteString("}\n")
+		w.WriteString("//go:inline\n")
 		fmt.Fprintf(w, "func (o *%s) Get%s(%s) uint%d {\n", typeName, funcSuffix, idxArg, bitSize)
 		if maxMask == bitfield.Mask {
 			fmt.Fprintf(w, "\treturn volatile.LoadUint%d(%s)\n", bitSize, regAccess)
