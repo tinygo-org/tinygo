@@ -31,8 +31,6 @@
  * virtual-address-overlap errors.
  */
 
-PROVIDE(__psram_size_default = 32M);
-
 MEMORY
 {
     /* HP L2MEM: unified IRAM/DRAM address space.
@@ -49,8 +47,9 @@ MEMORY
      */
     FLASH (rx)  : ORIGIN = 0x40000000, LENGTH = 64M
 
-    /* External PSRAM, mapped at the P4 PSRAM virtual base. */
-    PSRAM (rw)  : ORIGIN = 0x48000000, LENGTH = DEFINED(__psram_size) ? __psram_size : __psram_size_default
+    /* External PSRAM, mapped at runtime by machine_esp32p4_psram.go.
+     * The PSRAM is in the chip package, esp32p4.json sets its size. */
+    PSRAM (rw)  : ORIGIN = 0x48000000, LENGTH = DEFINED(__psram_size) ? __psram_size : 0
 }
 
 /* The entry point. It is set in the image flashed to the chip, so must be
@@ -196,6 +195,7 @@ SECTIONS
  */
 _psram_start = ORIGIN(PSRAM);
 _psram_end = ORIGIN(PSRAM) + LENGTH(PSRAM);
+ASSERT(LENGTH(PSRAM) <= 64M, "__psram_size is larger than the 64MB PSRAM window")
 
 _globals_start = _sdata;
 _globals_end = _ebss;

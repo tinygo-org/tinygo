@@ -30,12 +30,6 @@ func main() {
 
 	clearbss()
 
-	// Initialize PSRAM when the machine.psram tag is enabled.
-	if err := initPSRAM(); err != "" {
-		psramInitFailed = 1
-		psramInitErr = err
-	}
-
 	// Configure interrupt handler.
 	interruptInit()
 
@@ -49,16 +43,11 @@ func main() {
 	exit(0)
 }
 
-var (
-	psramInitFailed uint8
-	psramInitErr    string
-)
-
 func init() {
+	// The PSRAM driver allocates, so it runs after the heap is ready.
+	startPSRAM()
 	machine.InitSerial()
-	if hasPSRAM && volatile.LoadUint8(&psramInitFailed) != 0 {
-		panic(psramInitErr)
-	}
+	checkPSRAM()
 }
 
 // interruptInit initializes the interrupt controller.
