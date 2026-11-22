@@ -84,6 +84,9 @@ SECTIONS
         . = ALIGN(16);
         . += _stack_size;
         _stack_top = .;
+        . = ALIGN(16);
+        . += DEFINED(__num_stacks) && __num_stacks >= 2 ? _stack_size : 0;
+        _stack1_top = .;
     } >DRAM
 
     /* Global variables that are mutable and zero-initialized. Kept in SRAM2
@@ -177,6 +180,8 @@ SECTIONS
         /* Boot entry point and its literals */
         *(.literal.call_start_cpu0)
         *(.text.call_start_cpu0)
+        *(.literal.call_start_cpu1)
+        *(.text.call_start_cpu1)
 
         /* Xtensa exception/interrupt vector table — must be 0x400-aligned */
         . = ALIGN(0x400);
@@ -387,6 +392,12 @@ PROVIDE(ets_isr_attach = 0x400067ec);
 PROVIDE(ets_isr_mask = 0x400067fc);
 PROVIDE(ets_isr_unmask = 0x40006808);
 PROVIDE(roundup2 = 0x4000ab7c);
+PROVIDE(ets_set_appcpu_boot_addr = 0x4000689c);
+PROVIDE(mmu_init = 0x400095a4);
+PROVIDE(cache_flash_mmu_set = 0x400095e0);
+PROVIDE(Cache_Flush = 0x40009a14);
+PROVIDE(Cache_Read_Disable = 0x40009ab8);
+PROVIDE(Cache_Read_Enable = 0x40009a84);
 
 /* From ESP-IDF:
  * components/esp_rom/esp32/ld/esp32.rom.ld
