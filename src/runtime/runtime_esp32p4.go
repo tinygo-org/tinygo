@@ -135,10 +135,13 @@ func initTimerInterrupt() {
 // sleepTicks spins until the given number of ticks have elapsed. It does not
 // use the TIMG0 alarm interrupt.
 func sleepTicks(d timeUnit) {
+	printlock()
 	machine.FlushSerial()
+	printunlock()
+	core := currentCPU()
 	target := ticks() + d
 
-	for ticks() < target {
+	for ticks() < target && !sleepWoken(core) {
 	}
 }
 

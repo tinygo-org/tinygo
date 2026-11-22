@@ -19,7 +19,8 @@
 	"default-stack-size": 32768,
 	"linkerscript": "targets/esp32p4.ld",
 	"ldflags": [
-		"--defsym=__psram_size=32M"
+		"--defsym=__psram_size=32M",
+		"--defsym=__num_stacks=2"
 	],
 	"extra-files": [
 		"src/device/esp/esp32p4.S",

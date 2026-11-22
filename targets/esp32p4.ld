@@ -70,6 +70,9 @@ SECTIONS
         . = ALIGN(16);
         . += _stack_size;
         _stack_top = .;
+        . = ALIGN(16);
+        . += DEFINED(__num_stacks) && __num_stacks >= 2 ? _stack_size : 0;
+        _stack1_top = .;
     } >SRAM
 
     /* Mutable global variables. This data (in the SRAM segment) is initialized
@@ -207,6 +210,7 @@ _stack_size = 32K;
  * Source: ESP-IDF components/esp_rom/esp32p4/ld/esp32p4.rom.ld
  */
 PROVIDE( ets_delay_us = 0x4fc0003c );
+PROVIDE( ets_set_appcpu_boot_addr = 0x4fc000a8 );
 
 /* Cache / MMU ROM functions called from call_start_cpu0.
  * Source: ESP-IDF components/esp_rom/esp32p4/ld/esp32p4.rom.ld
