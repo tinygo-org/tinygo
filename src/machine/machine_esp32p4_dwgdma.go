@@ -42,34 +42,34 @@ import (
 
 // Channel register offsets relative to the channel base (64-bit transfer path).
 const (
-	gdmaRegSAR0          = 0x00
-	gdmaRegSAR1          = 0x04
-	gdmaRegDAR0          = 0x08
-	gdmaRegDAR1          = 0x0C
-	gdmaRegBlockTS       = 0x10
-	gdmaRegCTL0          = 0x18
-	gdmaRegCTL1          = 0x1C
-	gdmaRegCFG0          = 0x20
-	gdmaRegCFG1          = 0x24
-	gdmaRegLLP0          = 0x28
-	gdmaRegLLP1          = 0x2C
-	gdmaRegStatus0       = 0x30
-	gdmaRegSWHSSRC0      = 0x38 // CH_SWHSSRCREG0 — software handshake source
-	gdmaRegSWHSDST0      = 0x40 // CH_SWHSDSTREG0 — software handshake destination
-	gdmaRegINTSTATUS_EN0 = 0x80 // CH_INTSTATUS_ENABLE0 — gates status bit generation
-	gdmaRegINTSTATUS0    = 0x88 // CH_INTSTATUS0 — read-only interrupt status
-	gdmaRegINTSIGNAL_EN0 = 0x90 // CH_INTSIGNAL_ENABLE0 — gates interrupt signal to CPU
-	gdmaRegINTCLEAR0     = 0x98 // CH_INTCLEARREG0 (0x198 from DMAC base for CH1)
+	dwgdmaRegSAR0          = 0x00
+	dwgdmaRegSAR1          = 0x04
+	dwgdmaRegDAR0          = 0x08
+	dwgdmaRegDAR1          = 0x0C
+	dwgdmaRegBlockTS       = 0x10
+	dwgdmaRegCTL0          = 0x18
+	dwgdmaRegCTL1          = 0x1C
+	dwgdmaRegCFG0          = 0x20
+	dwgdmaRegCFG1          = 0x24
+	dwgdmaRegLLP0          = 0x28
+	dwgdmaRegLLP1          = 0x2C
+	dwgdmaRegStatus0       = 0x30
+	dwgdmaRegSWHSSRC0      = 0x38 // CH_SWHSSRCREG0 — software handshake source
+	dwgdmaRegSWHSDST0      = 0x40 // CH_SWHSDSTREG0 — software handshake destination
+	dwgdmaRegINTSTATUS_EN0 = 0x80 // CH_INTSTATUS_ENABLE0 — gates status bit generation
+	dwgdmaRegINTSTATUS0    = 0x88 // CH_INTSTATUS0 — read-only interrupt status
+	dwgdmaRegINTSIGNAL_EN0 = 0x90 // CH_INTSIGNAL_ENABLE0 — gates interrupt signal to CPU
+	dwgdmaRegINTCLEAR0     = 0x98 // CH_INTCLEARREG0 (0x198 from DMAC base for CH1)
 )
 
 // DW-GDMA channel enable / suspend bits in CHEN0.
 const (
-	gdmaChEnLow  = 0x101       // EN_WE + EN for channels 0..7 (2 bits each)
-	gdmaChEnHigh = 0x101 << 16 // EN_WE + EN for channels 8..11
+	dwgdmaChEnLow  = 0x101       // EN_WE + EN for channels 0..7 (2 bits each)
+	dwgdmaChEnHigh = 0x101 << 16 // EN_WE + EN for channels 8..11
 )
 
-// ErrGDMAChannel is returned when an invalid channel index is requested.
-var ErrGDMAChannel = errors.New("machine: DW-GDMA channel must be 0..3")
+// ErrDWGDMAChannel is returned when an invalid channel index is requested.
+var ErrDWGDMAChannel = errors.New("machine: DW-GDMA channel must be 0..3")
 
 // dmaLLIItem is the hardware layout of a 64-byte DW-GDMA link-list item.
 // Fields are written with the full word values produced by machine/internal/esp32p4dsi.
@@ -84,33 +84,33 @@ type dmaLLIItem struct {
 	_r2, _r3           uint32
 }
 
-// gdmaMaxLLI is the number of linked-list items in the static pool.  The
+// dwgdmaMaxLLI is the number of linked-list items in the static pool.  The
 // display path normally uses one item per frame; a long chain (up to 256
 // frames, ~4.5 s at 55 fps) is used to test continuous DMA without any
 // full-transfer-done re-arm.
-const gdmaMaxLLI = 256
+const dwgdmaMaxLLI = 256
 
-// gdmaLLIPool holds gdmaMaxLLI 64-byte-aligned link-list items in a
+// dwgdmaLLIPool holds dwgdmaMaxLLI 64-byte-aligned link-list items in a
 // package global (GC-stable) buffer.
-var gdmaLLIPool struct {
-	buf [esp32p4dsi.GdmaLLISize*gdmaMaxLLI + 63]byte
+var dwgdmaLLIPool struct {
+	buf [esp32p4dsi.GdmaLLISize*dwgdmaMaxLLI + 63]byte
 }
 
-// gdmaLLIAlloc returns a pointer to the first of gdmaMaxLLI 64-byte-aligned
+// dwgdmaLLIAlloc returns a pointer to the first of dwgdmaMaxLLI 64-byte-aligned
 // link-list items.
-func gdmaLLIAlloc() *dmaLLIItem {
-	base := uintptr(unsafe.Pointer(&gdmaLLIPool.buf[0]))
+func dwgdmaLLIAlloc() *dmaLLIItem {
+	base := uintptr(unsafe.Pointer(&dwgdmaLLIPool.buf[0]))
 	aligned := (base + 63) &^ 63
 	// IDF's dw_gdma_new_link_list does an esp_cache_msync(C2M|INVALIDATE) at
 	// allocation, before any non-cacheable writes, so stale dirty lines from
 	// the BSS zero-fill cannot later be written back over the descriptors.
-	CacheWriteBack(aligned, uintptr(len(gdmaLLIPool.buf)))
-	CacheInvalidateL1(aligned, uintptr(len(gdmaLLIPool.buf)))
+	CacheWriteBack(aligned, uintptr(len(dwgdmaLLIPool.buf)))
+	CacheInvalidateL1(aligned, uintptr(len(dwgdmaLLIPool.buf)))
 	return (*dmaLLIItem)(unsafe.Pointer(aligned))
 }
 
-// gdmaLLIAt returns the Nth link-list item (0-indexed) from the base item.
-func gdmaLLIAt(base *dmaLLIItem, n int) *dmaLLIItem {
+// dwgdmaLLIAt returns the Nth link-list item (0-indexed) from the base item.
+func dwgdmaLLIAt(base *dmaLLIItem, n int) *dmaLLIItem {
 	return (*dmaLLIItem)(unsafe.Pointer(uintptr(unsafe.Pointer(base)) + uintptr(n)*esp32p4dsi.GdmaLLISize))
 }
 
@@ -125,22 +125,22 @@ func BridgeFIFOWrite(word uint64) {
 	volatile.StoreUint64((*uint64)(unsafe.Pointer(uintptr(dsiBridgeMemBase))), word)
 }
 
-// gdmaHW returns a pointer to the DW-GDMA register block, constructed from
+// dwgdmaHW returns a pointer to the DW-GDMA register block, constructed from
 // a constant address.  This avoids reading the esp.DMA package-level var,
 // which is a .data global whose L1 D-cache line can be evicted and lost
 // during large memory fills on ESP32-P4 HP SRAM (display76 root cause).
-func gdmaHW() *esp.DMAC_Type {
+func dwgdmaHW() *esp.DMAC_Type {
 	return (*esp.DMAC_Type)(unsafe.Pointer(uintptr(0x50081000)))
 }
 
-// gdmaNonCacheableOff is SOC_NON_CACHEABLE_OFFSET_SRAM on the ESP32-P4: adding
+// dwgdmaNonCacheableOff is SOC_NON_CACHEABLE_OFFSET_SRAM on the ESP32-P4: adding
 // it to an L2MEM address maps to the non-cacheable alias of the same physical
 // SRAM (0x4FF0... -> 0x8FF0...).  Writes through this alias bypass the L1
 // D-cache so the DW-GDMA reads fresh data.
-const gdmaNonCacheableOff = 0x40000000
+const dwgdmaNonCacheableOff = 0x40000000
 
-// GDMAChannel is one DW-GDMA channel bound to the DSI display path.
-type GDMAChannel struct {
+// DWGDMAChannel is one DW-GDMA channel bound to the DSI display path.
+type DWGDMAChannel struct {
 	dmac     *esp.DMAC_Type
 	num      uint32 // 0..3
 	lli      *dmaLLIItem
@@ -148,19 +148,19 @@ type GDMAChannel struct {
 	m2m      bool // channel temporarily reconfigured for a memory-to-memory test
 }
 
-// gdmaChannel returns the volatile register at the given channel-relative
+// dwgdmaChannel returns the volatile register at the given channel-relative
 // offset.
-func (c *GDMAChannel) reg(off uint32) *volatile.Register32 {
+func (c *DWGDMAChannel) reg(off uint32) *volatile.Register32 {
 	base := unsafe.Pointer(&c.dmac.CH1_SAR0) // channel 0 starts at 0x100
 	return (*volatile.Register32)(unsafe.Add(base, uintptr(c.num)*0x100+uintptr(off)))
 }
 
-// gdmaClocksDone tracks whether gdmaGateClocks has already been called (e.g.
-// by an early InitGDMAClocks) so the reset pulse is not repeated when
-// NewGDMAChannel runs later.
-var gdmaClocksDone bool
+// dwgdmaClocksDone tracks whether dwgdmaGateClocks has already been called (e.g.
+// by an early InitDWGDMAClocks) so the reset pulse is not repeated when
+// NewDWGDMAChannel runs later.
+var dwgdmaClocksDone bool
 
-// InitGDMAClocks performs the one-time DW-GDMA clock enable, peripheral reset
+// InitDWGDMAClocks performs the one-time DW-GDMA clock enable, peripheral reset
 // and software reset.  Calling this early — BEFORE configuring the DSI bridge
 // — avoids the HP-AXI bus arbitration glitch that the RST_EN_GDMA pulse in
 // HP_RST_EN0 causes.  ESP-IDF creates the DMA channel (and thus gates clocks
@@ -168,30 +168,30 @@ var gdmaClocksDone bool
 // the GDMA reset AFTER bridge configuration, which could corrupt the bridge's
 // DMA handshake state machine.
 //
-// After this call, NewGDMAChannel will skip the redundant gdmaGateClocks().
-func InitGDMAClocks() {
-	if gdmaClocksDone {
+// After this call, NewDWGDMAChannel will skip the redundant dwgdmaGateClocks().
+func InitDWGDMAClocks() {
+	if dwgdmaClocksDone {
 		return
 	}
-	gdmaGateClocks()
-	EnableGDMAEngine()
+	dwgdmaGateClocks()
+	EnableDWGDMAEngine()
 }
 
-// NewGDMAChannel binds and configures a DW-GDMA channel for the DSI display
+// NewDWGDMAChannel binds and configures a DW-GDMA channel for the DSI display
 // path: memory→DSI-bridge, DMA as the flow controller, hardware handshake,
 // 64-bit transfers, 512-item source bursts and 256-item destination bursts.
 //
 // The bus clock is enabled and the controller reset on the first channel.
-func NewGDMAChannel(num uint8) (*GDMAChannel, error) {
+func NewDWGDMAChannel(num uint8) (*DWGDMAChannel, error) {
 	if num > 3 {
-		return nil, ErrGDMAChannel
+		return nil, ErrDWGDMAChannel
 	}
-	gdmaGateClocks()
+	dwgdmaGateClocks()
 
-	c := &GDMAChannel{dmac: gdmaHW(), num: uint32(num)}
+	c := &DWGDMAChannel{dmac: dwgdmaHW(), num: uint32(num)}
 	// d221: Disable the channel before reconfiguring, in case it's still
 	// enabled from a previous phase.  This replaces the full GDMA software
-	// reset that was previously done in gdmaGateClocks() — which broke the
+	// reset that was previously done in dwgdmaGateClocks() — which broke the
 	// bridge handshake (d205-d220).
 	c.Disarm()
 	ctl0 := esp32p4dsi.GDMAChannelCtl0(
@@ -227,27 +227,27 @@ func NewGDMAChannel(num uint8) (*GDMAChannel, error) {
 		1,        // priority
 		5-1, 2-1, // outstanding-request limits (stored minus one)
 	)
-	c.reg(gdmaRegCTL0).Set(ctl0)
-	c.reg(gdmaRegCTL1).Set(ctl1)
-	c.reg(gdmaRegCFG0).Set(cfg0)
-	c.reg(gdmaRegCFG1).Set(cfg1)
+	c.reg(dwgdmaRegCTL0).Set(ctl0)
+	c.reg(dwgdmaRegCTL1).Set(ctl1)
+	c.reg(dwgdmaRegCFG0).Set(cfg0)
+	c.reg(dwgdmaRegCFG1).Set(cfg1)
 	// Enable all interrupt status generation and signal delivery.  ESP-IDF
 	// sets both to UINT32_MAX; without these the DW-GDMA's handshake state
 	// machine may not properly cycle between bursts within a block transfer.
-	c.reg(gdmaRegINTSTATUS_EN0).Set(0xFFFFFFFF)
-	c.reg(gdmaRegINTSIGNAL_EN0).Set(0xFFFFFFFF)
+	c.reg(dwgdmaRegINTSTATUS_EN0).Set(0xFFFFFFFF)
+	c.reg(dwgdmaRegINTSIGNAL_EN0).Set(0xFFFFFFFF)
 	return c, nil
 }
 
-// gdmaGateClocks enables the DW-GDMA CPU/sys clocks, releases the block from
+// dwgdmaGateClocks enables the DW-GDMA CPU/sys clocks, releases the block from
 // peripheral reset and resets the controller software-wise.  This mirrors the
 // ESP-IDF dw_gdma_ll_enable_bus_clock + dw_gdma_ll_reset_register +
 // dw_gdma_ll_reset sequence: without reg_rst_en_gdma being released, reading
 // the DW-GDMA registers (e.g. RESET0) faults because the block is held in
 // reset.
-func gdmaGateClocks() {
-	firstTime := !gdmaClocksDone
-	gdmaClocksDone = true
+func dwgdmaGateClocks() {
+	firstTime := !dwgdmaClocksDone
+	dwgdmaClocksDone = true
 	if !firstTime {
 		// d221: Do NOT re-reset the entire GDMA controller on subsequent
 		// calls.  ESP-IDF only resets GDMA once (during group creation);
@@ -256,7 +256,7 @@ func gdmaGateClocks() {
 		// handshake interface state machine, disconnecting the bridge's
 		// dma_req signal — this was the root cause of the persistent
 		// HW-handshake failure in d205-d220.
-		// Channel disable (Disarm) is now done in NewGDMAChannel instead.
+		// Channel disable (Disarm) is now done in NewDWGDMAChannel instead.
 		return
 	}
 	// Force the GDMA internal memory clock on so register accesses don't
@@ -294,14 +294,14 @@ func gdmaGateClocks() {
 }
 
 // EnableController turns on the DW-GDMA engine (CFG0.DMAC_EN).
-func EnableGDMAEngine() {
-	gdmaHW().SetCFG0_DMAC_EN(1)
-	gdmaHW().SetCFG0_INT_EN(1)
+func EnableDWGDMAEngine() {
+	dwgdmaHW().SetCFG0_DMAC_EN(1)
+	dwgdmaHW().SetCFG0_INT_EN(1)
 }
 
 // DisableController turns off the DW-GDMA engine.
-func DisableGDMAEngine() {
-	gdmaHW().SetCFG0_DMAC_EN(0)
+func DisableDWGDMAEngine() {
+	dwgdmaHW().SetCFG0_DMAC_EN(0)
 }
 
 // SetupLinkList programmes the channel source/destination addresses, the block
@@ -317,7 +317,7 @@ func DisableGDMAEngine() {
 // DW-GDMA (which reads L2MEM SRAM directly, bypassing the CPU L1 D-cache)
 // always fetches fresh transfer parameters instead of stale cached copies.
 // The channel's LLP points at the (cached) item address, as ESP-IDF does.
-func (c *GDMAChannel) SetupLinkList(lli *dmaLLIItem, srcAddr, dstAddr uintptr, words uint32) {
+func (c *DWGDMAChannel) SetupLinkList(lli *dmaLLIItem, srcAddr, dstAddr uintptr, words uint32) {
 	// The link-list CtlLo carries the master ports.  In the display path the
 	// destination is the DSI bridge (master 0); when ReconfigureM2M has
 	// temporarily put the channel in memory-to-memory mode, both masters are
@@ -345,7 +345,7 @@ func (c *GDMAChannel) SetupLinkList(lli *dmaLLIItem, srcAddr, dstAddr uintptr, w
 
 	// Write the LLI through the non-cacheable alias so the DMA sees fresh data.
 	lliBase := uintptr(unsafe.Pointer(lli))
-	lliNC := unsafe.Pointer(lliBase + gdmaNonCacheableOff)
+	lliNC := unsafe.Pointer(lliBase + dwgdmaNonCacheableOff)
 	nc := (*dmaLLIItem)(lliNC)
 	nc.SarLo = uint32(srcAddr)
 	nc.SarHi = 0
@@ -368,8 +368,8 @@ func (c *GDMAChannel) SetupLinkList(lli *dmaLLIItem, srcAddr, dstAddr uintptr, w
 	// low 6 bits cleared (not a pre-shifted address).  lms (bit 0) selects the
 	// master port the DMA uses to fetch the list item from memory.
 	c.lli = lli
-	c.reg(gdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
-	c.reg(gdmaRegLLP1).Set(0)
+	c.reg(dwgdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
+	c.reg(dwgdmaRegLLP1).Set(0)
 }
 
 // ReconfigureM2M reprograms the channel registers for a memory-to-memory LLI
@@ -377,7 +377,7 @@ func (c *GDMAChannel) SetupLinkList(lli *dmaLLIItem, srcAddr, dstAddr uintptr, w
 // so a diagnostic memcpy can be driven without the DSI-destination binding.
 // The link-list items are rebuilt with matching masters by the next
 // SetupLinkList call.  Use ReconfigureM2P to restore the display path.
-func (c *GDMAChannel) ReconfigureM2M() {
+func (c *DWGDMAChannel) ReconfigureM2M() {
 	c.m2m = true
 	ctl0 := esp32p4dsi.GDMAChannelCtl0(
 		esp32p4dsi.GDMMasterMem, esp32p4dsi.GDMMasterMem,
@@ -397,16 +397,16 @@ func (c *GDMAChannel) ReconfigureM2M() {
 		0, esp32p4dsi.GdmaHandshakeHW, esp32p4dsi.GdmaHandshakeHW,
 		0, 0, 1, 5-1, 5-1,
 	)
-	c.reg(gdmaRegCTL0).Set(ctl0)
-	c.reg(gdmaRegCTL1).Set(ctl1)
-	c.reg(gdmaRegCFG0).Set(cfg0)
-	c.reg(gdmaRegCFG1).Set(cfg1)
+	c.reg(dwgdmaRegCTL0).Set(ctl0)
+	c.reg(dwgdmaRegCTL1).Set(ctl1)
+	c.reg(dwgdmaRegCFG0).Set(cfg0)
+	c.reg(dwgdmaRegCFG1).Set(cfg1)
 }
 
 // ReconfigureM2P restores the channel registers to the DSI display path:
 // memory→peripheral (DSI bridge) with hardware handshake.  Called after a
 // memory-to-memory diagnostic transfer.
-func (c *GDMAChannel) ReconfigureM2P() {
+func (c *DWGDMAChannel) ReconfigureM2P() {
 	c.m2m = false
 	ctl0 := esp32p4dsi.GDMAChannelCtl0(
 		esp32p4dsi.GDMMasterMem, esp32p4dsi.GDMMasterDSI,
@@ -422,32 +422,32 @@ func (c *GDMAChannel) ReconfigureM2P() {
 		esp32p4dsi.GdmaHandshakePeriphDSI, esp32p4dsi.GdmaHandshakePeriphDSI,
 		1, 5-1, 2-1,
 	)
-	c.reg(gdmaRegCTL0).Set(ctl0)
-	c.reg(gdmaRegCTL1).Set(ctl1)
-	c.reg(gdmaRegCFG0).Set(cfg0)
-	c.reg(gdmaRegCFG1).Set(cfg1)
+	c.reg(dwgdmaRegCTL0).Set(ctl0)
+	c.reg(dwgdmaRegCTL1).Set(ctl1)
+	c.reg(dwgdmaRegCFG0).Set(cfg0)
+	c.reg(dwgdmaRegCFG1).Set(cfg1)
 }
 
 // ConfigureContiguous sets up the channel for a contiguous (no LLI) block
 // transfer.  SAR, DAR and BLOCK_TS are written directly to channel registers.
 // CFG0 is set to contiguous mode (0,0) instead of linked-list mode.
 // CTL1 is set with valid=true, last=true (single block).
-func (c *GDMAChannel) ConfigureContiguous(srcAddr, dstAddr uintptr, words uint32) {
-	c.reg(gdmaRegSAR0).Set(uint32(srcAddr))
-	c.reg(gdmaRegSAR1).Set(0)
-	c.reg(gdmaRegDAR0).Set(uint32(dstAddr))
-	c.reg(gdmaRegDAR1).Set(0)
-	c.reg(gdmaRegBlockTS).Set(words - 1)
+func (c *DWGDMAChannel) ConfigureContiguous(srcAddr, dstAddr uintptr, words uint32) {
+	c.reg(dwgdmaRegSAR0).Set(uint32(srcAddr))
+	c.reg(dwgdmaRegSAR1).Set(0)
+	c.reg(dwgdmaRegDAR0).Set(uint32(dstAddr))
+	c.reg(dwgdmaRegDAR1).Set(0)
+	c.reg(dwgdmaRegBlockTS).Set(words - 1)
 	// Contiguous mode: no LLI, single block.
-	c.reg(gdmaRegCFG0).Set(esp32p4dsi.GDMAChannelCfg0(
+	c.reg(dwgdmaRegCFG0).Set(esp32p4dsi.GDMAChannelCfg0(
 		esp32p4dsi.GdmaBlockTransferContiguous,
 		esp32p4dsi.GdmaBlockTransferContiguous,
 	))
-	c.reg(gdmaRegLLP0).Set(0)
-	c.reg(gdmaRegLLP1).Set(0)
+	c.reg(dwgdmaRegLLP0).Set(0)
+	c.reg(dwgdmaRegLLP1).Set(0)
 	// CTL1: valid + last, keep arlen/awlen.  IOC_BLKTFR stays clear to
-	// match the working ESP-IDF reference (see NewGDMAChannel).
-	c.reg(gdmaRegCTL1).Set(esp32p4dsi.GDMAChannelCtl1(15, 15, false, true, true))
+	// match the working ESP-IDF reference (see NewDWGDMAChannel).
+	c.reg(dwgdmaRegCTL1).Set(esp32p4dsi.GDMAChannelCtl1(15, 15, false, true, true))
 }
 
 // ConfigureReload programmes a contiguous block in DW-GDMA auto-reload mode:
@@ -462,52 +462,52 @@ func (c *GDMAChannel) ConfigureContiguous(srcAddr, dstAddr uintptr, words uint32
 // draining the bridge FIFO enough to trigger the permanent reserve latch
 // (~39 underruns/15s in d482).  VALID=true tells the DMA the shadow registers
 // are ready; LAST=false tells it the transfer is not finished — keep going.
-func (c *GDMAChannel) ConfigureReload(srcAddr, dstAddr uintptr, words uint32) {
-	c.reg(gdmaRegSAR0).Set(uint32(srcAddr))
-	c.reg(gdmaRegSAR1).Set(0)
-	c.reg(gdmaRegDAR0).Set(uint32(dstAddr))
-	c.reg(gdmaRegDAR1).Set(0)
-	c.reg(gdmaRegBlockTS).Set(words - 1)
-	c.reg(gdmaRegCFG0).Set(esp32p4dsi.GDMAChannelCfg0(
+func (c *DWGDMAChannel) ConfigureReload(srcAddr, dstAddr uintptr, words uint32) {
+	c.reg(dwgdmaRegSAR0).Set(uint32(srcAddr))
+	c.reg(dwgdmaRegSAR1).Set(0)
+	c.reg(dwgdmaRegDAR0).Set(uint32(dstAddr))
+	c.reg(dwgdmaRegDAR1).Set(0)
+	c.reg(dwgdmaRegBlockTS).Set(words - 1)
+	c.reg(dwgdmaRegCFG0).Set(esp32p4dsi.GDMAChannelCfg0(
 		esp32p4dsi.GdmaBlockTransferReload,
 		esp32p4dsi.GdmaBlockTransferReload,
 	))
-	c.reg(gdmaRegLLP0).Set(0)
-	c.reg(gdmaRegLLP1).Set(0)
-	c.reg(gdmaRegCTL1).Set(esp32p4dsi.GDMAChannelCtl1(15, 15, false, false, true))
+	c.reg(dwgdmaRegLLP0).Set(0)
+	c.reg(dwgdmaRegLLP1).Set(0)
+	c.reg(dwgdmaRegCTL1).Set(esp32p4dsi.GDMAChannelCtl1(15, 15, false, false, true))
 }
 
 // RearmContiguous re-arms the channel for another contiguous block transfer
 // by disarming first (DW-GDMA faults if SAR/BlockTS/CTL written while
 // channel is enabled), re-writing SAR, BLOCK_TS, and CTL1.
-func (c *GDMAChannel) RearmContiguous(srcAddr uintptr, words uint32) {
+func (c *DWGDMAChannel) RearmContiguous(srcAddr uintptr, words uint32) {
 	c.Disarm()
-	c.reg(gdmaRegSAR0).Set(uint32(srcAddr))
-	c.reg(gdmaRegBlockTS).Set(words - 1)
-	c.reg(gdmaRegCTL1).Set(esp32p4dsi.GDMAChannelCtl1(15, 15, false, true, true))
+	c.reg(dwgdmaRegSAR0).Set(uint32(srcAddr))
+	c.reg(dwgdmaRegBlockTS).Set(words - 1)
+	c.reg(dwgdmaRegCTL1).Set(esp32p4dsi.GDMAChannelCtl1(15, 15, false, true, true))
 }
 
 // PokeSWHandshakeDst asserts the destination software handshake request.
 // Only effective when hs_sel_dst = SW (1) in CFG1.
-func (c *GDMAChannel) PokeSWHandshakeDst() {
+func (c *DWGDMAChannel) PokeSWHandshakeDst() {
 	// SWHSDST0: bit 0 = swhs_req_dst, bit 1 = swhs_req_dst_we
-	c.reg(gdmaRegSWHSDST0).Set(0x3) // req=1, we=1
+	c.reg(dwgdmaRegSWHSDST0).Set(0x3) // req=1, we=1
 }
 
 // SetSoftwareHandshakeDst changes hs_sel_dst to software (1) in CFG1
 // while preserving all other fields.  Used for bring-up diagnostics to
 // bypass the hardware handshake and manually trigger DMA bursts.
-func (c *GDMAChannel) SetSoftwareHandshakeDst() {
-	cfg1 := c.reg(gdmaRegCFG1).Get()
+func (c *DWGDMAChannel) SetSoftwareHandshakeDst() {
+	cfg1 := c.reg(dwgdmaRegCFG1).Get()
 	cfg1 |= 1 << 4 // hs_sel_dst = 1 (software)
-	c.reg(gdmaRegCFG1).Set(cfg1)
+	c.reg(dwgdmaRegCFG1).Set(cfg1)
 }
 
 // ReconfigureM2PBridgeFC reprograms the channel for memory→peripheral with the
 // DSI bridge as the flow controller (tt_fc = M2P_DST = 6).  All other settings
 // (master ports, burst sizes, handshake, etc.) remain the same as the normal
 // display path.  Use ReconfigureM2P to restore DMA-as-FC mode.
-func (c *GDMAChannel) ReconfigureM2PBridgeFC() {
+func (c *DWGDMAChannel) ReconfigureM2PBridgeFC() {
 	c.m2m = false
 	cfg1 := esp32p4dsi.GDMAChannelCfg1(
 		esp32p4dsi.GdmaTTFCM2PDst,                              // bridge as flow controller
@@ -515,7 +515,7 @@ func (c *GDMAChannel) ReconfigureM2PBridgeFC() {
 		esp32p4dsi.GdmaHandshakePeriphDSI, esp32p4dsi.GdmaHandshakePeriphDSI,
 		1, 5-1, 2-1,
 	)
-	c.reg(gdmaRegCFG1).Set(cfg1)
+	c.reg(dwgdmaRegCFG1).Set(cfg1)
 }
 
 // SetupLinkListChain programmes a multi-item linked list where each item
@@ -526,7 +526,7 @@ func (c *GDMAChannel) ReconfigureM2PBridgeFC() {
 // The items are written through their non-cacheable aliases.  The last item
 // has is_last=true and LLP=0 (end of list); intermediate items chain to
 // the next via LLP.
-func (c *GDMAChannel) SetupLinkListChain(lli *dmaLLIItem, count int, srcAddr, dstAddr uintptr, wordsPerBlock uint32) {
+func (c *DWGDMAChannel) SetupLinkListChain(lli *dmaLLIItem, count int, srcAddr, dstAddr uintptr, wordsPerBlock uint32) {
 	c.SetupLinkListChainStride(lli, count, srcAddr, dstAddr, wordsPerBlock, 0)
 }
 
@@ -534,7 +534,7 @@ func (c *GDMAChannel) SetupLinkListChain(lli *dmaLLIItem, count int, srcAddr, ds
 // in bytes: item i reads from srcAddr + i*strideBytes.  A stride of
 // wordsPerBlock*8 tiles consecutive framebuffer regions (one item per
 // horizontal band), which is the historical d256/d262/d263 shape.
-func (c *GDMAChannel) SetupLinkListChainStride(lli *dmaLLIItem, count int, srcAddr, dstAddr uintptr, wordsPerBlock uint32, strideBytes uintptr) {
+func (c *DWGDMAChannel) SetupLinkListChainStride(lli *dmaLLIItem, count int, srcAddr, dstAddr uintptr, wordsPerBlock uint32, strideBytes uintptr) {
 	ctl0 := esp32p4dsi.GDMAChannelCtl0(
 		esp32p4dsi.GDMMasterMem, esp32p4dsi.GDMMasterDSI,
 		esp32p4dsi.GdmaBurstModeIncr, esp32p4dsi.GdmaBurstModeFixed,
@@ -542,9 +542,9 @@ func (c *GDMAChannel) SetupLinkListChainStride(lli *dmaLLIItem, count int, srcAd
 		esp32p4dsi.GdmaBurstItems512, esp32p4dsi.GdmaBurstItems256,
 	)
 	for i := 0; i < count; i++ {
-		item := gdmaLLIAt(lli, i)
+		item := dwgdmaLLIAt(lli, i)
 		itemBase := uintptr(unsafe.Pointer(item))
-		nc := (*dmaLLIItem)(unsafe.Pointer(itemBase + gdmaNonCacheableOff))
+		nc := (*dmaLLIItem)(unsafe.Pointer(itemBase + dwgdmaNonCacheableOff))
 		nc.SarLo = uint32(srcAddr + uintptr(i)*strideBytes)
 		nc.SarHi = 0
 		nc.DarLo = uint32(dstAddr)
@@ -556,7 +556,7 @@ func (c *GDMAChannel) SetupLinkListChainStride(lli *dmaLLIItem, count int, srcAd
 		if isLast {
 			nc.LLPLo = esp32p4dsi.GDMMasterMem // null pointer, LMS=memory
 		} else {
-			next := gdmaLLIAt(lli, i+1)
+			next := dwgdmaLLIAt(lli, i+1)
 			nc.LLPLo = uint32(uintptr(unsafe.Pointer(next)))&^0x3F | esp32p4dsi.GDMMasterMem
 		}
 		nc.LLPHi = 0
@@ -567,8 +567,8 @@ func (c *GDMAChannel) SetupLinkListChainStride(lli *dmaLLIItem, count int, srcAd
 	c.lli = lli
 	c.lliCount = count
 	lliBase := uintptr(unsafe.Pointer(lli))
-	c.reg(gdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
-	c.reg(gdmaRegLLP1).Set(0)
+	c.reg(dwgdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
+	c.reg(dwgdmaRegLLP1).Set(0)
 }
 
 // SetupCircularChain programmes a circular linked list where the last item
@@ -579,7 +579,7 @@ func (c *GDMAChannel) SetupLinkListChainStride(lli *dmaLLIItem, count int, srcAd
 //
 // RAW_NUM_TOTAL must be set to the full frame size (count × wordsPerBlock)
 // so the bridge's auto_reload counter stays synchronised with the DMA cycle.
-func (c *GDMAChannel) SetupCircularChain(lli *dmaLLIItem, count int, srcAddr, dstAddr uintptr, wordsPerBlock uint32) {
+func (c *DWGDMAChannel) SetupCircularChain(lli *dmaLLIItem, count int, srcAddr, dstAddr uintptr, wordsPerBlock uint32) {
 	ctl0 := esp32p4dsi.GDMAChannelCtl0(
 		esp32p4dsi.GDMMasterMem, esp32p4dsi.GDMMasterDSI,
 		esp32p4dsi.GdmaBurstModeIncr, esp32p4dsi.GdmaBurstModeFixed,
@@ -587,9 +587,9 @@ func (c *GDMAChannel) SetupCircularChain(lli *dmaLLIItem, count int, srcAddr, ds
 		esp32p4dsi.GdmaBurstItems512, esp32p4dsi.GdmaBurstItems256,
 	)
 	for i := 0; i < count; i++ {
-		item := gdmaLLIAt(lli, i)
+		item := dwgdmaLLIAt(lli, i)
 		itemBase := uintptr(unsafe.Pointer(item))
-		nc := (*dmaLLIItem)(unsafe.Pointer(itemBase + gdmaNonCacheableOff))
+		nc := (*dmaLLIItem)(unsafe.Pointer(itemBase + dwgdmaNonCacheableOff))
 		nc.SarLo = uint32(srcAddr)
 		nc.SarHi = 0
 		nc.DarLo = uint32(dstAddr)
@@ -600,7 +600,7 @@ func (c *GDMAChannel) SetupCircularChain(lli *dmaLLIItem, count int, srcAddr, ds
 		nc.CtlHi = esp32p4dsi.GDMAChannelCtl1(15, 15, false, false, true)
 		// Every item chains to the next; last wraps to first.
 		nextIdx := (i + 1) % count
-		next := gdmaLLIAt(lli, nextIdx)
+		next := dwgdmaLLIAt(lli, nextIdx)
 		nc.LLPLo = uint32(uintptr(unsafe.Pointer(next)))&^0x3F | esp32p4dsi.GDMMasterMem
 		nc.LLPHi = 0
 		nc.SStat, nc.DStat, nc.StatLo, nc.StatHi = 0, 0, 0, 0
@@ -610,15 +610,15 @@ func (c *GDMAChannel) SetupCircularChain(lli *dmaLLIItem, count int, srcAddr, ds
 	c.lli = lli
 	c.lliCount = count
 	lliBase := uintptr(unsafe.Pointer(lli))
-	c.reg(gdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
-	c.reg(gdmaRegLLP1).Set(0)
+	c.reg(dwgdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
+	c.reg(dwgdmaRegLLP1).Set(0)
 }
 
 // Rearm re-arms the channel for a new transfer by re-writing the LLI block
 // markers (valid + last) via the non-cacheable alias for all items in the
 // chain, and re-pointing the channel's LLP register at the first LLI.
 // This matches the ESP-IDF mipi_dsi_dma_trans_done_cb re-arm sequence.
-func (c *GDMAChannel) Rearm() {
+func (c *DWGDMAChannel) Rearm() {
 	if c.lli == nil {
 		return
 	}
@@ -627,22 +627,22 @@ func (c *GDMAChannel) Rearm() {
 		count = 1
 	}
 	for i := 0; i < count; i++ {
-		item := gdmaLLIAt(c.lli, i)
+		item := dwgdmaLLIAt(c.lli, i)
 		itemBase := uintptr(unsafe.Pointer(item))
-		nc := (*dmaLLIItem)(unsafe.Pointer(itemBase + gdmaNonCacheableOff))
+		nc := (*dmaLLIItem)(unsafe.Pointer(itemBase + dwgdmaNonCacheableOff))
 		isLast := i == count-1
 		nc.CtlHi = esp32p4dsi.GDMAChannelCtl1(15, 15, false, isLast, true)
 	}
 	riscv.Asm("fence")
 	lliBase := uintptr(unsafe.Pointer(c.lli))
-	c.reg(gdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
+	c.reg(dwgdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
 }
 
 // RearmNoFence re-validates the link-list items and re-points LLP without the
 // trailing fence.  The fence is only needed when the caller immediately polls
 // CHEN0 for completion; the display re-arm path is latency-sensitive and the
 // channel is already disabled, so the fence can be omitted.
-func (c *GDMAChannel) RearmNoFence() {
+func (c *DWGDMAChannel) RearmNoFence() {
 	if c.lli == nil {
 		return
 	}
@@ -651,14 +651,14 @@ func (c *GDMAChannel) RearmNoFence() {
 		count = 1
 	}
 	for i := 0; i < count; i++ {
-		item := gdmaLLIAt(c.lli, i)
+		item := dwgdmaLLIAt(c.lli, i)
 		itemBase := uintptr(unsafe.Pointer(item))
-		nc := (*dmaLLIItem)(unsafe.Pointer(itemBase + gdmaNonCacheableOff))
+		nc := (*dmaLLIItem)(unsafe.Pointer(itemBase + dwgdmaNonCacheableOff))
 		isLast := i == count-1
 		nc.CtlHi = esp32p4dsi.GDMAChannelCtl1(15, 15, false, isLast, true)
 	}
 	lliBase := uintptr(unsafe.Pointer(c.lli))
-	c.reg(gdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
+	c.reg(dwgdmaRegLLP0).Set(uint32(lliBase)&^0x3F | esp32p4dsi.GDMMasterMem)
 	// The items were written through the non-cacheable alias, but the DMA
 	// fetches the cached alias address.  Drop any stale dirty cache lines for
 	// the cached alias so a later write-back cannot clobber the descriptor
@@ -667,9 +667,9 @@ func (c *GDMAChannel) RearmNoFence() {
 }
 
 // Start enables the channel, launching the transfer.
-func (c *GDMAChannel) Start() {
+func (c *DWGDMAChannel) Start() {
 	// CHEN0: EN_WE | EN for the channel selection.
-	gdmaHW().CHEN0.Set(gdmaChEnLow << (c.num * 2))
+	dwgdmaHW().CHEN0.Set(dwgdmaChEnLow << (c.num * 2))
 	// Fence ensures the CHEN0 write reaches the bus before the caller polls
 	// CHEN0 for done detection — without this, a back-to-back read could
 	// see the old value (0) and falsely report the channel as finished.
@@ -680,43 +680,43 @@ func (c *GDMAChannel) Start() {
 // The channel is enabled (so the DSI bridge sees a live DMA writer) but does
 // not transfer until Resume is called.  Used to enable DPI with both a live
 // DMA channel and an empty bridge FIFO.
-func (c *GDMAChannel) StartSuspended() {
-	gdmaHW().CHEN0.Set((gdmaChEnLow << (c.num * 2)) | (0x1010000 << c.num))
+func (c *DWGDMAChannel) StartSuspended() {
+	dwgdmaHW().CHEN0.Set((dwgdmaChEnLow << (c.num * 2)) | (0x1010000 << c.num))
 	riscv.Asm("fence iorw, iorw")
 }
 
 // Stop disables the channel (EN_W|!EN).
-func (c *GDMAChannel) Stop() {
-	gdmaHW().CHEN0.Set((0x100 << (c.num * 2)) & 0xFFFF)
+func (c *DWGDMAChannel) Stop() {
+	dwgdmaHW().CHEN0.Set((0x100 << (c.num * 2)) & 0xFFFF)
 }
 
 // Suspend requests the channel to stop at the next transaction boundary.
 // Unlike Stop, this preserves the channel's position so Resume can continue
 // the same block.  This is the DW-GDMA CHEN0 suspend protocol.
-func (c *GDMAChannel) Suspend() {
-	gdmaHW().CHEN0.Set(0x1010000 << c.num)
+func (c *DWGDMAChannel) Suspend() {
+	dwgdmaHW().CHEN0.Set(0x1010000 << c.num)
 	riscv.Asm("fence iorw, iorw")
 }
 
 // Resume clears the channel suspend request and continues the block.
-func (c *GDMAChannel) Resume() {
-	gdmaHW().CHEN0.Set(0x1000000 << c.num)
+func (c *DWGDMAChannel) Resume() {
+	dwgdmaHW().CHEN0.Set(0x1000000 << c.num)
 	riscv.Asm("fence iorw, iorw")
 }
 
 // Suspended reports whether the channel's suspend bit is set.
-func (c *GDMAChannel) Suspended() bool {
-	return gdmaHW().CHEN0.Get()&(1<<(16+c.num)) != 0
+func (c *DWGDMAChannel) Suspended() bool {
+	return dwgdmaHW().CHEN0.Get()&(1<<(16+c.num)) != 0
 }
 
 // Disarm disables the channel and waits for it to reach the disabled state.
 // The DW-GDMA faults (store access fault, mcause=7) if a transfer descriptor
 // register such as LLP0 is written while the channel is still enabled; the
 // display loop must disarm between frames before re-arming the link list.
-func (c *GDMAChannel) Disarm() {
-	gdmaHW().CHEN0.Set(0x100 << (c.num * 2))
+func (c *DWGDMAChannel) Disarm() {
+	dwgdmaHW().CHEN0.Set(0x100 << (c.num * 2))
 	for i := 0; i < 1000000; i++ {
-		if gdmaHW().CHEN0.Get()&(1<<c.num) == 0 {
+		if dwgdmaHW().CHEN0.Get()&(1<<c.num) == 0 {
 			break
 		}
 		riscv.Asm("nop")
@@ -731,9 +731,9 @@ func (c *GDMAChannel) Disarm() {
 // INTSTATUS0 was unreliable because CH_INTSTATUS_ENABLE0 defaults enable
 // multiple interrupt sources after reset, causing the aggregated bit to
 // re-assert even after ClearDone.
-func (c *GDMAChannel) Transferred() (words uint32, done bool) {
-	words = c.reg(gdmaRegStatus0).Get()
-	done = gdmaHW().CHEN0.Get()&(1<<c.num) == 0
+func (c *DWGDMAChannel) Transferred() (words uint32, done bool) {
+	words = c.reg(dwgdmaRegStatus0).Get()
+	done = dwgdmaHW().CHEN0.Get()&(1<<c.num) == 0
 	return
 }
 
@@ -742,59 +742,59 @@ func (c *GDMAChannel) Transferred() (words uint32, done bool) {
 // COMMONREG_INTCLEAR0 (which only clears bus-error interrupts).  The
 // aggregated INTSTATUS0.CH_INTSTAT bit clears automatically once the
 // underlying channel interrupt is cleared.
-func (c *GDMAChannel) ClearDone() {
+func (c *DWGDMAChannel) ClearDone() {
 	// Clear exactly the asserted channel events, matching IDF's
 	// dw_gdma_ll_channel_clear_intr().  Writing all ones can leave the
 	// controller aggregate INTSTATUS0 bit asserted, which prevents a
 	// level-triggered CLIC source from re-dispatching.
-	status := c.reg(gdmaRegINTSTATUS0).Get()
+	status := c.reg(dwgdmaRegINTSTATUS0).Get()
 	if status != 0 {
-		c.reg(gdmaRegINTCLEAR0).Set(status)
+		c.reg(dwgdmaRegINTCLEAR0).Set(status)
 	}
 }
 
 // ReadSAR returns the current DMA source address register value for this
 // channel.  Used for bring-up diagnostics to track how far DMA has advanced
 // through the source buffer.
-func (c *GDMAChannel) ReadSAR() uint32 {
-	return c.reg(gdmaRegSAR0).Get()
+func (c *DWGDMAChannel) ReadSAR() uint32 {
+	return c.reg(dwgdmaRegSAR0).Get()
 }
 
 // IRQRegisters returns the interrupt-related DW-GDMA registers for bring-up
 // diagnostics: controller aggregate status, common status/enables, and this
 // channel's status/enables/clear.
-func (c *GDMAChannel) IRQRegisters() (ctrlStatus, commonStatus, commonEnable, commonSignal, chStatus, chEnable, chSignal, chClear uint32) {
-	return gdmaHW().INTSTATUS0.Get(),
-		gdmaHW().COMMONREG_INTSTATUS0.Get(),
-		gdmaHW().COMMONREG_INTSTATUS_ENABLE0.Get(),
-		gdmaHW().COMMONREG_INTSIGNAL_ENABLE0.Get(),
-		c.reg(gdmaRegINTSTATUS0).Get(),
-		c.reg(gdmaRegINTSTATUS_EN0).Get(),
-		c.reg(gdmaRegINTSIGNAL_EN0).Get(),
+func (c *DWGDMAChannel) IRQRegisters() (ctrlStatus, commonStatus, commonEnable, commonSignal, chStatus, chEnable, chSignal, chClear uint32) {
+	return dwgdmaHW().INTSTATUS0.Get(),
+		dwgdmaHW().COMMONREG_INTSTATUS0.Get(),
+		dwgdmaHW().COMMONREG_INTSTATUS_ENABLE0.Get(),
+		dwgdmaHW().COMMONREG_INTSIGNAL_ENABLE0.Get(),
+		c.reg(dwgdmaRegINTSTATUS0).Get(),
+		c.reg(dwgdmaRegINTSTATUS_EN0).Get(),
+		c.reg(dwgdmaRegINTSIGNAL_EN0).Get(),
 		0 // CH_INTCLEARREG0 is write-only; reading it faults (0x50081198)
 }
 
 // State returns a snapshot of the DW-GDMA controller and this channel's
 // registers for bring-up diagnostics.
-func (c *GDMAChannel) State() (chen0, intstatus0, status0, llp0, cfg1, cfg0, ctl0 uint32) {
-	return gdmaHW().CHEN0.Get(),
-		gdmaHW().INTSTATUS0.Get(),
-		c.reg(gdmaRegStatus0).Get(),
-		c.reg(gdmaRegLLP0).Get(),
-		c.reg(gdmaRegCFG1).Get(),
-		c.reg(gdmaRegCFG0).Get(),
-		c.reg(gdmaRegCTL0).Get()
+func (c *DWGDMAChannel) State() (chen0, intstatus0, status0, llp0, cfg1, cfg0, ctl0 uint32) {
+	return dwgdmaHW().CHEN0.Get(),
+		dwgdmaHW().INTSTATUS0.Get(),
+		c.reg(dwgdmaRegStatus0).Get(),
+		c.reg(dwgdmaRegLLP0).Get(),
+		c.reg(dwgdmaRegCFG1).Get(),
+		c.reg(dwgdmaRegCFG0).Get(),
+		c.reg(dwgdmaRegCTL0).Get()
 }
 
 // DebugDump prints a full snapshot of the DW-GDMA controller and channel-0
 // registers for bring-up diagnostics.
-func (c *GDMAChannel) DebugDump() {
-	println("  dma chen0=", gdmaHW().CHEN0.Get(), "intst0=", gdmaHW().INTSTATUS0.Get())
-	println("  dma cfg0=", c.reg(gdmaRegCFG0).Get(), "cfg1=", c.reg(gdmaRegCFG1).Get())
-	println("  dma ctl0=", c.reg(gdmaRegCTL0).Get(), "ctl1=", c.reg(gdmaRegCTL1).Get())
-	println("  dma sar0=", c.reg(gdmaRegSAR0).Get(), "sar1=", c.reg(gdmaRegSAR1).Get())
-	println("  dma dar0=", c.reg(gdmaRegDAR0).Get(), "dar1=", c.reg(gdmaRegDAR1).Get())
-	println("  dma blkts=", c.reg(gdmaRegBlockTS).Get(), "status0=", c.reg(gdmaRegStatus0).Get())
+func (c *DWGDMAChannel) DebugDump() {
+	println("  dma chen0=", dwgdmaHW().CHEN0.Get(), "intst0=", dwgdmaHW().INTSTATUS0.Get())
+	println("  dma cfg0=", c.reg(dwgdmaRegCFG0).Get(), "cfg1=", c.reg(dwgdmaRegCFG1).Get())
+	println("  dma ctl0=", c.reg(dwgdmaRegCTL0).Get(), "ctl1=", c.reg(dwgdmaRegCTL1).Get())
+	println("  dma sar0=", c.reg(dwgdmaRegSAR0).Get(), "sar1=", c.reg(dwgdmaRegSAR1).Get())
+	println("  dma dar0=", c.reg(dwgdmaRegDAR0).Get(), "dar1=", c.reg(dwgdmaRegDAR1).Get())
+	println("  dma blkts=", c.reg(dwgdmaRegBlockTS).Get(), "status0=", c.reg(dwgdmaRegStatus0).Get())
 	// Channel-0 interrupt/status word.  Bit positions follow the ESP32-P4
 	// hw_ver1 dmac_chn_intstatus0_reg_t (dw_gdma_struct.h), NOT the older
 	// DW-GDMA field order.  The d288 circular-DMA failure was hidden because
@@ -808,20 +808,20 @@ func (c *GDMAChannel) DebugDump() {
 	//  11=lli_rd_slv_err      12=lli_wr_slv_err
 	//  13=shadowreg_or_lli_invalid_err
 	//  30=ch_disabled         31=ch_aborted
-	ist0 := c.reg(gdmaRegINTSTATUS0).Get()
+	ist0 := c.reg(dwgdmaRegINTSTATUS0).Get()
 	println("  dma ch0 int_st0=", ist0, " bits: blk_done=", ist0&1, "dma_tfr_done=", (ist0>>1)&1,
 		"src_dec=", (ist0>>5)&1, "dst_dec=", (ist0>>6)&1,
 		"src_slv=", (ist0>>7)&1, "dst_slv=", (ist0>>8)&1,
 		"lli_invalid=", (ist0>>13)&1, "disabled=", (ist0>>30)&1, "aborted=", (ist0>>31)&1)
-	println("  dma ch0 int_st_en0=", c.reg(gdmaRegINTSTATUS_EN0).Get(),
-		"int_sig_en0=", c.reg(gdmaRegINTSIGNAL_EN0).Get())
-	println("  dma ch0 int_st1=", gdmaHW().CH1_INTSTATUS1.Get(),
-		"ch0 status0=", gdmaHW().CH1_STATUS0.Get()&0xFFFFFFFF, "status1=", gdmaHW().CH1_STATUS1.Get())
+	println("  dma ch0 int_st_en0=", c.reg(dwgdmaRegINTSTATUS_EN0).Get(),
+		"int_sig_en0=", c.reg(dwgdmaRegINTSIGNAL_EN0).Get())
+	println("  dma ch0 int_st1=", dwgdmaHW().CH1_INTSTATUS1.Get(),
+		"ch0 status0=", dwgdmaHW().CH1_STATUS0.Get()&0xFFFFFFFF, "status1=", dwgdmaHW().CH1_STATUS1.Get())
 }
 
 // LLIWords returns the raw 64-byte link-list item contents (16 words) for
 // bring-up diagnostics.
-func (c *GDMAChannel) LLIWords() [16]uint32 {
+func (c *DWGDMAChannel) LLIWords() [16]uint32 {
 	var out [16]uint32
 	if c.lli == nil {
 		return out
@@ -835,12 +835,12 @@ func (c *GDMAChannel) LLIWords() [16]uint32 {
 
 // LLIAddr returns the cached and non-cacheable addresses of the link-list item
 // so diagnostics can compare what the CPU wrote vs what the DMA reads.
-func (c *GDMAChannel) LLIAddr() (cached, nonCacheable uintptr) {
+func (c *DWGDMAChannel) LLIAddr() (cached, nonCacheable uintptr) {
 	if c.lli == nil {
 		return 0, 0
 	}
 	cached = uintptr(unsafe.Pointer(c.lli))
-	return cached, cached + gdmaNonCacheableOff
+	return cached, cached + dwgdmaNonCacheableOff
 }
 
 // LLIWordsAt returns the 16-word contents of a link-list item at the given
