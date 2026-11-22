@@ -267,13 +267,16 @@ _handle_level1:
 1:
     rsr     a0, EXCSAVE1        // restore a0 clobbered by the EXCCAUSE read
 
-    // --- allocate 96-byte exception frame on the interrupted stack ---
+    // --- allocate the exception frame on the interrupted stack ---
     // Layout (offsets from a1 after adjustment):
     //   0: a0   4: a1(orig)  8: a2  12: a3  16: a4  20: a5
     //  24: a6  28: a7  32: a8  36: a9  40: a10 44: a11
     //  48: a12 52: a13 56: a14 60: a15
-    //  64: SAR 68: EPC1  72: PS
-    addi    a0, a1, -96         // a0 = new frame pointer
+    //  64: SAR 68: EPC1  72: PS  76: WINDOWBASE  80: WINDOWSTART
+    //  84: SCOMPARE1
+    // 128 bytes, as the low 16 are the interruptee's base save area. See
+    // XT_STK_FRMSZ in esp-idf components/xtensa/include/xtensa_context.h.
+    addi    a0, a1, -128        // a0 = new frame pointer
     s32i    a1, a0, 4           // save original a1 (SP)
     mov     a1, a0              // a1 = frame pointer
 
@@ -302,11 +305,23 @@ _handle_level1:
     rsr     a2, EPC1
     s32i    a2, a1, 68
 
+    // Atomics in a handler change SCOMPARE1 and break an interrupted S32C1I. See
+    // xchal_ncp_store in esp-idf components/xtensa/esp32/include/xtensa/config/tie-asm.h.
+    rsr     a2, SCOMPARE1
+    s32i    a2, a1, 84
+
     // Clear PS.EXCM (bit 4) so window overflow/underflow exceptions work
     // during the Go call. Set PS.INTLEVEL=1 to prevent re-entry of
     // level-1 interrupts.
     rsr     a2, PS
     s32i    a2, a1, 72          // save PS (with EXCM=1 set by hardware)
+
+    // Read before the Go call, which rotates and spills windows.
+    rsr     a3, WINDOWBASE
+    s32i    a3, a1, 76
+    rsr     a3, WINDOWSTART
+    s32i    a3, a1, 80
+
     movi    a3, ~0x1F           // mask: clear INTLEVEL (bits 0-3) + EXCM (bit 4)
     and     a2, a2, a3
     movi    a3, 1               // INTLEVEL = 1
@@ -337,6 +352,30 @@ _handle_level1:
     // After retw, WindowBase is restored.  a0..a3 are preserved because
     // they are outside the callee's register window.
 
+    // Our a1 is the caller's a5/a9/a13, so a deep handler spilled its a0..a3 below
+    // our frame. Move them below the interruptee SP, see _xt_context_save in esp-idf.
+    l32i    a2, a1, 80          // WINDOWSTART on entry
+    slli    a3, a2, 16
+    or      a2, a2, a3
+    rsr     a3, WINDOWBASE
+    addi    a3, a3, 13
+    ssr     a3
+    srl     a2, a2
+    extui   a2, a2, 0, 3        // panes WINDOWBASE-3 .. WINDOWBASE-1
+    beqz    a2, 1f
+    l32i    a3, a1, 4           // interruptee SP
+    addi    a4, a1, -16
+    addi    a3, a3, -16
+    l32i    a5, a4, 0
+    s32i    a5, a3, 0
+    l32i    a5, a4, 4
+    s32i    a5, a3, 4
+    l32i    a5, a4, 8
+    s32i    a5, a3, 8
+    l32i    a5, a4, 12
+    s32i    a5, a3, 12
+1:
+
     // --- restore context ---
 
     // Restore PS (restores EXCM=1).
@@ -349,6 +388,8 @@ _handle_level1:
     wsr     a2, SAR
     l32i    a2, a1, 68
     wsr     a2, EPC1
+    l32i    a2, a1, 84
+    wsr     a2, SCOMPARE1
 
     // Restore general registers a15..a2.
     l32i    a15, a1, 60
