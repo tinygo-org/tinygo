@@ -1,4 +1,4 @@
-//go:build esp && xtensa && !qemu
+//go:build (esp8266 || esp32 || esp32s3) && !qemu
 
 package runtime
 
