@@ -84,6 +84,7 @@ func (spi *SPI) configure(config SPIConfig, bus spiBus, mode spiMode) error {
 
 	spi.Bus.SetSPI_MISC_SPI_CK_IDLE_EDGE(mode.idleEdge())
 	spi.Bus.SetSPI_USER_SPI_CK_OUT_EDGE(mode.outEdge())
+	spi.Bus.SetSPI_USER_SPI_CS_SETUP(mode.csSetup())
 
 	if config.LSBFirst {
 		spi.Bus.SetSPI_CTRL_SPI_WR_BIT_ORDER(1)

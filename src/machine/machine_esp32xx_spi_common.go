@@ -57,6 +57,12 @@ func (m spiMode) outEdge() uint32 {
 	return uint32(m&spiModeOutEdge) >> 1
 }
 
+// csSetup is 1 in modes 1 and 3, where the first SCK edge comes with CS.
+// It adds one SPI clock between them. See ESP-IDF spi_ll_master_set_cs_setup.
+func (m spiMode) csSetup() uint32 {
+	return m.idleEdge() ^ m.outEdge()
+}
+
 // freqToClockDiv computes the SPI bus clock divider register value.
 // spiClockFreq is the SPI source clock of each chip.
 func freqToClockDiv(hz uint32) uint32 {

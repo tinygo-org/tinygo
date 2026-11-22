@@ -82,6 +82,7 @@ func (spi *SPI) configure(config SPIConfig, bus spiBus, mode spiMode) error {
 	// set spi2 data mode
 	spi.Bus.SetMISC_CK_IDLE_EDGE(mode.idleEdge())
 	spi.Bus.SetUSER_CK_OUT_EDGE(mode.outEdge())
+	spi.Bus.SetUSER_CS_SETUP(mode.csSetup())
 
 	// CTRL is clear, so the bit order is MSB first unless LSBFirst is set.
 	if config.LSBFirst {
