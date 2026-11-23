@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"fmt"
 	"go/token"
+	"math"
 	"os"
 	"regexp"
 	"strings"
@@ -184,8 +185,9 @@ func FormatAllocCover(pos token.Position) string {
 // nil llvm.Value if it definitely doesn't. The value must be an instruction.
 func valueEscapesAt(value llvm.Value) llvm.Value {
 	analysis := escapeAnalysis{
-		visiting: make(map[llvm.Value]int),
+		visiting: make(map[llvm.Value]visit),
 		results:  make(map[escapeKey]escapeResult),
+		cutAt:    noCut,
 		originFn: value.InstructionParent().Parent(),
 		// An allocation that runs more than once per call reuses its stack
 		// slot, so older objects must not stay reachable through a PHI.
@@ -200,19 +202,31 @@ type escapeKey struct {
 }
 
 type escapeAnalysis struct {
-	visiting map[llvm.Value]int
+	visiting map[llvm.Value]visit
 	results  map[escapeKey]escapeResult
 
 	originFn      llvm.Value
 	originInCycle bool
 
-	// cuts counts the PHIs that were reached again while they were still
-	// being checked.
-	cuts int
-
-	// depth counts the callee parameters that are being followed. visiting
-	// stores the depth at which each value was reached.
+	// depth counts the callee parameters that are being followed.
 	depth int
+
+	// pathLen is the number of values on the current path.
+	pathLen int
+
+	// cutAt is the lowest path position of a PHI that was reached again
+	// while it was still being checked, in the values checked since the
+	// current value was reached. It is noCut if there was none.
+	cutAt int
+}
+
+// noCut is the value of escapeAnalysis.cutAt when no PHI was reached again.
+const noCut = math.MaxInt
+
+// visit records where a value that is being checked was reached.
+type visit struct {
+	depth int // escapeAnalysis.depth at the time
+	pos   int // position on the current path
 }
 
 type escapeResult struct {
@@ -235,14 +249,14 @@ func (r *escapeResult) merge(other escapeResult) bool {
 }
 
 func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (result escapeResult) {
-	if depth, ok := a.visiting[value]; ok {
-		if !value.IsAPHINode().IsNil() && depth == a.depth {
+	if v, ok := a.visiting[value]; ok {
+		if !value.IsAPHINode().IsNil() && v.depth == a.depth {
 			// A value flowing around a loop back into the same PHI. The
 			// first visit already checks every use of the PHI. This only
 			// holds in the same call: a recursive call that reaches the PHI
 			// again returns to a different place, which the first visit
 			// does not check.
-			a.cuts++
+			a.cutAt = min(a.cutAt, v.pos)
 			return escapeResult{}
 		}
 		// Recursive call graph while following returned parameters. Treat this
@@ -255,16 +269,23 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 	if result, ok := a.results[key]; ok {
 		return result
 	}
-	a.visiting[value] = a.depth
-	cuts := a.cuts
+	pos := a.pathLen
+	a.pathLen++
+	a.visiting[value] = visit{depth: a.depth, pos: pos}
+	outerCut := a.cutAt
+	a.cutAt = noCut
 	defer func() {
 		delete(a.visiting, value)
-		// A result that stopped at a PHI that was still being checked misses
-		// what that PHI reaches, such as a return. It is only right for this
-		// path, so don't reuse it.
-		if a.cuts == cuts {
+		a.pathLen--
+		// A result that stopped at a PHI above this value, which is still
+		// being checked, misses what that PHI reaches, such as a return. It
+		// is only right for this path, so don't reuse it. A stop at this
+		// value or at a PHI below it is complete, because the first visit of
+		// that PHI checked all its uses.
+		if a.cutAt >= pos {
 			a.results[key] = result
 		}
+		a.cutAt = min(outerCut, a.cutAt)
 	}()
 
 	for use := range llvmutil.Uses(value) {
@@ -346,7 +367,7 @@ func (a *escapeAnalysis) stackSlotEscapesAt(slot llvm.Value, allowReturn bool) e
 	if _, ok := a.visiting[slot]; ok {
 		return escapeResult{escapeAt: slot}
 	}
-	a.visiting[slot] = a.depth
+	a.visiting[slot] = visit{depth: a.depth, pos: a.pathLen}
 	defer delete(a.visiting, slot)
 
 	var check func(ptr llvm.Value) escapeResult
