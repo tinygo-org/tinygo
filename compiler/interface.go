@@ -260,12 +260,7 @@ func (c *context) pkgPathPtr(pkgpath string) llvm.Value {
 		pkgpathGlobal.SetLinkage(llvm.LinkOnceODRLinkage)
 		pkgpathGlobal.SetGlobalConstant(true)
 	}
-	pkgPathPtr := llvm.ConstGEP(pkgpathGlobal.GlobalValueType(), pkgpathGlobal, []llvm.Value{
-		llvm.ConstInt(c.i32, 0, false),
-		llvm.ConstInt(c.i32, 0, false),
-	})
-
-	return pkgPathPtr
+	return pkgpathGlobal
 }
 
 // isGenericMethod returns true for a method that has its own type parameters
@@ -655,10 +650,7 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 				fieldType := c.getTypeCode(field.Type())
 				fields = append(fields, llvm.ConstNamedStruct(structFieldType, []llvm.Value{
 					fieldType,
-					llvm.ConstGEP(dataGlobal.GlobalValueType(), dataGlobal, []llvm.Value{
-						llvm.ConstInt(c.i32, 0, false),
-						llvm.ConstInt(c.i32, 0, false),
-					}),
+					dataGlobal,
 				}))
 			}
 			typeFields = append(typeFields, llvm.ConstArray(structFieldType, fields))

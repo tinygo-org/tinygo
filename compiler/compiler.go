@@ -1059,14 +1059,10 @@ func (c *context) createEmbedGlobal(member *ssa.Global, global llvm.Value, files
 		}
 		file := files[0]
 		bufferValue := c.ctx.ConstString(string(file.Data), false)
-		bufferGlobal := llvm.AddGlobal(c.mod, bufferValue.Type(), c.pkg.Path()+"$embedslice")
-		bufferGlobal.SetInitializer(bufferValue)
-		bufferGlobal.SetLinkage(llvm.InternalLinkage)
-		bufferGlobal.SetAlignment(1)
-		slicePtr := llvm.ConstInBoundsGEP(bufferValue.Type(), bufferGlobal, []llvm.Value{
-			c.uintptrZero,
-			c.uintptrZero,
-		})
+		slicePtr := llvm.AddGlobal(c.mod, bufferValue.Type(), c.pkg.Path()+"$embedslice")
+		slicePtr.SetInitializer(bufferValue)
+		slicePtr.SetLinkage(llvm.InternalLinkage)
+		slicePtr.SetAlignment(1)
 		sliceLen := llvm.ConstInt(c.uintptrType, file.Size, false)
 		sliceObj := c.ctx.ConstStruct([]llvm.Value{slicePtr, sliceLen, sliceLen}, false)
 		global.SetInitializer(sliceObj)
@@ -1082,7 +1078,7 @@ func (c *context) createEmbedGlobal(member *ssa.Global, global llvm.Value, files
 				LocalToUnit: true,
 				Expr:        c.dibuilder.CreateExpression(nil),
 			})
-			bufferGlobal.AddMetadata(0, diglobal)
+			slicePtr.AddMetadata(0, diglobal)
 		}
 
 	case *types.Struct:
@@ -1166,12 +1162,8 @@ func (c *context) createEmbedGlobal(member *ssa.Global, global llvm.Value, files
 		// Create the slice object itself.
 		// Because embed.FS refers to it as *[]embed.file instead of a plain
 		// []embed.file, we have to store this as a global.
-		slicePtr := llvm.ConstInBoundsGEP(sliceDataInitializer.Type(), sliceDataGlobal, []llvm.Value{
-			c.uintptrZero,
-			c.uintptrZero,
-		})
 		sliceLen := llvm.ConstInt(c.uintptrType, uint64(len(fileStructs)), false)
-		sliceInitializer := c.ctx.ConstStruct([]llvm.Value{slicePtr, sliceLen, sliceLen}, false)
+		sliceInitializer := c.ctx.ConstStruct([]llvm.Value{sliceDataGlobal, sliceLen, sliceLen}, false)
 		sliceGlobal := llvm.AddGlobal(c.mod, sliceInitializer.Type(), c.pkg.Path()+"$embedfsslice")
 		sliceGlobal.SetInitializer(sliceInitializer)
 		sliceGlobal.SetLinkage(llvm.InternalLinkage)
@@ -1209,12 +1201,8 @@ func (c *context) getEmbedFileString(file *loader.EmbedFile) llvm.Value {
 	if dataGlobal.IsNil() {
 		dataGlobal = llvm.AddGlobal(c.mod, dataGlobalType, dataGlobalName)
 	}
-	strPtr := llvm.ConstInBoundsGEP(dataGlobalType, dataGlobal, []llvm.Value{
-		c.uintptrZero,
-		c.uintptrZero,
-	})
 	strLen := llvm.ConstInt(c.uintptrType, file.Size, false)
-	return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{strPtr, strLen})
+	return llvm.ConstNamedStruct(c.getLLVMRuntimeType("_string"), []llvm.Value{dataGlobal, strLen})
 }
 
 // Start defining a function so that it can be filled with instructions: load
@@ -3867,8 +3855,7 @@ func (c *context) createConst(expr *ssa.Const, pos token.Pos) llvm.Value {
 					})
 					global.AddMetadata(0, diglobal)
 				}
-				zero := llvm.ConstInt(c.i32, 0, false)
-				strPtr = llvm.ConstInBoundsGEP(globalType, global, []llvm.Value{zero, zero})
+				strPtr = global
 			} else {
 				strPtr = c.dataPtrNull
 			}

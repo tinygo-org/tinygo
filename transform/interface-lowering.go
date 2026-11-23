@@ -196,10 +196,7 @@ func (p *lowerInterfacesPass) run() error {
 					}
 				} else {
 					// This type has no method set.
-					t.typecodeGEP = llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
-						llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-						llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-					})
+					t.typecodeGEP = global
 				}
 			}
 		}
@@ -432,7 +429,6 @@ func (p *lowerInterfacesPass) run() error {
 
 	// Remove temporary type metadata, which is now unnecessary and inhibits later
 	// optimizations if they are left in place.
-	zero := llvm.ConstInt(p.ctx.Int32Type(), 0, false)
 	for _, name := range typeNames {
 		t := p.types[name]
 		if !t.methodSet.IsNil() || !t.callAdapter.IsNil() {
@@ -487,8 +483,7 @@ func (p *lowerInterfacesPass) run() error {
 					opcode := use.Opcode()
 					if opcode == llvm.GetElementPtr && use.OperandsCount() == 3 {
 						if use.Operand(1).ZExtValue() == 0 && use.Operand(2).ZExtValue() == 1 {
-							gep := llvm.ConstInBoundsGEP(newGlobal.GlobalValueType(), newGlobal, []llvm.Value{zero, zero})
-							use.ReplaceAllUsesWith(gep)
+							use.ReplaceAllUsesWith(newGlobal)
 						}
 					}
 				}
@@ -820,10 +815,7 @@ func (p *lowerInterfacesPass) createReflectTypeLinks(typeNames []string) {
 		array.SetInitializer(llvm.ConstArray(p.ptrType, typeCodes))
 		array.SetGlobalConstant(true)
 		array.SetLinkage(llvm.InternalLinkage)
-		dataGlobal.SetInitializer(llvm.ConstGEP(arrayType, array, []llvm.Value{
-			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-		}))
+		dataGlobal.SetInitializer(array)
 		dataGlobal.SetGlobalConstant(true)
 	}
 }
@@ -874,10 +866,7 @@ func (p *lowerInterfacesPass) createReflectCallLinks(typeNames []string) {
 		array.SetInitializer(llvm.ConstArray(p.ptrType, table.values))
 		array.SetGlobalConstant(true)
 		array.SetLinkage(llvm.InternalLinkage)
-		table.global.SetInitializer(llvm.ConstGEP(arrayType, array, []llvm.Value{
-			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-		}))
+		table.global.SetInitializer(array)
 		table.global.SetGlobalConstant(true)
 	}
 }
@@ -938,10 +927,7 @@ func (p *lowerInterfacesPass) createReflectMakeFuncLinks(typeNames []string) {
 		if typ.makeFuncAdapter.IsNil() || typ.makeFuncAdapter.IsNull() {
 			panic("missing reflect MakeFunc adapter for " + name)
 		}
-		typeCodes = append(typeCodes, llvm.ConstGEP(typ.typecode.GlobalValueType(), typ.typecode, []llvm.Value{
-			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-		}))
+		typeCodes = append(typeCodes, typ.typecode)
 		adapters = append(adapters, llvm.ConstIntToPtr(typ.makeFuncAdapter, p.ptrType))
 	}
 	p.internalizeFunctionsWithPrefix("reflect/makefunc:")
@@ -966,10 +952,7 @@ func (p *lowerInterfacesPass) createReflectMakeFuncLinks(typeNames []string) {
 		array.SetInitializer(llvm.ConstArray(p.ptrType, table.values))
 		array.SetGlobalConstant(true)
 		array.SetLinkage(llvm.InternalLinkage)
-		table.global.SetInitializer(llvm.ConstGEP(arrayType, array, []llvm.Value{
-			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-		}))
+		table.global.SetInitializer(array)
 		table.global.SetGlobalConstant(true)
 	}
 }
