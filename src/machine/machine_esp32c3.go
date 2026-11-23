@@ -269,6 +269,11 @@ func setupPinInterrupt() error {
 	}).Enable()
 }
 
+func init() {
+	UART0.interrupt = interrupt.New(cpuInterruptFromUART0, _UART0.serveInterrupt)
+	UART1.interrupt = interrupt.New(cpuInterruptFromUART1, _UART1.serveInterrupt)
+}
+
 var (
 	DefaultUART = UART0
 
@@ -277,7 +282,6 @@ var (
 	UART1  = &_UART1
 	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
 
-	onceUart            = sync.Once{}
 	errSamePins         = errors.New("UART: invalid pin combination")
 	errWrongUART        = errors.New("UART: unsupported UARTn")
 	errWrongBitSize     = errors.New("UART: invalid data size")
@@ -287,23 +291,29 @@ var (
 const uartClockFreq = 80_000_000 // APB_CLK, SCLK_SEL 1. See ESP-IDF hal/esp32c3/include/hal/uart_ll.h uart_ll_set_sclk.
 
 type registerSet struct {
+	cpuInterrupt     uint32
 	interruptMapReg  *volatile.Register32
 	uartClockBitMask uint32
 	gpioMatrixSignal uint32
 }
 
-const cpuInterruptFromUART = 7
+const (
+	cpuInterruptFromUART0 = 7
+	cpuInterruptFromUART1 = 8
+)
 
 func busFor(bus *esp.UART_Type) registerSet {
 	switch bus {
 	case esp.UART0:
 		return registerSet{
+			cpuInterrupt:     cpuInterruptFromUART0,
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART_INTR_MAP,
 			uartClockBitMask: esp.SYSTEM_PERIP_CLK_EN0_UART_CLK_EN,
 			gpioMatrixSignal: 6,
 		}
 	case esp.UART1:
 		return registerSet{
+			cpuInterrupt:     cpuInterruptFromUART1,
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART1_INTR_MAP,
 			uartClockBitMask: esp.SYSTEM_PERIP_CLK_EN0_UART1_CLK_EN,
 			gpioMatrixSignal: 9,
@@ -344,7 +354,7 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 	uart.Bus.SetID_REG_UPDATE(1)
 
 	uart.setupPins(config, regs)
-	uart.configureInterrupt(regs.interruptMapReg)
+	uart.configureInterrupt(regs)
 	uart.enableTransmitter()
 	uart.enableReceiver()
 

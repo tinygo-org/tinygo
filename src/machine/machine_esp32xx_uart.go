@@ -5,7 +5,6 @@ package machine
 import (
 	"device/esp"
 	"runtime/interrupt"
-	"runtime/volatile"
 )
 
 type UART struct {
@@ -14,6 +13,7 @@ type UART struct {
 	ParityErrorDetected  bool // set when parity error detected
 	DataErrorDetected    bool // set when data corruption detected
 	DataOverflowDetected bool // set when data overflow detected in UART FIFO buffer or RingBuffer
+	interrupt            interrupt.Interrupt
 }
 
 const (
@@ -90,17 +90,12 @@ func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
 	}
 }
 
-func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) {
+func (uart *UART) configureInterrupt(regs registerSet) {
 	// Disable all UART interrupts
 	uart.Bus.INT_ENA.ClearBits(0x0ffff)
 
-	intrMapReg.Set(cpuInterruptFromUART)
-	onceUart.Do(func() {
-		_ = interrupt.New(cpuInterruptFromUART, func(i interrupt.Interrupt) {
-			UART0.serveInterrupt(0)
-			UART1.serveInterrupt(1)
-		}).Enable()
-	})
+	regs.interruptMapReg.Set(regs.cpuInterrupt)
+	uart.interrupt.Enable()
 }
 
 func (uart *UART) enableTransmitter() {
@@ -120,7 +115,7 @@ func (uart *UART) enableReceiver() {
 	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
 }
 
-func (uart *UART) serveInterrupt(num int) {
+func (uart *UART) serveInterrupt(interrupt.Interrupt) {
 	// get interrupt status
 	interruptFlag := uart.Bus.INT_ST.Get()
 	if (interruptFlag & uartInterrupts) == 0 {
