@@ -160,6 +160,45 @@ func TestRecursionPassesObject(t *testing.T) {
 	}
 }
 
+var globalRecursivePick *[16]byte
+
+// pickRecursive gets the object as b, and the recursive call gets it as a.
+// Both reach the same PHI, and only the recursive call's result is stored.
+//
+//go:noinline
+func pickRecursive(a, b *[16]byte, n int) *[16]byte {
+	var x *[16]byte
+	if n&1 == 0 {
+		sinkSum++
+		x = a
+	} else {
+		sinkSum--
+		x = b
+	}
+	if n > 0 {
+		globalRecursivePick = pickRecursive(x, nil, n-1)
+	}
+	return x
+}
+
+//go:noinline
+func passToPickRecursive() {
+	p := new([16]byte)
+	p[0] = 42
+	pickRecursive(nil, p, 1)
+}
+
+// A recursive call reaches a PHI that is still being checked, through another
+// parameter, and its result is stored in a global.
+func TestUnsafeRecursivePhiResultStored(t *testing.T) {
+	mustAllocate(t, 1, passToPickRecursive)
+	passToPickRecursive()
+	clobber(8)
+	if globalRecursivePick[0] != 42 {
+		t.Errorf("got %d, want 42", globalRecursivePick[0])
+	}
+}
+
 // Callee loops
 
 //go:noinline
