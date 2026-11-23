@@ -184,6 +184,7 @@ func TestBuild(t *testing.T) {
 		"chanrecover.go",
 		"clearloop.go",
 		"coreassign.go",
+		"coreswake.go",
 		"embed/",
 		"finalizer.go",
 		"finalizerbits.go",
@@ -712,8 +713,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				continue
 			}
 		}
-		if name == "coreassign.go" && scheduler != "cores" {
-			// Core assignment needs the cores scheduler.
+		if (name == "coreassign.go" || name == "coreswake.go") && scheduler != "cores" {
+			// These tests need the cores scheduler.
 			continue
 		}
 		if name == "slicegrow.go" && (isBaremetal || spec.GC == "leaking") {
