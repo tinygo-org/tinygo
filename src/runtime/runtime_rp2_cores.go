@@ -32,3 +32,26 @@ func schedulerEndWait(core uint32) {
 	volatile.StoreUint32(&schedulerWakePending[core], 1)
 	arm.Asm("sev")
 }
+
+// Almost identical to sleepTicks, except that it will unlock/lock the scheduler
+// while sleeping and is interruptible by interruptSleepTicksMulticore.
+// This may only be called with the scheduler lock held.
+func sleepTicksMulticore(d timeUnit) {
+	sleepingCore = uint8(currentCPU())
+
+	// Note: interruptSleepTicksMulticore will be able to interrupt this, since
+	// it executes the "sev" instruction which would make sleepTicks return
+	// immediately without sleeping. Even if it happens while configuring the
+	// sleep operation.
+
+	schedulerLock.Unlock()
+	sleepTicks(d)
+	schedulerLock.Lock()
+
+	sleepingCore = 0xff
+}
+
+// Interrupt an ongoing call to sleepTicksMulticore on another core.
+func interruptSleepTicksMulticore(wakeup timeUnit) {
+	arm.Asm("sev")
+}

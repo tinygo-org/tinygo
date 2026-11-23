@@ -177,16 +177,6 @@ func schedulerEndWait(core uint32) {
 	signalCore(core, 1)
 }
 
-// Currently sleeping core, or 0xff.
-// Must only be accessed with the scheduler lock held.
-var sleepingCore uint8 = 0xff
-
-// Return whether another core is sleeping.
-// May only be called with the scheduler lock held.
-func hasSleepingCore() bool {
-	return sleepingCore != 0xff
-}
-
 // Almost identical to sleepTicks, except that it will unlock/lock the scheduler
 // while sleeping and is interruptible by interruptSleepTicksMulticore.
 // This may only be called with the scheduler lock held.
