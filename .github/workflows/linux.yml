@@ -170,9 +170,12 @@ jobs:
           path: /tmp/tinygo_${{ steps.version.outputs.version }}_amd64.deb
           archive: false
   test-linux-build:
-    # Test the binaries built in the build-linux job by running the smoke tests.
     runs-on: ubuntu-latest
     needs: build-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [tinygo-test-wasip1-fast, tinygo-test-wasip2-fast, tinygo-test-wasm]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -196,17 +199,19 @@ jobs:
           mkdir -p ~/lib
           tar -C ~/lib -xf tinygo${{ needs.build-linux.outputs.version }}.linux-amd64.tar.gz
           ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
-      - run: make tinygo-test-wasip1-fast
       - name: Check for clang 22 or newer
+        if: matrix.target == 'tinygo-test-wasip2-fast'
         id: clang
         run: |
           major=$(tinygo version | sed -n 's/.*LLVM version \([0-9]*\)\..*/\1/p')
           if [ "${major:-0}" -ge 22 ]; then
             echo "wasip2=true" >> "$GITHUB_OUTPUT"
           fi
-      - run: make tinygo-test-wasip2-fast
-        if: steps.clang.outputs.wasip2 == 'true'
-      - run: make tinygo-test-wasm
+      - name: Test stdlib packages
+        if: matrix.target != 'tinygo-test-wasip2-fast' || steps.clang.outputs.wasip2 == 'true'
+        env:
+          STDLIB_TARGET: ${{ matrix.target }}
+        run: make "$STDLIB_TARGET"
   smoketest-linux:
     # Build a binary for every supported board, using the binaries built in the
     # build-linux job. This is the only job that runs the full smoke test. The
