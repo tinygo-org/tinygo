@@ -2732,6 +2732,7 @@ func makeFuncStubCode() unsafe.Pointer {
 	return (*funcHeader)(unsafe.Pointer(&stub)).Code
 }
 
+//go:noinline
 func makeFuncCall(context unsafe.Pointer, argPointers, resultPointers *unsafe.Pointer) {
 	typ := (*makeFuncContext)(context).typ
 	callMakeFunc(context, unsafe.Slice(argPointers, typ.NumIn()), unsafe.Slice(resultPointers, typ.NumOut()), true)
