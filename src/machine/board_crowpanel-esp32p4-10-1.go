@@ -1,0 +1,30 @@
+//go:build crowpanel_esp32p4_10_1
+
+package machine
+
+// Minimal board pins for the Elecrow CrowPanel ESP32-P4 10.1".
+
+const (
+	UART0_TX_PIN = GPIO37
+	UART0_RX_PIN = GPIO38
+	UART_TX_PIN  = UART0_TX_PIN
+	UART_RX_PIN  = UART0_RX_PIN
+
+	SDA_PIN = GPIO45
+	SCL_PIN = GPIO46
+
+	TOUCH_RST = GPIO40
+	TOUCH_INT = GPIO42
+
+	BACKLIGHT_GATE = GPIO29
+	BACKLIGHT_PWM  = GPIO31
+
+	I2S_LRCLK = GPIO21
+	I2S_BCLK  = GPIO22
+	I2S_SDATA = GPIO23
+	AMP_EN    = GPIO30
+
+	LED = GPIO48
+)
+
+const AMP_EN_ACTIVE_HIGH = false
