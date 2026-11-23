@@ -353,7 +353,6 @@ func (t *TIM) channelCCMR(channel uint8) (reg *volatile.Register32, offset uint8
 	return nil, 0
 }
 
-//go:inline
 func ceil(num uint64, denom uint64) uint64 {
 	return (num + denom - 1) / denom
 }

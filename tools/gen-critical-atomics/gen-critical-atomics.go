@@ -55,7 +55,6 @@ func __atomic_store_{{.}}(ptr *uint{{$bits}}, val uint{{$bits}}, ordering uintpt
 }
 {{end}}
 {{- define "cas"}}{{$bits := mul . 8 -}}
-//go:inline
 func doAtomicCAS{{$bits}}(ptr *uint{{$bits}}, expected, desired uint{{$bits}}) uint{{$bits}} {
 	mask := lockAtomics()
 	old := *ptr
@@ -79,7 +78,6 @@ func __atomic_compare_exchange_{{.}}(ptr, expected *uint{{$bits}}, desired uint{
 }
 {{end}}
 {{- define "swap"}}{{$bits := mul . 8 -}}
-//go:inline
 func doAtomicSwap{{$bits}}(ptr *uint{{$bits}}, new uint{{$bits}}) uint{{$bits}} {
 	mask := lockAtomics()
 	old := *ptr
@@ -108,7 +106,6 @@ func __atomic_exchange_{{.}}(ptr *uint{{$bits}}, new uint{{$bits}}, ordering uin
 {{- if not $signed}}{{$type = printf "u%s" $type}}{{end -}}
 {{- $opfn := printf "doAtomic%s%d" (title $opname) $bits}}
 
-//go:inline
 func {{$opfn}}(ptr *{{$type}}, value {{$type}}) (old, new {{$type}}) {
 	mask := lockAtomics()
 	old = *ptr

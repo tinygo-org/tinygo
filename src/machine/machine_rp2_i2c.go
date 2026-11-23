@@ -149,8 +149,6 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 // SetBaudRate sets the I2C frequency. It has the side effect of also
 // enabling the I2C hardware if disabled beforehand.
-//
-//go:inline
 func (i2c *I2C) SetBaudRate(br uint32) error {
 
 	if br == 0 {
@@ -205,14 +203,11 @@ func (i2c *I2C) SetBaudRate(br uint32) error {
 	return nil
 }
 
-//go:inline
 func (i2c *I2C) enable() {
 	i2c.Bus.IC_ENABLE.ReplaceBits(rp.I2C0_IC_ENABLE_ENABLE<<rp.I2C0_IC_ENABLE_ENABLE_Pos, rp.I2C0_IC_ENABLE_ENABLE_Msk, 0)
 }
 
 // Implemented as per 4.3.10.3. Disabling DW_apb_i2c section.
-//
-//go:inline
 func (i2c *I2C) disable() error {
 	const timeout_us = 4_000
 	deadline := ticks() + timeout_us
@@ -225,7 +220,6 @@ func (i2c *I2C) disable() error {
 	return nil
 }
 
-//go:inline
 func (i2c *I2C) init(config I2CConfig) error {
 	i2c.reset()
 	if err := i2c.disable(); err != nil {
@@ -254,16 +248,12 @@ func (i2c *I2C) init(config I2CConfig) error {
 }
 
 // reset sets I2C register RESET bits in the reset peripheral and then clears them.
-//
-//go:inline
 func (i2c *I2C) reset() {
 	resetVal := i2c.deinit()
 	unresetBlockWait(resetVal)
 }
 
 // deinit sets reset bit for I2C. Must call reset to reenable I2C after deinit.
-//
-//go:inline
 func (i2c *I2C) deinit() (resetVal uint32) {
 	switch {
 	case i2c.Bus == rp.I2C0:
@@ -550,8 +540,6 @@ func (i2c *I2C) readAvailable() uint32 {
 }
 
 // Equivalent to IC_CLR_TX_ABRT.Get() (side effect clears ABORT_REASON)
-//
-//go:inline
 func (i2c *I2C) clearAbortReason() {
 	// Note clearing the abort flag also clears the reason, and
 	// this instance of flag is clear-on-read! Note also the
@@ -560,8 +548,6 @@ func (i2c *I2C) clearAbortReason() {
 }
 
 // getAbortReason reads IC_TX_ABRT_SOURCE register.
-//
-//go:inline
 func (i2c *I2C) getAbortReason() i2cAbortError {
 	return i2cAbortError(i2c.Bus.IC_TX_ABRT_SOURCE.Get())
 }

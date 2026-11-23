@@ -35,7 +35,6 @@ func __atomic_store_2(ptr *uint16, val uint16, ordering uintptr) {
 	unlockAtomics(mask)
 }
 
-//go:inline
 func doAtomicCAS16(ptr *uint16, expected, desired uint16) uint16 {
 	mask := lockAtomics()
 	old := *ptr
@@ -58,7 +57,6 @@ func __atomic_compare_exchange_2(ptr, expected *uint16, desired uint16, successO
 	return old == exp
 }
 
-//go:inline
 func doAtomicSwap16(ptr *uint16, new uint16) uint16 {
 	mask := lockAtomics()
 	old := *ptr
@@ -77,7 +75,6 @@ func __atomic_exchange_2(ptr *uint16, new uint16, ordering uintptr) uint16 {
 	return doAtomicSwap16(ptr, new)
 }
 
-//go:inline
 func doAtomicAdd16(ptr *uint16, value uint16) (old, new uint16) {
 	mask := lockAtomics()
 	old = *ptr
@@ -105,7 +102,6 @@ func __atomic_add_fetch_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
 	return new
 }
 
-//go:inline
 func doAtomicSub16(ptr *uint16, value uint16) (old, new uint16) {
 	mask := lockAtomics()
 	old = *ptr
@@ -133,7 +129,6 @@ func __atomic_sub_fetch_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
 	return new
 }
 
-//go:inline
 func doAtomicAnd16(ptr *uint16, value uint16) (old, new uint16) {
 	mask := lockAtomics()
 	old = *ptr
@@ -161,7 +156,6 @@ func __atomic_and_fetch_2(ptr *uint16, value uint16, ordering uintptr) uint16 {
 	return new
 }
 
-//go:inline
 func doAtomicOr16(ptr *uint16, value uint16) (old, new uint16) {
 	mask := lockAtomics()
 	old = *ptr
@@ -208,7 +202,6 @@ func __atomic_store_4(ptr *uint32, val uint32, ordering uintptr) {
 	unlockAtomics(mask)
 }
 
-//go:inline
 func doAtomicCAS32(ptr *uint32, expected, desired uint32) uint32 {
 	mask := lockAtomics()
 	old := *ptr
@@ -231,7 +224,6 @@ func __atomic_compare_exchange_4(ptr, expected *uint32, desired uint32, successO
 	return old == exp
 }
 
-//go:inline
 func doAtomicSwap32(ptr *uint32, new uint32) uint32 {
 	mask := lockAtomics()
 	old := *ptr
@@ -250,7 +242,6 @@ func __atomic_exchange_4(ptr *uint32, new uint32, ordering uintptr) uint32 {
 	return doAtomicSwap32(ptr, new)
 }
 
-//go:inline
 func doAtomicAdd32(ptr *uint32, value uint32) (old, new uint32) {
 	mask := lockAtomics()
 	old = *ptr
@@ -278,7 +269,6 @@ func __atomic_add_fetch_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
 	return new
 }
 
-//go:inline
 func doAtomicSub32(ptr *uint32, value uint32) (old, new uint32) {
 	mask := lockAtomics()
 	old = *ptr
@@ -306,7 +296,6 @@ func __atomic_sub_fetch_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
 	return new
 }
 
-//go:inline
 func doAtomicAnd32(ptr *uint32, value uint32) (old, new uint32) {
 	mask := lockAtomics()
 	old = *ptr
@@ -334,7 +323,6 @@ func __atomic_and_fetch_4(ptr *uint32, value uint32, ordering uintptr) uint32 {
 	return new
 }
 
-//go:inline
 func doAtomicOr32(ptr *uint32, value uint32) (old, new uint32) {
 	mask := lockAtomics()
 	old = *ptr
@@ -381,7 +369,6 @@ func __atomic_store_8(ptr *uint64, val uint64, ordering uintptr) {
 	unlockAtomics(mask)
 }
 
-//go:inline
 func doAtomicCAS64(ptr *uint64, expected, desired uint64) uint64 {
 	mask := lockAtomics()
 	old := *ptr
@@ -404,7 +391,6 @@ func __atomic_compare_exchange_8(ptr, expected *uint64, desired uint64, successO
 	return old == exp
 }
 
-//go:inline
 func doAtomicSwap64(ptr *uint64, new uint64) uint64 {
 	mask := lockAtomics()
 	old := *ptr
@@ -423,7 +409,6 @@ func __atomic_exchange_8(ptr *uint64, new uint64, ordering uintptr) uint64 {
 	return doAtomicSwap64(ptr, new)
 }
 
-//go:inline
 func doAtomicAdd64(ptr *uint64, value uint64) (old, new uint64) {
 	mask := lockAtomics()
 	old = *ptr
@@ -451,7 +436,6 @@ func __atomic_add_fetch_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
 	return new
 }
 
-//go:inline
 func doAtomicSub64(ptr *uint64, value uint64) (old, new uint64) {
 	mask := lockAtomics()
 	old = *ptr
@@ -479,7 +463,6 @@ func __atomic_sub_fetch_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
 	return new
 }
 
-//go:inline
 func doAtomicAnd64(ptr *uint64, value uint64) (old, new uint64) {
 	mask := lockAtomics()
 	old = *ptr
@@ -507,7 +490,6 @@ func __atomic_and_fetch_8(ptr *uint64, value uint64, ordering uintptr) uint64 {
 	return new
 }
 
-//go:inline
 func doAtomicOr64(ptr *uint64, value uint64) (old, new uint64) {
 	mask := lockAtomics()
 	old = *ptr

@@ -54,7 +54,6 @@ func (i2c *I2C) initAll() {
 	i2c.startMaster()
 }
 
-//go:inline
 func (i2c *I2C) initClock() {
 	// reset I2C clock
 	if i2c.Bus == esp.I2C0 {
@@ -73,13 +72,11 @@ func (i2c *I2C) initClock() {
 	i2c.Bus.SetCTR_CLK_EN(1)
 }
 
-//go:inline
 func (i2c *I2C) initNoiseFilter() {
 	i2c.Bus.SCL_FILTER_CFG.Set(0xF)
 	i2c.Bus.SDA_FILTER_CFG.Set(0xF)
 }
 
-//go:inline
 func (i2c *I2C) initPins() {
 	var muxConfig uint32
 	const function = 2 // function 2 is just GPIO
@@ -117,7 +114,6 @@ func (i2c *I2C) initPins() {
 	i2c.Bus.SetCTR_SCL_FORCE_OUT(1)
 }
 
-//go:inline
 func (i2c *I2C) initFrequency() {
 	clkmDiv := i2cClkSourceFrequency/(i2c.config.Frequency*1024) + 1
 	sclkFreq := i2cClkSourceFrequency / clkmDiv
@@ -147,7 +143,6 @@ func (i2c *I2C) initFrequency() {
 	i2c.Bus.SetTO_TIME_OUT(20 * halfCycle)
 }
 
-//go:inline
 func (i2c *I2C) startMaster() {
 	// FIFO mode for data
 	i2c.Bus.SetFIFO_CONF_NONFIFO_EN(0)
