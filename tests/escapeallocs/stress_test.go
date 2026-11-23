@@ -644,3 +644,135 @@ func TestSafeReadOnlyChain(t *testing.T) {
 		sinkSum = readOnlyChain([]byte(constString)) + readOnlyLeaf([]byte(constString))
 	})
 }
+
+// Compile time
+
+var mergeConds [32]bool
+
+//go:noinline
+func stepSlice(b []byte) []byte { return b[1:] }
+
+// manyMergesBeforeLoop has a chain of merge PHIs before a loop. The analysis
+// reaches each merge PHI on two paths, so it takes exponential time unless
+// the results for the merge PHIs are reused.
+//
+//go:noinline
+func manyMergesBeforeLoop() int {
+	buf := make([]byte, 64)
+	for i := range buf {
+		buf[i] = 1
+	}
+	b := buf
+	if mergeConds[0] {
+		b = stepSlice(b)
+	}
+	if mergeConds[1] {
+		b = stepSlice(b)
+	}
+	if mergeConds[2] {
+		b = stepSlice(b)
+	}
+	if mergeConds[3] {
+		b = stepSlice(b)
+	}
+	if mergeConds[4] {
+		b = stepSlice(b)
+	}
+	if mergeConds[5] {
+		b = stepSlice(b)
+	}
+	if mergeConds[6] {
+		b = stepSlice(b)
+	}
+	if mergeConds[7] {
+		b = stepSlice(b)
+	}
+	if mergeConds[8] {
+		b = stepSlice(b)
+	}
+	if mergeConds[9] {
+		b = stepSlice(b)
+	}
+	if mergeConds[10] {
+		b = stepSlice(b)
+	}
+	if mergeConds[11] {
+		b = stepSlice(b)
+	}
+	if mergeConds[12] {
+		b = stepSlice(b)
+	}
+	if mergeConds[13] {
+		b = stepSlice(b)
+	}
+	if mergeConds[14] {
+		b = stepSlice(b)
+	}
+	if mergeConds[15] {
+		b = stepSlice(b)
+	}
+	if mergeConds[16] {
+		b = stepSlice(b)
+	}
+	if mergeConds[17] {
+		b = stepSlice(b)
+	}
+	if mergeConds[18] {
+		b = stepSlice(b)
+	}
+	if mergeConds[19] {
+		b = stepSlice(b)
+	}
+	if mergeConds[20] {
+		b = stepSlice(b)
+	}
+	if mergeConds[21] {
+		b = stepSlice(b)
+	}
+	if mergeConds[22] {
+		b = stepSlice(b)
+	}
+	if mergeConds[23] {
+		b = stepSlice(b)
+	}
+	if mergeConds[24] {
+		b = stepSlice(b)
+	}
+	if mergeConds[25] {
+		b = stepSlice(b)
+	}
+	if mergeConds[26] {
+		b = stepSlice(b)
+	}
+	if mergeConds[27] {
+		b = stepSlice(b)
+	}
+	if mergeConds[28] {
+		b = stepSlice(b)
+	}
+	if mergeConds[29] {
+		b = stepSlice(b)
+	}
+	if mergeConds[30] {
+		b = stepSlice(b)
+	}
+	if mergeConds[31] {
+		b = stepSlice(b)
+	}
+	s := 0
+	for len(b) > 0 {
+		s += int(b[0])
+		b = b[1:]
+	}
+	return s
+}
+
+func TestManyMergesBeforeLoop(t *testing.T) {
+	for i := range mergeConds {
+		mergeConds[i] = i%2 == 0
+	}
+	if got := manyMergesBeforeLoop(); got != 64-16 {
+		t.Errorf("got %d, want %d", got, 64-16)
+	}
+	checkNoAllocs(t, func() { sinkSum = manyMergesBeforeLoop() })
+}
