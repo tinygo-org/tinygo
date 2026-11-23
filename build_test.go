@@ -271,6 +271,10 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 			runTest("testing-verbose.go", hostOptions, t, nil, nil)
 		})
+		t.Run("testing-bench.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("testing-bench.go", hostOptions, t, nil, nil)
+		})
 
 		// scheduler.threads needs threadID, which exists only on Linux and Darwin.
 		// scheduler.none does not link on Windows.

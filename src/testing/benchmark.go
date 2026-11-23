@@ -200,7 +200,28 @@ func (b *B) run1() bool {
 		b.runN(1)
 	}()
 	<-done
-	return !b.hasSub
+	if b.Failed() {
+		fmt.Printf("--- FAIL: %s\n", b.name)
+		b.output.writeToStdout()
+		return false
+	}
+	// Only print the output if we know we are not going to proceed.
+	// Otherwise it is printed in processBench.
+	b.mu.Lock()
+	finished := b.finished
+	b.mu.Unlock()
+	if b.hasSub || finished {
+		tag := "BENCH"
+		if b.Skipped() {
+			tag = "SKIP"
+		}
+		if flagVerbose && (b.output.Len() > 0 || finished) {
+			fmt.Printf("--- %s: %s\n", tag, b.name)
+			b.output.writeToStdout()
+		}
+		return false
+	}
+	return true
 }
 
 // run executes the benchmark.
@@ -459,7 +480,7 @@ func runBenchmarks(matchString func(pat, str string) (bool, error), benchmarks [
 	}
 
 	main.runN(1)
-	return true
+	return !main.Failed()
 }
 
 // Set by tinygo test at link time.
@@ -493,9 +514,9 @@ func (b *B) processBench(ctx *benchContext) {
 	if ctx != nil {
 		printBenchLabels()
 	}
-	// Like go test, only append the CPU count when it isn't 1.
+	// Like go test, only append GOMAXPROCS when it isn't 1.
 	procsSuffix := ""
-	if n := runtime.NumCPU(); n != 1 {
+	if n := runtime.GOMAXPROCS(-1); n != 1 {
 		procsSuffix = "-" + strconv.Itoa(n)
 	}
 
@@ -508,7 +529,8 @@ func (b *B) processBench(ctx *benchContext) {
 			// The output could be very long here, but probably isn't.
 			// We print it all, regardless, because we don't want to trim the reason
 			// the benchmark failed.
-			fmt.Printf("--- FAIL: %s\n%s", benchName, "") // b.output)
+			fmt.Printf("--- FAIL: %s\n", benchName+procsSuffix)
+			b.output.writeToStdout()
 			return
 		}
 		if ctx != nil {
@@ -521,7 +543,7 @@ func (b *B) processBench(ctx *benchContext) {
 
 			// Print any benchmark output
 			if b.output.Len() > 0 {
-				fmt.Printf("--- BENCH: %s\n", benchName)
+				fmt.Printf("--- BENCH: %s\n", benchName+procsSuffix)
 				b.output.writeToStdout()
 			}
 		}
@@ -557,10 +579,16 @@ func (b *B) Run(name string, f func(b *B)) bool {
 		// Only process sub-benchmarks, if any.
 		sub.hasSub = true
 	}
+	if flagVerbose && b.context != nil {
+		printBenchLabels()
+	}
 	if sub.run1() {
 		sub.run()
 	}
 	b.add(sub.result)
+	if sub.Failed() {
+		b.Fail()
+	}
 	return !sub.failed
 }
 
