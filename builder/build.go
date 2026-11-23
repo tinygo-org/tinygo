@@ -825,6 +825,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 	}
 	result.Binary = result.Executable // final file
 	ldflags := append(config.LDFlags(), "-o", result.Executable)
+	if config.GOOS() == "darwin" {
+		// Keep the LTO output, which holds the DWARF, for dsymutil.
+		ldflags = append(ldflags, "-object_path_lto", filepath.Join(tmpdir, "lto"))
+	}
 
 	if config.Options.BuildMode == "c-shared" {
 		if !strings.HasPrefix(config.Triple(), "wasm32-") {

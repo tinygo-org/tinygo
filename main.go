@@ -214,12 +214,29 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 			}
 
 			// Check whether file writing was successful.
-			return outf.Close()
+			if err := outf.Close(); err != nil {
+				return err
+			}
+		}
+		if config.GOOS() == "darwin" && config.Debug() {
+			writeDSYM(outpath)
 		}
 	}
 
-	// Move was successful.
 	return nil
+}
+
+// writeDSYM creates a .dSYM bundle with the DWARF of a macOS executable, as
+// it is otherwise lost with the temporary object files.
+func writeDSYM(outpath string) {
+	dsymutil, err := exec.LookPath("dsymutil")
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(dsymutil, "-o", outpath+".dSYM", outpath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: dsymutil failed: %v\n%s", err, out)
+	}
 }
 
 // Test runs the tests in the given package. Returns whether the test passed and
@@ -303,6 +320,9 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 				outpath = filepath.Base(result.MainDir) + ".test"
 			}
 			copyFile(result.Binary, outpath)
+			if config.GOOS() == "darwin" && config.Debug() {
+				writeDSYM(outpath)
+			}
 		}
 		if testConfig.CompileOnly {
 			// Do not run the test.
