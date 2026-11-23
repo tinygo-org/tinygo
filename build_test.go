@@ -745,8 +745,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// Too many goroutines for the LM3S6965's RAM.
 			continue
 		}
-		if options.Target == "riscv-qemu" && name == "gcstacks.go" {
-			// The cores scheduler crashes with timers and runtime.GC, see #6047.
+		if options.Target == "riscv-qemu" && name == "gcstacks.go" && scheduler == "tasks" {
+			// Other targets cover the tasks scheduler, and this run takes 34 seconds.
 			continue
 		}
 		if options.Target == "simavr" {
