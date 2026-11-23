@@ -56,39 +56,6 @@ func sleepTicks(d timeUnit) {
 	}
 }
 
-// Currently sleeping core, or 0xff.
-// Must only be accessed with the scheduler lock held.
-var sleepingCore uint8 = 0xff
-
-// Return whether another core is sleeping.
-// May only be called with the scheduler lock held.
-func hasSleepingCore() bool {
-	return sleepingCore != 0xff
-}
-
-// Almost identical to sleepTicks, except that it will unlock/lock the scheduler
-// while sleeping and is interruptible by interruptSleepTicksMulticore.
-// This may only be called with the scheduler lock held.
-func sleepTicksMulticore(d timeUnit) {
-	sleepingCore = uint8(currentCPU())
-
-	// Note: interruptSleepTicksMulticore will be able to interrupt this, since
-	// it executes the "sev" instruction which would make sleepTicks return
-	// immediately without sleeping. Even if it happens while configuring the
-	// sleep operation.
-
-	schedulerLock.Unlock()
-	sleepTicks(d)
-	schedulerLock.Lock()
-
-	sleepingCore = 0xff
-}
-
-// Interrupt an ongoing call to sleepTicksMulticore on another core.
-func interruptSleepTicksMulticore(wakeup timeUnit) {
-	arm.Asm("sev")
-}
-
 // Return the current core number: 0 or 1.
 func currentCPU() uint32 {
 	return rp.SIO.CPUID.Get()
