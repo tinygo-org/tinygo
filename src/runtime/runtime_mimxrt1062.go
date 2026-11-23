@@ -20,6 +20,9 @@ var _flexram_cfg [0]byte
 
 //export Reset_Handler
 func main() {
+	if nxp.FPUPresent {
+		arm.DisableFPU()
+	}
 
 	// disable interrupts
 	irq := arm.DisableInterrupts()

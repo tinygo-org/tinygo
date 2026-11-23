@@ -320,6 +320,9 @@ func prerun() {
 
 //export Reset_Handler
 func main() {
+	if rp.FPUPresent {
+		arm.DisableFPU()
+	}
 	preinit()
 	prerun()
 	run()

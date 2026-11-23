@@ -16,7 +16,7 @@ func systemInit()
 //export Reset_Handler
 func main() {
 	if nrf.FPUPresent {
-		arm.SCB.CPACR.Set(0) // disable FPU if it is enabled
+		arm.DisableFPU()
 	}
 	systemInit()
 	preinit()

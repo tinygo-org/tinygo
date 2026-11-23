@@ -53,6 +53,9 @@ const (
 
 //go:export Reset_Handler
 func main() {
+	if nxp.FPUPresent {
+		arm.DisableFPU()
+	}
 	initSystem()
 	arm.Asm("CPSIE i")
 	initInternal()

@@ -98,6 +98,9 @@ func init() {
 
 //export Reset_Handler
 func main() {
+	if renesas.FPUPresent {
+		arm.DisableFPU()
+	}
 	preinit()
 	run()
 	exit(0)

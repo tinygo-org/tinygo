@@ -45,6 +45,14 @@ type SCB_Type struct {
 
 var SCB = (*SCB_Type)(unsafe.Pointer(uintptr(SCB_BASE)))
 
+// DisableFPU turns off the FPU by clearing the CP10 and CP11 access bits in CPACR.
+// See the Cortex-M4 Devices Generic User Guide (DUI0553), section 4.6.1.
+func DisableFPU() {
+	SCB.CPACR.ClearBits(0xF << 20)
+	Asm("dsb")
+	Asm("isb")
+}
+
 // SystemReset performs a hard system reset.
 func SystemReset() {
 	SCB.AIRCR.Set((0x5FA << SCB_AIRCR_VECTKEY_Pos) | SCB_AIRCR_SYSRESETREQ_Msk)

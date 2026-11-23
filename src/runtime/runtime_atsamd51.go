@@ -13,7 +13,9 @@ import (
 
 //export Reset_Handler
 func main() {
-	arm.SCB.CPACR.Set(0) // disable FPU if it is enabled
+	if sam.FPUPresent {
+		arm.DisableFPU()
+	}
 	preinit()
 	run()
 	exit(0)
