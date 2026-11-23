@@ -184,7 +184,7 @@ func FormatAllocCover(pos token.Position) string {
 // nil llvm.Value if it definitely doesn't. The value must be an instruction.
 func valueEscapesAt(value llvm.Value) llvm.Value {
 	analysis := escapeAnalysis{
-		visiting: make(map[llvm.Value]struct{}),
+		visiting: make(map[llvm.Value]int),
 		results:  make(map[escapeKey]escapeResult),
 		originFn: value.InstructionParent().Parent(),
 		// An allocation that runs more than once per call reuses its stack
@@ -200,7 +200,7 @@ type escapeKey struct {
 }
 
 type escapeAnalysis struct {
-	visiting map[llvm.Value]struct{}
+	visiting map[llvm.Value]int
 	results  map[escapeKey]escapeResult
 
 	originFn      llvm.Value
@@ -209,6 +209,10 @@ type escapeAnalysis struct {
 	// cuts counts the PHIs that were reached again while they were still
 	// being checked.
 	cuts int
+
+	// depth counts the callee parameters that are being followed. visiting
+	// stores the depth at which each value was reached.
+	depth int
 }
 
 type escapeResult struct {
@@ -231,10 +235,13 @@ func (r *escapeResult) merge(other escapeResult) bool {
 }
 
 func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (result escapeResult) {
-	if _, ok := a.visiting[value]; ok {
-		if !value.IsAPHINode().IsNil() {
+	if depth, ok := a.visiting[value]; ok {
+		if !value.IsAPHINode().IsNil() && depth == a.depth {
 			// A value flowing around a loop back into the same PHI. The
-			// first visit already checks every use of the PHI.
+			// first visit already checks every use of the PHI. This only
+			// holds in the same call: a recursive call that reaches the PHI
+			// again returns to a different place, which the first visit
+			// does not check.
 			a.cuts++
 			return escapeResult{}
 		}
@@ -248,7 +255,7 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 	if result, ok := a.results[key]; ok {
 		return result
 	}
-	a.visiting[value] = struct{}{}
+	a.visiting[value] = a.depth
 	cuts := a.cuts
 	defer func() {
 		delete(a.visiting, value)
@@ -339,7 +346,7 @@ func (a *escapeAnalysis) stackSlotEscapesAt(slot llvm.Value, allowReturn bool) e
 	if _, ok := a.visiting[slot]; ok {
 		return escapeResult{escapeAt: slot}
 	}
-	a.visiting[slot] = struct{}{}
+	a.visiting[slot] = a.depth
 	defer delete(a.visiting, slot)
 
 	var check func(ptr llvm.Value) escapeResult
@@ -410,7 +417,10 @@ func (a *escapeAnalysis) callValueEscapesAt(call, value llvm.Value, allowReturn 
 			// valueEscapesAt is already checking this parameter's other uses.
 			continue
 		}
-		if !result.merge(a.valueEscapesAt(called.Param(i), true)) {
+		a.depth++
+		paramResult := a.valueEscapesAt(called.Param(i), true)
+		a.depth--
+		if !result.merge(paramResult) {
 			return result
 		}
 	}
