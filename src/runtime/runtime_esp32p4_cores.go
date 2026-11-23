@@ -6,7 +6,6 @@ import (
 	"device/esp"
 	"device/riscv"
 	"internal/task"
-	"math/bits"
 	"runtime/interrupt"
 	"sync/atomic"
 	"unsafe"
@@ -164,10 +163,6 @@ func runCore1() {
 	exit(0)
 }
 
-// Bitset of cores waiting in schedulerUnlockAndWait.
-// Must only be accessed with the scheduler lock held.
-var waitingCores uint8
-
 // Put the scheduler to sleep, since there are no tasks to run.
 // This will unlock the scheduler lock, and must be called with the scheduler
 // lock held.
@@ -187,26 +182,10 @@ func schedulerUnlockAndWait() {
 	schedulerLock.lockMasked(state)
 }
 
-// Wake another core, if one is waiting or sleeping. Must be called with the
-// scheduler lock held.
-func schedulerWake() {
-	if core := bits.TrailingZeros8(waitingCores); core < numCPU {
-		schedulerWakeCore(uint32(core))
-	} else if hasSleepingCore() {
-		interruptSleepTicksMulticore(0)
-	}
-}
-
-// Wake the given core if it is waiting or sleeping. Must be called with the
-// scheduler lock held.
-func schedulerWakeCore(core uint32) {
-	if waitingCores&(1<<core) != 0 {
-		waitingCores &^= 1 << core
-		schedulerWakePending[core].Store(1)
-		signalCore(core, 1)
-	} else if uint32(sleepingCore) == core {
-		interruptSleepTicksMulticore(0)
-	}
+// End schedulerUnlockAndWait on the given core.
+func schedulerEndWait(core uint32) {
+	schedulerWakePending[core].Store(1)
+	signalCore(core, 1)
 }
 
 // Currently sleeping core, or 0xff.

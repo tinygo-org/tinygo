@@ -4,15 +4,10 @@ package runtime
 
 import (
 	"device/arm"
-	"math/bits"
 	"runtime/volatile"
 )
 
-// Bitset of cores waiting in schedulerUnlockAndWait.
-// Must only be accessed with the scheduler lock held.
-var waitingCores uint8
-
-// Set to 1 by schedulerWakeCore to end a wait in schedulerUnlockAndWait.
+// Set to 1 by schedulerEndWait to end a wait in schedulerUnlockAndWait.
 var schedulerWakePending [2]uint32
 
 // Put the scheduler to sleep, since there are no tasks to run.
@@ -32,24 +27,8 @@ func schedulerUnlockAndWait() {
 	schedulerLock.Lock()
 }
 
-// Wake another core, if one is waiting or sleeping. Must be called with the
-// scheduler lock held.
-func schedulerWake() {
-	if waitingCores != 0 {
-		schedulerWakeCore(uint32(bits.TrailingZeros8(waitingCores)))
-	} else if hasSleepingCore() {
-		interruptSleepTicksMulticore(0)
-	}
-}
-
-// Wake the given core if it is waiting or sleeping. Must be called with the
-// scheduler lock held.
-func schedulerWakeCore(core uint32) {
-	if waitingCores&(1<<core) != 0 {
-		waitingCores &^= 1 << core
-		volatile.StoreUint32(&schedulerWakePending[core], 1)
-		arm.Asm("sev")
-	} else if uint32(sleepingCore) == core {
-		interruptSleepTicksMulticore(0)
-	}
+// End schedulerUnlockAndWait on the given core.
+func schedulerEndWait(core uint32) {
+	volatile.StoreUint32(&schedulerWakePending[core], 1)
+	arm.Asm("sev")
 }
