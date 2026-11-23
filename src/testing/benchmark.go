@@ -514,9 +514,9 @@ func (b *B) processBench(ctx *benchContext) {
 	if ctx != nil {
 		printBenchLabels()
 	}
-	// Like go test, only append the CPU count when it isn't 1.
+	// Like go test, only append GOMAXPROCS when it isn't 1.
 	procsSuffix := ""
-	if n := runtime.NumCPU(); n != 1 {
+	if n := runtime.GOMAXPROCS(-1); n != 1 {
 		procsSuffix = "-" + strconv.Itoa(n)
 	}
 
