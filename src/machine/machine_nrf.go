@@ -301,8 +301,6 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 // SetBaudRate sets the I2C frequency. It has the side effect of also
 // enabling the I2C hardware if disabled beforehand.
-//
-//go:inline
 func (i2c *I2C) SetBaudRate(br uint32) error {
 	switch {
 	case br >= 400*KHz:
