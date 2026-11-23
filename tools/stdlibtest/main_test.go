@@ -124,3 +124,31 @@ func TestWASIHostExclusion(t *testing.T) {
 		}
 	}
 }
+
+func TestSuiteShards(t *testing.T) {
+	var rules ruleSet
+	rules.skipPackage("archive/zip")
+	rules.includePackage("./tests/runtime_wasi")
+	rules.stackSizeMB("fmt", 1)
+	rules.skipTest("time", `^TestTimerGC$`)
+	packages := []string{"time", "fmt", "bytes", "archive/zip", "errors", "fmt"}
+	for _, tc := range []struct {
+		shard int
+		want  []string
+	}{
+		{1, []string{"./tests/runtime_wasi", "errors", "time -skip=^TestTimerGC$"}},
+		{2, []string{"bytes", "fmt -stack-size=1MB"}},
+	} {
+		plans, err := planSuite(packages, rules, options{mode: modeFull, shard: tc.shard, shardCount: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, p := range plans {
+			got = append(got, strings.Join(append([]string{p.name}, p.flags()...), " "))
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Fatalf("shard %d: got %v, want %v", tc.shard, got, tc.want)
+		}
+	}
+}
