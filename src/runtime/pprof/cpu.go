@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build darwin || (linux && scheduler.threads && (amd64 || arm64))
 
 package pprof
 

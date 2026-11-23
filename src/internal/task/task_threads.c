@@ -45,9 +45,10 @@ struct state_pass {
 // Handle the GC pause in Go.
 void tinygo_task_gc_pause(int sig);
 
-#if __APPLE__
-// CPU profiler hook, in src/runtime/cpuprof_darwin.c.
+// CPU profiler hooks, in src/runtime/cpuprof_darwin.c and cpuprof_linux.c.
 void tinygo_cpuprof_thread_exit(uintptr_t fn);
+#if __linux__
+void tinygo_cpuprof_thread_start(void);
 #endif
 
 // Entry function of the goroutine running on this thread, or 0 on the main
@@ -57,9 +58,7 @@ static __thread uintptr_t current_start;
 // Called once before a thread exits, by returning from its goroutine or
 // through tinygo_task_exit_thread.
 static void thread_exiting(void) {
-    #if __APPLE__
     tinygo_cpuprof_thread_exit(current_start);
-    #endif
 }
 
 // Initialize the main thread.
@@ -77,6 +76,10 @@ void tinygo_task_init(void *mainTask, pthread_t *thread, int *numCPU, void *cont
     act.sa_handler = tinygo_task_gc_pause;
     act.sa_flags = SA_RESTART;
     sigaction(taskPauseSignal, &act, NULL);
+
+    #if __linux__
+    tinygo_cpuprof_thread_start();
+    #endif
 
     // Obtain the number of CPUs available on program start (for NumCPU).
     int num = sysconf(_SC_NPROCESSORS_ONLN);
@@ -100,6 +103,10 @@ static void* start_wrapper(void *arg) {
     // Save the current stack pointer in the goroutine state, for the GC.
     int stackAddr;
     *(state->stackTop) = (uintptr_t)(&stackAddr);
+
+    #if __linux__
+    tinygo_cpuprof_thread_start();
+    #endif
 
     // Notify the caller that the thread has successfully started and
     // initialized.
