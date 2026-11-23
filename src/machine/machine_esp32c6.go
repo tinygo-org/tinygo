@@ -280,13 +280,15 @@ func setupPinInterrupt() error {
 	}).Enable()
 }
 
+const numUARTs = 2
+
 var (
 	DefaultUART = UART0
 
 	UART0  = &_UART0
 	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer()}
 	UART1  = &_UART1
-	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
+	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer(), num: 1}
 
 	onceUart            = sync.Once{}
 	errSamePins         = errors.New("UART: invalid pin combination")
