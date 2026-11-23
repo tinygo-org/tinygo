@@ -62,3 +62,9 @@ const (
 const (
 	LED = GPIO21
 )
+
+// UART0 pins, U0TXD and U0RXD.
+const (
+	UART0_TX_PIN = GPIO43
+	UART0_RX_PIN = GPIO44
+)

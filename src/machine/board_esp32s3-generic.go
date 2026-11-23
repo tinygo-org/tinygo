@@ -16,3 +16,9 @@ const (
 	SPI2_MISO_PIN = NoPin // SDI (MISO)
 	SPI2_CS_PIN   = NoPin // CS
 )
+
+// UART0 pins, U0TXD and U0RXD.
+const (
+	UART0_TX_PIN = GPIO43
+	UART0_RX_PIN = GPIO44
+)

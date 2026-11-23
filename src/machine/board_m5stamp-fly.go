@@ -101,3 +101,9 @@ const (
 	// WS2812_STAMP is the data pin for the addressable RGB LED on the Stamp-S3A module.
 	WS2812_STAMP = GPIO21
 )
+
+// UART0 pins, U0TXD and U0RXD.
+const (
+	UART0_TX_PIN = GPIO43
+	UART0_RX_PIN = GPIO44
+)

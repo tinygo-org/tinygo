@@ -412,42 +412,6 @@ func setupPinInterrupt() error {
 	}).Enable()
 }
 
-var DefaultUART = UART0
-
-var (
-	UART0  = &_UART0
-	_UART0 = UART{Bus: esp.UART0, Buffer: NewRingBuffer()}
-	UART1  = &_UART1
-	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
-	UART2  = &_UART2
-	_UART2 = UART{Bus: esp.UART2, Buffer: NewRingBuffer()}
-)
-
-type UART struct {
-	Bus    *esp.UART_Type
-	Buffer *RingBuffer
-}
-
-func (uart *UART) Configure(config UARTConfig) {
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
-	// Crystal clock source is selected by default
-	uart.Bus.CLKDIV.Set(xtalClock / config.BaudRate)
-}
-
-func (uart *UART) writeByte(b byte) error {
-	for (uart.Bus.STATUS.Get()>>16)&0xff >= 128 {
-		// Read UART_TXFIFO_CNT from the status register, which indicates how
-		// many bytes there are in the transmit buffer. Wait until there are
-		// less than 128 bytes in this buffer (the default buffer size).
-	}
-	uart.Bus.FIFO.Set(uint32(b))
-	return nil
-}
-
-func (uart *UART) flush() {}
-
 // GetRNG returns 32-bit random numbers using the ESP32-S3 true random number generator,
 // Random numbers are generated based on the thermal noise in the system and the
 // asynchronous clock mismatch.
