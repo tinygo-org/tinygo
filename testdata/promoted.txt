@@ -13,3 +13,6 @@ both inner2: 3
 generic own: 2
 generic promoted: 1
 generic string promoted: 1
+anonymous inner: 1
+anonymous inner2: 3
+anonymous ptr inner2: 3

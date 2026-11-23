@@ -442,7 +442,12 @@ func methodPackageQualifier(f *ssa.Function) string {
 		t = ptr.Elem()
 	}
 	named, ok := types.Unalias(t).(*types.Named)
-	if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg().Path() == obj.Pkg().Path() {
+	if !ok {
+		// An unnamed type (a struct literal type) has no methods of its own:
+		// each is promoted, and two from different packages can share a name.
+		return "$" + obj.Pkg().Path()
+	}
+	if named.Obj().Pkg() == nil || named.Obj().Pkg().Path() == obj.Pkg().Path() {
 		return ""
 	}
 	return "$" + obj.Pkg().Path()
