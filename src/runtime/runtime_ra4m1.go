@@ -6,21 +6,13 @@ import (
 	"device/arm"
 	"device/renesas"
 	"machine"
-	"runtime/interrupt"
-	"runtime/volatile"
 )
 
-// Prior to loading SysTick at startup, [initClocks] selects the high-speed
-// on-chip oscillator.
-// It sets ICLK to 48 MHz and starts SysTick with a 1 ms period.
+// [initClocks] selects the high-speed on-chip oscillator and sets ICLK to 48 MHz.
 // The MCU OFS1 setting must select the 48 MHz oscillator frequency.
-const (
-	cpuFrequency              = 48_000_000
-	cyclesPerMicrosecond      = cpuFrequency / 1_000_000
-	microsecondsPerInterrupt  = 1_000
-	nanosecondsPerMicrosecond = 1_000
-	sysTickReload             = cyclesPerMicrosecond*microsecondsPerInterrupt - 1
-)
+func sysTickFrequency() uint32 {
+	return 48_000_000
+}
 
 // RA4M1 requires BCK bits 16 to 18 to match PCKB.
 // See ArduinoCore-renesas 1.6.0 ra4m1/bsp_feature.h.
@@ -44,54 +36,6 @@ const (
 		(renesas.SYSTEM_SCKDIVCR_PCKB_001 << bckDivPos) |
 		(renesas.SYSTEM_SCKDIVCR_PCKB_001 << renesas.SYSTEM_SCKDIVCR_PCKB_Pos)
 )
-
-var sysTickCount volatile.Register64
-
-// ticks returns the time in microseconds since reset.
-func ticks() timeUnit {
-	state := interrupt.Disable()
-	milliseconds := sysTickCount.Get()
-	current := arm.SYST.SYST_CVR.Get()
-	if arm.SCB.ICSR.HasBits(arm.SCB_ICSR_PENDSTSET) {
-		current = arm.SYST.SYST_CVR.Get()
-		milliseconds++
-	}
-	interrupt.Restore(state)
-
-	elapsedCycles := uint32(sysTickReload) - current
-	microseconds := elapsedCycles / cyclesPerMicrosecond
-	return timeUnit(milliseconds*microsecondsPerInterrupt + uint64(microseconds))
-}
-
-func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks) * nanosecondsPerMicrosecond
-}
-
-func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns / nanosecondsPerMicrosecond)
-}
-
-func sleepTicks(d timeUnit) {
-	if d <= 0 {
-		return
-	}
-
-	if hasScheduler {
-		if d >= microsecondsPerInterrupt {
-			waitForEvents()
-		}
-		return
-	}
-
-	sleepUntil := ticks() + d
-	for ticks() < sleepUntil {
-		waitForEvents()
-	}
-}
-
-func waitForEvents() {
-	arm.Asm("wfe")
-}
 
 func putchar(c byte) {
 	machine.Serial.WriteByte(c)
@@ -147,14 +91,9 @@ func initClocks() {
 
 func init() {
 	initClocks()
-	arm.SetupSystemTimer(sysTickReload)
+	initSysTick()
 	arm.EnableInterrupts(0)
 	machine.InitSerial()
-}
-
-//go:export SysTick_Handler
-func handleSysTick() {
-	sysTickCount.Set(sysTickCount.Get() + 1)
 }
 
 //export Reset_Handler
