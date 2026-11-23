@@ -1435,6 +1435,9 @@ func (b *builder) createFunction() {
 		return
 	}
 
+	// Find loops that zero a slice, to be replaced with a memset.
+	clearLoops := findClearLoops(b.fn)
+
 	// Fill blocks with instructions.
 	b.loweringBody = true
 	for _, block := range b.fn.DomPreorder() {
@@ -1444,6 +1447,10 @@ func (b *builder) createFunction() {
 		b.currentBlock = block
 		b.currentBlockInfo = &b.blockInfo[block.Index]
 		b.SetInsertPointAtEnd(b.currentBlockInfo.entry)
+		if loop := clearLoops[block]; loop != nil {
+			b.createClearLoop(loop, block)
+			continue
+		}
 		for _, instr := range block.Instrs {
 			if instr, ok := instr.(*ssa.DebugRef); ok {
 				if !b.Debug {
@@ -2182,30 +2189,7 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 		value := argValues[0]
 		switch typ := argTypes[0].Underlying().(type) {
 		case *types.Slice:
-			elementType := b.getLLVMType(typ.Elem())
-			elementSize := b.targetData.TypeAllocSize(elementType)
-			elementAlign := b.targetData.ABITypeAlignment(elementType)
-
-			// The pointer to the data to be cleared.
-			llvmBuf := b.CreateExtractValue(value, 0, "buf")
-
-			// The length (in bytes) to be cleared.
-			llvmLen := b.CreateExtractValue(value, 1, "len")
-			llvmLen = b.CreateMul(llvmLen, llvm.ConstInt(llvmLen.Type(), elementSize, false), "")
-
-			// Do the clear operation using the LLVM memset builtin.
-			// This is also correct for nil slices: in those cases, len will be
-			// 0 which means the memset call is a no-op (according to the LLVM
-			// LangRef).
-			memset := b.getMemsetFunc()
-			call := b.createCall(memset.GlobalValueType(), memset, []llvm.Value{
-				llvmBuf,                       // dest
-				llvm.ConstInt(b.i8, 0, false), // val
-				llvmLen,                       // len
-				b.i1False,                     // isVolatile
-			}, "")
-			call.AddCallSiteAttribute(1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elementAlign)))
-
+			b.createSliceClear(value, typ.Elem())
 			return llvm.Value{}, nil
 		case *types.Map:
 			m := argValues[0]
@@ -2487,6 +2471,34 @@ func (b *builder) createBuiltin(argTypes []types.Type, argValues []llvm.Value, c
 	default:
 		return llvm.Value{}, b.makeError(pos, "todo: builtin: "+callName)
 	}
+}
+
+// createSliceClear zeroes all elements of the given slice value, like the
+// clear builtin does for slices.
+func (b *builder) createSliceClear(value llvm.Value, elemType types.Type) {
+	elementType := b.getLLVMType(elemType)
+	elementSize := b.targetData.TypeAllocSize(elementType)
+	elementAlign := b.targetData.ABITypeAlignment(elementType)
+
+	// The pointer to the data to be cleared.
+	llvmBuf := b.CreateExtractValue(value, 0, "buf")
+
+	// The length (in bytes) to be cleared.
+	llvmLen := b.CreateExtractValue(value, 1, "len")
+	llvmLen = b.CreateMul(llvmLen, llvm.ConstInt(llvmLen.Type(), elementSize, false), "")
+
+	// Do the clear operation using the LLVM memset builtin.
+	// This is also correct for nil slices: in those cases, len will be
+	// 0 which means the memset call is a no-op (according to the LLVM
+	// LangRef).
+	memset := b.getMemsetFunc()
+	call := b.createCall(memset.GlobalValueType(), memset, []llvm.Value{
+		llvmBuf,                       // dest
+		llvm.ConstInt(b.i8, 0, false), // val
+		llvmLen,                       // len
+		b.i1False,                     // isVolatile
+	}, "")
+	call.AddCallSiteAttribute(1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("align"), uint64(elementAlign)))
 }
 
 // createFunctionCall lowers a Go SSA call instruction (to a simple function,
