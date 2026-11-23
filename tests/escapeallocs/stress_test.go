@@ -645,6 +645,34 @@ func TestSafeReadOnlyChain(t *testing.T) {
 	})
 }
 
+// Stack slots
+
+var (
+	gbufCopied [1]*int
+	copyIndex  = 1
+)
+
+// copyThroughLocal copies the pointer out of a local array with copy. LLVM
+// turns the 8 byte copy into an integer load and store.
+//
+//go:noinline
+func copyThroughLocal(j int) {
+	x := new(int)
+	*x = 42
+	var local [2]*int
+	local[j] = x
+	copy(gbufCopied[:], local[j:j+1])
+}
+
+// A pointer stored in a local slot leaves it as an integer.
+func TestUnsafePointerCopiedAsInteger(t *testing.T) {
+	copyThroughLocal(copyIndex)
+	clobber(8)
+	if *gbufCopied[0] != 42 {
+		t.Errorf("got %d, want 42", *gbufCopied[0])
+	}
+}
+
 // Compile time
 
 var mergeConds [32]bool
