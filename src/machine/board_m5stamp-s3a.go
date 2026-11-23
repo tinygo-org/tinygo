@@ -85,3 +85,9 @@ const (
 	// WS2812_POWER enables power for the onboard addressable RGB LED.
 	WS2812_POWER = GPIO38
 )
+
+// UART0 pins, U0TXD and U0RXD.
+const (
+	UART0_TX_PIN = GPIO43
+	UART0_RX_PIN = GPIO44
+)

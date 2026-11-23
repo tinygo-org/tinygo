@@ -136,3 +136,9 @@ const TOUCH_INT_PIN = IO3
 
 // Power amplifier control
 const POWER_AMP_PIN = IO46
+
+// UART0 pins, U0TXD and U0RXD.
+const (
+	UART0_TX_PIN = GPIO43
+	UART0_RX_PIN = GPIO44
+)
