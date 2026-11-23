@@ -50,6 +50,11 @@ func TestTempDirInCleanup(t *testing.T) {
 }
 
 func TestTempDirInBenchmark(t *testing.T) {
+	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
+		t.Log("Skipping.  TODO: implement RemoveAll for wasi")
+		return
+	}
+
 	testing.Benchmark(func(b *testing.B) {
 		if !b.Run("test", func(b *testing.B) {
 			// Add a loop so that the test won't fail. See issue 38677.

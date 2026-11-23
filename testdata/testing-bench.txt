@@ -1,0 +1,4 @@
+--- FAIL: BenchmarkFail
+    fail message
+FAIL
+exit code: 1
