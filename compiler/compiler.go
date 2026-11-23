@@ -2552,8 +2552,6 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		case name == "runtime.exportedFuncPtr":
 			_, ptr := b.getFunction(instr.Args[0].(*ssa.Function))
 			return b.CreatePtrToInt(ptr, b.uintptrType, ""), nil
-		case name == "(*runtime/interrupt.Checkpoint).Save":
-			return b.createInterruptCheckpoint(instr.Args[0]), nil
 		case name == "internal/abi.FuncPCABI0":
 			retval := b.createDarwinFuncPCABI0Call(instr)
 			if !retval.IsNil() {
