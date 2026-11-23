@@ -14,8 +14,9 @@ import (
 // wasmFile is a core module or a component. wasmtime's address map uses file
 // offsets for both, so everything here does too.
 type wasmFile struct {
-	data    []byte
-	modules []*wasmModule // sorted by start
+	data       []byte
+	modules    []*wasmModule // sorted by start
+	bodyStarts map[int64]bool
 }
 
 // wasmModule holds the parts of a core module needed for symbolization.
@@ -34,7 +35,7 @@ func readWasm(path string) (*wasmFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := &wasmFile{data: data}
+	f := &wasmFile{data: data, bodyStarts: map[int64]bool{}}
 	if err := f.parse(0, int64(len(data))); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
@@ -83,6 +84,9 @@ func (f *wasmFile) parse(start, end int64) error {
 			m.custom[string(body[k:k+int(nameLen)])] = body[k+int(nameLen):]
 		case !component && id == 10:
 			m.codeStart = pos
+			if err := f.readBodies(pos, body); err != nil {
+				return err
+			}
 		}
 		pos += int64(size)
 	}
@@ -96,6 +100,26 @@ func (f *wasmFile) parse(start, end int64) error {
 		}
 		i := sort.Search(len(f.modules), func(i int) bool { return f.modules[i].start > start })
 		f.modules = slices.Insert(f.modules, i, m)
+	}
+	return nil
+}
+
+// readBodies records the file offset of each function body in a code section,
+// which starts after the body size.
+func (f *wasmFile) readBodies(pos int64, code []byte) error {
+	count, n := binary.Uvarint(code)
+	if n <= 0 {
+		return fmt.Errorf("malformed code section at %#x", pos)
+	}
+	off := int64(n)
+	for range count {
+		size, n := binary.Uvarint(code[off:])
+		if n <= 0 || off+int64(n)+int64(size) > int64(len(code)) {
+			return fmt.Errorf("malformed function body at %#x", pos+off)
+		}
+		off += int64(n)
+		f.bodyStarts[pos+off] = true
+		off += int64(size)
 	}
 	return nil
 }

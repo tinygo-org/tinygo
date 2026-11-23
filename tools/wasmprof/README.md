@@ -74,6 +74,11 @@ go tool pprof -top -lines cpu.pprof
    `profiled functions are not where the profile says`. Use `-wasmtime` to
    select a wasmtime binary other than the one on `PATH`.
 
+   Some hosts write guest profiles with offsets into the wasm binary instead
+   of native code offsets. wasmprof detects this, as every function address
+   is then the start of a function body, and skips the recompile. Steps 3 and
+   4 do not apply to such profiles: no wasmtime binary or flags are needed.
+
 5. **Look at it.**
 
    ```

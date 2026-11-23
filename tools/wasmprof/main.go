@@ -55,15 +55,20 @@ func run(wasmPath, profPath, outPath, wasmtime string, compileArgs []string, for
 	if err != nil {
 		return err
 	}
-	am, err := compileAddrMap(wasmtime, wasmPath, compileArgs)
-	if err != nil {
-		return err
-	}
-	if err := am.check(gp); err != nil {
-		if !force {
-			return fmt.Errorf("%w\nthe recompiled module does not match the profiled code; use the same wasmtime binary and pass the run's codegen flags with -compile-arg", err)
+	var am *addrMap
+	if usesWasmOffsets(gp, wf) {
+		am = &addrMap{identity: true}
+	} else {
+		am, err = compileAddrMap(wasmtime, wasmPath, compileArgs)
+		if err != nil {
+			return err
 		}
-		fmt.Fprintln(os.Stderr, "wasmprof: warning:", err)
+		if err := am.check(gp); err != nil {
+			if !force {
+				return fmt.Errorf("%w\nthe recompiled module does not match the profiled code; use the same wasmtime binary and pass the run's codegen flags with -compile-arg", err)
+			}
+			fmt.Fprintln(os.Stderr, "wasmprof: warning:", err)
+		}
 	}
 	if !slices.ContainsFunc(wf.modules, func(m *wasmModule) bool { return m.dw != nil }) {
 		fmt.Fprintln(os.Stderr, "wasmprof: warning: no DWARF in any module, profile will only have function names")
@@ -173,9 +178,27 @@ func (t *guestThread) str(i int) string {
 	return t.StringArray[i]
 }
 
+// usesWasmOffsets reports whether the profile gives addresses as wasm file
+// offsets instead of native code offsets, as some hosts write them.
+func usesWasmOffsets(gp *guestProfile, wf *wasmFile) bool {
+	n := 0
+	for i := range gp.Threads {
+		for _, addr := range gp.Threads[i].NativeSymbols.Address {
+			if !wf.bodyStarts[addr] {
+				return false
+			}
+			n++
+		}
+	}
+	return n > 0
+}
+
 // Native code address map, from `wasmtime objdump --addrmap`.
 
 type addrMap struct {
+	// The profile already uses wasm file offsets.
+	identity bool
+
 	// Sorted by native address. wasm is a wasm file offset, or -1 where the
 	// native code has no wasm location.
 	entries []addrEntry
@@ -257,6 +280,9 @@ func parseObjdump(text []byte) (*addrMap, error) {
 
 // lookup returns the wasm file offset for a native code offset, or -1.
 func (am *addrMap) lookup(native int64) int64 {
+	if am.identity {
+		return native
+	}
 	i := sort.Search(len(am.entries), func(i int) bool { return am.entries[i].native > native }) - 1
 	if i < 0 {
 		return -1

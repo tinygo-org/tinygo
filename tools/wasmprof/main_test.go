@@ -156,3 +156,28 @@ func main() {
 		}
 	}
 }
+
+func TestUsesWasmOffsets(t *testing.T) {
+	// Code section payload at file offset 100: two bodies of sizes 2 and 3.
+	code := []byte{2, 2, 0, 0x0b, 3, 0, 0x01, 0x0b}
+	wf := &wasmFile{bodyStarts: map[int64]bool{}}
+	if err := wf.readBodies(100, code); err != nil {
+		t.Fatal(err)
+	}
+	if !wf.bodyStarts[102] || !wf.bodyStarts[105] || len(wf.bodyStarts) != 2 {
+		t.Fatalf("bodyStarts = %v", wf.bodyStarts)
+	}
+	gp := &guestProfile{Threads: []guestThread{{}}}
+	gp.Threads[0].NativeSymbols.Address = []int64{102, 105}
+	if !usesWasmOffsets(gp, wf) {
+		t.Error("wasm offsets not detected")
+	}
+	gp.Threads[0].NativeSymbols.Address = []int64{102, 0x4000}
+	if usesWasmOffsets(gp, wf) {
+		t.Error("native offsets detected as wasm offsets")
+	}
+	gp.Threads[0].NativeSymbols.Address = nil
+	if usesWasmOffsets(gp, wf) {
+		t.Error("empty profile detected as wasm offsets")
+	}
+}
