@@ -1,4 +1,4 @@
-//go:build scheduler.cores && !virt
+//go:build scheduler.cores
 
 package runtime
 
