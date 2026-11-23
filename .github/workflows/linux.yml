@@ -356,6 +356,10 @@ jobs:
     # Test the standard library with the assertions build.
     runs-on: ubuntu-24.04
     needs: assert-build-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/2', '2/2']
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -374,7 +378,7 @@ jobs:
           tar -C ~/lib -xf tinygo-asserts.linux-amd64.tar.gz
           ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
       - name: Test stdlib packages
-        run: make tinygo-test
+        run: make tinygo-test STDLIB_TEST_FLAGS="-shard=${{ matrix.shard }}"
 
   assert-smoketest-linux:
     # The smoke test, the wasm tests, and the baremetal tests, with the

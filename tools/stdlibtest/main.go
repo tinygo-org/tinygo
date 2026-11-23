@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -332,6 +333,7 @@ const (
 type options struct {
 	mode, goos, goarch, match           string
 	plan, packages, bench, json, report bool
+	shard, shardCount                   int
 }
 
 func (opts options) environment() []string {
@@ -362,11 +364,23 @@ func planSuite(packages []string, rules ruleSet, opts options) ([]packagePlan, e
 		}
 	}
 	var plans []packagePlan
+	runnable := 0
 	for _, name := range packages {
 		if match != nil && !match.MatchString(name) {
 			continue
 		}
-		plans = append(plans, rules.planPackage(name))
+		plan := rules.planPackage(name)
+		if opts.shardCount > 1 {
+			if plan.skipped {
+				continue
+			}
+			shard := runnable%opts.shardCount + 1
+			runnable++
+			if shard != opts.shard {
+				continue
+			}
+		}
+		plans = append(plans, plan)
 	}
 	return plans, nil
 }
@@ -508,12 +522,14 @@ func run(goTool, tinygo string, extra []string, opts options) error {
 
 func main() {
 	var opts options
+	var shard string
 	flag.BoolVar(&opts.plan, "plan", false, "print matching rule lines and test commands")
 	flag.BoolVar(&opts.packages, "packages", false, "print selected standard library packages")
 	flag.BoolVar(&opts.bench, "bench", false, "run benchmarks")
 	flag.BoolVar(&opts.json, "json", false, "emit test2json events")
 	flag.BoolVar(&opts.report, "report", false, "report tested packages across platforms")
 	flag.StringVar(&opts.match, "match", "", "restrict selected packages by regular expression")
+	flag.StringVar(&shard, "shard", "1/1", "run one shard of selected packages (index/count, starting at 1)")
 	flag.StringVar(&opts.mode, "mode", modeFull, "suite mode: full, fast or slow")
 	flag.StringVar(&opts.goos, "goos", "", "set GOOS for TinyGo")
 	flag.StringVar(&opts.goarch, "goarch", "", "set GOARCH for TinyGo")
@@ -524,6 +540,18 @@ func main() {
 	}
 	if opts.mode != modeFull && opts.mode != modeFast && opts.mode != modeSlow {
 		fmt.Fprintln(os.Stderr, "invalid suite mode:", opts.mode)
+		os.Exit(2)
+	}
+	index, count, ok := strings.Cut(shard, "/")
+	var indexErr, countErr error
+	opts.shard, indexErr = strconv.Atoi(index)
+	opts.shardCount, countErr = strconv.Atoi(count)
+	if !ok || indexErr != nil || countErr != nil || opts.shard < 1 || opts.shard > opts.shardCount {
+		fmt.Fprintln(os.Stderr, "invalid shard (expected 1 <= index <= count):", shard)
+		os.Exit(2)
+	}
+	if opts.report && opts.shardCount > 1 {
+		fmt.Fprintln(os.Stderr, "-report cannot be combined with sharding")
 		os.Exit(2)
 	}
 	if err := run(flag.Arg(0), flag.Arg(1), flag.Args()[2:], opts); err != nil {
