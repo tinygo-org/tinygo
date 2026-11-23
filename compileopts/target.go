@@ -495,6 +495,7 @@ func defaultTarget(options *Options) (*TargetSpec, error) {
 		spec.ExtraFiles = append(spec.ExtraFiles,
 			"src/internal/futex/futex_darwin.c",
 			"src/internal/task/task_threads.c",
+			"src/runtime/cpuprof_darwin.c",
 			"src/runtime/os_darwin.c",
 			"src/runtime/runtime_unix.c",
 			"src/runtime/signal.c")

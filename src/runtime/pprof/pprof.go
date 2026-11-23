@@ -12,13 +12,6 @@ var ErrUnimplemented = errors.New("runtime/pprof: unimplemented")
 
 type Profile struct{}
 
-func StartCPUProfile(w io.Writer) error {
-	return nil
-}
-
-func StopCPUProfile() {
-}
-
 func WriteHeapProfile(w io.Writer) error {
 	return nil
 }

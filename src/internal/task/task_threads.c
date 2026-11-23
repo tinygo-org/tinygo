@@ -45,6 +45,11 @@ struct state_pass {
 // Handle the GC pause in Go.
 void tinygo_task_gc_pause(int sig);
 
+#if __APPLE__
+// CPU profiler hook, in src/runtime/cpuprof_darwin.c.
+void tinygo_cpuprof_thread_exit(uintptr_t fn);
+#endif
+
 // Initialize the main thread.
 void tinygo_task_init(void *mainTask, pthread_t *thread, int *numCPU, void *context) {
     // Make sure the current task pointer is set correctly for the main
@@ -93,6 +98,10 @@ static void* start_wrapper(void *arg) {
 
     // Run the goroutine function.
     start(args);
+
+    #if __APPLE__
+    tinygo_cpuprof_thread_exit((uintptr_t)start);
+    #endif
 
     // Notify the Go side this thread will exit.
     tinygo_task_exited(current_task);
