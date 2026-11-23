@@ -122,7 +122,7 @@ func main() {
 			t.Fatalf("%s %s: %v\n%s", name, strings.Join(args, " "), err, b)
 		}
 	}
-	runCmd("tinygo", "build", "-o", wasm, "-target=wasip1", "-buildmode=wasi-legacy", mainGo)
+	runCmd("tinygo", "build", "-o", wasm, "-target=wasip1", mainGo)
 	runCmd("wasmtime", "run", "--profile=guest,"+prof+",1ms", wasm)
 	if err := run(wasm, prof, out, "wasmtime", nil, false, false); err != nil {
 		t.Fatal(err)

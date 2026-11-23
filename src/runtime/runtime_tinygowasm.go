@@ -80,6 +80,13 @@ func syscall_Exit(code int) {
 }
 
 func mainReturnExit() {
+	if GOOS == "wasip1" {
+		// Return instead of calling proc_exit(0), like wasi-libc. Some hosts
+		// only finish work, such as writing a wasmtime guest profile, then.
+		__stdio_exit()
+		return
+	}
+	// To make sure wasm_exec.js knows that we've exited, exit explicitly.
 	syscall_Exit(0)
 }
 

@@ -20,17 +20,19 @@ go tool pprof -top -lines cpu.pprof
    through `proc_exit` (any `os.Exit` call) or traps (for example on a panic),
    wasmtime exits without writing the profile.
 
-   - wasip1: TinyGo calls `proc_exit(0)` when `main` returns, so build with
-     `-buildmode=wasi-legacy`. Its `_start` returns when `main` returns.
+   When `main` returns, TinyGo returns from `_start` (wasip1) or
+   `wasi:cli/run` (wasip3), so a normal build works:
 
-     ```
-     tinygo build -target=wasip1 -buildmode=wasi-legacy -o prog.wasm .
-     ```
-
-   - wasip3: `wasi:cli/run` returns normally, so no extra flag is needed.
+   ```
+   tinygo build -target=wasip1 -o prog.wasm .
+   ```
 
    Do not call `os.Exit` at the end of `main`, and profile programs that do not
    panic.
+
+   Older TinyGo versions call `proc_exit(0)` on wasip1 when `main` returns, so
+   no profile is written. With those, build with `-buildmode=wasi-legacy`,
+   whose `_start` returns when `main` returns.
 
 3. **Run with the guest profiler.** Use a 1ms interval. The default is 10ms,
    which gives few samples for short runs.
