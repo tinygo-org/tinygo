@@ -108,12 +108,11 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) ([]string
 	// Replace the calls with loads from the new global with stack sizes.
 	irbuilder := mod.NewBuilder()
 	defer irbuilder.Dispose()
+	i8, i32 := ctx.Int8Type(), ctx.Int32Type()
+	elementSize := targetData.TypeAllocSize(functions[0].Type())
 	for i, function := range functions {
 		for _, use := range functionMap[function] {
-			ptr := llvm.ConstGEP(stackSizesGlobalType, stackSizesGlobal, []llvm.Value{
-				llvm.ConstInt(ctx.Int32Type(), 0, false),
-				llvm.ConstInt(ctx.Int32Type(), uint64(i), false),
-			})
+			ptr := llvmutil.ConstPtrAdd(i8, stackSizesGlobal, llvm.ConstInt(i32, uint64(i)*elementSize, false), false)
 			irbuilder.SetInsertPointBefore(use)
 			stacksize := irbuilder.CreateLoad(uintptrType, ptr, "stacksize")
 			use.ReplaceAllUsesWith(stacksize)

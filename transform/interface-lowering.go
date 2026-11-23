@@ -155,6 +155,7 @@ func LowerInterfaces(mod llvm.Module, config *compileopts.Config) error {
 
 // run runs the pass itself.
 func (p *lowerInterfacesPass) run() error {
+	i8, i32, i64 := p.ctx.Int8Type(), p.ctx.Int32Type(), p.ctx.Int64Type()
 	if p.dibuilder != nil {
 		p.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
 			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
@@ -186,13 +187,10 @@ func (p *lowerInterfacesPass) run() error {
 				// are i8 arrays, not structs. Thus, examine the type of the
 				// first element, and read its value only from a struct.
 				initializer := global.Initializer()
-				if elementType(initializer.Type(), 0) != p.ctx.Int8Type() {
+				if elementType(initializer.Type(), 0) != i8 {
 					firstField := initializer.AggregateElement(0)
 					// Temporary metadata precedes the kind byte at index 1.
-					t.typecodeGEP = llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
-						llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-						llvm.ConstInt(p.ctx.Int32Type(), 1, false),
-					})
+					t.typecodeGEP = llvmutil.ConstPtrAdd(i8, global, llvm.ConstInt(i32, p.targetData.ElementOffset(global.GlobalValueType(), 1), false), false)
 					if strings.HasPrefix(name, "func:") {
 						t.callAdapter = stripPointerCasts(firstField.Operand(0))
 						t.makeFuncAdapter = stripPointerCasts(firstField.Operand(1))
@@ -364,9 +362,7 @@ func (p *lowerInterfacesPass) run() error {
 			typecodeGEP := t.typecodeGEP
 			if gepOffset != 0 {
 				// This is a tagged pointer.
-				typecodeGEP = llvm.ConstInBoundsGEP(p.ctx.Int8Type(), typecodeGEP, []llvm.Value{
-					llvm.ConstInt(p.ctx.Int64Type(), gepOffset, false),
-				})
+				typecodeGEP = llvmutil.ConstPtrAdd(i8, typecodeGEP, llvm.ConstInt(i64, gepOffset, false), true)
 			}
 			commaOk := p.builder.CreateICmp(llvm.IntEQ, typecodeGEP, actualType, "typeassert.ok")
 			use.ReplaceAllUsesWith(commaOk)
@@ -497,20 +493,16 @@ func (p *lowerInterfacesPass) run() error {
 			newGlobal.SetLinkage(t.typecode.Linkage())
 			newGlobal.SetGlobalConstant(true)
 			newGlobal.SetAlignment(t.typecode.Alignment())
+			fieldOffset := p.targetData.ElementOffset(t.typecode.GlobalValueType(), 1)
 			for _, use := range getUses(t.typecode) {
-				if !use.IsAConstantExpr().IsNil() {
-					opcode := use.Opcode()
-					if opcode == llvm.GetElementPtr && use.OperandsCount() == 3 {
-						if use.Operand(1).ZExtValue() == 0 && use.Operand(2).ZExtValue() == 1 {
-							use.ReplaceAllUsesWith(newGlobal)
-						}
-					}
+				if !use.IsAConstantExpr().IsNil() && use.Opcode() == llvm.GetElementPtr && isFieldOneGEP(use, fieldOffset, i8) {
+					use.ReplaceAllUsesWith(newGlobal)
 				}
 			}
 			// Fallback.
 			if hasUses(t.typecode) {
-				negativeOffset := -int64(p.targetData.ElementOffset(t.typecode.GlobalValueType(), 1))
-				gep := llvm.ConstInBoundsGEP(p.ctx.Int8Type(), newGlobal, []llvm.Value{llvm.ConstInt(p.ctx.Int32Type(), uint64(negativeOffset), true)})
+				negativeOffset := -int64(fieldOffset)
+				gep := llvmutil.ConstPtrAdd(i8, newGlobal, llvm.ConstInt(i32, uint64(negativeOffset), true), true)
 				t.typecode.ReplaceAllUsesWith(gep)
 			}
 			t.typecode.EraseFromParentAsGlobal()
@@ -1516,4 +1508,17 @@ func isSubsetOf(sub, super map[string]struct{}) bool {
 		}
 	}
 	return true
+}
+
+// isFieldOneGEP reports whether gep points to field 1 of its base, either as
+// a struct GEP with indices 0, 1 or as an i8 GEP with the field offset.
+func isFieldOneGEP(gep llvm.Value, fieldOffset uint64, i8 llvm.Type) bool {
+	switch {
+	case gep.OperandsCount() == 3:
+		return gep.Operand(1).ZExtValue() == 0 && gep.Operand(2).ZExtValue() == 1
+	case gep.OperandsCount() == 2 && gep.GEPSourceElementType() == i8:
+		return gep.Operand(1).ZExtValue() == fieldOffset
+	default:
+		return false
+	}
 }

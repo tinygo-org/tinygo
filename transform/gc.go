@@ -464,9 +464,7 @@ func appendGCGlobalRootRanges(roots []gcGlobalRootRange, global llvm.Value, typ 
 func appendGCGlobalRootRange(roots []gcGlobalRootRange, global llvm.Value, offset, size uint64, i8Type, uintptrType llvm.Type) []gcGlobalRootRange {
 	address := global
 	if offset != 0 {
-		address = llvm.ConstGEP(i8Type, global, []llvm.Value{
-			llvm.ConstInt(uintptrType, offset, false),
-		})
+		address = llvmutil.ConstPtrAdd(i8Type, global, llvm.ConstInt(uintptrType, offset, false), false)
 	}
 	return append(roots, gcGlobalRootRange{address: address, size: size})
 }

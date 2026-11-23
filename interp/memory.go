@@ -744,9 +744,7 @@ func (v pointerValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Val
 	if v.offset() != 0 {
 		// If there is an offset, make sure to use a GEP to index into the
 		// pointer.
-		llvmValue = llvm.ConstInBoundsGEP(mem.r.mod.Context().Int8Type(), llvmValue, []llvm.Value{
-			llvm.ConstInt(mem.r.mod.Context().Int32Type(), uint64(v.offset()), false),
-		})
+		llvmValue = llvmutil.ConstPtrAdd(mem.r.mod.Context().Int8Type(), llvmValue, llvm.ConstInt(mem.r.mod.Context().Int32Type(), uint64(v.offset()), false), true)
 	}
 
 	return llvmValue, nil

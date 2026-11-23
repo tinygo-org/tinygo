@@ -318,9 +318,7 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			if depth < compileopts.MaxTypePointerDepth {
 				// For shallow pointers to pointers, increase the pointer by 1.
 				ptr := c.getTypeCode(typ.Elem())
-				return llvm.ConstGEP(c.i8, ptr, []llvm.Value{
-					llvm.ConstInt(c.i32, 1, false),
-				})
+				return llvmutil.ConstPtrAdd(c.i8, ptr, llvm.ConstInt(c.i32, 1, false), false)
 			}
 		}
 	}
@@ -733,15 +731,12 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			global.AddMetadata(0, diglobal)
 		}
 	}
-	offset := uint64(0)
-	if hasMethodSet || isSignature {
-		// Temporary metadata precedes the kind field until interface lowering.
-		offset = 1
+	if !hasMethodSet && !isSignature {
+		return global
 	}
-	return llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
-		llvm.ConstInt(c.i32, 0, false),
-		llvm.ConstInt(c.i32, offset, false),
-	})
+	// Temporary metadata precedes the kind field until interface lowering.
+	offset := c.targetData.ElementOffset(global.GlobalValueType(), 1)
+	return llvmutil.ConstPtrAdd(c.i8, global, llvm.ConstInt(c.i32, offset, false), false)
 }
 
 // hasTypeIDField reports whether the descriptor of typ has a type ID byte after

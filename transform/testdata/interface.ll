@@ -20,7 +20,7 @@ declare void @runtime.printnl()
 define void @printInterfaces() {
   call void @printInterface(ptr @"reflect/types.type:basic:int", ptr inttoptr (i32 5 to ptr))
   call void @printInterface(ptr @"reflect/types.type:basic:uint8", ptr inttoptr (i8 120 to ptr))
-  call void @printInterface(ptr getelementptr inbounds ({ ptr, i8, ptr, ptr }, ptr @"reflect/types.type:named:Number", i32 0, i32 1), ptr inttoptr (i32 3 to ptr))
+  call void @printInterface(ptr getelementptr inbounds (i8, ptr @"reflect/types.type:named:Number", i32 4), ptr inttoptr (i32 3 to ptr))
 
   ret void
 }
