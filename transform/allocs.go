@@ -385,10 +385,11 @@ func (a *escapeAnalysis) stackSlotEscapesAt(slot llvm.Value, allowReturn bool) e
 					return escapeResult{escapeAt: use}
 				}
 			case llvm.Load:
-				if typeHasPointers(use.Type()) {
-					if !res.merge(a.valueEscapesAt(use, allowReturn)) {
-						return res
-					}
+				// Follow every load, not only loads of pointers. InstCombine
+				// turns a small memmove into an integer load and store, which
+				// still carries the pointer.
+				if !res.merge(a.valueEscapesAt(use, allowReturn)) {
+					return res
 				}
 			case llvm.Call:
 				// Lifetime markers don't let the slot escape.
