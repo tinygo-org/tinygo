@@ -943,9 +943,12 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			// The runtime package has two variables (osArgs and osEnv) that are
 			// both strings, from which the parameters and environment variables
 			// are read.
-			config.Options.GlobalValues = map[string]map[string]string{
-				"runtime": runtimeGlobals,
-			}
+			// Keep any other values, such as those set by -ldflags or by
+			// tinygo test.
+			globals := map[string]map[string]string{}
+			maps.Copy(globals, config.Options.GlobalValues)
+			globals["runtime"] = runtimeGlobals
+			config.Options.GlobalValues = globals
 		}
 	} else {
 		// Pass environment variables and command line parameters as usual.
