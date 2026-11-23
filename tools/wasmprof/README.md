@@ -2,119 +2,65 @@
 
 wasmprof converts a [wasmtime](https://wasmtime.dev/) guest profile of a TinyGo
 WebAssembly program into a [pprof](https://github.com/google/pprof) profile with
-call stacks, file:line information and inlined frames.
+call stacks, file and line information, and inlined frames.
 
 ```
+tinygo build -target=wasip1 -o prog.wasm .
 wasmtime run --profile=guest,prof.json,1ms prog.wasm
 go run ./tools/wasmprof -o cpu.pprof prog.wasm prof.json
 go tool pprof -top -lines cpu.pprof
 ```
 
-## Getting a usable profile from wasmtime
+## Getting a usable profile
 
-1. **Build with debug info.** This is the default. Do not pass `-no-debug`.
-   Any `-opt` level works.
+Build with debug info, which is the default. Any `-opt` level works.
 
-2. **Make sure the program returns from its entry point.** wasmtime writes the
-   guest profile only when the program returns normally. If the program exits
-   through `proc_exit` (any `os.Exit` call) or traps (for example on a panic),
-   wasmtime exits without writing the profile.
+wasmtime only writes the profile when the program returns from its entry
+point. A program that calls `os.Exit` or panics gets no profile. Older TinyGo
+versions exit through `proc_exit` even when `main` returns. With those, build
+with `-buildmode=wasi-legacy`.
 
-   When `main` returns, TinyGo returns from `_start` (wasip1) or
-   `wasi:cli/run` (wasip3), so a normal build works:
+Use a 1ms sampling interval. The default of 10ms gives few samples. For wasip3,
+also pass the flags from `targets/wasip3.json`.
 
-   ```
-   tinygo build -target=wasip1 -o prog.wasm .
-   ```
+```
+wasmtime run --wasm component-model -Sp3 -Wcomponent-model-async \
+    -Wcomponent-model-threading --profile=guest,prof.json,1ms prog.wasm
+```
 
-   Do not call `os.Exit` at the end of `main`, and profile programs that do not
-   panic.
+The profile records addresses in the native code wasmtime compiled. wasmprof
+recompiles the module with `wasmtime compile` to map them back, so use the same
+wasmtime binary and pass every `-O`, `-C`, `-D` and `-W` option of the run with
+`-compile-arg`, one each. Other options do not matter. Use `-wasmtime` to pick
+a wasmtime binary other than the one on `PATH`.
 
-   Older TinyGo versions call `proc_exit(0)` on wasip1 when `main` returns, so
-   no profile is written. With those, build with `-buildmode=wasi-legacy`,
-   whose `_start` returns when `main` returns.
+```
+go run ./tools/wasmprof \
+    -compile-arg=--wasm=component-model \
+    -compile-arg=-Wcomponent-model-async \
+    -compile-arg=-Wcomponent-model-threading \
+    -o cpu.pprof prog.wasm prof.json
+```
 
-3. **Run with the guest profiler.** Use a 1ms interval. The default is 10ms,
-   which gives few samples for short runs.
+wasmprof checks that every profiled function is at the same address in the
+recompiled module and stops if not.
 
-   ```
-   wasmtime run --profile=guest,prof.json,1ms prog.wasm args...
-   ```
-
-   For wasip3, use the flags from `targets/wasip3.json`:
-
-   ```
-   wasmtime run --wasm component-model -Sp3 -Wcomponent-model-async \
-       -Wcomponent-model-threading --profile=guest,prof.json,1ms prog.wasm
-   ```
-
-   wasmtime prints `Profile written to: prof.json` when it worked.
-
-4. **Convert with the same wasmtime binary and the same codegen flags.** The
-   profile records native code addresses. wasmprof recompiles the module with
-   `wasmtime compile` to map those back to wasm code, so the compiled code has
-   to be identical to the profiled run. Use the same wasmtime build, and pass
-   every `-O`, `-C`, `-D` and `-W` option given to `wasmtime run`, one per
-   `-compile-arg`. Other options (`-S`, `--dir`, `--env`, program arguments)
-   do not matter. wasmprof adds `-W epoch-interruption=y` itself, as the guest
-   profiler enables it.
-
-   ```
-   go run ./tools/wasmprof -o cpu.pprof prog.wasm prof.json
-
-   # wasip3
-   go run ./tools/wasmprof \
-       -compile-arg=--wasm=component-model \
-       -compile-arg=-Wcomponent-model-async \
-       -compile-arg=-Wcomponent-model-threading \
-       -o cpu.pprof prog.wasm prof.json
-   ```
-
-   If the flags or the wasmtime binary differ, wasmprof stops with
-   `profiled functions are not where the profile says`. Use `-wasmtime` to
-   select a wasmtime binary other than the one on `PATH`.
-
-   Some hosts write guest profiles with offsets into the wasm binary instead
-   of native code offsets. wasmprof detects this, as every function address
-   is then the start of a function body, and skips the recompile. Steps 3 and
-   4 do not apply to such profiles: no wasmtime binary or flags are needed.
-
-5. **Look at it.**
-
-   ```
-   go tool pprof -top -lines cpu.pprof
-   go tool pprof -list 'main\.' cpu.pprof
-   go tool pprof -http=: cpu.pprof
-   ```
-
-   The JSON profile itself can also be opened in https://profiler.firefox.com/.
+Some hosts write profiles with offsets into the wasm binary instead. wasmprof
+detects these and skips the recompile, so no wasmtime binary or flags are
+needed.
 
 ## Accuracy
 
-- wasmtime samples only at its epoch checks, which are at function entry and
-  at loop headers, and at calls to host functions. Time spent in straight-line
-  code is charged to the next check. This gives accurate function and loop
-  level attribution, but cannot separate statements inside one loop body.
-  A loop header has no line of its own, so wasmprof attributes such samples to
-  the first line of the loop body.
-- TinyGo always runs `wasm-opt` on wasm output. It inlines without recording
-  inline scopes in DWARF, and its asyncify pass (used by the default wasip1
-  scheduler) rewrites the scheduler path. Where a scope is missing, wasmprof
-  guesses the inlined function from the declarations in the source file and
-  leaves the caller's line as 0. The guess can pick the wrong closure or
-  generic instance. In practice it affects the frames between `_start` and
-  `main` with the asyncify scheduler, and rarely anything else.
-- Code without DWARF (adapter modules in components, libraries built without
-  debug info) shows function names only.
-- `-stats` prints how the leaf position of the samples was resolved.
+wasmtime samples at function entry, at loop headers and at calls to host
+functions. Time in straight line code is charged to the next of these, so a
+profile is accurate per function and per loop but not per statement within a
+loop body. Samples at a loop header are attributed to the first line of the
+loop body.
 
-## How it works
+TinyGo runs `wasm-opt`, which inlines without recording inline scopes. Where a
+scope is missing, wasmprof guesses the inlined function from the declarations
+in the source file. The guess can pick the wrong closure or generic instance.
+With the asyncify scheduler this affects the frames between `_start` and `main`.
 
-The guest profile is in the Firefox Profiler format. It has full call stacks,
-with each frame given as an offset into the native code wasmtime compiled, and
-function names from the wasm name section, but no wasm offsets or lines.
-wasmprof recompiles the module, reads the native to wasm offset map from
-`wasmtime objdump --addrmap`, checks that every profiled function is at the
-same address, and resolves the wasm offsets against the DWARF of the core
-module they fall in. Components are supported, as wasmtime gives the offsets
-relative to the component file.
+Code without DWARF shows function names only. `-stats` prints how the samples
+were resolved.

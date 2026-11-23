@@ -139,8 +139,9 @@ func (m *wasmModule) sampleOffset(off int64) int64 {
 	if off < 0 || off+1 >= int64(len(m.data)) || m.data[off] != 0x03 {
 		return off
 	}
-	// loop blocktype: 0x40 (empty), a value type byte, or an s33 type index.
-	_, n := binary.Varint(m.data[off+1:]) // length is all we need
+	// The block type is a signed LEB128 value. Only its length is used.
+	// https://webassembly.github.io/spec/core/binary/instructions.html#control-instructions
+	_, n := binary.Varint(m.data[off+1:])
 	if n <= 0 {
 		return off
 	}
@@ -159,7 +160,7 @@ type frame struct {
 	line     int64  // line being executed in this function
 	srcFile  string // file containing line
 	guessed  bool   // function guessed from declarations (missing inline scope)
-	prologue bool   // no line row; line is the declaration line
+	prologue bool   // line is the declaration line, as there is no line row
 }
 
 // dwarfInfo answers "which (inlined) functions and lines are at this code
@@ -196,7 +197,7 @@ type scope struct {
 	name     string
 	declFile string
 	declLine int64
-	callFile string // for inlined subroutines: where the call is
+	callFile string // where an inlined subroutine is called from
 	callLine int64
 	children []*scope
 }
@@ -280,7 +281,6 @@ func (di *dwarfInfo) load() error {
 		di.cus = append(di.cus, info)
 	}
 
-	// Second pass: functions and their inlined calls.
 	r = di.data.Reader()
 	for {
 		cu, err := r.Next()
@@ -470,8 +470,8 @@ func (di *dwarfInfo) line(pc uint64) (string, int64) {
 func (di *dwarfInfo) frames(pc uint64) []frame {
 	i := sort.Search(len(di.progs), func(i int) bool { return di.progs[i].ranges[0][0] > pc }) - 1
 	var prog *scope
-	// Subprograms can have several ranges; scan back a little in case pc is
-	// in a later range of an earlier subprogram.
+	// Subprograms can have several ranges, so pc may be in a later range of
+	// an earlier subprogram.
 	for j := i; j >= 0 && j > i-64; j-- {
 		if di.progs[j].contains(pc) {
 			prog = di.progs[j]

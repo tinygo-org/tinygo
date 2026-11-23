@@ -56,8 +56,8 @@ func buildProfile(gp *guestProfile, am *addrMap, wf *wasmFile, wasmPath string, 
 		return f
 	}
 
-	// Locations are keyed by native address: the same address always maps to
-	// the same wasm position, whichever thread it came from.
+	// The same native address always maps to the same wasm position, so key
+	// locations by it.
 	locs := map[int64]*profile.Location{}
 	leafKind := map[*profile.Location]string{}
 	guessedLoc := map[*profile.Location]bool{}
@@ -115,8 +115,8 @@ func buildProfile(gp *guestProfile, am *addrMap, wf *wasmFile, wasmPath string, 
 		for i, f := range frames {
 			name := f.function
 			if i == len(frames)-1 && profName != "" {
-				// The outermost function is the real wasm function; prefer
-				// the name section's name, which matches the profile.
+				// The outermost function is the wasm function, so use its name
+				// from the name section, as the profile does.
 				name = profName
 			}
 			if name == "" {

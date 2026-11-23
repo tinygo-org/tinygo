@@ -158,7 +158,7 @@ func main() {
 }
 
 func TestUsesWasmOffsets(t *testing.T) {
-	// Code section payload at file offset 100: two bodies of sizes 2 and 3.
+	// A code section at file offset 100 with bodies of sizes 2 and 3.
 	code := []byte{2, 2, 0, 0x0b, 3, 0, 0x01, 0x0b}
 	wf := &wasmFile{bodyStarts: map[int64]bool{}}
 	if err := wf.readBodies(100, code); err != nil {
