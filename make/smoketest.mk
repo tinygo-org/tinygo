@@ -563,6 +563,8 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	# esp32p4-module-devkit
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32p4-module-devkit 	examples/serial
+	# crowpanel-esp32p4-10-1
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=crowpanel-esp32p4-10-1	examples/psram
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	# xiao-esp32s3
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32s3   		examples/blinky1
