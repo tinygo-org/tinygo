@@ -274,6 +274,7 @@ var (
 	flashSafeLock = spinLock{id: 24}
 )
 
+// resetSpinLocks runs before initHeap, so it must not allocate.
 //go:noheap
 func resetSpinLocks() {
 	for i := uint8(0); i < numSpinlocks; i++ {
