@@ -274,6 +274,7 @@ var (
 	flashSafeLock = spinLock{id: 24}
 )
 
+//go:noheap
 func resetSpinLocks() {
 	for i := uint8(0); i < numSpinlocks; i++ {
 		(*volatile.Register32)(unsafe.Add(unsafe.Pointer(&rp.SIO.SPINLOCK0), i*4)).Set(0)
