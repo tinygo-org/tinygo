@@ -342,6 +342,12 @@ define i32 @"(T%[1]d).Double$invoke"(ptr %%receiver, ptr %%context) {
 			if !strings.Contains(thunk, `@"(Legacy).Double$invoke"`) {
 				t.Errorf("thunk does not call (Legacy).Double:\n%s", thunk)
 			}
+			if tc.switched {
+				checkNilBeforeTypeID(t, thunk, "nilpanic")
+				if !strings.Contains(thunk, "nilpanic:") || !strings.Contains(thunk, "@runtime.nilPanic(") {
+					t.Errorf("thunk does not call runtime.nilPanic:\n%s", thunk)
+				}
+			}
 
 			assert := mod.NamedFunction("Doubler$typeassert").String()
 			for _, want := range []string{"switch i8", "%istagged", "%meta"} {
@@ -351,6 +357,9 @@ define i32 @"(T%[1]d).Double$invoke"(ptr %%receiver, ptr %%context) {
 			}
 			if !strings.Contains(assert, `icmp eq ptr %actualType, @"reflect/types.type:named:Legacy"`) {
 				t.Errorf("type assert does not compare the type without an ID byte:\n%s", assert)
+			}
+			if tc.switched {
+				checkNilBeforeTypeID(t, assert, "false")
 			}
 
 			seen := make(map[uint64]bool)
@@ -377,5 +386,17 @@ define i32 @"(T%[1]d).Double$invoke"(ptr %%receiver, ptr %%context) {
 				t.Errorf("got %d type IDs, want %d", len(seen), wantIDs)
 			}
 		})
+	}
+}
+
+// checkNilBeforeTypeID checks that a nil typecode branches to failLabel before
+// the type ID load, which would read address 1.
+func checkNilBeforeTypeID(t *testing.T, fn, failLabel string) {
+	t.Helper()
+	isNil := strings.Index(fn, "%isnil = icmp eq ptr %actualType, null")
+	branch := strings.Index(fn, "label %"+failLabel+", label %typeid")
+	load := strings.Index(fn, "load i8, ptr %typeid.ptr")
+	if isNil < 0 || branch < isNil || load < branch {
+		t.Errorf("nil typecode does not branch to %s before the type ID load:\n%s", failLabel, fn)
 	}
 }
