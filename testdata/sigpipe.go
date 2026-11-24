@@ -14,6 +14,8 @@ func main() {
 	switch os.Args[1] {
 	case "stdout":
 		os.Stdout.Write([]byte("x"))
+	case "println":
+		println("x")
 	case "notify":
 		signal.Notify(make(chan os.Signal, 1), syscall.SIGPIPE)
 		_, err := os.Stdout.Write([]byte("x"))

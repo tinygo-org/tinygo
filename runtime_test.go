@@ -261,6 +261,7 @@ func TestSigpipe(t *testing.T) {
 		stderr string
 	}{
 		{"stdout", "signal: broken pipe", ""},
+		{"println", "signal: broken pipe", ""},
 		{"notify", "exit status 0", "EPIPE\nstill running\n"},
 		{"reset", "exit status 0", "EPIPE\nstill running\n"},
 		// SIGPIPE is caught, not ignored, even when inherited as ignored.

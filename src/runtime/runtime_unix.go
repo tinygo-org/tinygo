@@ -233,8 +233,13 @@ func syscall_runtime_envs() []string {
 
 func putchar(c byte) {
 	buf := [1]byte{c}
-	libc_write(1, unsafe.Pointer(&buf[0]), 1)
+	if libc_write(1, unsafe.Pointer(&buf[0]), 1) < 0 && *libc_errno_location() == _EPIPE {
+		tinygo_sigpipe()
+	}
 }
+
+// EPIPE has the same value on Linux and darwin.
+const _EPIPE = 32
 
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	// The OS API works in nanoseconds so no conversion necessary.
