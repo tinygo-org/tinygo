@@ -521,10 +521,6 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	if hostOS == "windows" && (wasip1 || wasip2) {
 		r.skipTest("html/template", `^TestEmptyTemplateHTML$`)
 	}
-	// TestWalkDir needs File.Chdir, a stub in src/os/file_windows.go.
-	if windows {
-		r.skipTest("io/fs", `^TestWalkDir$`)
-	}
 
 	return r
 }

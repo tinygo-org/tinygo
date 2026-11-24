@@ -150,5 +150,8 @@ func (f *File) chmod(mode FileMode) error {
 }
 
 func (f *File) chdir() error {
-	return ErrNotImplemented
+	if err := syscall.Fchdir(syscall.Handle(f.Fd())); err != nil {
+		return &PathError{Op: "chdir", Path: f.name, Err: handleSyscallError(err)}
+	}
+	return nil
 }
