@@ -16,10 +16,10 @@ require (
 	go.bug.st/serial v1.8.0
 	golang.org/x/mod v0.41.0
 	golang.org/x/net v0.59.0
-	golang.org/x/sys v0.48.0
+	golang.org/x/sys v0.50.0
 	golang.org/x/tools v0.50.0
 	gopkg.in/yaml.v2 v2.4.0
-	tinygo.org/x/espflasher v0.9.5
+	tinygo.org/x/espflasher v0.10.0
 	tinygo.org/x/go-llvm v0.0.0-20261118231036-8ac15cf747df
 )
 
