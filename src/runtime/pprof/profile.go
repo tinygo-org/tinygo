@@ -75,7 +75,7 @@ func (p *profileBuilder) valueType(field int, typ, unit string) {
 func (p *profileBuilder) locationIDs(ids []uint64, pcs []uintptr, leafIsPC bool) []uint64 {
 	for j, pc := range pcs {
 		if j > 0 || !leafIsPC {
-			pc--
+			pc -= returnAddressAdjust
 		}
 		id, ok := p.locations[pc]
 		if !ok {
@@ -144,6 +144,10 @@ func (p *profileBuilder) writeLocations() {
 	type function struct {
 		name, file string
 	}
+	type line struct {
+		function uint64
+		line     int64
+	}
 	var (
 		sysMappings = map[string]*sysMapping{}
 		sysOrder    []*sysMapping
@@ -160,7 +164,42 @@ func (p *profileBuilder) writeLocations() {
 		}
 		return id
 	}
+	// Call sites of the shadow stack come with their frames.
+	siteMappingID := uint64(0)
 	for i, addr := range p.locationAddrs {
+		var lines []line
+		for j := 0; ; j++ {
+			name, file, l, ok := siteFrame(addr, j)
+			if !ok {
+				break
+			}
+			lines = append(lines, line{functionID(name, file), int64(l)})
+		}
+		if len(lines) != 0 {
+			if siteMappingID == 0 {
+				siteMappingID = uint64(len(files) + 1)
+				p.b.message(tagProfileMapping, func(b *protobuf) {
+					b.uint64(1, siteMappingID)
+					b.uint64(3, ^uint64(0))
+					b.uint64(7, 1)  // has_functions
+					b.uint64(8, 1)  // has_filenames
+					b.uint64(9, 1)  // has_line_numbers
+					b.uint64(10, 1) // has_inline_frames
+				})
+			}
+			p.b.message(tagProfileLocation, func(b *protobuf) {
+				b.uint64(1, uint64(i+1))
+				b.uint64(2, siteMappingID)
+				b.uint64(3, uint64(addr))
+				for _, l := range lines {
+					b.message(4, func(b *protobuf) {
+						b.uint64(1, l.function)
+						b.int64(2, l.line)
+					})
+				}
+			})
+			continue
+		}
 		mappingID, funcID := uint64(0), uint64(0)
 		for j, m := range files {
 			if addr >= m.start && addr < m.end {
@@ -177,7 +216,7 @@ func (p *profileBuilder) writeLocations() {
 			}
 			m := sysMappings[lib]
 			if m == nil {
-				m = &sysMapping{id: uint64(len(files) + 1 + len(sysOrder)), lib: lib, start: base, end: addr + 1}
+				m = &sysMapping{id: uint64(len(files) + 2 + len(sysOrder)), lib: lib, start: base, end: addr + 1}
 				sysMappings[lib] = m
 				sysOrder = append(sysOrder, m)
 			}

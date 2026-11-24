@@ -1,4 +1,4 @@
-//go:build (gc.conservative || gc.precise) && !((darwin || linux) && !baremetal && (amd64 || arm64) && scheduler.threads)
+//go:build (gc.conservative || gc.precise) && !((darwin || linux) && !baremetal && (amd64 || arm64) && scheduler.threads) && !(tinygo.wasm && tinygo.shadowstack)
 
 package runtime
 
