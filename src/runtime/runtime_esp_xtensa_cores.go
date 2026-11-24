@@ -17,30 +17,7 @@ const numCPU = 2
 // XCHAL_INT3_LEVEL in esp-idf components/xtensa/<chip>/include/xtensa/config/core-isa.h.
 const crossCoreCPUInterrupt = 3
 
-var (
-	printLock     spinLock
-	schedulerLock schedulerSpinLock
-	atomicsLock   spinLock
-	futexLock     spinLock
-	ticksLock     spinLock
-)
-
-type spinLock struct {
-	atomic.Uint32
-}
-
-func (l *spinLock) Lock() {
-	for !l.Uint32.CompareAndSwap(0, 1) {
-		spinLoopWait()
-	}
-}
-
-func (l *spinLock) Unlock() {
-	if schedulerAsserts && l.Uint32.Load() != 1 {
-		runtimeFatal("unlock of unlocked spinlock")
-	}
-	l.Uint32.Store(0)
-}
+var ticksLock spinLock
 
 func spinLoopWait() {
 	device.Asm("nop")
