@@ -86,10 +86,11 @@
 // switch on it. It is absent on AVR, where numMethod directly follows meta
 // (see typeIDField in internal/reflectlite).
 //
-// Pointer types with 2 to 4 levels of indirection (below
-// compileopts.MaxTypePointerDepth) are not separate type structs. They point 1
-// to 3 bytes past the type struct of the 1 level pointer type, and the low 2
-// bits hold that offset (see RawType.ptrtag in internal/reflectlite).
+// A type pointer with nonzero low 2 bits is a tagged pointer type, not a type
+// struct. Type struct t plus n means n more levels of pointers on top of t (see
+// RawType.ptrtag in internal/reflectlite). The compiler uses this for 2 to 4
+// levels of pointers on top of the 1 level pointer type, and reflect also uses
+// it for pointers to types it makes at runtime.
 
 package reflect
 
