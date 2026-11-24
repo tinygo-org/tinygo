@@ -164,3 +164,13 @@ func sleepTicks(d timeUnit) {
 
 //go:extern _vector_table
 var _vector_table [0]uintptr
+
+// The ESP32-C3 has one core, so interrupt.Enable always runs on core 0.
+//
+//go:inline
+func currentCPU() uint32 {
+	return 0
+}
+
+func enableInterruptOnCore0(num uint32) {
+}

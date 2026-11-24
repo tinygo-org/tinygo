@@ -2,10 +2,7 @@
 
 package interrupt
 
-import (
-	"device/xtensa"
-	"errors"
-)
+import "device/xtensa"
 
 // The ESP32 (Xtensa LX6) and ESP32-S3 (Xtensa LX7) interrupt model:
 //
@@ -35,22 +32,9 @@ const maxCores = 2 // the maximum number of cores supported
 // interrupt.In() returns the correct value.
 var inInterrupt [maxCores]bool
 
-// Enable enables a CPU interrupt. The caller must first map the peripheral to
-// a CPU interrupt line using the interrupt matrix.
-func (i Interrupt) Enable() error {
-	if i.num < firstCPUInt || i.num > lastCPUInt {
-		return errors.New("interrupt must be in range 1 through 30")
-	}
-
-	// INTENABLE is per core and peripherals are routed to core 0, so the other
-	// cores ask core 0 to enable the line.
-	switch currentCPU() {
-	case 0:
-		enableLocal(1 << uint(i.num))
-	default:
-		enableOnCore0(uint32(i.num))
-	}
-	return nil
+// enableLine enables CPU interrupt line num on the calling core.
+func enableLine(num int) {
+	enableLocal(1 << uint(num))
 }
 
 // enableLocal sets the given bits in INTENABLE of the calling core.
@@ -97,86 +81,6 @@ func handleInterrupt() {
 
 	inInterrupt[core] = false
 }
-
-func callHandler(n int) {
-	switch n {
-	case 1:
-		callHandlers(1)
-	case 2:
-		callHandlers(2)
-	case 3:
-		callHandlers(3)
-	case 4:
-		callHandlers(4)
-	case 5:
-		callHandlers(5)
-	case 6:
-		callHandlers(6)
-	case 7:
-		callHandlers(7)
-	case 8:
-		callHandlers(8)
-	case 9:
-		callHandlers(9)
-	case 10:
-		callHandlers(10)
-	case 11:
-		callHandlers(11)
-	case 12:
-		callHandlers(12)
-	case 13:
-		callHandlers(13)
-	case 14:
-		callHandlers(14)
-	case 15:
-		callHandlers(15)
-	case 16:
-		callHandlers(16)
-	case 17:
-		callHandlers(17)
-	case 18:
-		callHandlers(18)
-	case 19:
-		callHandlers(19)
-	case 20:
-		callHandlers(20)
-	case 21:
-		callHandlers(21)
-	case 22:
-		callHandlers(22)
-	case 23:
-		callHandlers(23)
-	case 24:
-		callHandlers(24)
-	case 25:
-		callHandlers(25)
-	case 26:
-		callHandlers(26)
-	case 27:
-		callHandlers(27)
-	case 28:
-		callHandlers(28)
-	case 29:
-		callHandlers(29)
-	case 30:
-		callHandlers(30)
-	}
-}
-
-// callHandlers dispatches to registered interrupt handlers for a given
-// interrupt number.
-//
-//go:linkname callHandlers runtime/interrupt.callHandlers
-func callHandlers(num int)
-
-//go:linkname signalInterrupt runtime.signalInterrupt
-func signalInterrupt()
-
-//go:linkname currentCPU runtime.currentCPU
-func currentCPU() uint32
-
-//go:linkname enableOnCore0 runtime.enableInterruptOnCore0
-func enableOnCore0(num uint32)
 
 // readINTENABLE reads the INTENABLE special register (SR 228).
 func readINTENABLE() uint32 {
