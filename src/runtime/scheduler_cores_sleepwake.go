@@ -1,4 +1,4 @@
-//go:build (esp32 || esp32s3 || esp32p4) && scheduler.cores
+//go:build scheduler.cores && !rp2040 && !rp2350
 
 package runtime
 
