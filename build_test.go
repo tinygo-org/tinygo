@@ -876,6 +876,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("filesystem.go", options, t, nil, nil)
 		})
 	}
+	if spec.GOOS == "darwin" || spec.GOOS == "linux" {
+		t.Run("syscall.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("syscall.go", options, t, nil, nil)
+		})
+	}
 	if options.Target == "wasm" || isBaremetal {
 		t.Run("devnull.go", func(t *testing.T) {
 			t.Parallel()
