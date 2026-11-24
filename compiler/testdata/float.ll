@@ -15,7 +15,7 @@ entry:
 define hidden i32 @main.f32tou32(float %v, ptr %context) unnamed_addr #1 {
 entry:
   %positive = fcmp oge float %v, 0.000000e+00
-  %withinmax = fcmp ole float %v, 0x41EFFFFFC0000000
+  %withinmax = fcmp ole float %v, 0x41EFFFFFE0000000
   %inbounds = and i1 %positive, %withinmax
   %saturated = sext i1 %positive to i32
   %normal = fptoui float %v to i32
@@ -45,7 +45,7 @@ entry:
 define hidden i32 @main.u32tof32tou32(i32 %v, ptr %context) unnamed_addr #1 {
 entry:
   %0 = uitofp i32 %v to float
-  %withinmax = fcmp ole float %0, 0x41EFFFFFC0000000
+  %withinmax = fcmp ole float %0, 0x41EFFFFFE0000000
   %normal = fptoui float %0 to i32
   %1 = select i1 %withinmax, i32 %normal, i32 -1
   ret i32 %1
@@ -55,7 +55,7 @@ entry:
 define hidden float @main.f32tou32tof32(float %v, ptr %context) unnamed_addr #1 {
 entry:
   %positive = fcmp oge float %v, 0.000000e+00
-  %withinmax = fcmp ole float %v, 0x41EFFFFFC0000000
+  %withinmax = fcmp ole float %v, 0x41EFFFFFE0000000
   %inbounds = and i1 %positive, %withinmax
   %saturated = sext i1 %positive to i32
   %normal = fptoui float %v to i32

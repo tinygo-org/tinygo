@@ -45,6 +45,13 @@ func main() {
 	println(uint8(f5), uint8(f6), int8(f7), int8(f6), uint32(f8), int32(f9), int32(f10),
 		uint8(inf), uint8(-inf), int8(inf), int8(-inf), uint8(nan), int64(nan))
 
+	// largest floats below the integer max convert exactly
+	var f11 float32 = 2147483520
+	var f12 float32 = 4294967040
+	var f13 float64 = 9223372036854774784
+	var f14 float64 = 18446744073709549568
+	println(int32(f11), uint32(f12), int64(f13), uint64(f14))
+
 	// int -> float
 	var i1 int32 = 53
 	var i2 int32 = -8
