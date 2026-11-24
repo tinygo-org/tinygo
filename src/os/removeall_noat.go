@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build !baremetal && !js && !tinygo.wasi && !wasm_unknown && !nintendoswitch
+//go:build !baremetal && !js && !wasm_unknown && !nintendoswitch
 
 package os
 
