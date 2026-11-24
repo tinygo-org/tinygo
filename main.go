@@ -219,7 +219,7 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 			}
 		}
 		if config.GOOS() == "darwin" && config.Debug() {
-			writeDSYM(outpath)
+			writeDSYM(config, outpath, tmpdir)
 		}
 	}
 
@@ -227,13 +227,18 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 }
 
 // writeDSYM creates a .dSYM bundle with the DWARF of a macOS executable, as
-// it is otherwise lost with the temporary object files.
-func writeDSYM(outpath string) {
+// it is otherwise lost with the temporary object files in tmpdir.
+func writeDSYM(config *compileopts.Config, outpath, tmpdir string) {
 	dsymutil, err := exec.LookPath("dsymutil")
 	if err != nil {
 		return
 	}
-	cmd := exec.Command(dsymutil, "-o", outpath+".dSYM", outpath)
+	args := []string{"-o", outpath + ".dSYM"}
+	if config.TrimPath() {
+		// The object paths are relative to tmpdir, see -oso_prefix.
+		args = append(args, "--oso-prepend-path", tmpdir)
+	}
+	cmd := exec.Command(dsymutil, append(args, outpath)...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: dsymutil failed: %v\n%s", err, out)
 	}
@@ -321,7 +326,7 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 			}
 			copyFile(result.Binary, outpath)
 			if config.GOOS() == "darwin" && config.Debug() {
-				writeDSYM(outpath)
+				writeDSYM(config, outpath, filepath.Dir(result.Executable))
 			}
 		}
 		if testConfig.CompileOnly {
