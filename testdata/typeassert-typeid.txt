@@ -30,5 +30,9 @@ func(int)int false false none
 error false false error
 StructOf false false none
 FuncOf false false none
+SliceOf false false none
+MapOf false false none
+ArrayOf false false none
+ChanOf false false none
 PointerTo(A) true true I1
 PointerTo(B) true false I2

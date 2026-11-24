@@ -249,6 +249,7 @@ func TestInterfaceLoweringTypeIDSwitch(t *testing.T) {
 	}{
 		{"below threshold", 3, "", false},
 		{"above threshold", 5, "", true},
+		{"more than 255 types", 260, "", true},
 		// Like AVR, where numMethods is not aligned.
 		{"unaligned i16", 5, "-i16:8", false},
 	} {
@@ -349,19 +350,23 @@ define i32 @"(T%[1]d).Double$invoke"(ptr %%receiver, ptr %%context) {
 
 			seen := make(map[uint64]bool)
 			for i := range tc.numTypes {
-				init := mod.NamedGlobal(fmt.Sprintf("reflect/types.type:named:T%d", i)).Initializer()
-				field := init.AggregateElement(1)
-				if !tc.switched {
-					if field.Type() != ctx.Int16Type() {
-						t.Errorf("T%d has a type ID", i)
+				name := fmt.Sprintf("reflect/types.type:named:T%d", i)
+				field := mod.NamedGlobal(name).Initializer().AggregateElement(1)
+				if field.Type() == ctx.Int8Type() {
+					if !tc.switched || field.ZExtValue() == 0 || seen[field.ZExtValue()] {
+						t.Errorf("T%d: bad type ID %d", i, field.ZExtValue())
 					}
+					seen[field.ZExtValue()] = true
 					continue
 				}
-				if field.Type() != ctx.Int8Type() || field.ZExtValue() == 0 || seen[field.ZExtValue()] {
-					t.Errorf("T%d: bad type ID field %s", i, field.String())
-					continue
+				// Types without an ID must still be compared.
+				cmp := `icmp eq ptr %actualType, @"` + name + `"`
+				if tc.switched && (!strings.Contains(thunk, cmp) || !strings.Contains(assert, cmp)) {
+					t.Errorf("T%d has no type ID and is not compared", i)
 				}
-				seen[field.ZExtValue()] = true
+			}
+			if wantIDs := min(tc.numTypes, 255); tc.switched && len(seen) != wantIDs {
+				t.Errorf("got %d type IDs, want %d", len(seen), wantIDs)
 			}
 		})
 	}

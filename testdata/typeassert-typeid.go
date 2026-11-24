@@ -78,7 +78,11 @@ func main() {
 		{"func(int)int", func(int) int { return 0 }},
 		{"error", errors.New("e")},
 		{"StructOf", reflect.New(reflect.StructOf([]reflect.StructField{{Name: "X", Type: reflect.TypeOf(0)}})).Elem().Interface()},
-		{"FuncOf", reflect.MakeFunc(reflect.FuncOf([]reflect.Type{reflect.TypeOf(0), reflect.TypeOf(0)}, nil, false), func([]reflect.Value) []reflect.Value { return nil }).Interface()},
+		{"FuncOf", reflect.Zero(reflect.FuncOf([]reflect.Type{reflect.TypeOf(A(0)), reflect.TypeOf(B{})}, nil, false)).Interface()},
+		{"SliceOf", reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(E{})), 0, 0).Interface()},
+		{"MapOf", reflect.MakeMap(reflect.MapOf(reflect.TypeOf(D("")), reflect.TypeOf(E{}))).Interface()},
+		{"ArrayOf", reflect.New(reflect.ArrayOf(3, reflect.TypeOf(H{}))).Elem().Interface()},
+		{"ChanOf", reflect.MakeChan(reflect.ChanOf(reflect.BothDir, reflect.TypeOf(F(0))), 0).Interface()},
 		{"PointerTo(A)", reflect.New(reflect.TypeOf(A(0))).Interface()},
 		{"PointerTo(B)", reflect.New(reflect.TypeOf(B{})).Interface()},
 	}

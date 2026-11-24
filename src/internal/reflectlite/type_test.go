@@ -97,3 +97,28 @@ func TestValueFieldFlags(t *testing.T) {
 		t.Error("exported field of an unaddressable struct cannot be used as an interface")
 	}
 }
+
+// Interface lowering reads byte 1 of a descriptor as a type ID, so descriptors
+// made at runtime must leave it zero.
+func TestDynamicTypeIDByte(t *testing.T) {
+	if unsafe.Alignof(uint16(0)) < 2 {
+		t.Skip("byte 1 is not padding on this target")
+	}
+	st := reflectlite.StructOf([]reflectlite.StructField{{Name: "X", Type: reflectlite.TypeOf(0)}})
+	for _, tc := range []struct {
+		name string
+		typ  reflectlite.Type
+	}{
+		{"StructOf", st},
+		{"PointerTo", reflectlite.PointerTo(st)},
+		{"SliceOf", reflectlite.SliceOf(st)},
+		{"ArrayOf", reflectlite.ArrayOf(3, st)},
+		{"ChanOf", reflectlite.ChanOf(reflectlite.BothDir, st)},
+		{"MapOf", reflectlite.MapOf(st, st)},
+	} {
+		raw := tc.typ.(*reflectlite.RawType)
+		if id := *(*uint8)(unsafe.Add(unsafe.Pointer(raw), 1)); id != 0 {
+			t.Errorf("%s: byte 1 is %d, want 0", tc.name, id)
+		}
+	}
+}
