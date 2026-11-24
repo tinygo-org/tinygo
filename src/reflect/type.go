@@ -11,58 +11,85 @@
 // avoid infinite recursion.
 //
 // The layouts specifically look like this:
-// - basic types (Bool..UnsafePointer):
+// - basic types (Bool..UnsafePointer, see basicType):
 //     meta         uint8 // actually: kind + flags
 //     ptrTo        *typeStruct
 // - channels and slices (see elemType):
-//     meta          uint8
-//     nmethods     uint16 (0)
+//     meta         uint8
+//     typeID       uint8       // see below
+//     numMethod    uint16      // 0 for slices, the direction for channels
 //     ptrTo        *typeStruct
-//     elementType  *typeStruct // the type that you get with .Elem()
+//     elem         *typeStruct // the type that you get with .Elem()
 // - pointer types (see ptrType, this doesn't include chan, map, etc):
 //     meta         uint8
-//     nmethods     uint16
-//     elementType  *typeStruct
+//     typeID       uint8
+//     numMethod    uint16
+//     elem         *typeStruct
+//     methods      methodSet   // only if numMethod has the method set flag
 // - array types (see arrayType)
 //     meta         uint8
-//     nmethods     uint16 (0)
+//     typeID       uint8
+//     numMethod    uint16 (0)
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // element type of the array
 //     arrayLen     uintptr     // length of the array (this is part of the type)
 //     slicePtr     *typeStruct // pointer to []T type
-// - map types (this is still missing the key and element types)
+//     layout       unsafe.Pointer // GC layout of the array
+// - map types (see mapType)
 //     meta         uint8
-//     nmethods     uint16 (0)
+//     typeID       uint8
+//     numMethod    uint16 (0)
 //     ptrTo        *typeStruct
 //     elem         *typeStruct
 //     key          *typeStruct
+//     typeInfo     unsafe.Pointer // hashmap type info
 // - struct types (see structType):
 //     meta         uint8
-//     nmethods     uint16
+//     typeID       uint8
+//     numMethod    uint16
 //     ptrTo        *typeStruct
-//     size         uint32
 //     pkgpath      *byte       // package path; null terminated
+//     size         uint32
 //     numField     uint16
+//     layout       unsafe.Pointer // GC layout of the struct
 //     fields       [...]structField // the remaining fields are all of type structField
-// - interface types (this is missing the interface methods):
+//     methods      methodSet   // only if numMethod has the method set flag
+// - interface types (see interfaceType):
 //     meta         uint8
 //     ptrTo        *typeStruct
-// - signature types:
+//     methods      methodSet
+// - signature types (see funcType):
 //     meta         uint8
 //     numIn        uint8
-//     numOut       uint8       // high bit indicates a variadic signature
+//     numOut       uint16      // high bit indicates a variadic signature
 //     ptrTo        *typeStruct
 //     inOut        [...]typeStruct // input types followed by output types
-// - named types
+// - named types (see namedType):
 //     meta         uint8
-//     nmethods     uint16      // number of methods
+//     typeID       uint8
+//     numMethod    uint16      // number of exported methods
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // underlying type
 //     pkgpath      *byte       // pkgpath; null terminated
+//     methods      methodSet   // only if numMethod has the method set flag
 //     name         [1]byte     // actual name; null terminated
 //
 // The type struct is essentially a union of all the above types. Which it is,
 // can be determined by looking at the meta byte.
+//
+// The method set flag is bit 15 of numMethod (numMethodHasMethodSet). A
+// methodSet holds a length followed by arrays of method signatures, names,
+// types and functions.
+//
+// typeID is 0, or the ID that interface lowering gives to implementers of
+// interfaces with many implementers, so method calls and type asserts can
+// switch on it. It is absent on AVR, where numMethod directly follows meta
+// (see typeIDField in internal/reflectlite).
+//
+// Pointer types with 2 to 4 levels of indirection (below
+// compileopts.MaxTypePointerDepth) are not separate type structs. They point 1
+// to 3 bytes past the type struct of the 1 level pointer type, and the low 2
+// bits hold that offset (see RawType.ptrtag in internal/reflectlite).
 
 package reflect
 
