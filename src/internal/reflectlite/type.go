@@ -1278,6 +1278,11 @@ func typeImplementsMethodSet(concreteType, assertedMethodSet unsafe.Pointer) boo
 	if itfNumMethod == 0 {
 		return true
 	}
+	if (*RawType)(concreteType).ptrtag() != 0 {
+		// Tagged pointer types have no methods, and the byte they point to is
+		// not a meta byte.
+		return false
+	}
 
 	// Pull the method set out of the concrete type.
 	var methods *methodSet
@@ -1350,6 +1355,10 @@ func (t *RawType) Comparable() bool {
 
 // isBinary returns if the hashmapAlgorithmBinary functions can be used on this type
 func (t *RawType) isBinary() bool {
+	if t.ptrtag() != 0 {
+		// Tagged pointer types are pointers, which are always binary.
+		return true
+	}
 	return (t.meta & flagIsBinary) == flagIsBinary
 }
 
