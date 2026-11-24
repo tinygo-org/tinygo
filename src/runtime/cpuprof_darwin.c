@@ -67,7 +67,7 @@ struct cpuprof_thread_state {
 #endif
 
 // Each sample is the number of PCs, the CPU time in nanoseconds and the PCs,
-// leaf first. Only the sampler thread writes them.
+// leaf first. The sampler thread and exiting threads write them.
 static uintptr_t *cpuprof_mem;
 static size_t cpuprof_mem_bytes;
 static uint32_t cpuprof_slots;
@@ -89,8 +89,16 @@ static int cpuprof_prev;
 // it while a thread is suspended.
 static pthread_mutex_t cpuprof_table_lock = PTHREAD_MUTEX_INITIALIZER;
 
+// Profiling states. Exiting threads only record samples once the sampler has
+// noted the CPU time of the threads that were already running.
+#define CPUPROF_OFF 0
+#define CPUPROF_STARTING 1
+#define CPUPROF_RECORDING 2
+
 static pthread_t cpuprof_sampler;
-static int cpuprof_running;
+static int cpuprof_state;
+// Exiting threads that may be writing samples or tables.
+static uint32_t cpuprof_writers;
 static int32_t cpuprof_hz;
 
 // Process CPU time at start and stop, CPU time in samples, and CPU time of
@@ -137,6 +145,21 @@ static uint64_t cpuprof_last_locked(uint64_t id) {
     return e != NULL ? e->cpu_ns : 0;
 }
 
+// Record the CPU time of a thread and return the CPU time since it was last
+// recorded, or 0 if the table is full. A thread not seen before is new, so all
+// its time counts.
+static uint64_t cpuprof_update(uint64_t id, uint64_t cpu_ns) {
+    pthread_mutex_lock(&cpuprof_table_lock);
+    uint64_t last = cpuprof_last_locked(id);
+    struct cpuprof_entry *now = cpuprof_lookup(1 - cpuprof_prev, id, 1);
+    if (now != NULL) {
+        // Another thread may have stored a newer time since cpu_ns was read.
+        now->cpu_ns = cpu_ns > last ? cpu_ns : last;
+    }
+    pthread_mutex_unlock(&cpuprof_table_lock);
+    return now != NULL && cpu_ns > last ? cpu_ns - last : 0;
+}
+
 // Claim a sample slot, or return NULL. Exiting threads write samples too.
 static uintptr_t *cpuprof_claim(void) {
     uint32_t slot = __atomic_fetch_add(&cpuprof_next, 1, __ATOMIC_RELAXED);
@@ -144,7 +167,11 @@ static uintptr_t *cpuprof_claim(void) {
         __atomic_fetch_add(&cpuprof_dropped, 1, __ATOMIC_RELAXED);
         return NULL;
     }
-    return cpuprof_mem + (uintptr_t)slot * CPUPROF_SLOT_WORDS;
+    // The buffer is reused, so clear the length in case the sample is not
+    // completed.
+    uintptr_t *rec = cpuprof_mem + (uintptr_t)slot * CPUPROF_SLOT_WORDS;
+    rec[0] = 0;
+    return rec;
 }
 
 static uint64_t cpuprof_time_ns(struct cpuprof_time_value user, struct cpuprof_time_value sys) {
@@ -174,17 +201,8 @@ static void cpuprof_sample_thread(cpuprof_port_t thread, int record) {
     if (thread_info(thread, CPUPROF_THREAD_BASIC_INFO, (int32_t *)&basic, &count) != 0) {
         return;
     }
-    uint64_t cpu_ns = cpuprof_time_ns(basic.user_time, basic.system_time);
-    // A thread not seen before is new, so all its time counts.
-    pthread_mutex_lock(&cpuprof_table_lock);
-    uint64_t last = cpuprof_last_locked(ident.thread_id);
-    struct cpuprof_entry *now = cpuprof_lookup(1 - cpuprof_prev, ident.thread_id, 1);
-    if (now != NULL) {
-        now->cpu_ns = cpu_ns;
-    }
-    pthread_mutex_unlock(&cpuprof_table_lock);
-    uint64_t delta = cpu_ns > last ? cpu_ns - last : 0;
-    if (now == NULL || !record || delta == 0) {
+    uint64_t delta = cpuprof_update(ident.thread_id, cpuprof_time_ns(basic.user_time, basic.system_time));
+    if (!record || delta == 0) {
         return;
     }
     uintptr_t *rec = cpuprof_claim();
@@ -237,12 +255,7 @@ static void cpuprof_sample_thread(cpuprof_port_t thread, int record) {
     __atomic_store_n(&rec[0], n, __ATOMIC_RELEASE);
 }
 
-// Called by every goroutine thread before it exits. Its CPU time since the
-// last wakeup goes to its entry function, so short threads are still counted.
-void tinygo_cpuprof_thread_exit(uintptr_t fn) {
-    if (!__atomic_load_n(&cpuprof_running, __ATOMIC_ACQUIRE)) {
-        return;
-    }
+static void cpuprof_record_exit(uintptr_t fn) {
     cpuprof_port_t self = mach_thread_self();
     struct cpuprof_thread_identifier_info ident;
     struct cpuprof_thread_basic_info basic;
@@ -254,15 +267,7 @@ void tinygo_cpuprof_thread_exit(uintptr_t fn) {
     if (!ok) {
         return;
     }
-    uint64_t cpu_ns = cpuprof_time_ns(basic.user_time, basic.system_time);
-    pthread_mutex_lock(&cpuprof_table_lock);
-    uint64_t last = cpuprof_last_locked(ident.thread_id);
-    struct cpuprof_entry *now = cpuprof_lookup(1 - cpuprof_prev, ident.thread_id, 1);
-    if (now != NULL) {
-        now->cpu_ns = cpu_ns;
-    }
-    pthread_mutex_unlock(&cpuprof_table_lock);
-    uint64_t delta = cpu_ns > last ? cpu_ns - last : 0;
+    uint64_t delta = cpuprof_update(ident.thread_id, cpuprof_time_ns(basic.user_time, basic.system_time));
     uintptr_t *rec = delta > 0 ? cpuprof_claim() : NULL;
     if (rec == NULL) {
         return;
@@ -271,6 +276,22 @@ void tinygo_cpuprof_thread_exit(uintptr_t fn) {
     rec[1] = delta;
     __atomic_fetch_add(&cpuprof_sampled_ns, delta, __ATOMIC_RELAXED);
     __atomic_store_n(&rec[0], 1, __ATOMIC_RELEASE);
+}
+
+// Called by every goroutine thread before it exits. Its CPU time since the
+// last wakeup goes to its entry function, so short threads are still counted.
+// The main thread passes 0 and is not recorded.
+void tinygo_cpuprof_thread_exit(uintptr_t fn) {
+    if (fn == 0) {
+        return;
+    }
+    // Register as a writer before checking the state, so that stop either
+    // sees this thread or this thread sees that profiling stopped.
+    __atomic_fetch_add(&cpuprof_writers, 1, __ATOMIC_SEQ_CST);
+    if (__atomic_load_n(&cpuprof_state, __ATOMIC_SEQ_CST) == CPUPROF_RECORDING) {
+        cpuprof_record_exit(fn);
+    }
+    __atomic_fetch_sub(&cpuprof_writers, 1, __ATOMIC_RELEASE);
 }
 
 static void cpuprof_sample_all(int record) {
@@ -302,8 +323,11 @@ static void cpuprof_sample_all(int record) {
 
 static void *cpuprof_loop(void *arg) {
     cpuprof_sample_all(0);
+    int starting = CPUPROF_STARTING;
+    __atomic_compare_exchange_n(&cpuprof_state, &starting, CPUPROF_RECORDING, 0,
+                                __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
     struct timespec interval = { 0, 1000000000 / cpuprof_hz };
-    while (__atomic_load_n(&cpuprof_running, __ATOMIC_ACQUIRE)) {
+    while (__atomic_load_n(&cpuprof_state, __ATOMIC_ACQUIRE) != CPUPROF_OFF) {
         nanosleep(&interval, NULL);
         cpuprof_sample_all(1);
     }
@@ -336,17 +360,21 @@ int tinygo_cpuprof_start(int32_t hz, uint32_t slots) {
     __atomic_store_n(&cpuprof_sampled_ns, 0, __ATOMIC_RELAXED);
     cpuprof_sampler_ns = 0;
     cpuprof_start_ns = cpuprof_process_ns();
-    __atomic_store_n(&cpuprof_running, 1, __ATOMIC_RELEASE);
+    __atomic_store_n(&cpuprof_state, CPUPROF_STARTING, __ATOMIC_SEQ_CST);
     if (pthread_create(&cpuprof_sampler, NULL, cpuprof_loop, NULL) != 0) {
-        __atomic_store_n(&cpuprof_running, 0, __ATOMIC_RELEASE);
+        __atomic_store_n(&cpuprof_state, CPUPROF_OFF, __ATOMIC_SEQ_CST);
         return 0;
     }
     return 1;
 }
 
 void tinygo_cpuprof_stop(void) {
-    __atomic_store_n(&cpuprof_running, 0, __ATOMIC_RELEASE);
+    __atomic_store_n(&cpuprof_state, CPUPROF_OFF, __ATOMIC_SEQ_CST);
     pthread_join(cpuprof_sampler, NULL);
+    // Wait for exiting threads that saw profiling still running.
+    while (__atomic_load_n(&cpuprof_writers, __ATOMIC_ACQUIRE) != 0) {
+        sched_yield();
+    }
     cpuprof_stop_ns = cpuprof_process_ns();
 }
 
