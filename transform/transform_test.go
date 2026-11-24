@@ -11,6 +11,7 @@ import (
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
+	"github.com/tinygo-org/tinygo/internal/diff"
 	"github.com/tinygo-org/tinygo/internal/ir"
 	"github.com/tinygo-org/tinygo/loader"
 	"tinygo.org/x/go-llvm"
@@ -37,7 +38,7 @@ func checkGolden(t *testing.T, path, got string) {
 		t.Fatal(err)
 	}
 	if got != string(want) {
-		t.Errorf("%s does not match expected output:\n%s", path, got)
+		t.Errorf("%s does not match expected output (re-run with -update to regenerate):\n%s", path, diff.Diff("expected", want, "actual", []byte(got)))
 	}
 }
 
