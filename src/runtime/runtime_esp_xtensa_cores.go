@@ -68,10 +68,8 @@ var crossCoreInterrupt interrupt.Interrupt
 var (
 	core1Started         atomic.Uint32
 	schedulerWakePending [numCPU]atomic.Uint32
-	sleepWake            [numCPU]atomic.Uint32
 	gcPauseRequest       [numCPU]atomic.Uint32
 	gcSignalWait         [numCPU]atomic.Uint32
-	coreIdle             [numCPU]atomic.Uint32
 )
 
 func crossCoreHandler(interrupt.Interrupt) {
@@ -175,36 +173,6 @@ func schedulerUnlockAndWait() {
 func schedulerEndWait(core uint32) {
 	schedulerWakePending[core].Store(1)
 	signalCore(core, 1)
-}
-
-// Almost identical to sleepTicks, except that it will unlock/lock the scheduler
-// while sleeping and is interruptible by interruptSleepTicksMulticore.
-// This may only be called with the scheduler lock held.
-func sleepTicksMulticore(d timeUnit) {
-	core := currentCPU()
-	sleepingCore = uint8(core)
-	sleepWake[core].Store(0)
-
-	schedulerLock.Unlock()
-	coreIdle[core].Store(1)
-	sleepTicks(d)
-	coreIdle[core].Store(0)
-	schedulerLock.Lock()
-
-	sleepingCore = 0xff
-}
-
-// Interrupt an ongoing call to sleepTicksMulticore on another core.
-// Must be called with the scheduler lock held.
-func interruptSleepTicksMulticore(wakeup timeUnit) {
-	if hasSleepingCore() {
-		sleepWake[sleepingCore].Store(1)
-	}
-}
-
-//go:inline
-func sleepWoken(core uint32) bool {
-	return sleepWake[core].Load() != 0
 }
 
 // The GC interrupted this core for the stop-the-world phase.
