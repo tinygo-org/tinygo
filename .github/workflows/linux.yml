@@ -465,6 +465,8 @@ jobs:
           - goarch: arm
             toolchain: arm-linux-gnueabihf
             libc: armhf
+    # Pull requests skip the arm and arm64 release builds to save runners.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04-arm # note: use the oldest image available! (see above)
     needs: build-linux
     steps:
