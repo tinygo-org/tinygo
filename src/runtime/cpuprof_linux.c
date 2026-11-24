@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <sched.h>
 #include <sys/syscall.h>
 #include <ucontext.h>
 #include <sys/mman.h>
@@ -35,12 +36,14 @@
 // Each sample is the number of PCs, the CPU time in nanoseconds and the PCs.
 // The count is stored last, so zero means the sample is not complete.
 static uintptr_t *cpuprof_buf;
-// Never unmapped, as a handler may still write to it after profiling stops.
+// Reused by later profiles.
 static uintptr_t *cpuprof_mem;
 static size_t cpuprof_mem_bytes;
 static uint32_t cpuprof_slots;
 static uint32_t cpuprof_next;
 static uint32_t cpuprof_dropped;
+// Handlers and exiting threads that may be writing a sample.
+static uint32_t cpuprof_writers;
 static uintptr_t cpuprof_period_ns;
 static uint64_t cpuprof_start_ns;
 static uint64_t cpuprof_stop_ns;
@@ -62,18 +65,29 @@ static struct {
 } cpuprof_timers[CPUPROF_MAX_TIMERS];
 static int cpuprof_ntimers;
 
-// Claim a sample slot, or return NULL.
+// Claim a sample slot, or return NULL. A writer is registered before the
+// buffer is checked, so stop either waits for it or it sees profiling stopped.
 static uintptr_t *cpuprof_claim(void) {
-    uintptr_t *buf = __atomic_load_n(&cpuprof_buf, __ATOMIC_ACQUIRE);
-    if (buf == NULL) {
-        return NULL;
-    }
-    uint32_t slot = __atomic_fetch_add(&cpuprof_next, 1, __ATOMIC_RELAXED);
-    if (slot >= cpuprof_slots) {
+    __atomic_fetch_add(&cpuprof_writers, 1, __ATOMIC_SEQ_CST);
+    uintptr_t *buf = __atomic_load_n(&cpuprof_buf, __ATOMIC_SEQ_CST);
+    uint32_t slot = buf != NULL ? __atomic_fetch_add(&cpuprof_next, 1, __ATOMIC_RELAXED) : 0;
+    if (buf != NULL && slot >= cpuprof_slots) {
         __atomic_fetch_add(&cpuprof_dropped, 1, __ATOMIC_RELAXED);
+        buf = NULL;
+    }
+    if (buf == NULL) {
+        __atomic_fetch_sub(&cpuprof_writers, 1, __ATOMIC_RELEASE);
         return NULL;
     }
     return buf + (uintptr_t)slot * CPUPROF_SLOT_WORDS;
+}
+
+// Publish a sample claimed with cpuprof_claim.
+static void cpuprof_publish(uintptr_t *rec, uintptr_t n, uint64_t ns) {
+    rec[1] = ns;
+    __atomic_fetch_add(&cpuprof_sampled_ns, ns, __ATOMIC_RELAXED);
+    __atomic_store_n(&rec[0], n, __ATOMIC_RELEASE);
+    __atomic_fetch_sub(&cpuprof_writers, 1, __ATOMIC_RELEASE);
 }
 
 static void cpuprof_handler(int sig, siginfo_t *info, void *context) {
@@ -113,9 +127,7 @@ static void cpuprof_handler(int sig, siginfo_t *info, void *context) {
         }
         fp = next;
     }
-    rec[1] = cpuprof_period_ns;
-    __atomic_fetch_add(&cpuprof_sampled_ns, cpuprof_period_ns, __ATOMIC_RELAXED);
-    __atomic_store_n(&rec[0], n, __ATOMIC_RELEASE);
+    cpuprof_publish(rec, n, cpuprof_period_ns);
 }
 
 // The CPU time clock of a thread, as glibc's pthread_getcpuclockid makes it.
@@ -215,6 +227,7 @@ void tinygo_cpuprof_thread_start(void) {
 
 // Called by every goroutine thread before it exits. Its CPU time since the
 // last expiry goes to its entry function, so short threads are still counted.
+// The main thread passes 0 and only has its timer removed.
 void tinygo_cpuprof_thread_exit(uintptr_t fn) {
     pid_t tid = gettid();
     struct timespec cpu;
@@ -226,12 +239,10 @@ void tinygo_cpuprof_thread_exit(uintptr_t fn) {
             syscall(SYS_timer_delete, cpuprof_timers[i].timer);
             uint64_t rest = (now - cpuprof_timers[i].base_ns) % cpuprof_period_ns;
             cpuprof_timers[i] = cpuprof_timers[--cpuprof_ntimers];
-            uintptr_t *rec = rest > 0 ? cpuprof_claim() : NULL;
+            uintptr_t *rec = rest > 0 && fn != 0 ? cpuprof_claim() : NULL;
             if (rec != NULL) {
                 rec[2] = fn;
-                rec[1] = rest;
-                __atomic_fetch_add(&cpuprof_sampled_ns, rest, __ATOMIC_RELAXED);
-                __atomic_store_n(&rec[0], 1, __ATOMIC_RELEASE);
+                cpuprof_publish(rec, 1, rest);
             }
             break;
         }
@@ -286,7 +297,11 @@ void tinygo_cpuprof_stop(void) {
     cpuprof_ntimers = 0;
     pthread_mutex_unlock(&cpuprof_lock);
     cpuprof_stop_ns = cpuprof_process_ns();
-    __atomic_store_n(&cpuprof_buf, NULL, __ATOMIC_RELEASE);
+    __atomic_store_n(&cpuprof_buf, NULL, __ATOMIC_SEQ_CST);
+    // Wait for handlers that claimed a slot before the buffer was cleared.
+    while (__atomic_load_n(&cpuprof_writers, __ATOMIC_ACQUIRE) != 0) {
+        sched_yield();
+    }
     // A SIGPROF that is still pending would otherwise end the process.
     struct sigaction act;
     memset(&act, 0, sizeof(act));

@@ -17,9 +17,14 @@ func fileMappings() []fileMapping {
 	var mappings []fileMapping
 	for _, line := range strings.Split(string(data), "\n") {
 		// Each line is address range, permissions, offset, device, inode and
-		// path. See proc_pid_maps(5).
-		fields := strings.Fields(line)
-		if len(fields) < 6 || !strings.Contains(fields[1], "x") {
+		// path, which may contain spaces. See proc_pid_maps(5).
+		var fields [6]string
+		rest := line
+		for i := 0; i < 5; i++ {
+			fields[i], rest, _ = strings.Cut(strings.TrimLeft(rest, " "), " ")
+		}
+		fields[5] = strings.TrimLeft(rest, " ")
+		if fields[5] == "" || !strings.Contains(fields[1], "x") {
 			continue
 		}
 		start, end, ok := strings.Cut(fields[0], "-")
