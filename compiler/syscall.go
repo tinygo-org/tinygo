@@ -379,21 +379,19 @@ func (b *builder) createDarwinSyscall(call *ssa.CallCommon) (llvm.Value, error) 
 		return llvm.Value{}, b.makeError(call.Pos(), "too many arguments for darwin syscall")
 	}
 
-	// All registers are outputs because the kernel may change them.
+	// All registers are outputs because the kernel may change them. Only
+	// the registers that carry arguments are inputs, like upstream.
 	args := []llvm.Value{num}
 	for _, arg := range call.Args[1:] {
 		args = append(args, b.getValue(arg, getPos(call)))
-	}
-	for len(args) < len(regs) {
-		args = append(args, b.uintptrZero)
 	}
 	var constraints strings.Builder
 	constraints.WriteString("=&r")
 	for _, reg := range regs {
 		constraints.WriteString(",={" + reg + "}")
 	}
-	argTypes := make([]llvm.Type, len(regs))
-	for i := range regs {
+	argTypes := make([]llvm.Type, len(args))
+	for i := range args {
 		constraints.WriteString("," + strconv.Itoa(i+1))
 		argTypes[i] = b.uintptrType
 	}
