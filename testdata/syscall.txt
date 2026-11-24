@@ -1,0 +1,5 @@
+RawSyscall getpid: true true
+RawSyscall6 getpid: true true
+Syscall close: true
+Syscall6 write
+wrote: true true
