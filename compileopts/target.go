@@ -45,6 +45,7 @@ type TargetSpec struct {
 	Libc             string   `json:"libc,omitempty"`
 	AutoStackSize    *bool    `json:"automatic-stack-size,omitempty"` // Determine stack size automatically at compile time.
 	DefaultStackSize uint64   `json:"default-stack-size,omitempty"`   // Default stack size if the size couldn't be determined at compile time.
+	StackLimitCheck  bool     `json:"stack-limit-check,omitempty"`    // Check the stack pointer against a limit in every function with a stack frame.
 	CFlags           []string `json:"cflags,omitempty"`
 	LDFlags          []string `json:"ldflags,omitempty"`
 	LinkerScript     string   `json:"linkerscript,omitempty"`

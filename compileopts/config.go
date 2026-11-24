@@ -297,6 +297,18 @@ func (c *Config) StackSize() uint64 {
 	return c.Target.DefaultStackSize
 }
 
+// StackLimitCheck returns whether every function with a stack frame checks the
+// stack pointer against a limit, so that stack overflows are caught.
+func (c *Config) StackLimitCheck() bool {
+	switch c.Options.StackCheck {
+	case "true":
+		return true
+	case "false":
+		return false
+	}
+	return c.Target.StackLimitCheck
+}
+
 // MaxStackAlloc returns the size of the maximum allocation to put on the stack vs heap.
 func (c *Config) MaxStackAlloc() uint64 {
 	if c.StackSize() >= 16*1024 {

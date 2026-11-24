@@ -217,12 +217,14 @@ func (t *Task) Resume() {
 	t.gcData.swap()
 	currentTask = t
 	t.state.running = true
+	prevLimit := setStackLimit(t.state.stackBase + unsafe.Sizeof(uintptr(0)))
 	if !t.state.launched {
 		t.state.launch()
 		t.state.launched = true
 	} else {
 		t.state.rewind()
 	}
+	restoreStackLimit(prevLimit)
 	t.state.running = false
 	currentTask = prevTask
 	t.gcData.swap()

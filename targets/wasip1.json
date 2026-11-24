@@ -11,6 +11,7 @@
 	"gc":            "precise",
 	"scheduler":     "asyncify",
 	"default-stack-size": 65536,
+	"stack-limit-check": true,
 	"cflags": [
 		"-mbulk-memory",
 		"-mnontrapping-fptoint",
