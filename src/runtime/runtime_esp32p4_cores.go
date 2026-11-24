@@ -16,30 +16,7 @@ const numCPU = 2
 // CPU interrupt line for the FROM_CPU software interrupts, on both cores.
 const crossCoreCPUInterrupt = 11
 
-var (
-	printLock     spinLock
-	schedulerLock schedulerSpinLock
-	atomicsLock   spinLock
-	futexLock     spinLock
-	ticksLock     spinLock
-)
-
-type spinLock struct {
-	atomic.Uint32
-}
-
-func (l *spinLock) Lock() {
-	for !l.Uint32.CompareAndSwap(0, 1) {
-		spinLoopWait()
-	}
-}
-
-func (l *spinLock) Unlock() {
-	if schedulerAsserts && l.Uint32.Load() != 1 {
-		runtimeFatal("unlock of unlocked spinlock")
-	}
-	l.Uint32.Store(0)
-}
+var ticksLock spinLock
 
 func spinLoopWait() {
 	riscv.Asm("nop")
