@@ -1,4 +1,4 @@
-//go:build darwin || (linux && !baremetal && !js && !wasip2)
+//go:build darwin || (linux && !baremetal && !js) || tinygo.wasi
 
 // TODO: implement ReadDir on windows
 
@@ -77,8 +77,7 @@ func TestRemoveAll(t *testing.T) {
 		t.Fatalf("Lstat %q succeeded after RemoveAll (third)", path)
 	}
 
-	// Chmod is not supported under Windows and test fails as root.
-	if runtime.GOOS != "windows" && Getuid() != 0 {
+	if Getuid() > 0 {
 		// Make directory with file and subdirectory and trigger error.
 		if err = MkdirAll(dpath, 0777); err != nil {
 			t.Fatalf("MkdirAll %q: %s", dpath, err)
@@ -214,13 +213,8 @@ func TestRemoveReadOnlyDir(t *testing.T) {
 
 // Issue #29983.
 func TestRemoveAllButReadOnlyAndPathError(t *testing.T) {
-	switch runtime.GOOS {
-	case "js", "windows":
-		t.Skipf("skipping test on %s", runtime.GOOS)
-	}
-
-	if Getuid() == 0 {
-		t.Skip("skipping test when running as root")
+	if Getuid() <= 0 {
+		t.Skip("requires an unprivileged user ID")
 	}
 
 	t.Parallel()
@@ -326,6 +320,9 @@ func TestRemoveUnreadableDir(t *testing.T) {
 
 // Issue 29921
 func TestRemoveAllWithMoreErrorThanReqSize(t *testing.T) {
+	if Getuid() < 0 {
+		t.Skip("requires file permission checks")
+	}
 	if testing.Short() {
 		t.Skip("skipping in short mode")
 	}

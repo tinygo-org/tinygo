@@ -41,8 +41,11 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipPackage("internal/types/errors")
 	// OID encoding and self-signed certificate tests fail.
 	r.skipPackage("crypto/x509")
-	// Reader and writer flattening and exhausted-reader finalizer checks fail.
-	r.skipPackage("io")
+	if wasi {
+		r.skipTest("io", `^(TestMultiReaderFlatten|TestMultiWriterSingleChainFlatten|TestMultiReaderFreesExhaustedReaders|TestMultiWriter_WriteStringSingleAlloc|TestPipeAllocations)$`)
+	} else {
+		r.skipPackage("io")
+	}
 	// The logging tests check the caller's file and line.
 	r.skipPackage("log")
 	r.skipPackage("log/slog")
@@ -140,7 +143,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	if !linux && !darwin {
 		r.skipPackage("internal/syscall/unix")
 	}
-	if !hosted {
+	if !hosted && !wasi {
 		r.skipPackage("internal/testenv")
 	}
 	if !linux && !darwin && !wasi {
@@ -183,13 +186,10 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 				r.skipPackage("crypto/sha3")
 			}
 		}
-		if !windows && !wasip2 {
-			r.skipPackage("crypto/ecdh")
-			r.skipPackage("math/big")
-		}
 		if !windows && !wasi {
 			r.skipPackage("archive/tar")
 			r.skipPackage("compress/gzip")
+			r.skipPackage("crypto/ecdh")
 			r.skipPackage("crypto/ed25519")
 			r.skipPackage("crypto/hpke")
 			r.skipPackage("crypto/rsa")
@@ -197,6 +197,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 			r.skipPackage("debug/pe")
 			r.skipPackage("encoding/gob")
 			r.skipPackage("go/printer")
+			r.skipPackage("math/big")
 			r.skipPackage("uuid")
 			if !browser {
 				r.skipPackage("crypto/aes")
@@ -237,7 +238,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		if !wasi {
 			r.skipPackage("debug/dwarf")
 		}
-		if !windows {
+		if !windows && !wasi {
 			r.skipPackage("debug/elf")
 		}
 		if windows {
@@ -261,9 +262,9 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("path/filepath")
 		r.skipPackage("sort")
 
-		// Windows File.ReadAt is a stub.
-		r.skipPackage("archive/zip")
 		if !wasi {
+			// Windows File.ReadAt is a stub.
+			r.skipPackage("archive/zip")
 			r.skipPackage("debug/plan9obj")
 		}
 		r.skipPackage("time") // Takes more than 25 minutes on Windows.
@@ -273,15 +274,13 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("debug/elf")
 		r.skipPackage("mime/multipart") // File.ReadAt is a stub.
 	}
-	if !hosted {
+	if !hosted && !wasi {
 		r.skipPackage("mime/multipart")
 	}
 
 	if wasip2 {
 		r.skipTest("archive/tar", `^TestFileInfoHeaderSymlink$`)
-		// TempDir cleanup fails even when the linker tests skip themselves.
-		r.skipTest("crypto/ecdh", `^TestLinker$`)
-		r.skipTest("math/big", `^TestLinkerGC$`)
+		r.skipTest("debug/elf", `^TestNoSectionOverlaps$`)
 	}
 	if windows || wasip2 {
 		r.skipTest("math/rand", `^TestDefaultRace$`)
@@ -302,13 +301,17 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("compress/flate")
 		r.skipPackage("encoding/json")
 		r.skipPackage("internal/synctest")
-		r.skipPackage("io/fs")
-		r.skipPackage("io/ioutil")
-		r.skipPackage("testing/fstest")
 		r.skipPackage("testing/synctest")
 	}
 	if !hosted && !wasi {
+		r.skipPackage("io/fs")
+		r.skipPackage("io/ioutil")
+		r.skipPackage("testing/fstest")
 		r.skipPackage("mime")
+	}
+	if wasip2 {
+		r.skipTest("io/ioutil", `^TestReadOnlyWriteFile$`)
+		r.skipTest("testing/fstest", `^TestSymlink$`)
 	}
 
 	// ARM64 DIT tests need Go assembly for internal/runtime/sys.DITEnabled.
@@ -364,6 +367,8 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	if opts.mode != modeFull || opts.bench {
 		r.skipPackage("internal/synctest")
 		r.skipPackage("testing/synctest")
+	}
+	if opts.bench || (opts.mode != modeFull && !wasi) {
 		r.skipPackage("io/fs")
 	}
 	if !opts.bench && (wasip1 || (wasip2 && opts.mode == modeFast)) {
@@ -379,7 +384,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		}
 	}
 
-	if opts.mode == modeFull && !opts.bench {
+	if (opts.mode == modeFull || wasi) && !opts.bench {
 		r.short("archive/zip")
 	}
 	if !opts.bench {
@@ -414,6 +419,10 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.stackSizeMB("io/fs", 8)
 	} else {
 		r.stackSizeMB("io/fs", 6)
+	}
+	if wasi {
+		// The deep glob test exhausts the Wasm stack.
+		r.skipTest("io/fs", `^TestCVE202230630$`)
 	}
 	r.stackSizeMB("path/filepath", 4)
 	r.stackSizeMB("regexp", 1)
