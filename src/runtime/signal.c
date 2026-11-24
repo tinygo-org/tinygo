@@ -63,6 +63,8 @@ void tinygo_sigpipe(void) {
     sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGPIPE);
-    sigprocmask(SIG_UNBLOCK, &set, NULL);
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
     raise(SIGPIPE);
+    // As in Go's dieFromSignal, exit if the signal did not end the process.
+    _exit(2);
 }
