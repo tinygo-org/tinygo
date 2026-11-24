@@ -212,47 +212,6 @@ func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns / 100) // one tick is 100ns
 }
 
-// Set to 1 by interruptSleepTicksMulticore to end a sleep in sleepTicks.
-var sleepWake [numCPU]atomic.Uint32
-
-//go:inline
-func sleepWoken(core uint32) bool {
-	return sleepWake[core].Load() != 0
-}
-
-// Currently sleeping core, or 0xff.
-// Must only be accessed with the scheduler lock held.
-var sleepingCore uint8 = 0xff
-
-// Return whether another core is sleeping.
-// May only be called with the scheduler lock held.
-func hasSleepingCore() bool {
-	return sleepingCore != 0xff
-}
-
-// Almost identical to sleepTicks, except that it will unlock/lock the scheduler
-// while sleeping and is interruptible by interruptSleepTicksMulticore.
-// This may only be called with the scheduler lock held.
-func sleepTicksMulticore(d timeUnit) {
-	core := currentCPU()
-	sleepingCore = uint8(core)
-	sleepWake[core].Store(0)
-
-	schedulerLock.Unlock()
-	sleepTicks(d)
-	schedulerLock.Lock()
-
-	sleepingCore = 0xff
-}
-
-// Interrupt an ongoing call to sleepTicksMulticore on another core.
-// This may only be called with the scheduler lock held.
-func interruptSleepTicksMulticore(wakeup timeUnit) {
-	if hasSleepingCore() {
-		sleepWake[sleepingCore].Store(1)
-	}
-}
-
 func ticks() timeUnit {
 	// Combining the low bits and the high bits (at a rate of 100ns per tick)
 	// yields a time span of over 59930 years without counter rollover.
