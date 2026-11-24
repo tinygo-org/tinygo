@@ -106,7 +106,7 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) ([]string
 	llvmutil.AppendToGlobal(mod, "llvm.used", append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
 
 	// Replace the calls with loads from the new global with stack sizes.
-	irbuilder := ctx.NewBuilder()
+	irbuilder := mod.NewBuilder()
 	defer irbuilder.Dispose()
 	for i, function := range functions {
 		for _, use := range functionMap[function] {

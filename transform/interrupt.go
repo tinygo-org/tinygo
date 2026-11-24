@@ -27,8 +27,7 @@ import (
 func LowerInterrupts(mod llvm.Module) []error {
 	var errs []error
 
-	ctx := mod.Context()
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 
 	// Collect a map of interrupt handle objects. The fact that they still

@@ -161,7 +161,7 @@ func (b *builder) createAsyncifyNoSuspendInvoke(fnType llvm.Type, fn llvm.Value,
 	wrapper.SetLinkage(llvm.InternalLinkage)
 	wrapper.AddFunctionAttr(b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0))
 
-	builder := b.ctx.NewBuilder()
+	builder := b.mod.NewBuilder()
 	entry := b.ctx.AddBasicBlock(wrapper, "entry")
 	builder.SetInsertPointAtEnd(entry)
 	wrapperParams := wrapper.Params()
@@ -232,7 +232,7 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	targetWrapper := llvm.AddFunction(b.mod, wrapperName+".target", targetType)
 	targetWrapper.SetLinkage(llvm.InternalLinkage)
 	targetWrapper.AddFunctionAttr(b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0))
-	builder := b.ctx.NewBuilder()
+	builder := b.mod.NewBuilder()
 	entry := b.ctx.AddBasicBlock(targetWrapper, "entry")
 	builder.SetInsertPointAtEnd(entry)
 	targetParams := targetWrapper.Params()
@@ -249,7 +249,7 @@ func (b *builder) createAsyncifySuspendInvoke(fnType llvm.Type, fn llvm.Value, a
 	catchWrapper := llvm.AddFunction(b.mod, wrapperName+".paniccatch", wrapperType)
 	catchWrapper.SetLinkage(llvm.InternalLinkage)
 	catchWrapper.AddFunctionAttr(b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0))
-	builder = b.ctx.NewBuilder()
+	builder = b.mod.NewBuilder()
 	entry = b.ctx.AddBasicBlock(catchWrapper, "entry")
 	builder.SetInsertPointAtEnd(entry)
 	catchArgs := make([]llvm.Value, len(paramTypes))
@@ -305,7 +305,7 @@ func (b *builder) createAsyncifyPanicReplay(catcherType llvm.Type) llvm.Value {
 	replay.AddFunctionAttr(b.ctx.CreateEnumAttribute(llvm.AttributeKindID("noinline"), 0))
 	b.asyncifyReplays[catcherType] = replay
 
-	builder := b.ctx.NewBuilder()
+	builder := b.mod.NewBuilder()
 	defer builder.Dispose()
 	entry := b.ctx.AddBasicBlock(replay, "entry")
 	builder.SetInsertPointAtEnd(entry)

@@ -84,7 +84,7 @@ func OptimizeStringEqual(mod llvm.Module) {
 		return
 	}
 
-	builder := mod.Context().NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 
 	for _, call := range getUses(stringEqual) {

@@ -355,7 +355,7 @@ func blockGlobalAllocPromotion(mod llvm.Module) {
 	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
 	marker := llvm.AddFunction(mod, "tinygo.gc.alloc.marker", llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false))
 
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 	var marked bool
 	for _, name := range []string{"runtime.alloc", "runtime.alloc_noheap"} {

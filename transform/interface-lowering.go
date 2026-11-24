@@ -132,7 +132,7 @@ func LowerInterfaces(mod llvm.Module, config *compileopts.Config) error {
 	p := &lowerInterfacesPass{
 		mod:         mod,
 		config:      config,
-		builder:     ctx.NewBuilder(),
+		builder:     mod.NewBuilder(),
 		ctx:         ctx,
 		targetData:  targetData,
 		uintptrType: mod.Context().IntType(targetData.PointerSize() * 8),

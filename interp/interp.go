@@ -83,7 +83,7 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 
 	// Create a builder, to insert instructions that could not be evaluated at
 	// compile time.
-	r.builder = mod.Context().NewBuilder()
+	r.builder = mod.NewBuilder()
 	defer r.builder.Dispose()
 
 	// Create a dummy alloca in the entry block that we can set the insert point
@@ -238,7 +238,7 @@ func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug 
 
 	// Create a builder, to insert instructions that could not be evaluated at
 	// compile time.
-	r.builder = mod.Context().NewBuilder()
+	r.builder = mod.NewBuilder()
 	defer r.builder.Dispose()
 	r.builder.SetInsertPointAtEnd(entry)
 

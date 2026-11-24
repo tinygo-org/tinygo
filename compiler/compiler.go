@@ -376,7 +376,7 @@ func CompilePackage(moduleName string, pkg *loader.Package, ssaPkg *ssa.Package,
 	}
 
 	// Compile all functions, methods, and global variables in this package.
-	irbuilder := c.ctx.NewBuilder()
+	irbuilder := c.mod.NewBuilder()
 	defer irbuilder.Dispose()
 	c.createPackage(irbuilder, ssaPkg)
 
@@ -1520,7 +1520,7 @@ func (b *builder) createFunction() {
 	}
 
 	// Resolve phi nodes
-	phiBuilder := b.ctx.NewBuilder()
+	phiBuilder := b.mod.NewBuilder()
 	originalBuilder := b.Builder
 	b.Builder = phiBuilder
 	for _, phi := range b.phis {

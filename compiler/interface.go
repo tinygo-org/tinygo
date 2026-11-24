@@ -775,7 +775,7 @@ func (c *context) getReflectCallWrapper(sig *types.Signature) llvm.Value {
 	wrapper := llvm.AddFunction(c.mod, name, wrapperType)
 	wrapper.SetLinkage(llvm.WeakODRLinkage)
 
-	irbuilder := c.ctx.NewBuilder()
+	irbuilder := c.mod.NewBuilder()
 	defer irbuilder.Dispose()
 	b := &builder{context: c, Builder: irbuilder}
 	entry := c.ctx.AddBasicBlock(wrapper, "entry")
@@ -851,7 +851,7 @@ func (c *context) getReflectMakeFuncWrapper(sig *types.Signature) llvm.Value {
 	wrapper := llvm.AddFunction(c.mod, name, c.getLLVMFunctionType(sig))
 	wrapper.SetLinkage(llvm.WeakODRLinkage)
 
-	irbuilder := c.ctx.NewBuilder()
+	irbuilder := c.mod.NewBuilder()
 	defer irbuilder.Dispose()
 	b := &builder{context: c, Builder: irbuilder}
 	entry := c.ctx.AddBasicBlock(wrapper, "entry")
@@ -1751,7 +1751,7 @@ func (c *context) getReflectMethodFunction(method *ssa.Function, sig *types.Sign
 	wrapper := llvm.AddFunction(c.mod, name, wrapperType)
 	wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
 	c.addStandardAttributes(wrapper)
-	b := builder{context: c, Builder: c.ctx.NewBuilder()}
+	b := builder{context: c, Builder: c.mod.NewBuilder()}
 	defer b.Builder.Dispose()
 	b.SetInsertPointAtEnd(c.ctx.AddBasicBlock(wrapper, "entry"))
 
@@ -1971,7 +1971,7 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 	// Create a new builder just to create this wrapper.
 	b := builder{
 		context: c,
-		Builder: c.ctx.NewBuilder(),
+		Builder: c.mod.NewBuilder(),
 	}
 	defer b.Builder.Dispose()
 

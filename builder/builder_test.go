@@ -377,7 +377,7 @@ func TestLinkReflectAttributes(t *testing.T) {
 			mod := ctx.NewModule("destination")
 			defer mod.Dispose()
 			pkgMod := ctx.NewModule("source")
-			builder := ctx.NewBuilder()
+			builder := mod.NewBuilder()
 			defer builder.Dispose()
 			typ := llvm.FunctionType(ctx.VoidType(), nil, false)
 			dst := llvm.AddFunction(mod, "lookup", typ)
