@@ -13,7 +13,7 @@ func TestOptimizeInterfacesIndirectABIRoots(t *testing.T) {
 	defer ctx.Dispose()
 	mod := ctx.NewModule("indirect-abi-roots")
 	defer mod.Dispose()
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 
 	for _, name := range []string{"dead", "retained"} {
@@ -132,7 +132,7 @@ func TestReflectMethodFunctionDCE(t *testing.T) {
 			defer ctx.Dispose()
 			mod := ctx.NewModule("reflect-method-dce")
 			defer mod.Dispose()
-			builder := ctx.NewBuilder()
+			builder := mod.NewBuilder()
 			defer builder.Dispose()
 			uintptrType := ctx.Int64Type()
 			ptrType := llvm.PointerType(ctx.Int8Type(), 0)

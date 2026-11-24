@@ -15,7 +15,7 @@ func TestNoRuntimeRoots(t *testing.T) {
 			defer ctx.Dispose()
 			mod := ctx.NewModule("test")
 			defer mod.Dispose()
-			builder := ctx.NewBuilder()
+			builder := mod.NewBuilder()
 			defer builder.Dispose()
 			fnType := llvm.FunctionType(ctx.VoidType(), nil, false)
 			marked := llvm.AddFunction(mod, "marked", fnType)

@@ -678,7 +678,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			transform.AddStandardAttributes(llvmInitFn, config)
 			llvmInitFn.Param(0).SetName("context")
 			block := mod.Context().AddBasicBlock(llvmInitFn, "entry")
-			irbuilder := mod.Context().NewBuilder()
+			irbuilder := mod.NewBuilder()
 			defer irbuilder.Dispose()
 			irbuilder.SetInsertPointAtEnd(block)
 			if debugInitAll {

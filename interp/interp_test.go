@@ -40,7 +40,7 @@ func TestInterpFunctionUsageAttributes(t *testing.T) {
 			mod := ctx.NewModule("test")
 			defer mod.Dispose()
 			mod.SetDataLayout("e-p:64:64-i64:64-n8:16:32:64")
-			builder := ctx.NewBuilder()
+			builder := mod.NewBuilder()
 			defer builder.Dispose()
 			typ := llvm.FunctionType(ctx.VoidType(), nil, false)
 			helper := llvm.AddFunction(mod, "helper", typ)

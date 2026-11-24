@@ -40,7 +40,7 @@ func AddUnwindAssumptions(mod llvm.Module) bool {
 		assume = llvm.AddFunction(mod, "llvm.assume", assumeType)
 	}
 
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 	for fn := range functions {
 		first := fn.EntryBasicBlock().FirstInstruction()

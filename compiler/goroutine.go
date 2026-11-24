@@ -170,7 +170,7 @@ func (b *builder) createWasmExport() {
 	exportedFn.AddFunctionAttr(b.ctx.CreateStringAttribute("wasm-export-name", b.info.wasmExport))
 
 	// Create a builder for this wrapper function.
-	builder := newBuilder(b.context, b.ctx.NewBuilder(), b.fn)
+	builder := newBuilder(b.context, b.mod.NewBuilder(), b.fn)
 	defer builder.Dispose()
 
 	// Create a single basic block inside of it.
@@ -316,7 +316,7 @@ func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, p
 
 	b := &builder{
 		context: c,
-		Builder: c.ctx.NewBuilder(),
+		Builder: c.mod.NewBuilder(),
 	}
 	defer b.Dispose()
 

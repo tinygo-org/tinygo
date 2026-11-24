@@ -28,7 +28,7 @@ func TestAllocsSharedCalls(t *testing.T) {
 	mod := ctx.NewModule("shared-calls")
 	defer mod.Dispose()
 	mod.SetDataLayout("e-p:64:64")
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 
 	intType := ctx.Int32Type()
@@ -85,7 +85,7 @@ func TestAllocsCapturesAttribute(t *testing.T) {
 			mod := ctx.NewModule("captures")
 			defer mod.Dispose()
 			mod.SetDataLayout("e-p:64:64")
-			builder := ctx.NewBuilder()
+			builder := mod.NewBuilder()
 			defer builder.Dispose()
 
 			intType := ctx.Int32Type()

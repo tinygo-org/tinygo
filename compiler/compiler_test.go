@@ -733,7 +733,7 @@ func TestValidateWasmFunctionParameters(t *testing.T) {
 			defer ctx.Dispose()
 			mod := ctx.NewModule("test")
 			defer mod.Dispose()
-			builder := ctx.NewBuilder()
+			builder := mod.NewBuilder()
 			defer builder.Dispose()
 
 			paramTypes := make([]llvm.Type, test.params)

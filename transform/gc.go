@@ -35,7 +35,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	}
 
 	ctx := mod.Context()
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
@@ -387,7 +387,7 @@ func makeGCGlobalRoots(mod llvm.Module) bool {
 	rootArray.SetGlobalConstant(true)
 	rootArray.SetLinkage(llvm.InternalLinkage)
 
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 
 	entry := ctx.AddBasicBlock(rootCount, "entry")

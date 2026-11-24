@@ -41,7 +41,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
 	ctx := mod.Context()
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 
 	// Determine the maximum alignment on this platform.
