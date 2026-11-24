@@ -162,6 +162,7 @@ func initSystem() {
 
 	// initialize the SysTick counter
 	initSysTick()
+	nxp.SystemControl.SHPR3.Set((32 << nxp.SystemControl_SHPR3_PRI_15_Pos) | (32 << nxp.SystemControl_SHPR3_PRI_14_Pos)) // set systick and pendsv priority to 32
 }
 
 func initInternal() {
@@ -260,8 +261,8 @@ func abort() {
 		machine.LED.Set(v)
 		v = !v
 
-		t := millisSinceBoot()
-		for millisSinceBoot()-t < 60 {
+		t := sysTickCount.Get()
+		for sysTickCount.Get()-t < 60 {
 			arm.Asm("wfi")
 		}
 

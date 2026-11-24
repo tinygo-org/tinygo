@@ -39,32 +39,8 @@ import (
 	"runtime/volatile"
 )
 
-func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks) * 1000
-}
-
-func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns / 1000)
-}
-
-// cyclesPerMilli-1 is used for the systick reset value.
-// The systick current value will be decremented on every clock cycle.
-// An interrupt is generated when the current value reaches 0.
-// A value of freq/1000 generates a tick (irq) every millisecond (1/1000 s).
-var cyclesPerMilli = machine.CPUFrequency() / 1000
-
-// number of systick irqs (milliseconds) since boot
-var systickCount volatile.Register64
-
-func millisSinceBoot() uint64 {
-	return systickCount.Get()
-}
-
-func initSysTick() {
-	nxp.SysTick.RVR.Set(cyclesPerMilli - 1)
-	nxp.SysTick.CVR.Set(0)
-	nxp.SysTick.CSR.Set(nxp.SysTick_CSR_CLKSOURCE | nxp.SysTick_CSR_TICKINT | nxp.SysTick_CSR_ENABLE)
-	nxp.SystemControl.SHPR3.Set((32 << nxp.SystemControl_SHPR3_PRI_15_Pos) | (32 << nxp.SystemControl_SHPR3_PRI_14_Pos)) // set systick and pendsv priority to 32
+func sysTickFrequency() uint32 {
+	return machine.CPUFrequency()
 }
 
 func initSleepTimer() {
@@ -73,33 +49,6 @@ func initSleepTimer() {
 
 	timerInterrupt = interrupt.New(nxp.IRQ_LPTMR0, timerWake)
 	timerInterrupt.Enable()
-}
-
-//go:export SysTick_Handler
-func tick() {
-	systickCount.Set(systickCount.Get() + 1)
-}
-
-// ticks are in microseconds
-func ticks() timeUnit {
-	mask := arm.DisableInterrupts()
-	current := nxp.SysTick.CVR.Get()        // current value of the systick counter
-	count := millisSinceBoot()              // number of milliseconds since boot
-	istatus := nxp.SystemControl.ICSR.Get() // interrupt status register
-	arm.EnableInterrupts(mask)
-
-	micros := timeUnit(count * 1000) // a tick (1ms) = 1000 us
-
-	// if the systick counter was about to reset and ICSR indicates a pending systick irq, increment count
-	if istatus&nxp.SystemControl_ICSR_PENDSTSET != 0 && current > 50 {
-		micros += 1000
-	} else {
-		cycles := cyclesPerMilli - 1 - current // number of cycles since last 1ms tick
-		cyclesPerMicro := machine.CPUFrequency() / 1000000
-		micros += timeUnit(cycles / cyclesPerMicro)
-	}
-
-	return micros
 }
 
 // sleepTicks spins for a number of microseconds

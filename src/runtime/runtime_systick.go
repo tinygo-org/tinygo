@@ -1,4 +1,4 @@
-//go:build cortexm && (ra4m1 || py32 || qemu)
+//go:build cortexm && (ra4m1 || py32 || qemu || (nxp && mk66f18))
 
 package runtime
 
@@ -54,26 +54,4 @@ func ticksToNanoseconds(ticks timeUnit) int64 {
 
 func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns / 1000)
-}
-
-func sleepTicks(d timeUnit) {
-	if d <= 0 {
-		return
-	}
-
-	if hasScheduler {
-		if d >= 1000 {
-			waitForEvents()
-		}
-		return
-	}
-
-	sleepUntil := ticks() + d
-	for ticks() < sleepUntil {
-		waitForEvents()
-	}
-}
-
-func waitForEvents() {
-	arm.Asm("wfe")
 }
