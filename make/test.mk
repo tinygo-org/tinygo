@@ -261,6 +261,7 @@ report-stdlib-tests-pass:
 
 # Standard library packages that pass tests quickly on the current platform
 TEST_PACKAGES_HOST_FULL_ONLY := internal/synctest testing/synctest
+TEST_PACKAGES_HOST_FULL_ONLY += ./tests/escapeallocs
 ifeq ($(uname),Darwin)
 TEST_PACKAGES_HOST := $(TEST_PACKAGES_FAST) $(TEST_PACKAGES_DARWIN)
 TEST_PACKAGES_HOST_FULL_ONLY += io/fs
@@ -330,7 +331,6 @@ tinygo-test tinygo-test-fast: TEST_OPTIONS_go/parser = $(HOST_TEST_STACK_SKIP_FL
 tinygo-test tinygo-test-fast: TEST_OPTIONS_encoding/xml = $(TEST_SKIP_FLAG) -short -stack-size=16MB
 tinygo-test: TEST_OPTIONS_archive/zip = $(TEST_SKIP_FLAG) -short
 tinygo-test: TEST_OPTIONS_index/suffixarray = $(TEST_SKIP_FLAG) -short
-tinygo-test: TEST_OPTIONS_net/netip := -skip='^TestAddrStringAllocs$$|^TestNoAllocs$$/^(Addr.IsGlobalUnicast|Addr.IsInterfaceLocalMulticast|Addr.IsLinkLocalMulticast|Addr.IsLinkLocalUnicast|Addr.IsPrivate)$$'
 tinygo-test: TEST_OPTIONS_io/fs := -stack-size=6MB
 ifeq ($(OS),Windows_NT)
 # TestWalkDir needs File.Chdir, which is a stub in src/os/file_windows.go.
