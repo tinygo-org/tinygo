@@ -6,10 +6,40 @@ package os_test
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 )
+
+func TestFileChdir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "marker"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(wd); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	h, err := syscall.Open(dir, syscall.O_RDONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := os.NewFile(uintptr(h), "unused-file-name")
+	defer f.Close()
+	if err := f.Chdir(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat("marker"); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestFixLongPath(t *testing.T) {
 	if os.CanUseLongPaths {
