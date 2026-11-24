@@ -4036,9 +4036,9 @@ func (b *builder) createConvert(typeFrom, typeTo types.Type, value llvm.Value, p
 			var significandBits int
 			switch typeFrom.Kind() {
 			case types.Float32:
-				significandBits = 23
+				significandBits = 24
 			case types.Float64:
-				significandBits = 52
+				significandBits = 53
 			}
 			if typeTo.Info()&types.IsUnsigned != 0 { // if unsigned
 				// Select the maximum value for this unsigned integer type.
