@@ -236,6 +236,7 @@ func FinalizerAllowsInterior(t *RawType) bool {
 // pointer because it doesn't have ptrTo).
 type elemType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
@@ -254,6 +255,7 @@ var chanTypeLinksLen uintptr
 // actual type descriptor and must not be accessed.
 type ptrType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	elem      *RawType
 	methods   methodSet // only present when numMethod & numMethodHasMethodSet != 0
@@ -273,6 +275,7 @@ type interfaceType struct {
 
 type arrayType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
@@ -289,6 +292,7 @@ var arrayTypeLinksLen uintptr
 
 type mapType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
@@ -315,6 +319,7 @@ var mapTypeLinksLen uintptr
 // set's entries. When clear, the name string starts directly at that offset.
 type namedType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
@@ -336,6 +341,7 @@ type namedType struct {
 // and the type descriptor ends after the last structField entry.
 type structType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	pkgpath   *byte

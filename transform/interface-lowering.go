@@ -447,13 +447,18 @@ func (p *lowerInterfacesPass) run() error {
 			numFields := initializer.Type().StructElementTypesCount()
 
 			// Read numMethods from the original type descriptor (index 2:
-			// after prefix pointer at 0 and kind byte at 1). For Named,
-			// Pointer, and Struct types, the numMethodHasMethodSet flag
-			// indicates that an inline method set is present.
+			// after prefix pointer at 0 and kind byte at 1, or index 3 after
+			// the type ID byte). For Named, Pointer, and Struct types, the
+			// numMethodHasMethodSet flag indicates that an inline method set
+			// is present.
+			nmIndex := 2
+			if p.hasTypeIDField(t) {
+				nmIndex = 3
+			}
 			var numMethodsConst uint64
 			var numMethodsIsI16 bool
-			if numFields > 2 {
-				nmField := initializer.AggregateElement(2)
+			if numFields > nmIndex {
+				nmField := initializer.AggregateElement(nmIndex)
 				if nmField.Type() == p.ctx.Int16Type() {
 					numMethodsConst = nmField.ZExtValue()
 					numMethodsIsI16 = true
@@ -476,18 +481,14 @@ func (p *lowerInterfacesPass) run() error {
 					elems := field.Type().StructElementTypes()
 					if elems[1].ArrayLength() == 0 {
 						clearedNumMethods := numMethodsConst & ^uint64(numMethodHasMethodSet)
-						newInitializerFields[1] = llvm.ConstInt(p.ctx.Int16Type(), clearedNumMethods, false)
+						newInitializerFields[nmIndex-1] = llvm.ConstInt(p.ctx.Int16Type(), clearedNumMethods, false)
 						continue
 					}
 				}
 				newInitializerFields = append(newInitializerFields, field)
 			}
 			if t.typeID != 0 {
-				// The ID goes in the padding byte before numMethods.
-				newInitializerFields = append([]llvm.Value{
-					newInitializerFields[0],
-					llvm.ConstInt(p.ctx.Int8Type(), uint64(t.typeID), false),
-				}, newInitializerFields[1:]...)
+				newInitializerFields[1] = llvm.ConstInt(p.ctx.Int8Type(), uint64(t.typeID), false)
 			}
 			newInitializer := p.ctx.ConstStruct(newInitializerFields, false)
 			typecodeName := t.typecode.Name()
@@ -1174,7 +1175,7 @@ func (p *lowerInterfacesPass) assignTypeIDs(invokeFunctions, assertFunctions []l
 	next := 1
 	for _, itf := range itfs {
 		for _, t := range itf.types {
-			if t.typeID != 0 || next > 255 || !p.hasTypeIDByte(t) {
+			if t.typeID != 0 || next > 255 || !p.hasTypeIDField(t) {
 				continue
 			}
 			t.typeID = uint8(next)
@@ -1225,23 +1226,18 @@ func (p *lowerInterfacesPass) createTypeIDSwitch(fn, actualType llvm.Value, type
 	return chain
 }
 
-// hasTypeIDByte reports whether byte 1 of the type descriptor is padding before
-// an aligned numMethods field. Index 0 is still the temporary method set.
-func (p *lowerInterfacesPass) hasTypeIDByte(t *typeInfo) bool {
+// hasTypeIDField reports whether the descriptor has the typeID byte between the
+// kind byte and numMethods. Index 0 is still the temporary method set.
+func (p *lowerInterfacesPass) hasTypeIDField(t *typeInfo) bool {
 	if t.methodSet.IsNil() {
 		return false
 	}
 	init := t.typecode.Initializer()
-	if init.Type().StructElementTypesCount() < 3 {
+	if init.Type().StructElementTypesCount() < 4 {
 		return false
 	}
 	elems := init.Type().StructElementTypes()
-	if elems[1] != p.ctx.Int8Type() || elems[2] != p.ctx.Int16Type() {
-		return false
-	}
-	// On AVR numMethods is not aligned, so there is no padding byte.
-	ty := init.Type()
-	return p.targetData.ElementOffset(ty, 2)-p.targetData.ElementOffset(ty, 1) >= 2
+	return elems[1] == p.ctx.Int8Type() && elems[2] == p.ctx.Int8Type() && elems[3] == p.ctx.Int16Type()
 }
 
 func (p *lowerInterfacesPass) getDIFile(file string) llvm.Metadata {

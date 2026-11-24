@@ -8,7 +8,7 @@ target triple = "wasm32-unknown-wasip1"
 
 @"main$string" = internal unnamed_addr constant [3 x i8] c"foo", align 1
 @"reflect/types.type:basic:string" = linkonce_odr constant { i8, ptr } { i8 81, ptr @"reflect/types.type:pointer:basic:string" }, align 4
-@"reflect/types.type:pointer:basic:string" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:string" }, align 4
+@"reflect/types.type:pointer:basic:string" = linkonce_odr constant { i8, i8, i16, ptr } { i8 -43, i8 0, i16 0, ptr @"reflect/types.type:basic:string" }, align 4
 @"main$string.1" = internal unnamed_addr constant [3 x i8] c"abc", align 1
 @"main$string.2" = internal unnamed_addr constant [3 x i8] c"abc", align 1
 @"main$string.3" = internal unnamed_addr constant [3 x i8] c"abc", align 1

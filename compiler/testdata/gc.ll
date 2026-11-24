@@ -23,7 +23,7 @@ target triple = "wasm32-unknown-wasip1"
 @"runtime/gc.layout:62-0100000000000020" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\01\00\00\00\00\00\00 " }
 @"runtime/gc.layout:62-0100000000000000" = linkonce_odr unnamed_addr constant { i32, [8 x i8] } { i32 62, [8 x i8] c"\01\00\00\00\00\00\00\00" }
 @"reflect/types.type:basic:complex128" = linkonce_odr constant { i8, ptr } { i8 80, ptr @"reflect/types.type:pointer:basic:complex128" }, align 4
-@"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:complex128" }, align 4
+@"reflect/types.type:pointer:basic:complex128" = linkonce_odr constant { i8, i8, i16, ptr } { i8 -43, i8 0, i16 0, ptr @"reflect/types.type:basic:complex128" }, align 4
 
 declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 

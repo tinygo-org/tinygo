@@ -250,8 +250,8 @@ func TestInterfaceLoweringTypeIDSwitch(t *testing.T) {
 		{"below threshold", 3, "", false},
 		{"above threshold", 5, "", true},
 		{"more than 255 types", 260, "", true},
-		// Like AVR, where numMethods is not aligned.
-		{"unaligned i16", 5, "-i16:8", false},
+		// Like AVR, where the compiler emits no typeID byte.
+		{"no type ID field", 5, "-i16:8", false},
 	} {
 		var ir strings.Builder
 		ir.WriteString(`
@@ -287,15 +287,20 @@ define i32 @"(Legacy).Double$invoke"(ptr %receiver, ptr %context) {
 attributes #0 = { "tinygo-invoke"="reflect/methods.Double() int" "tinygo-methods"="reflect/methods.Double() int" }
 attributes #1 = { "tinygo-methods"="reflect/methods.Double() int" }
 `)
+		// The compiler emits a typeID byte after the kind byte, except on AVR.
+		descType, descID := "{ ptr, i8, i8, i16, ptr, ptr, ptr }", "i8 0, "
+		if tc.layout != "" {
+			descType, descID = "{ ptr, i8, i16, ptr, ptr, ptr }", ""
+		}
 		for i := range tc.numTypes {
 			fmt.Fprintf(&ir, `
 @"T%[1]d$methodset" = linkonce_odr unnamed_addr constant { i32, [1 x ptr], { ptr } } { i32 1, [1 x ptr] [ptr @"reflect/methods.Double() int"], { ptr } { ptr @"(T%[1]d).Double$invoke" } }
-@"reflect/types.type:named:T%[1]d" = linkonce_odr constant { ptr, i8, i16, ptr, ptr, ptr } { ptr @"T%[1]d$methodset", i8 34, i16 1, ptr null, ptr @"reflect/types.type:basic:int", ptr null }, align 4
+@"reflect/types.type:named:T%[1]d" = linkonce_odr constant %[2]s { ptr @"T%[1]d$methodset", i8 34, %[3]si16 1, ptr null, ptr @"reflect/types.type:basic:int", ptr null }, align 4
 define i32 @"(T%[1]d).Double$invoke"(ptr %%receiver, ptr %%context) {
   ret i32 %[1]d
 }
-@box%[1]d = global ptr getelementptr inbounds ({ ptr, i8, i16, ptr, ptr, ptr }, ptr @"reflect/types.type:named:T%[1]d", i32 0, i32 1)
-`, i)
+@box%[1]d = global ptr getelementptr inbounds (%[2]s, ptr @"reflect/types.type:named:T%[1]d", i32 0, i32 1)
+`, i, descType, descID)
 		}
 
 		t.Run(tc.name, func(t *testing.T) {
@@ -351,12 +356,15 @@ define i32 @"(T%[1]d).Double$invoke"(ptr %%receiver, ptr %%context) {
 			seen := make(map[uint64]bool)
 			for i := range tc.numTypes {
 				name := fmt.Sprintf("reflect/types.type:named:T%d", i)
-				field := mod.NamedGlobal(name).Initializer().AggregateElement(1)
-				if field.Type() == ctx.Int8Type() {
-					if !tc.switched || field.ZExtValue() == 0 || seen[field.ZExtValue()] {
-						t.Errorf("T%d: bad type ID %d", i, field.ZExtValue())
+				var id uint64
+				if field := mod.NamedGlobal(name).Initializer().AggregateElement(1); field.Type() == ctx.Int8Type() {
+					id = field.ZExtValue()
+				}
+				if id != 0 {
+					if !tc.switched || seen[id] {
+						t.Errorf("T%d: bad type ID %d", i, id)
 					}
-					seen[field.ZExtValue()] = true
+					seen[id] = true
 					continue
 				}
 				// Types without an ID must still be compared.
