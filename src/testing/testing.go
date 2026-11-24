@@ -40,6 +40,9 @@ var (
 	flagCount      int
 	flagParallel   int
 	flagCPUProfile string
+
+	flagMemProfile     string
+	flagMemProfileRate int
 )
 
 var initRan bool
@@ -60,6 +63,8 @@ func Init() {
 	flag.IntVar(&flagCount, "test.count", 1, "run each test or benchmark `count` times")
 	flag.IntVar(&flagParallel, "test.parallel", runtime.NumCPU(), "run at most `n` tests in parallel")
 	flag.StringVar(&flagCPUProfile, "test.cpuprofile", "", "write a cpu profile to `file`")
+	flag.StringVar(&flagMemProfile, "test.memprofile", "", "write an allocation profile to `file`")
+	flag.IntVar(&flagMemProfileRate, "test.memprofilerate", 0, "set memory allocation profiling `rate` (see runtime.MemProfileRate)")
 
 	initBenchmarkFlags()
 }
@@ -877,6 +882,7 @@ type testDeps interface {
 	MatchString(pat, str string) (bool, error)
 	StartCPUProfile(io.Writer) error
 	StopCPUProfile()
+	WriteProfileTo(string, io.Writer, int) error
 }
 
 func (m *M) shuffle() error {
@@ -922,6 +928,14 @@ func (m *M) Run() (code int) {
 		}
 	}
 
+	if flagMemProfileRate > 0 {
+		runtime.MemProfileRate = flagMemProfileRate
+	}
+	if flagMemProfile != "" && !isBaremetal {
+		// Deferred first, so it runs after the CPU profile is stopped.
+		defer m.writeMemProfile()
+	}
+
 	if flagCPUProfile != "" {
 		f, err := os.Create(flagCPUProfile)
 		if err != nil {
@@ -953,6 +967,22 @@ func (m *M) Run() (code int) {
 		m.exitCode = 0
 	}
 	return
+}
+
+// writeMemProfile writes the profile requested with -test.memprofile.
+func (m *M) writeMemProfile() {
+	f, err := os.Create(flagMemProfile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "testing: %s\n", err)
+		m.exitCode = 2
+		return
+	}
+	runtime.GC() // materialize all statistics
+	if err := m.deps.WriteProfileTo("allocs", f, 0); err != nil {
+		fmt.Fprintf(os.Stderr, "testing: can't write %s: %s\n", flagMemProfile, err)
+		m.exitCode = 2
+	}
+	f.Close()
 }
 
 func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
