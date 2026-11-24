@@ -57,16 +57,28 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipPackage("embed")
 	// BoringCrypto's cache tests reference the missing registerCache symbol.
 	r.skipPackage("crypto/internal/boring/...")
-	// Instrumented subprocess tests time out.
-	r.skipPackage("internal/coverage/...")
+	if !linux {
+		r.skipPackage("internal/coverage/cfile")
+		r.skipPackage("internal/coverage/pods")
+		r.skipPackage("internal/coverage/test")
+	}
+	if !linux && !wasi {
+		r.skipPackage("internal/coverage/cformat")
+		r.skipPackage("internal/coverage/cmerge")
+		r.skipPackage("internal/coverage/slicereader")
+		r.skipPackage("internal/coverage/slicewriter")
+	}
 	// The cgroup tests need stock runtime throw and Linux Syscall6 symbols.
 	r.skipPackage("internal/cgrouptest")
 	r.skipPackage("internal/runtime/cgroup")
 	// The CPU and GC scan tests need Go's x86 CPU assembly.
 	r.skipPackage("internal/cpu")
 	r.skipPackage("internal/runtime/gc/scan")
-	// The metrics and bisect subprocess checks fail on Linux.
-	r.skipPackage("internal/godebug")
+	if linux {
+		r.skipTest("internal/godebug", `^Test(Metrics|CmdBisect|BisectTestCase)$`)
+	} else {
+		r.skipPackage("internal/godebug")
+	}
 	// The polling tests reach an unimplemented semacquire path.
 	r.skipPackage("internal/poll")
 	// The stock runtime tests need Go's atomic entry points and internal ABI types.
@@ -89,8 +101,6 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("internal/trace/internal/tracev1")
 		r.skipPackage("internal/trace/tracev2")
 	}
-	// TestAlloc exceeds the decompressor's allocation budget.
-	r.skipPackage("internal/zstd")
 
 	if !linux {
 		r.skipPackage("net/rpc/jsonrpc")
@@ -120,23 +130,12 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("crypto/internal/fips140/mldsa")
 		r.skipPackage("crypto/internal/fips140only")
 	}
-	r.skipPackage("encoding/json/internal/jsonflags")
-	r.skipPackage("encoding/json/internal/jsonopts")
-	r.skipPackage("encoding/json/internal/jsonwire")
-	r.skipPackage("internal/buildcfg")
-	r.skipPackage("internal/chacha8rand")
-	r.skipPackage("internal/dag")
-	r.skipPackage("internal/diff")
-	r.skipPackage("internal/godebugs")
-	r.skipPackage("internal/gover")
 	if baremetal {
 		r.skipPackage("internal/nettest")
 	}
-	r.skipPackage("internal/pkgbits")
-	r.skipPackage("internal/platform")
-	r.skipPackage("internal/runtime/math")
-	r.skipPackage("internal/saferio")
-	r.skipPackage("internal/singleflight")
+	if !linux {
+		r.skipPackage("internal/platform")
+	}
 	if !linux && !darwin {
 		r.skipPackage("internal/syscall/unix")
 	}
@@ -149,7 +148,6 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	if (!hosted && !wasi) || (hostOS == "windows" && wasi) {
 		r.skipPackage("internal/copyright")
 	}
-	r.skipPackage("internal/unsafeheader")
 	r.skipPackage("internal/runtime/wasitest")
 	r.skipPackage("internal/routebsd")
 	r.skipPackage("internal/syscall/windows")
@@ -161,8 +159,8 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	if !linux {
 		r.skipPackage("net/internal/socktest")
 	}
-	if baremetal || (wasm && !wasi) {
-		r.skipPackage("embed/internal/embedtest")
+	if baremetal || browser {
+		r.skipTest("embed/internal/embedtest", `TestXGlobal`)
 	}
 	if baremetal && !qemu {
 		r.skipPackage("expvar")
@@ -218,21 +216,20 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		if !wasi && !browser && !qemu {
 			r.skipPackage("os/user")
 		}
-		if !browser {
+		if !hosted && !wasi && !browser {
 			r.skipPackage("image/gif")
 			r.skipPackage("image/jpeg")
 			r.skipPackage("image/png")
 			r.skipPackage("regexp")
 		}
-		if !browser && !qemu {
+		if !hosted && !wasi && !browser && !qemu {
 			r.skipPackage("flag")
 			r.skipPackage("fmt")
 		}
-		if !browser && !qemu {
+		if !hosted && !wasi && !browser && !qemu {
 			r.skipPackage("slices")
 			r.skipPackage("strings")
 		}
-		r.skipPackage("context")
 		r.skipPackage("crypto/mldsa")
 		if !wasi {
 			r.skipPackage("debug/dwarf")
@@ -243,23 +240,13 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		if windows {
 			r.skipPackage("debug/pe")
 		}
-		r.skipPackage("debug/gosym")
-		r.skipPackage("go/constant")
-		r.skipPackage("go/doc")
-		r.skipPackage("go/doc/comment")
 		r.skipPackage("go/parser")
-		r.skipPackage("image/color")
-		r.skipPackage("image/draw")
-		r.skipPackage("iter")
-		r.skipPackage("math/bits")
-		r.skipPackage("mime/quotedprintable")
 		r.skipPackage("net")
 		if !wasm {
 			r.skipPackage("net/netip")
 			r.skipPackage("net/textproto")
 		}
 		r.skipPackage("path/filepath")
-		r.skipPackage("sort")
 
 		// Windows File.ReadAt is a stub.
 		r.skipPackage("archive/zip")
@@ -275,6 +262,23 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	}
 	if !hosted {
 		r.skipPackage("mime/multipart")
+	}
+
+	if windows || wasi {
+		r.skipTest("flag", `^TestExitCode$`)
+	}
+	if windows && hasTag("scheduler.tasks") {
+		r.skipTest("context", `^TestContextErrDoneRace$`)
+	}
+	if baremetal {
+		r.skipTest("image/draw", `TestPaletted`)
+	} else if browser {
+		r.skipTest("image/draw", `^TestPaletted$`)
+	}
+	if wasi {
+		r.skipTest("fmt", `^TestScanInts$`)
+		r.skipTest("regexp", `^TestOnePassCutoff$`)
+		r.skipTest("image/png", `^TestDimensionOverflow$`)
 	}
 
 	if wasip2 {
@@ -299,7 +303,6 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 
 	// Hosted coverage
 	if !hosted {
-		r.skipPackage("compress/flate")
 		r.skipPackage("encoding/json")
 		r.skipPackage("internal/synctest")
 		r.skipPackage("io/fs")
@@ -322,13 +325,18 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 
 	// These suites exercise a filesystem or read fixtures from disk.
 	if baremetal || (wasm && !wasi) {
+		r.skipPackage("compress/flate")
 		r.skipPackage("compress/lzw")
 		r.skipPackage("compress/zlib")
 		r.skipPackage("crypto/ecdsa")
+		r.skipPackage("debug/gosym")
 		r.skipPackage("debug/macho")
+		r.skipPackage("go/doc")
+		r.skipPackage("go/doc/comment")
 		r.skipPackage("go/format")
 		r.skipPackage("html/template")
 		r.skipPackage("image")
+		r.skipPackage("internal/diff")
 		r.skipPackage("os")
 		r.skipPackage("testing")
 		r.skipPackage("text/template")
@@ -383,6 +391,9 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.short("archive/zip")
 	}
 	if !opts.bench {
+		if wasi {
+			r.short("compress/flate")
+		}
 		r.short("crypto/dsa")
 		r.short("crypto/mldsa")
 		r.short("crypto/rsa")
@@ -435,14 +446,14 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipTest("encoding/json/jsontext", `^TestTokenStringAllocations$`)
 	r.skipTest("math/big", `^TestNewIntAllocs$`)
 	r.skipTest("mime", `^TestLookupMallocs$`)
-	if opts.mode == modeFull || wasm {
+	if opts.mode == modeFull || opts.mode == modeFast || wasm {
 		r.skipTest("net/netip", `^TestAddrStringAllocs$|^TestNoAllocs$/^(Addr.IsGlobalUnicast|Addr.IsInterfaceLocalMulticast|Addr.IsLinkLocalMulticast|Addr.IsLinkLocalUnicast|Addr.IsPrivate)$|^TestNoAllocs$/^Addr\.Zone$/^6zone$`)
 	}
 	if !baremetal {
 		r.skipTest("reflect", `^TestMapIterSet$`)
 	}
-	r.skipTest("sort", `^TestSearchWrappersDontAlloc$`)
 	if !baremetal {
+		r.skipTest("sort", `^TestSearchWrappersDontAlloc$`)
 		r.skipTest("strconv", `^(TestCountMallocs|TestAllocationsFromBytes)$`)
 	}
 	if !baremetal {
@@ -452,6 +463,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	// The same allocation checks on bare metal use substring matches.
 	if baremetal {
 		r.skipTest("reflect", `TestMapIterSet`)
+		r.skipTest("sort", `TestSearchWrappersDontAlloc`)
 		r.skipTest("strconv", `TestCountMallocs|TestAllocationsFromBytes`)
 		r.skipTest("unicode/utf16", `TestAllocationsDecode`)
 	}
@@ -463,6 +475,19 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipTest("fmt", `^TestCountMallocs$`)
 		r.skipTest("slices", `^(TestGrow|TestInsert|TestConcat)$`)
 		r.skipTest("strings", `^(TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace)$`)
+	}
+
+	if baremetal {
+		// TestLarge also matches TestLargeXXHash.
+		r.skipTest("internal/zstd", `TestAlloc|TestLarge|TestFileSamples`)
+	} else {
+		r.skipTest("internal/zstd", `^TestAlloc$`)
+		if !linux {
+			r.skipTest("internal/zstd", `^TestLarge$`)
+		}
+		if browser {
+			r.skipTest("internal/zstd", `^(TestFileSamples|TestLargeXXHash)$`)
+		}
 	}
 
 	// TestPureGoTag calls go/build, which rejects runtime.Compiler == "tinygo".
