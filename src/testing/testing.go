@@ -87,6 +87,10 @@ type common struct {
 	tempDirErr error
 	tempDirSeq int32
 
+	artifactDirOnce sync.Once
+	artifactDir     string
+	artifactDirErr  error
+
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 
@@ -198,6 +202,7 @@ func fmtDuration(d time.Duration) string {
 
 // TB is the interface common to T and B.
 type TB interface {
+	ArtifactDir() string
 	Cleanup(func())
 	Context() context.Context
 	Error(args ...any)
@@ -384,6 +389,25 @@ func (c *common) Cleanup(f func()) {
 // that shut down on [context.Context.Done] before the test or benchmark completes.
 func (c *common) Context() context.Context {
 	return c.ctx
+}
+
+// ArtifactDir returns the same temporary directory on each call within a test
+// or benchmark. Cleanup removes it after that test and its subtests complete.
+func (c *common) ArtifactDir() string {
+	c.artifactDirOnce.Do(func() {
+		c.artifactDir, c.artifactDirErr = os.MkdirTemp("", "test-artifacts-")
+		if c.artifactDirErr == nil {
+			c.Cleanup(func() {
+				if err := os.RemoveAll(c.artifactDir); err != nil {
+					c.Errorf("ArtifactDir cleanup: %v", err)
+				}
+			})
+		}
+	})
+	if c.artifactDirErr != nil {
+		c.Fatalf("ArtifactDir: %v", c.artifactDirErr)
+	}
+	return c.artifactDir
 }
 
 // TempDir returns a temporary directory for the test to use.
