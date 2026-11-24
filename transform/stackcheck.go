@@ -1,6 +1,9 @@
 package transform
 
 import (
+	"slices"
+	"strings"
+
 	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
@@ -90,15 +93,45 @@ func AddStackLimitChecks(mod llvm.Module) {
 	}
 }
 
-// hasStackFrame returns whether fn has allocas, which are the only things that
-// put a function frame in linear memory on wasm.
+// hasStackFrame returns whether fn has allocas, which make a frame in linear
+// memory on wasm. It removes dead allocas first.
 func hasStackFrame(fn llvm.Value) bool {
+	var unused []llvm.Value
+	found := false
 	for bb := range llvmutil.BasicBlocks(fn) {
 		for inst := range llvmutil.Instructions(bb) {
-			if !inst.IsAAllocaInst().IsNil() {
-				return true
+			if inst.IsAAllocaInst().IsNil() {
+				continue
+			}
+			if isDeadAlloca(inst) {
+				unused = append(unused, inst)
+			} else {
+				found = true
 			}
 		}
 	}
-	return false
+	for _, inst := range unused {
+		for _, use := range slices.Collect(llvmutil.Uses(inst)) {
+			use.EraseFromParentAsInstruction()
+		}
+		inst.EraseFromParentAsInstruction()
+	}
+	return found
+}
+
+// isDeadAlloca returns whether alloca is only written to and marked with
+// lifetime markers, so that it can be removed.
+func isDeadAlloca(alloca llvm.Value) bool {
+	for use := range llvmutil.Uses(alloca) {
+		if !use.IsAStoreInst().IsNil() {
+			if use.Operand(1) != alloca || use.Operand(0) == alloca || use.IsVolatile() {
+				return false
+			}
+			continue
+		}
+		if use.IsACallInst().IsNil() || !strings.HasPrefix(use.CalledValue().Name(), "llvm.lifetime.") {
+			return false
+		}
+	}
+	return true
 }
