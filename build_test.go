@@ -233,6 +233,7 @@ func TestBuild(t *testing.T) {
 		"timer_node_reuse_gc.go",
 		"timers.go",
 		"typealias.go",
+		"typeassert-typeid.go",
 		"zeroalloc.go",
 	}
 
@@ -753,7 +754,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// Not all tests are currently supported on AVR.
 			// Skip the ones that aren't.
 			switch name {
-			case "reflect.go", "reflect-method-values.go", "reflect-promoted-lookup.go":
+			case "reflect.go", "reflect-method-values.go", "reflect-promoted-lookup.go", "typeassert-typeid.go":
 				// Reflect tests do not run correctly, probably because of the
 				// limited amount of memory.
 				continue

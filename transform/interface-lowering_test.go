@@ -1,6 +1,7 @@
 package transform_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -232,5 +233,170 @@ define { ptr, ptr } @compose(ptr %typecode, ptr %value) {
 				}
 			}
 		})
+	}
+}
+
+// TestInterfaceLoweringTypeIDSwitch checks that invoke thunks with many
+// implementers switch on the type ID, and still compare types without one.
+func TestInterfaceLoweringTypeIDSwitch(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		numTypes int // plus Legacy
+		layout   string
+		switched bool
+	}{
+		{"below threshold", 3, "", false},
+		{"above threshold", 5, "", true},
+		{"more than 255 types", 260, "", true},
+		// Like AVR, where the compiler emits no typeID byte.
+		{"no type ID field", 5, "-i16:8", false},
+	} {
+		var ir strings.Builder
+		ir.WriteString(`
+target datalayout = "e-m:e-p:32:32` + tc.layout + `-i64:64-v128:64:128-a:0:32-n32-S64"
+target triple = "armv7m-none-eabi"
+
+@"reflect/types.type:basic:int" = linkonce_odr constant { i8, ptr } { i8 2, ptr null }, align 4
+@"reflect/methods.Double() int" = linkonce_odr constant i8 0
+
+declare void @runtime.nilPanic(ptr)
+declare i32 @"Doubler.Double$invoke"(ptr %receiver, ptr %typecode, ptr %context) #0
+
+define i32 @callDouble(ptr %typecode, ptr %value) {
+  %ret = call i32 @"Doubler.Double$invoke"(ptr %value, ptr %typecode, ptr undef)
+  ret i32 %ret
+}
+
+declare i1 @"Doubler$typeassert"(ptr %typecode) #1
+
+define i1 @isDoubler(ptr %typecode) {
+  %ok = call i1 @"Doubler$typeassert"(ptr %typecode)
+  ret i1 %ok
+}
+
+; Descriptor without numMethods, so it has no type ID byte.
+@"Legacy$methodset" = linkonce_odr unnamed_addr constant { i32, [1 x ptr], { ptr } } { i32 1, [1 x ptr] [ptr @"reflect/methods.Double() int"], { ptr } { ptr @"(Legacy).Double$invoke" } }
+@"reflect/types.type:named:Legacy" = linkonce_odr constant { ptr, i8, ptr, ptr } { ptr @"Legacy$methodset", i8 34, ptr null, ptr @"reflect/types.type:basic:int" }, align 4
+define i32 @"(Legacy).Double$invoke"(ptr %receiver, ptr %context) {
+  ret i32 0
+}
+@boxLegacy = global ptr getelementptr inbounds ({ ptr, i8, ptr, ptr }, ptr @"reflect/types.type:named:Legacy", i32 0, i32 1)
+
+attributes #0 = { "tinygo-invoke"="reflect/methods.Double() int" "tinygo-methods"="reflect/methods.Double() int" }
+attributes #1 = { "tinygo-methods"="reflect/methods.Double() int" }
+`)
+		// The compiler emits a typeID byte after the kind byte, except on AVR.
+		descType, descID := "{ ptr, i8, i8, i16, ptr, ptr, ptr }", "i8 0, "
+		if tc.layout != "" {
+			descType, descID = "{ ptr, i8, i16, ptr, ptr, ptr }", ""
+		}
+		for i := range tc.numTypes {
+			fmt.Fprintf(&ir, `
+@"T%[1]d$methodset" = linkonce_odr unnamed_addr constant { i32, [1 x ptr], { ptr } } { i32 1, [1 x ptr] [ptr @"reflect/methods.Double() int"], { ptr } { ptr @"(T%[1]d).Double$invoke" } }
+@"reflect/types.type:named:T%[1]d" = linkonce_odr constant %[2]s { ptr @"T%[1]d$methodset", i8 34, %[3]si16 1, ptr null, ptr @"reflect/types.type:basic:int", ptr null }, align 4
+define i32 @"(T%[1]d).Double$invoke"(ptr %%receiver, ptr %%context) {
+  ret i32 %[1]d
+}
+@box%[1]d = global ptr getelementptr inbounds (%[2]s, ptr @"reflect/types.type:named:T%[1]d", i32 0, i32 1)
+`, i, descType, descID)
+		}
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			path := filepath.Join(t.TempDir(), "in.ll")
+			if err := os.WriteFile(path, []byte(ir.String()), 0o666); err != nil {
+				t.Fatal(err)
+			}
+			buf, err := llvm.NewMemoryBufferFromFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mod, err := ctx.ParseIR(buf)
+			if err != nil {
+				t.Fatalf("could not load module:\n%v", err)
+			}
+			defer mod.Dispose()
+
+			if err := transform.LowerInterfaces(mod, defaultTestConfig); err != nil {
+				t.Fatal(err)
+			}
+			if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
+				t.Fatal("IR verification failed")
+			}
+
+			thunk := mod.NamedFunction("Doubler.Double$invoke").String()
+			if got := strings.Contains(thunk, "switch i8"); got != tc.switched {
+				t.Errorf("thunk uses switch: got %v, want %v\n%s", got, tc.switched, thunk)
+			}
+			if !strings.Contains(thunk, `icmp eq ptr %actualType, @"reflect/types.type:named:Legacy"`) {
+				t.Errorf("thunk does not compare the type without an ID byte:\n%s", thunk)
+			}
+			for i := range tc.numTypes {
+				if !strings.Contains(thunk, fmt.Sprintf(`@"(T%d).Double$invoke"`, i)) {
+					t.Errorf("thunk does not call (T%d).Double:\n%s", i, thunk)
+				}
+			}
+			if !strings.Contains(thunk, `@"(Legacy).Double$invoke"`) {
+				t.Errorf("thunk does not call (Legacy).Double:\n%s", thunk)
+			}
+			if tc.switched {
+				checkNilBeforeTypeID(t, thunk, "nilpanic")
+				if !strings.Contains(thunk, "nilpanic:") || !strings.Contains(thunk, "@runtime.nilPanic(") {
+					t.Errorf("thunk does not call runtime.nilPanic:\n%s", thunk)
+				}
+			}
+
+			assert := mod.NamedFunction("Doubler$typeassert").String()
+			for _, want := range []string{"switch i8", "%istagged", "%meta"} {
+				if got := strings.Contains(assert, want); got != tc.switched {
+					t.Errorf("type assert contains %q: got %v, want %v\n%s", want, got, tc.switched, assert)
+				}
+			}
+			if !strings.Contains(assert, `icmp eq ptr %actualType, @"reflect/types.type:named:Legacy"`) {
+				t.Errorf("type assert does not compare the type without an ID byte:\n%s", assert)
+			}
+			if tc.switched {
+				checkNilBeforeTypeID(t, assert, "false")
+			}
+
+			seen := make(map[uint64]bool)
+			for i := range tc.numTypes {
+				name := fmt.Sprintf("reflect/types.type:named:T%d", i)
+				var id uint64
+				if field := mod.NamedGlobal(name).Initializer().AggregateElement(1); field.Type() == ctx.Int8Type() {
+					id = field.ZExtValue()
+				}
+				if id != 0 {
+					if !tc.switched || seen[id] {
+						t.Errorf("T%d: bad type ID %d", i, id)
+					}
+					seen[id] = true
+					continue
+				}
+				// Types without an ID must still be compared.
+				cmp := `icmp eq ptr %actualType, @"` + name + `"`
+				if tc.switched && (!strings.Contains(thunk, cmp) || !strings.Contains(assert, cmp)) {
+					t.Errorf("T%d has no type ID and is not compared", i)
+				}
+			}
+			if wantIDs := min(tc.numTypes, 255); tc.switched && len(seen) != wantIDs {
+				t.Errorf("got %d type IDs, want %d", len(seen), wantIDs)
+			}
+		})
+	}
+}
+
+// checkNilBeforeTypeID checks that a nil typecode branches to failLabel before
+// the type ID load, which would read address 1.
+func checkNilBeforeTypeID(t *testing.T, fn, failLabel string) {
+	t.Helper()
+	isNil := strings.Index(fn, "%isnil = icmp eq ptr %actualType, null")
+	branch := strings.Index(fn, "label %"+failLabel+", label %typeid")
+	load := strings.Index(fn, "load i8, ptr %typeid.ptr")
+	if isNil < 0 || branch < isNil || load < branch {
+		t.Errorf("nil typecode does not branch to %s before the type ID load:\n%s", failLabel, fn)
 	}
 }

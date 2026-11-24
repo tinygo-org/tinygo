@@ -469,6 +469,11 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 				types.NewVar(token.NoPos, nil, "inOut", types.NewArray(types.Typ[types.UnsafePointer], int64(numIn+numOut))),
 			)
 		}
+		if c.hasTypeIDField(typ) {
+			typeFieldTypes = append([]*types.Var{typeFieldTypes[0],
+				types.NewVar(token.NoPos, nil, "typeID", types.Typ[types.Uint8]),
+			}, typeFieldTypes[1:]...)
+		}
 		if hasMethodSet {
 			// This method set is appended at the start of the struct. It is
 			// removed in the interface lowering pass.
@@ -690,6 +695,9 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			}
 		}
 		// Prepend the common RawType field.
+		if c.hasTypeIDField(typ) {
+			typeFields = append([]llvm.Value{llvm.ConstInt(c.i8, 0, false)}, typeFields...)
+		}
 		typeFields = append([]llvm.Value{
 			llvm.ConstInt(c.i8, uint64(metabyte), false),
 		}, typeFields...)
@@ -734,6 +742,20 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 		llvm.ConstInt(c.i32, 0, false),
 		llvm.ConstInt(c.i32, offset, false),
 	})
+}
+
+// hasTypeIDField reports whether the descriptor of typ has a type ID byte after
+// the kind byte. It must match typeIDField in src/internal/reflectlite.
+func (c *context) hasTypeIDField(typ types.Type) bool {
+	if c.targetData.ABITypeAlignment(c.i16) < 2 {
+		// AVR, where numMethod directly follows the kind byte.
+		return false
+	}
+	switch typ.(type) {
+	case *types.Named, *types.Chan, *types.Slice, *types.Pointer, *types.Array, *types.Map, *types.Struct:
+		return true
+	}
+	return false
 }
 
 func (c *context) getReflectCallWrapper(sig *types.Signature) llvm.Value {

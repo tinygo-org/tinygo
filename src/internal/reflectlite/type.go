@@ -236,6 +236,7 @@ func FinalizerAllowsInterior(t *RawType) bool {
 // pointer because it doesn't have ptrTo).
 type elemType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
@@ -254,6 +255,7 @@ var chanTypeLinksLen uintptr
 // actual type descriptor and must not be accessed.
 type ptrType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	elem      *RawType
 	methods   methodSet // only present when numMethod & numMethodHasMethodSet != 0
@@ -273,6 +275,7 @@ type interfaceType struct {
 
 type arrayType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
@@ -289,6 +292,7 @@ var arrayTypeLinksLen uintptr
 
 type mapType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
@@ -315,6 +319,7 @@ var mapTypeLinksLen uintptr
 // set's entries. When clear, the name string starts directly at that offset.
 type namedType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	elem      *RawType
@@ -336,6 +341,7 @@ type namedType struct {
 // and the type descriptor ends after the last structField entry.
 type structType struct {
 	RawType
+	typeID    typeIDField
 	numMethod uint16
 	ptrTo     *RawType
 	pkgpath   *byte
@@ -1272,6 +1278,11 @@ func typeImplementsMethodSet(concreteType, assertedMethodSet unsafe.Pointer) boo
 	if itfNumMethod == 0 {
 		return true
 	}
+	if (*RawType)(concreteType).ptrtag() != 0 {
+		// Tagged pointer types have no methods, and the byte they point to is
+		// not a meta byte.
+		return false
+	}
 
 	// Pull the method set out of the concrete type.
 	var methods *methodSet
@@ -1344,6 +1355,10 @@ func (t *RawType) Comparable() bool {
 
 // isBinary returns if the hashmapAlgorithmBinary functions can be used on this type
 func (t *RawType) isBinary() bool {
+	if t.ptrtag() != 0 {
+		// Tagged pointer types are pointers, which are always binary.
+		return true
+	}
 	return (t.meta & flagIsBinary) == flagIsBinary
 }
 

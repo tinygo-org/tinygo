@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"go/scanner"
 	"go/token"
+	"slices"
 	"sort"
 	"strings"
 
@@ -45,6 +46,13 @@ import (
 // is present in the type descriptor. Must match the constant in
 // src/internal/reflectlite/type.go.
 const numMethodHasMethodSet = 0x8000
+
+// Meta byte values from src/internal/reflectlite/type.go.
+const (
+	kindMask  = 31
+	flagNamed = 32
+	kindFunc  = 24
+)
 
 // signatureInfo is a Go signature of an interface method. It does not represent
 // any method in particular.
@@ -70,6 +78,7 @@ type typeInfo struct {
 	methods         []*methodInfo
 	callAdapter     llvm.Value
 	makeFuncAdapter llvm.Value
+	typeID          uint8 // dense ID stored in descriptor byte 1, 0 if none
 }
 
 // getMethod looks up the method on this type with the given signature and
@@ -295,6 +304,8 @@ func (p *lowerInterfacesPass) run() error {
 		})
 	}
 
+	p.assignTypeIDs(interfaceInvokeFunctions, interfaceAssertFunctions)
+
 	// Report incompatible exported methods before defining any invoke thunks.
 	var abiErrors scanner.ErrorList
 	seenABIErrors := make(map[llvm.Value]struct{})
@@ -436,13 +447,18 @@ func (p *lowerInterfacesPass) run() error {
 			numFields := initializer.Type().StructElementTypesCount()
 
 			// Read numMethods from the original type descriptor (index 2:
-			// after prefix pointer at 0 and kind byte at 1). For Named,
-			// Pointer, and Struct types, the numMethodHasMethodSet flag
-			// indicates that an inline method set is present.
+			// after prefix pointer at 0 and kind byte at 1, or index 3 after
+			// the type ID byte). For Named, Pointer, and Struct types, the
+			// numMethodHasMethodSet flag indicates that an inline method set
+			// is present.
+			nmIndex := 2
+			if p.hasTypeIDField(t) {
+				nmIndex = 3
+			}
 			var numMethodsConst uint64
 			var numMethodsIsI16 bool
-			if numFields > 2 {
-				nmField := initializer.AggregateElement(2)
+			if numFields > nmIndex {
+				nmField := initializer.AggregateElement(nmIndex)
 				if nmField.Type() == p.ctx.Int16Type() {
 					numMethodsConst = nmField.ZExtValue()
 					numMethodsIsI16 = true
@@ -465,11 +481,14 @@ func (p *lowerInterfacesPass) run() error {
 					elems := field.Type().StructElementTypes()
 					if elems[1].ArrayLength() == 0 {
 						clearedNumMethods := numMethodsConst & ^uint64(numMethodHasMethodSet)
-						newInitializerFields[1] = llvm.ConstInt(p.ctx.Int16Type(), clearedNumMethods, false)
+						newInitializerFields[nmIndex-1] = llvm.ConstInt(p.ctx.Int16Type(), clearedNumMethods, false)
 						continue
 					}
 				}
 				newInitializerFields = append(newInitializerFields, field)
+			}
+			if t.typeID != 0 {
+				newInitializerFields[1] = llvm.ConstInt(p.ctx.Int8Type(), uint64(t.typeID), false)
 			}
 			newInitializer := p.ctx.ConstStruct(newInitializerFields, false)
 			typecodeName := t.typecode.Name()
@@ -1027,9 +1046,8 @@ func (p *lowerInterfacesPass) getSignature(name string) *signatureInfo {
 // defineInterfaceMethodFunc defines this thunk by calling the concrete method
 // of the type that implements this interface.
 //
-// Matching the actual type is implemented using an if/else chain over all
-// possible types.  This is later converted to a switch statement by the LLVM
-// simplifycfg pass.
+// Above typeIDSwitchThreshold implementers it switches on the type ID, and
+// otherwise compares the typecode against each type.
 func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *interfaceInfo, signature *signatureInfo) {
 	context := fn.LastParam()
 	actualType := llvm.PrevParam(context)
@@ -1079,20 +1097,15 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
 	}
 
-	// Define all possible functions that can be called.
-	for _, typ := range itf.types {
-		// Create type check (if/else).
+	// Reached for a nil interface or a type with no match.
+	panicBlock := p.ctx.AddBasicBlock(fn, "nilpanic")
+
+	receiver := fn.Param(resultOffset)
+	callBlock := func(typ *typeInfo) llvm.BasicBlock {
 		bb := p.ctx.AddBasicBlock(fn, typ.name)
-		next := p.ctx.AddBasicBlock(fn, typ.name+".next")
-		cmp := p.builder.CreateICmp(llvm.IntEQ, actualType, typ.typecodeGEP, typ.name+".icmp")
-		p.builder.CreateCondBr(cmp, bb, next)
-
-		// The function we will redirect to when the interface has this type.
-		function := typ.getMethod(signature).function
-
+		saved := p.builder.GetInsertBlock()
 		p.builder.SetInsertPointAtEnd(bb)
-		receiver := fn.Param(resultOffset)
-
+		function := typ.getMethod(signature).function
 		callParams := make([]llvm.Value, 0, len(params)+2+resultOffset)
 		if resultOffset != 0 {
 			callParams = append(callParams, fn.FirstParam())
@@ -1110,24 +1123,121 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 		} else {
 			p.builder.CreateRet(retval)
 		}
-
-		// Start next comparison in the 'next' block (which is jumped to when
-		// the type doesn't match).
-		p.builder.SetInsertPointAtEnd(next)
+		p.builder.SetInsertPointAtEnd(saved)
+		return bb
 	}
 
-	// The builder now points to the last *.then block, after all types have
-	// been checked. Call runtime.nilPanic here.
+	chain := p.createTypeIDSwitch(fn, actualType, itf.types, panicBlock, false, callBlock)
+	for _, typ := range chain {
+		next := p.ctx.AddBasicBlock(fn, typ.name+".next")
+		cmp := p.builder.CreateICmp(llvm.IntEQ, actualType, typ.typecodeGEP, typ.name+".icmp")
+		p.builder.CreateCondBr(cmp, callBlock(typ), next)
+		p.builder.SetInsertPointAtEnd(next)
+	}
+	p.builder.CreateBr(panicBlock)
+
 	// The only other possible value remaining is nil for nil interfaces. We
 	// could panic with a different message here such as "nil interface" but
 	// that would increase code size and "nil panic" is close enough. Most
 	// importantly, it avoids undefined behavior when accidentally calling a
 	// method on a nil interface.
+	p.builder.SetInsertPointAtEnd(panicBlock)
 	nilPanic := p.mod.NamedFunction("runtime.nilPanic")
 	p.builder.CreateCall(nilPanic.GlobalValueType(), nilPanic, []llvm.Value{
 		llvm.Undef(p.ptrType),
 	}, "")
 	p.builder.CreateUnreachable()
+}
+
+// typeIDSwitchThreshold is the number of implementers above which a thunk
+// switches on the type ID instead of comparing typecodes.
+const typeIDSwitchThreshold = 4
+
+// assignTypeIDs gives IDs 1 to 255 to implementers of invoked or asserted
+// interfaces above typeIDSwitchThreshold. Larger interfaces go first.
+func (p *lowerInterfacesPass) assignTypeIDs(invokeFunctions, assertFunctions []llvm.Value) {
+	seen := make(map[*interfaceInfo]struct{})
+	var itfs []*interfaceInfo
+	for _, fn := range slices.Concat(invokeFunctions, assertFunctions) {
+		itf := p.interfaces[llvmutil.ReadInterfaceStub(fn).Methods]
+		if _, ok := seen[itf]; ok || len(itf.types) <= typeIDSwitchThreshold {
+			continue
+		}
+		seen[itf] = struct{}{}
+		itfs = append(itfs, itf)
+	}
+	sort.Slice(itfs, func(i, j int) bool {
+		if len(itfs[i].types) != len(itfs[j].types) {
+			return len(itfs[i].types) > len(itfs[j].types)
+		}
+		return itfs[i].name < itfs[j].name
+	})
+	next := 1
+	for _, itf := range itfs {
+		for _, t := range itf.types {
+			if t.typeID != 0 || next > 255 || !p.hasTypeIDField(t) {
+				continue
+			}
+			t.typeID = uint8(next)
+			next++
+		}
+	}
+}
+
+// createTypeIDSwitch switches on the type ID when types is above the threshold,
+// and returns the types that still need a typecode compare.
+func (p *lowerInterfacesPass) createTypeIDSwitch(fn, actualType llvm.Value, types []*typeInfo, failBlock llvm.BasicBlock, anyType bool, caseBlock func(*typeInfo) llvm.BasicBlock) []*typeInfo {
+	if len(types) <= typeIDSwitchThreshold {
+		return types
+	}
+	var switched, chain []*typeInfo
+	for _, typ := range types {
+		if typ.typeID != 0 {
+			switched = append(switched, typ)
+		} else {
+			chain = append(chain, typ)
+		}
+	}
+	if len(switched) == 0 {
+		return chain
+	}
+	bad := p.builder.CreateICmp(llvm.IntEQ, actualType, llvm.ConstNull(actualType.Type()), "isnil")
+	if anyType {
+		// Pointer to pointer typecodes are tagged in the low 2 bits, see ptrtag
+		// in src/internal/reflectlite/type.go.
+		tag := p.builder.CreateAnd(p.builder.CreatePtrToInt(actualType, p.uintptrType, ""), llvm.ConstInt(p.uintptrType, 3, false), "tag")
+		isTagged := p.builder.CreateICmp(llvm.IntNE, tag, llvm.ConstInt(p.uintptrType, 0, false), "istagged")
+		bad = p.builder.CreateOr(bad, isTagged, "")
+	}
+	idBlock := p.ctx.AddBasicBlock(fn, "typeid")
+	p.builder.CreateCondBr(bad, failBlock, idBlock)
+	p.builder.SetInsertPointAtEnd(idBlock)
+	idPtr := p.builder.CreateInBoundsGEP(p.ctx.Int8Type(), actualType, []llvm.Value{
+		llvm.ConstInt(p.ctx.Int32Type(), 1, false),
+	}, "typeid.ptr")
+	id := p.builder.CreateLoad(p.ctx.Int8Type(), idPtr, "typeid")
+	id.SetAlignment(1)
+	defaultBlock := p.ctx.AddBasicBlock(fn, "typeid.default")
+	sw := p.builder.CreateSwitch(id, defaultBlock, len(switched))
+	for _, typ := range switched {
+		sw.AddCase(llvm.ConstInt(p.ctx.Int8Type(), uint64(typ.typeID), false), caseBlock(typ))
+	}
+	p.builder.SetInsertPointAtEnd(defaultBlock)
+	return chain
+}
+
+// hasTypeIDField reports whether the descriptor has the typeID byte between the
+// kind byte and numMethods. Index 0 is still the temporary method set.
+func (p *lowerInterfacesPass) hasTypeIDField(t *typeInfo) bool {
+	if t.methodSet.IsNil() {
+		return false
+	}
+	init := t.typecode.Initializer()
+	if init.Type().StructElementTypesCount() < 4 {
+		return false
+	}
+	elems := init.Type().StructElementTypes()
+	return elems[1] == p.ctx.Int8Type() && elems[2] == p.ctx.Int8Type() && elems[3] == p.ctx.Int16Type()
 }
 
 func (p *lowerInterfacesPass) getDIFile(file string) llvm.Metadata {
@@ -1141,9 +1251,9 @@ func (p *lowerInterfacesPass) getDIFile(file string) llvm.Metadata {
 
 // defineInterfaceAssertFunc defines a $typeassert function for the given
 // interface. The function returns true if the concrete type (passed as a
-// type-ID pointer) implements the interface, using a chain of type-ID
-// comparisons. This avoids pulling in runtime.typeImplementsMethodSet for
-// programs that don't use reflect.
+// type-ID pointer) implements the interface, using a switch on the type ID or
+// a chain of type-ID comparisons. This avoids pulling in
+// runtime.typeImplementsMethodSet for programs that don't use reflect.
 func (p *lowerInterfacesPass) defineInterfaceAssertFunc(fn llvm.Value, itf *interfaceInfo) {
 	actualType := fn.FirstParam()
 	actualType.SetName("actualType")
@@ -1174,14 +1284,34 @@ func (p *lowerInterfacesPass) defineInterfaceAssertFunc(fn llvm.Value, itf *inte
 		p.builder.SetCurrentDebugLocation(0, 0, difunc, llvm.Metadata{})
 	}
 
-	// Build an OR chain: return (type == T1) || (type == T2) || ...
 	llvmFalse := llvm.ConstInt(p.ctx.Int1Type(), 0, false)
+	falseBlock := p.ctx.AddBasicBlock(fn, "false")
+	trueBlock := p.ctx.AddBasicBlock(fn, "true")
+	chain := p.createTypeIDSwitch(fn, actualType, itf.types, falseBlock, true, func(*typeInfo) llvm.BasicBlock {
+		return trueBlock
+	})
+
+	// Build an OR chain: return (type == T1) || (type == T2) || ...
 	result := llvmFalse
-	for _, typ := range itf.types {
+	for _, typ := range chain {
 		cmp := p.builder.CreateICmp(llvm.IntEQ, actualType, typ.typecodeGEP, typ.name+".icmp")
 		result = p.builder.CreateOr(result, cmp, "")
 	}
 	p.builder.CreateRet(result)
+
+	if !hasUses(trueBlock.AsValue()) {
+		falseBlock.EraseFromParent()
+		trueBlock.EraseFromParent()
+		return
+	}
+	p.builder.SetInsertPointAtEnd(falseBlock)
+	p.builder.CreateRet(llvmFalse)
+
+	// Byte 1 of an unnamed func type is numIn, not a type ID.
+	p.builder.SetInsertPointAtEnd(trueBlock)
+	meta := p.builder.CreateLoad(p.ctx.Int8Type(), actualType, "meta")
+	kind := p.builder.CreateAnd(meta, llvm.ConstInt(p.ctx.Int8Type(), kindMask|flagNamed, false), "")
+	p.builder.CreateRet(p.builder.CreateICmp(llvm.IntNE, kind, llvm.ConstInt(p.ctx.Int8Type(), kindFunc, false), ""))
 }
 
 func (p *lowerInterfacesPass) isMethodSetType(ty llvm.Type) bool {
