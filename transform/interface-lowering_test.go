@@ -268,6 +268,13 @@ define i32 @callDouble(ptr %typecode, ptr %value) {
   ret i32 %ret
 }
 
+declare i1 @"Doubler$typeassert"(ptr %typecode) #1
+
+define i1 @isDoubler(ptr %typecode) {
+  %ok = call i1 @"Doubler$typeassert"(ptr %typecode)
+  ret i1 %ok
+}
+
 ; Descriptor without numMethods, so it has no type ID byte.
 @"Legacy$methodset" = linkonce_odr unnamed_addr constant { i32, [1 x ptr], { ptr } } { i32 1, [1 x ptr] [ptr @"reflect/methods.Double() int"], { ptr } { ptr @"(Legacy).Double$invoke" } }
 @"reflect/types.type:named:Legacy" = linkonce_odr constant { ptr, i8, ptr, ptr } { ptr @"Legacy$methodset", i8 34, ptr null, ptr @"reflect/types.type:basic:int" }, align 4
@@ -277,6 +284,7 @@ define i32 @"(Legacy).Double$invoke"(ptr %receiver, ptr %context) {
 @boxLegacy = global ptr getelementptr inbounds ({ ptr, i8, ptr, ptr }, ptr @"reflect/types.type:named:Legacy", i32 0, i32 1)
 
 attributes #0 = { "tinygo-invoke"="reflect/methods.Double() int" "tinygo-methods"="reflect/methods.Double() int" }
+attributes #1 = { "tinygo-methods"="reflect/methods.Double() int" }
 `)
 		for i := range tc.numTypes {
 			fmt.Fprintf(&ir, `
@@ -327,6 +335,16 @@ define i32 @"(T%[1]d).Double$invoke"(ptr %%receiver, ptr %%context) {
 			}
 			if !strings.Contains(thunk, `@"(Legacy).Double$invoke"`) {
 				t.Errorf("thunk does not call (Legacy).Double:\n%s", thunk)
+			}
+
+			assert := mod.NamedFunction("Doubler$typeassert").String()
+			for _, want := range []string{"switch i8", "%istagged", "%meta"} {
+				if got := strings.Contains(assert, want); got != tc.switched {
+					t.Errorf("type assert contains %q: got %v, want %v\n%s", want, got, tc.switched, assert)
+				}
+			}
+			if !strings.Contains(assert, `icmp eq ptr %actualType, @"reflect/types.type:named:Legacy"`) {
+				t.Errorf("type assert does not compare the type without an ID byte:\n%s", assert)
 			}
 
 			seen := make(map[uint64]bool)
