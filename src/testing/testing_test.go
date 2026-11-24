@@ -25,6 +25,35 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestArtifactDir(t *testing.T) {
+	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
+		t.Log("Skipping.  TODO: implement RemoveAll for wasi")
+		return
+	}
+
+	parent := t.ArtifactDir()
+	var dir string
+	t.Run("child", func(t *testing.T) {
+		var tb testing.TB = t
+		dir = tb.ArtifactDir()
+		if got := tb.ArtifactDir(); got != dir {
+			t.Fatalf("ArtifactDir() = %q; want %q", got, dir)
+		}
+		if dir == parent || filepath.Dir(dir) == parent {
+			t.Fatalf("child artifact directory %q is inside %q", dir, parent)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "output"), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("child artifact directory after cleanup: %v", err)
+	}
+	if _, err := os.Stat(parent); err != nil {
+		t.Errorf("parent artifact directory after child cleanup: %v", err)
+	}
+}
+
 func TestTempDirInCleanup(t *testing.T) {
 	if runtime.GOOS == "wasip1" || runtime.GOOS == "wasip2" {
 		t.Log("Skipping.  TODO: implement RemoveAll for wasi")

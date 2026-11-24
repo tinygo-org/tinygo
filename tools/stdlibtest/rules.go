@@ -83,8 +83,14 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipPackage("syscall/js")
 	// The strconv tests pull in crypto/ecdsa, which fails to import cryptobyte.
 	r.skipPackage("internal/strconv")
-	// The trace test harness needs testing.T.ArtifactDir.
-	r.skipPackage("internal/trace/...")
+	if !linux {
+		r.skipPackage("internal/trace")
+		r.skipPackage("internal/trace/testtrace")
+	}
+	if !linux && !wasi {
+		r.skipPackage("internal/trace/internal/tracev1")
+		r.skipPackage("internal/trace/tracev2")
+	}
 	// TestAlloc exceeds the decompressor's allocation budget.
 	r.skipPackage("internal/zstd")
 
