@@ -82,6 +82,17 @@ func (usbdev *USB_DEVICE) ensureConfigured() {
 	}
 }
 
+// ReadByte returns a byte from the receive ring buffer, or errNoByte when it
+// is empty.
+func (usbdev *USB_DEVICE) ReadByte() (byte, error) {
+	usbdev.ensureConfigured()
+	b, ok := usbdev.Buffer.Get()
+	if !ok {
+		return 0, errNoByte
+	}
+	return b, nil
+}
+
 func (usbdev *USB_DEVICE) DTR() bool {
 	return false
 }
