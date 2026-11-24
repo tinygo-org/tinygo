@@ -1,12 +1,10 @@
-//go:build esp32s3
+//go:build esp32 || esp32s3
 
 package interrupt
 
 import (
 	"device"
-	"device/esp"
-	"runtime/volatile"
-	"unsafe"
+	"errors"
 )
 
 // State represents the previous global interrupt state.
@@ -35,14 +33,15 @@ func Restore(state State) {
 	})
 }
 
-// The ESP32-S3 (Xtensa LX7) interrupt model:
+// The ESP32 (Xtensa LX6) and ESP32-S3 (Xtensa LX7) interrupt model:
 //
-//  1. The **interrupt matrix** (INTERRUPT_CORE0) maps each peripheral source
-//     (0-98) to one of 32 CPU interrupt lines via a 5-bit mapping register.
+//  1. The **interrupt matrix** (DPORT on the ESP32, INTERRUPT_CORE0 on the
+//     ESP32-S3) maps each peripheral source to one of 32 CPU interrupt lines
+//     via a 5-bit mapping register.
 //  2. The CPU's INTENABLE special register (SR 228) enables/disables each of
 //     the 32 CPU interrupt lines independently.
 //  3. When an enabled CPU interrupt fires, the processor vectors to the
-//     level-1 exception vector (offset 0x180 from VECBASE).
+//     level-1 exception vector (offset 0x340 from VECBASE).
 //  4. The INTERRUPT special register (SR 226) shows which CPU interrupts are
 //     currently pending.
 //
@@ -56,39 +55,27 @@ const (
 	lastCPUInt  = 30
 )
 
-// cpuIntUsed tracks which CPU interrupt lines have been allocated.
-var cpuIntUsed [32]bool
-
-// cpuIntToPeripheral maps CPU interrupt number → peripheral IRQ source,
-// so that handleInterrupt can dispatch to the correct Go handler.
-var cpuIntToPeripheral [32]int
+const maxCores = 2 // the maximum number of cores supported
 
 // inInterrupt is set while we're inside the interrupt handler so that
-// interrupt.In() returns the correct value. One flag for each of the two cores.
-var inInterrupt [2]bool
+// interrupt.In() returns the correct value.
+var inInterrupt [maxCores]bool
 
-// Enable enables a CPU interrupt for the ESP32-S3.  The caller must first
-// map the peripheral to a CPU interrupt line using the interrupt matrix,
-// e.g.:
-//
-//	esp.INTERRUPT_CORE0.SetGPIO_INTERRUPT_PRO_MAP(cpuInt)
-//	interrupt.New(cpuInt, handler).Enable()
+// Enable enables a CPU interrupt. The caller must first map the peripheral to
+// a CPU interrupt line using the interrupt matrix.
 func (i Interrupt) Enable() error {
 	if i.num < firstCPUInt || i.num > lastCPUInt {
-		return errInterruptRange
+		return errors.New("interrupt must be in range 1 through 30")
 	}
 
-	// Mark as used.
-	cpuIntUsed[i.num] = true
-
-	// INTENABLE is per core and peripherals are routed to core 0, so core 1
-	// asks core 0 to enable the line.
-	if currentCPU() != 0 {
+	// INTENABLE is per core and peripherals are routed to core 0, so the other
+	// cores ask core 0 to enable the line.
+	switch currentCPU() {
+	case 0:
+		enableLocal(1 << uint(i.num))
+	default:
 		enableOnCore0(uint32(i.num))
-		return nil
 	}
-	enableLocal(1 << uint(i.num))
-
 	return nil
 }
 
@@ -99,16 +86,17 @@ func enableLocal(mask uint32) {
 
 // In returns whether the CPU is currently inside an interrupt handler.
 func In() bool {
-	return inInterrupt[currentCPU()&1]
+	return inInterrupt[currentCPU()%maxCores]
 }
 
-// handleInterrupt is called from the assembly vector code in esp32s3.S.
+// handleInterrupt is called from the assembly vector code in
+// targets/esp32-interrupts.S and targets/esp32s3-interrupts.S.
 // It determines which CPU interrupt(s) fired and dispatches to the
 // registered Go handlers.
 //
 //export handleInterrupt
 func handleInterrupt() {
-	core := currentCPU() & 1
+	core := currentCPU() % maxCores
 	inInterrupt[core] = true
 
 	// INTERRUPT register shows pending + enabled CPU interrupts.
@@ -136,7 +124,6 @@ func handleInterrupt() {
 	inInterrupt[core] = false
 }
 
-//go:inline
 func callHandler(n int) {
 	switch n {
 	case 1:
@@ -217,14 +204,6 @@ func currentCPU() uint32
 //go:linkname enableOnCore0 runtime.enableInterruptOnCore0
 func enableOnCore0(num uint32)
 
-var errInterruptRange = constError("interrupt for ESP32-S3 must be in range 1 through 30")
-
-type constError string
-
-func (e constError) Error() string {
-	return string(e)
-}
-
 // readINTENABLE reads the INTENABLE special register (SR 228).
 func readINTENABLE() uint32 {
 	return uint32(device.AsmFull("rsr {}, INTENABLE", nil))
@@ -251,20 +230,4 @@ func writeINTCLEAR(val uint32) {
 	device.AsmFull("wsr {val}, INTCLEAR", map[string]interface{}{
 		"val": val,
 	})
-}
-
-// -- Interrupt matrix helpers -----------------------------------------------
-// The ESP32-S3 interrupt matrix has one mapping register per peripheral
-// source.  These are memory-mapped in the INTERRUPT_CORE0 peripheral.
-// The mapping register for peripheral source N is at:
-//   base + N*4  (where base = &INTERRUPT_CORE0.PRO_MAC_INTR_MAP)
-//
-// We provide helpers to set/get the mapping for any source number.
-
-// mapPeripheralToInt routes peripheral IRQ source `src` to CPU interrupt
-// `cpuInt` via the interrupt matrix.
-func mapPeripheralToInt(src int, cpuInt int) {
-	base := unsafe.Pointer(&esp.INTERRUPT_CORE0.PRO_MAC_INTR_MAP)
-	reg := (*volatile.Register32)(unsafe.Add(base, uintptr(src)*4))
-	reg.Set(uint32(cpuInt))
 }
