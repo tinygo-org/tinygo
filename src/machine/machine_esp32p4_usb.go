@@ -97,15 +97,6 @@ func (usbdev *USB_DEVICE) Buffered() int {
 	return int(usbdev.Buffer.Used())
 }
 
-func (usbdev *USB_DEVICE) ReadByte() (byte, error) {
-	usbdev.ensureConfigured()
-	b, ok := usbdev.Buffer.Get()
-	if !ok {
-		return 0, errNoByte
-	}
-	return b, nil
-}
-
 // flush sends the data in the EP1 FIFO to the host.
 func (usbdev *USB_DEVICE) flush() {
 	usbdev.Bus.EP1_CONF.Set(usbEP1WrDone)
