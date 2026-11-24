@@ -851,7 +851,7 @@ func (spi *SPI) Tx(w, r []byte) error {
 		}
 
 		// Fill tx buffer.
-		transferWords := (*[16]volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(&spi.Bus.W0))))
+		transferWords := (*[16]volatile.Register32)(unsafe.Pointer(&spi.Bus.W0))
 		if len(w) >= 64 {
 			// We can fill the entire 64-byte transfer buffer with data.
 			// This loop is slightly faster than the loop below.

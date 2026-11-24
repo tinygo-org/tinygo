@@ -109,7 +109,7 @@ func pipeCtr(num uint32) *volatile.Register16 {
 	if num == 0 {
 		return &renesas.USBFS.DCPCTR
 	}
-	return (*volatile.Register16)(unsafe.Pointer(uintptr(unsafe.Pointer(&renesas.USBFS.PIPE1CTR)) + uintptr(num-1)*2))
+	return (*volatile.Register16)(unsafe.Add(unsafe.Pointer(&renesas.USBFS.PIPE1CTR), uintptr(num-1)*2))
 }
 
 func fifoByte(r *volatile.Register16) *volatile.Register8 {

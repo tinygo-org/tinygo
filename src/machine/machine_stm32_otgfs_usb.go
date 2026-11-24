@@ -73,18 +73,18 @@ type usbPowerRegs struct {
 
 // otgInEP returns the IN endpoint registers for physical endpoint ep.
 func otgInEP(ep uint32) *usbInEndpointRegs {
-	return (*usbInEndpointRegs)(unsafe.Pointer(uintptr(unsafe.Pointer(stm32.OTG_FS_GLOBAL)) + 0x900 + uintptr(ep)*0x20))
+	return (*usbInEndpointRegs)(unsafe.Add(unsafe.Pointer(stm32.OTG_FS_GLOBAL), 0x900+uintptr(ep)*0x20))
 }
 
 // otgOutEP returns the OUT endpoint registers for physical endpoint ep.
 func otgOutEP(ep uint32) *usbOutEndpointRegs {
-	return (*usbOutEndpointRegs)(unsafe.Pointer(uintptr(unsafe.Pointer(stm32.OTG_FS_GLOBAL)) + 0xB00 + uintptr(ep)*0x20))
+	return (*usbOutEndpointRegs)(unsafe.Add(unsafe.Pointer(stm32.OTG_FS_GLOBAL), 0xB00+uintptr(ep)*0x20))
 }
 
 // otgDFIFO returns a volatile pointer to the data FIFO for physical endpoint ep.
 // DFIFO[ep] is located at 0x50001000 + ep*0x1000.
 func otgDFIFO(ep uint32) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(stm32.OTG_FS_GLOBAL)) + 0x1000 + uintptr(ep)*0x1000))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(stm32.OTG_FS_GLOBAL), 0x1000+uintptr(ep)*0x1000))
 }
 
 // DCFG bit positions and masks.
