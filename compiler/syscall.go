@@ -274,6 +274,8 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		retval = b.CreateInsertValue(retval, b.uintptrZero, 1, "")
 		retval = b.CreateInsertValue(retval, errResult, 2, "")
 		return retval, nil
+	case "darwin":
+		return b.createDarwinSyscall(call)
 	case "windows":
 		// On Windows, syscall.Syscall* is basically just a function pointer
 		// call. This is complicated in gc because of stack switching and the
@@ -352,6 +354,75 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+b.GOOS+"/"+b.GOARCH)
 	}
+}
+
+// createDarwinSyscall emits a direct system call. The carry flag is set on error.
+// See src/syscall/asm_darwin_arm64.s and asm_darwin_amd64.s in upstream Go.
+func (b *builder) createDarwinSyscall(call *ssa.CallCommon) (llvm.Value, error) {
+	var regs []string
+	var asm, clobbers string
+	num := b.getValue(call.Args[0], getPos(call))
+	switch b.GOARCH {
+	case "arm64":
+		regs = []string{"x16", "x0", "x1", "x2", "x3", "x4", "x5"}
+		asm = "svc #0x80\ncset $0, cs"
+		clobbers = ",~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x17},~{cc},~{memory}"
+	case "amd64":
+		regs = []string{"rax", "rdi", "rsi", "rdx", "r10", "r8", "r9"}
+		asm = "syscall\nsetc ${0:b}\nmovzbq ${0:b}, $0"
+		clobbers = ",~{rcx},~{r11},~{flags},~{memory}"
+		num = b.CreateAdd(num, llvm.ConstInt(b.uintptrType, 0x2000000, false), "")
+	default:
+		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOARCH for darwin syscall: "+b.GOARCH)
+	}
+	if len(call.Args)-1 > len(regs)-1 {
+		return llvm.Value{}, b.makeError(call.Pos(), "too many arguments for darwin syscall")
+	}
+
+	// All registers are outputs because the kernel may change them.
+	args := []llvm.Value{num}
+	for _, arg := range call.Args[1:] {
+		args = append(args, b.getValue(arg, getPos(call)))
+	}
+	for len(args) < len(regs) {
+		args = append(args, b.uintptrZero)
+	}
+	var constraints strings.Builder
+	constraints.WriteString("=&r")
+	for _, reg := range regs {
+		constraints.WriteString(",={" + reg + "}")
+	}
+	argTypes := make([]llvm.Type, len(regs))
+	for i := range regs {
+		constraints.WriteString("," + strconv.Itoa(i+1))
+		argTypes[i] = b.uintptrType
+	}
+	constraints.WriteString(clobbers)
+	resultTypes := make([]llvm.Type, len(regs)+1)
+	for i := range resultTypes {
+		resultTypes[i] = b.uintptrType
+	}
+	fnType := llvm.FunctionType(b.ctx.StructType(resultTypes, false), argTypes, false)
+	target := llvm.InlineAsm(fnType, asm, constraints.String(), true, false, 0, false)
+	result := b.CreateCall(fnType, target, args, "")
+
+	// Results are in x0 and x1 on arm64, rax and rdx on amd64.
+	r1Index, r2Index := 2, 3
+	if b.GOARCH == "amd64" {
+		r1Index, r2Index = 1, 4
+	}
+	carry := b.CreateExtractValue(result, 0, "")
+	r1 := b.CreateExtractValue(result, r1Index, "")
+	r2 := b.CreateExtractValue(result, r2Index, "")
+
+	// On error return -1, 0, errno.
+	isError := b.CreateICmp(llvm.IntNE, carry, b.uintptrZero, "")
+	allOnes := llvm.ConstAllOnes(b.uintptrType)
+	retval := llvm.Undef(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
+	retval = b.CreateInsertValue(retval, b.CreateSelect(isError, allOnes, r1, ""), 0, "")
+	retval = b.CreateInsertValue(retval, b.CreateSelect(isError, b.uintptrZero, r2, ""), 1, "")
+	retval = b.CreateInsertValue(retval, b.CreateSelect(isError, r1, b.uintptrZero, ""), 2, "")
+	return retval, nil
 }
 
 // createSyscalln emits instructions for the syscall.syscalln function on
