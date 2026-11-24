@@ -111,7 +111,7 @@ func gdmaLLIAlloc() *dmaLLIItem {
 
 // gdmaLLIAt returns the Nth link-list item (0-indexed) from the base item.
 func gdmaLLIAt(base *dmaLLIItem, n int) *dmaLLIItem {
-	return (*dmaLLIItem)(unsafe.Pointer(uintptr(unsafe.Pointer(base)) + uintptr(n)*esp32p4dsi.GdmaLLISize))
+	return (*dmaLLIItem)(unsafe.Add(unsafe.Pointer(base), uintptr(n)*esp32p4dsi.GdmaLLISize))
 }
 
 // DSI bridge memory FIFO that the DW-GDMA writes pixels into.

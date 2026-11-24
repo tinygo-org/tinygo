@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	HSEM_CORE1 = (*HSEM_CORE_Type)(unsafe.Pointer((uintptr(unsafe.Pointer(stm32.HSEM)) + 0x100)))
-	HSEM_CORE2 = (*HSEM_CORE_Type)(unsafe.Pointer((uintptr(unsafe.Pointer(stm32.HSEM)) + 0x110)))
+	HSEM_CORE1 = (*HSEM_CORE_Type)(unsafe.Add(unsafe.Pointer(stm32.HSEM), 0x100))
+	HSEM_CORE2 = (*HSEM_CORE_Type)(unsafe.Add(unsafe.Pointer(stm32.HSEM), 0x110))
 )
 
 // HSEM_CORE represents the registers for a core's hardware semaphore interrupts.

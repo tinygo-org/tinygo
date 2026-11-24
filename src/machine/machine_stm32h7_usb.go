@@ -357,7 +357,7 @@ func sendUSBPacket(ep uint32, data []byte) {
 
 	// 4. Write data to FIFO
 	// FIFOs are at 0x1000, 0x2000, ... from base
-	fifo := (*volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(usbOTG)) + 0x1000 + uintptr(ep)*0x1000))
+	fifo := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(usbOTG), 0x1000+uintptr(ep)*0x1000))
 	for i := 0; i < len(data); i += 4 {
 		var word uint32
 		for j := 0; j < 4 && i+j < len(data); j++ {
@@ -433,7 +433,7 @@ func handleRxFIFO() {
 	pktSts := (pop >> 17) & 0xF
 
 	// All OUT/SETUP data is read from the shared RX FIFO (DFIFO[0]).
-	fifo := (*volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(usbOTG)) + 0x1000))
+	fifo := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(usbOTG), 0x1000))
 
 	switch pktSts {
 	case 0x2: // OUT data packet received
