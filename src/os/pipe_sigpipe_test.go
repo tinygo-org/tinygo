@@ -1,4 +1,4 @@
-//go:build darwin || (linux && !baremetal && !wasip1 && !wasip2)
+//go:build darwin || (linux && !baremetal && !tinygo.wasm && !nintendoswitch)
 
 package os_test
 
