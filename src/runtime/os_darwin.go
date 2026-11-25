@@ -31,10 +31,14 @@ const (
 	sig_SIGSEGV = 11
 )
 
-func hardwareRand() (n uint64, ok bool) {
+func osRand() (n uint64, ok bool) {
 	n |= uint64(libc_arc4random())
 	n |= uint64(libc_arc4random()) << 32
 	return n, true
+}
+
+func startupRand() (uint64, bool) {
+	return osRand()
 }
 
 //go:linkname syscall_Getpagesize syscall.Getpagesize

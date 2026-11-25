@@ -18,5 +18,6 @@ func (lock *runtimeSpinLock) Unlock() {
 }
 
 type timerLock = runtimeSpinLock
+type randLock = runtimeSpinLock
 type synctestLock = runtimeSpinLock
 type channelLock = runtimeSpinLock
