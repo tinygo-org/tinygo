@@ -3,8 +3,8 @@
 package runtime
 
 import (
-	"device"
 	"device/esp"
+	"device/xtensa"
 	"machine"
 	"unsafe"
 )
@@ -104,15 +104,10 @@ func init() {
 // initially disabled.
 func interruptInit() {
 	// Disable all CPU interrupts while we configure.
-	device.AsmFull("wsr {zero}, INTENABLE", map[string]interface{}{
-		"zero": uintptr(0),
-	})
+	xtensa.WriteINTENABLE(0)
 
 	// Write the vector table address to VECBASE (SR 231).
-	vecbase := uintptr(unsafe.Pointer(&_vector_table))
-	device.AsmFull("wsr {vecbase}, VECBASE", map[string]interface{}{
-		"vecbase": vecbase,
-	})
+	xtensa.WriteVECBASE(uintptr(unsafe.Pointer(&_vector_table)))
 
 	// Clear PS.EXCM and PS.INTLEVEL so that level-1 interrupts can fire.
 	// The ROM bootloader leaves PS.EXCM=1 (exception mode), which masks
@@ -124,15 +119,10 @@ func interruptInit() {
 	// the User exception vector at VECBASE+0x340, where our handler lives.
 	// With PS.UM=0 (the ROM default), they would go to the Kernel exception
 	// vector at VECBASE+0x300 which is an infinite-loop stub.
-	ps := uintptr(device.AsmFull("rsr {}, PS", nil))
+	ps := xtensa.ReadPS()
 	ps &^= 0x1F // clear INTLEVEL (bits 0-3) and EXCM (bit 4)
 	ps |= 0x20  // set PS.UM (bit 5) — use User exception vector
-	device.AsmFull("wsr {ps}, PS", map[string]interface{}{
-		"ps": ps,
-	})
-
-	// Synchronize pipeline after writing special registers.
-	device.Asm("rsync")
+	xtensa.EnableInterrupts(ps)
 }
 
 //go:extern _vector_table
