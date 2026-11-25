@@ -33,6 +33,7 @@ package runtime
 
 import (
 	"device/esp"
+	"runtime/volatile"
 	"unsafe"
 )
 
@@ -101,14 +102,20 @@ const (
 //
 //go:section .iram
 func setPSRAMClockDivider(n, h, l uint32) {
-	esp.SPI0.SetSRAM_CLK_SCLK_EQU_SYSCLK(0)
-	esp.SPI0.SetSRAM_CLK_SCLKCNT_N(n)
-	esp.SPI0.SetSRAM_CLK_SCLKCNT_H(h)
-	esp.SPI0.SetSRAM_CLK_SCLKCNT_L(l)
-	esp.SPI1.SetCLOCK_CLK_EQU_SYSCLK(0)
-	esp.SPI1.SetCLOCK_CLKCNT_N(n)
-	esp.SPI1.SetCLOCK_CLKCNT_H(h)
-	esp.SPI1.SetCLOCK_CLKCNT_L(l)
+	// Write SPI0.SRAM_CLK and SPI1.CLOCK directly via volatile.StoreUint32
+	// rather than device/esp's Set* bitfield methods: those methods live in
+	// flash (.text) unless inlined, and calibratePSRAMTiming calls this with
+	// flash caches disabled. Both registers contain only SCLK_EQU_SYSCLK/
+	// CLK_EQU_SYSCLK (0 here) and the N, H, L divider fields.
+	sramClk := ((n << esp.SPI0_SRAM_CLK_SCLKCNT_N_Pos) & esp.SPI0_SRAM_CLK_SCLKCNT_N_Msk) |
+		((h << esp.SPI0_SRAM_CLK_SCLKCNT_H_Pos) & esp.SPI0_SRAM_CLK_SCLKCNT_H_Msk) |
+		((l << esp.SPI0_SRAM_CLK_SCLKCNT_L_Pos) & esp.SPI0_SRAM_CLK_SCLKCNT_L_Msk)
+	volatile.StoreUint32(&esp.SPI0.SRAM_CLK.Reg, sramClk)
+
+	spi1Clk := ((n << esp.SPI1_CLOCK_CLKCNT_N_Pos) & esp.SPI1_CLOCK_CLKCNT_N_Msk) |
+		((h << esp.SPI1_CLOCK_CLKCNT_H_Pos) & esp.SPI1_CLOCK_CLKCNT_H_Msk) |
+		((l << esp.SPI1_CLOCK_CLKCNT_L_Pos) & esp.SPI1_CLOCK_CLKCNT_L_Msk)
+	volatile.StoreUint32(&esp.SPI1.CLOCK.Reg, spi1Clk)
 }
 
 // initPSRAM performs the Octal PSRAM bring-up sequence, mirroring
@@ -271,14 +278,15 @@ func romSpiFlashRestoreCache(cpuid uint32, savedState uint32)
 //go:section .iram
 func calibratePSRAMTiming() (ok bool) {
 	// Disable both caches so that no flash fetches can be initiated by the
-	// cache controller during clock switches.
+	// cache controller during clock switches. Everything executed or read here
+	// must stay out of flash (.text and .rodata) until romSpiFlashRestoreCache.
 	var cacheState uint32
 	romSpiFlashDisableCache(0, &cacheState)
 
-	origCoreClkSel := esp.SPI0.GetCORE_CLK_SEL()
+	origCoreClkSel := volatile.LoadUint32(&esp.SPI0.CORE_CLK_SEL.Reg) & esp.SPI0_CORE_CLK_SEL_CORE_CLK_SEL_Msk
 
 	// Disable variable dummy mode on SPI1 during timing calibration (matching ESP-IDF).
-	esp.SPI1.SetDDR_SPI_FMEM_VAR_DUMMY(0)
+	volatile.StoreUint32(&esp.SPI1.DDR.Reg, volatile.LoadUint32(&esp.SPI1.DDR.Reg)&^esp.SPI1_DDR_SPI_FMEM_VAR_DUMMY_Msk)
 
 	// 1. Write reference data pattern (64 bytes) to PSRAM address 0 at low speed (40 MHz).
 	var refData [16]uint32
@@ -290,7 +298,7 @@ func calibratePSRAMTiming() (ok bool) {
 	romOpiflashExecCmd(opiSpiNum, opiDtrMode, opiSyncWrite, opiCmdBitLen, 0, opiAddrBitLen, opiWrDummy, (*byte)(unsafe.Pointer(&refData[0])), 512, nil, 0, opiCS1Mask, false)
 
 	// 2. Read the original flash clock configuration to scale the divider when the core clock increases.
-	origFlashClock := esp.SPI0.CLOCK.Get()
+	origFlashClock := volatile.LoadUint32(&esp.SPI0.CLOCK.Reg)
 	var origFlashDiv uint32 = 1
 	if (origFlashClock & (1 << 31)) == 0 {
 		origFlashDiv = ((origFlashClock >> 16) & 0xff) + 1
@@ -299,135 +307,137 @@ func calibratePSRAMTiming() (ok bool) {
 	newFlashClock := ((newFlashDiv - 1) << 16) | (((newFlashDiv/2 - 1) & 0xff) << 8) | (newFlashDiv - 1)
 
 	// Apply scaled divider to SPI0 and SPI1 flash clock registers.
-	esp.SPI0.CLOCK.Set(newFlashClock)
-	esp.SPI1.CLOCK.Set(newFlashClock)
+	volatile.StoreUint32(&esp.SPI0.CLOCK.Reg, newFlashClock)
+	volatile.StoreUint32(&esp.SPI1.CLOCK.Reg, newFlashClock)
 
 	// Switch MSPI core clock to 160 MHz.
-	esp.SPI0.SetCORE_CLK_SEL(2) // 160 MHz core clock
+	volatile.StoreUint32(&esp.SPI0.CORE_CLK_SEL.Reg, (volatile.LoadUint32(&esp.SPI0.CORE_CLK_SEL.Reg)&^esp.SPI0_CORE_CLK_SEL_CORE_CLK_SEL_Msk)|2)
 
 	// Set SPI0/SPI1 SRAM clocks to 80 MHz (divider = 2).
 	setPSRAMClockDivider(1, 0, 1)
 
-	// Declare candidate delay parameters inside IRAM to avoid RODATA flash access.
+	// Declare candidate delay parameters inside IRAM to avoid RODATA flash
+	// access. Each entry carries its selection rank (0 = highest priority,
+	// matching the {4, 10, 6, 12, 0, 5, 1, 2, 3, 7, 8, 9, 11, 13} preference
+	// order) so the best passing config can be tracked in-place during the
+	// sweep without indexing into a separate success/priority array.
 	psramTuningParams := [14]struct {
 		dinMode       uint8
 		dinNum        uint8
 		extraDummyLen uint8
+		rank          uint8
 	}{
-		{0, 0, 0},
-		{4, 2, 2},
-		{2, 1, 2},
-		{4, 1, 2},
-		{1, 0, 1},
-		{4, 0, 2}, // default config index 5
-		{0, 0, 1},
-		{4, 2, 3},
-		{2, 1, 3},
-		{4, 1, 3},
-		{1, 0, 2},
-		{4, 0, 3},
-		{0, 0, 2},
-		{4, 2, 4},
+		{0, 0, 0, 4},
+		{4, 2, 2, 6},
+		{2, 1, 2, 7},
+		{4, 1, 2, 8},
+		{1, 0, 1, 0},
+		{4, 0, 2, 5}, // default config index 5
+		{0, 0, 1, 2},
+		{4, 2, 3, 9},
+		{2, 1, 3, 10},
+		{4, 1, 3, 11},
+		{1, 0, 2, 1},
+		{4, 0, 3, 12},
+		{0, 0, 2, 3},
+		{4, 2, 4, 13},
 	}
 
 	romDummyPlus1 := (*uint8)(unsafe.Pointer(&romDummyLenPlusSymbol))
 	origRomDummyPlus1 := *romDummyPlus1
 
-	// 3. Sweep all 14 timing configurations and record successful reads.
-	var success [14]bool
-	for i := 0; i < 14; i++ {
+	// 3. Sweep all 14 timing configurations and retain the highest-priority pass.
+	var bestRank uint8 = 0xff
+	var bestDinMode, bestDinNum, bestExtraDummy uint8
+	ok = false
+	for i := 0; i < len(psramTuningParams); i++ {
 		p := psramTuningParams[i]
 		dinModeReg := (uint32(p.dinMode) & 7) * 0x01249249
 		dinNumReg := (uint32(p.dinNum) & 3) * 0x00015555
-		esp.SPI0.SPI_SMEM_DIN_MODE.Set(dinModeReg)
-		esp.SPI0.SPI_SMEM_DIN_NUM.Set(dinNumReg)
+		volatile.StoreUint32(&esp.SPI0.SPI_SMEM_DIN_MODE.Reg, dinModeReg)
+		volatile.StoreUint32(&esp.SPI0.SPI_SMEM_DIN_NUM.Reg, dinNumReg)
 
 		if p.extraDummyLen > 0 {
-			esp.SPI1.TIMING_CALI.Set(2 | ((uint32(p.extraDummyLen) & 7) << 2))
-			esp.SPI0.SPI_SMEM_TIMING_CALI.Set(2 | ((uint32(p.extraDummyLen) & 7) << 2))
+			volatile.StoreUint32(&esp.SPI1.TIMING_CALI.Reg, 2|((uint32(p.extraDummyLen)&7)<<2))
+			volatile.StoreUint32(&esp.SPI0.SPI_SMEM_TIMING_CALI.Reg, 2|((uint32(p.extraDummyLen)&7)<<2))
 		} else {
-			esp.SPI1.TIMING_CALI.Set(0)
-			esp.SPI0.SPI_SMEM_TIMING_CALI.Set(0)
+			volatile.StoreUint32(&esp.SPI1.TIMING_CALI.Reg, 0)
+			volatile.StoreUint32(&esp.SPI0.SPI_SMEM_TIMING_CALI.Reg, 0)
 		}
 		*romDummyPlus1 = origRomDummyPlus1 + p.extraDummyLen
 
 		// Inline clear of SPI1 FIFO (W0..W15 registers).
-		esp.SPI1.W0.Set(0)
-		esp.SPI1.W1.Set(0)
-		esp.SPI1.W2.Set(0)
-		esp.SPI1.W3.Set(0)
-		esp.SPI1.W4.Set(0)
-		esp.SPI1.W5.Set(0)
-		esp.SPI1.W6.Set(0)
-		esp.SPI1.W7.Set(0)
-		esp.SPI1.W8.Set(0)
-		esp.SPI1.W9.Set(0)
-		esp.SPI1.W10.Set(0)
-		esp.SPI1.W11.Set(0)
-		esp.SPI1.W12.Set(0)
-		esp.SPI1.W13.Set(0)
-		esp.SPI1.W14.Set(0)
-		esp.SPI1.W15.Set(0)
+		volatile.StoreUint32(&esp.SPI1.W0.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W1.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W2.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W3.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W4.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W5.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W6.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W7.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W8.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W9.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W10.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W11.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W12.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W13.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W14.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.W15.Reg, 0)
 
 		var readData [16]uint32
 		romOpiflashExecCmd(opiSpiNum, opiDtrMode, opiSyncRead, opiCmdBitLen, 0, opiAddrBitLen, opiRdDummy, nil, 0, (*byte)(unsafe.Pointer(&readData[0])), 512, opiCS1Mask, false)
 
-		if readData == refData {
-			success[i] = true
+		// Compare element-by-element without array == (which lowers to
+		// runtime.memequal in .text under -opt=z) or early-exit comparisons
+		// that LLVM could turn into bcmp/memcmp.
+		var diff uint32
+		for j := range readData {
+			diff |= readData[j] ^ refData[j]
 		}
-	}
-
-	// 5. Select best calibration index from passing candidates, in order of
-	// preference; this covers all 14 measured candidates, so a working but
-	// non-preferred config is never silently dropped in favor of an
-	// unverified default.
-	priority := [14]uint32{4, 10, 6, 12, 0, 5, 1, 2, 3, 7, 8, 9, 11, 13}
-	var bestIdx uint32
-	ok = false
-	for _, idx := range priority {
-		if success[idx] {
-			bestIdx = idx
+		if diff == 0 && p.rank < bestRank {
+			bestRank = p.rank
+			bestDinMode = p.dinMode
+			bestDinNum = p.dinNum
+			bestExtraDummy = p.extraDummyLen
 			ok = true
-			break
 		}
 	}
 
 	if ok {
-		// 6. Apply best calibration parameters to SPI0 (cache) and
+		// 4. Apply best calibration parameters to SPI0 (cache) and
 		// clear SPI1's leftover sweep timing.
-		best := psramTuningParams[bestIdx]
-		dinModeReg := (uint32(best.dinMode) & 7) * 0x01249249
-		dinNumReg := (uint32(best.dinNum) & 3) * 0x00015555
-		esp.SPI0.SPI_SMEM_DIN_MODE.Set(dinModeReg)
-		esp.SPI0.SPI_SMEM_DIN_NUM.Set(dinNumReg)
+		dinModeReg := (uint32(bestDinMode) & 7) * 0x01249249
+		dinNumReg := (uint32(bestDinNum) & 3) * 0x00015555
+		volatile.StoreUint32(&esp.SPI0.SPI_SMEM_DIN_MODE.Reg, dinModeReg)
+		volatile.StoreUint32(&esp.SPI0.SPI_SMEM_DIN_NUM.Reg, dinNumReg)
 
-		if best.extraDummyLen > 0 {
-			esp.SPI0.SPI_SMEM_TIMING_CALI.Set(2 | ((uint32(best.extraDummyLen) & 7) << 2))
+		if bestExtraDummy > 0 {
+			volatile.StoreUint32(&esp.SPI0.SPI_SMEM_TIMING_CALI.Reg, 2|((uint32(bestExtraDummy)&7)<<2))
 		} else {
-			esp.SPI0.SPI_SMEM_TIMING_CALI.Set(0)
+			volatile.StoreUint32(&esp.SPI0.SPI_SMEM_TIMING_CALI.Reg, 0)
 		}
-		esp.SPI1.TIMING_CALI.Set(0)
+		volatile.StoreUint32(&esp.SPI1.TIMING_CALI.Reg, 0)
 	} else {
 		// No candidate passed the 80 MHz DTR read-back: revert clocks and
 		// din_mode/din_num/timing-cali to the same untuned 40 MHz state
 		// used for bring-up (spiClkCntN/H/L), which already passed
 		// checkPSRAMConnected, instead of running PSRAM at an unverified
 		// timing.
-		esp.SPI0.CLOCK.Set(origFlashClock)
-		esp.SPI1.CLOCK.Set(origFlashClock)
-		esp.SPI0.SetCORE_CLK_SEL(origCoreClkSel)
+		volatile.StoreUint32(&esp.SPI0.CLOCK.Reg, origFlashClock)
+		volatile.StoreUint32(&esp.SPI1.CLOCK.Reg, origFlashClock)
+		volatile.StoreUint32(&esp.SPI0.CORE_CLK_SEL.Reg, (volatile.LoadUint32(&esp.SPI0.CORE_CLK_SEL.Reg)&^esp.SPI0_CORE_CLK_SEL_CORE_CLK_SEL_Msk)|origCoreClkSel)
 
 		// Restore SPI0 SRAM clock for 40 MHz PSRAM.
 		setPSRAMClockDivider(spiClkCntN, spiClkCntH, spiClkCntL)
 
-		esp.SPI0.SPI_SMEM_DIN_MODE.Set(0)
-		esp.SPI0.SPI_SMEM_DIN_NUM.Set(0)
-		esp.SPI0.SPI_SMEM_TIMING_CALI.Set(0)
-		esp.SPI1.TIMING_CALI.Set(0)
+		volatile.StoreUint32(&esp.SPI0.SPI_SMEM_DIN_MODE.Reg, 0)
+		volatile.StoreUint32(&esp.SPI0.SPI_SMEM_DIN_NUM.Reg, 0)
+		volatile.StoreUint32(&esp.SPI0.SPI_SMEM_TIMING_CALI.Reg, 0)
+		volatile.StoreUint32(&esp.SPI1.TIMING_CALI.Reg, 0)
 	}
 
 	// Restore variable dummy mode on SPI1.
-	esp.SPI1.SetDDR_SPI_FMEM_VAR_DUMMY(1)
+	volatile.StoreUint32(&esp.SPI1.DDR.Reg, volatile.LoadUint32(&esp.SPI1.DDR.Reg)|esp.SPI1_DDR_SPI_FMEM_VAR_DUMMY_Msk)
 
 	// Restore ROM global dummy plus value.
 	*romDummyPlus1 = origRomDummyPlus1
