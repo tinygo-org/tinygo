@@ -52,4 +52,20 @@ func main() {
 	start := time.Now()
 	time.Sleep(20 * time.Millisecond)
 	println("short sleep not delayed:", time.Since(start) < 1500*time.Millisecond)
+
+	// Busy every core but one, so the last core sleeps on the timer. main polls a
+	// flag, because a blocked main would free its own core for the new goroutine.
+	go func() {
+		time.Sleep(5 * time.Second)
+	}()
+	for i := 0; i < runtime.NumCPU()-2; i++ {
+		go spin(2 * time.Second)
+	}
+	spin(50 * time.Millisecond)
+	var started atomic.Bool
+	start = time.Now()
+	go started.Store(true)
+	for !started.Load() && time.Since(start) < 2500*time.Millisecond {
+	}
+	println("sleeping core woken:", started.Load() && time.Since(start) < 500*time.Millisecond)
 }
