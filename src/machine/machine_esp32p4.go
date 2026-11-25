@@ -20,6 +20,10 @@ const maxPin = 55
 
 const cpuInterruptFromPin = 6
 
+// clicExtIntrNumOffset is CLIC_EXT_INTR_NUM_OFFSET in ESP-IDF. The interrupt
+// matrix takes the CLIC source number, which is the CPU interrupt line plus 16.
+const clicExtIntrNumOffset = 16
+
 // CPUFrequency returns the current CPU frequency of the chip.
 func CPUFrequency() uint32 {
 	return 360e6 // 360MHz (default HP CPU clock)
@@ -292,7 +296,7 @@ var (
 )
 
 func setupPinInterrupt() error {
-	esp.INTERRUPT_CORE0.GPIO_INT0_MAP.Set(cpuInterruptFromPin)
+	esp.INTERRUPT_CORE0.GPIO_INT0_MAP.Set(cpuInterruptFromPin + clicExtIntrNumOffset)
 	return interrupt.New(cpuInterruptFromPin, func(interrupt.Interrupt) {
 		status := esp.GPIO.STATUS.Get()
 		status1 := esp.GPIO.STATUS1.Get()
@@ -355,13 +359,13 @@ func busFor(bus *esp.UART_Type) registerSet {
 	switch bus {
 	case esp.UART0:
 		return registerSet{
-			cpuInterrupt:     cpuInterruptFromUART0,
+			cpuInterrupt:     cpuInterruptFromUART0 + clicExtIntrNumOffset,
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART0_INT_MAP,
 			gpioMatrixSignal: uartSignalU0,
 		}
 	case esp.UART1:
 		return registerSet{
-			cpuInterrupt:     cpuInterruptFromUART1,
+			cpuInterrupt:     cpuInterruptFromUART1 + clicExtIntrNumOffset,
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART1_INT_MAP,
 			gpioMatrixSignal: uartSignalU1,
 		}

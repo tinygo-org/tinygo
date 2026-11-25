@@ -26,7 +26,7 @@ func (usbdev *USB_DEVICE) configure(config UARTConfig) error {
 	usbdev.Bus.INT_ENA.SetBits(usbRecvPktIntEna)
 
 	// The interrupt matrix takes the CLIC number, which is the line plus 16.
-	esp.INTERRUPT_CORE0.USB_DEVICE_INT_MAP.Set(cpuInterruptFromUSB + 16)
+	esp.INTERRUPT_CORE0.USB_DEVICE_INT_MAP.Set(cpuInterruptFromUSB + clicExtIntrNumOffset)
 	interrupt.New(cpuInterruptFromUSB, func(interrupt.Interrupt) {
 		_USBCDC.handleInterrupt()
 	}).Enable()

@@ -122,7 +122,7 @@ func initTimerInterrupt() {
 	clicSetTrigger(timerAlarmCPUInterrupt, 1) // 1 = edge
 
 	// Set priority above threshold.
-	clicSetPriority(timerAlarmCPUInterrupt, 10)
+	clicSetPriority(timerAlarmCPUInterrupt, 7)
 
 	riscv.Asm("fence")
 
