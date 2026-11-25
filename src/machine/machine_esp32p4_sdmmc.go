@@ -3,7 +3,12 @@
 // ESP32-P4 SDMMC host driver, slot 0.
 //
 // This file implements the SD host controller bring-up, the native SD
-// command protocol, and single-block IDMAC data transfers.
+// command protocol, and block-oriented PIO and IDMAC transfers.  It does
+// not provide a filesystem or a byte-addressed ReadAt/WriteAt device.
+//
+// The controller uses shared static DMA and descriptor buffers, so only one
+// controller may be initialized at a time.  Public block operations are
+// serialized with a mutex.  Call Init before any block operation.
 //
 // Reference: ESP-IDF components/esp_hal_sd/esp32p4/include/hal/sdmmc_ll.h,
 // components/esp_driver_sdmmc/src/sd_host_sdmmc.c, and
@@ -16,6 +21,7 @@ import (
 	"errors"
 	"machine/internal/esp32p4sdmmc"
 	"runtime/volatile"
+	"sync"
 	"unsafe"
 )
 
@@ -109,6 +115,8 @@ var (
 	ErrSDMMCControllerReset = errors.New("machine: SDMMC controller reset failed")
 	ErrSDMMCFIFOReset       = errors.New("machine: SDMMC FIFO reset failed")
 	ErrSDMMCDMAReset        = errors.New("machine: SDMMC DMA reset failed")
+	ErrSDMMCInUse           = errors.New("machine: SDMMC controller already active")
+	ErrSDMMCNotInitialized  = errors.New("machine: SDMMC controller not initialized")
 	ErrSDMMCClock           = errors.New("machine: SDMMC clock setup failed")
 	ErrSDMMCNoCard          = errors.New("machine: SDMMC no card response")
 	ErrSDMMCCID             = errors.New("machine: SDMMC CID read failed (CRC/invalid response)")
@@ -118,21 +126,74 @@ var (
 
 // SDMMCConfig describes the slot-0 pins and optional power control.
 type SDMMCConfig struct {
-	CLK      Pin
-	CMD      Pin
-	D0       Pin
-	D1       Pin
-	D2       Pin
-	D3       Pin
-	Power    Pin        // active-low card power enable, NoPin to skip
-	LDO      LDOChannel // 0 to skip; LDO4 on the WaveShare ESP32-P4-NANO
-	OneBit   bool       // force 1-bit data for bring-up
-	PIO      bool       // use FIFO/PIO reads instead of IDMAC
-	DataFreq uint32     // data clock in Hz; 0 uses the 400 kHz default
+	CLK Pin // clock pin
+	CMD Pin // command pin
+	D0  Pin // data line 0
+	D1  Pin // data line 1; unused when OneBit is true
+	D2  Pin // data line 2; unused when OneBit is true
+	D3  Pin // data line 3; unused when OneBit is true
+
+	Power Pin        // active-low card power enable; NoPin to skip
+	LDO   LDOChannel // 0 to skip; LDO4 on the WaveShare ESP32-P4-NANO
+
+	OneBit bool // force 1-bit data for bring-up
+	PIO    bool // use FIFO/PIO transfers instead of IDMAC
+
+	DataFreq uint32 // data clock in Hz; 0 uses the 400 kHz default
 }
 
-// SDMMC is an ESP32-P4 SDMMC slot-0 controller.
-type SDMMC struct {
+// SDCard is the block-level interface for an initialized SD card.
+// It is intentionally limited to operations that can be shared safely by
+// callers through a mutex.
+type SDCard interface {
+	Init() error
+	ReadBlocks(dst []byte, startBlockIdx int64) (int, error)
+	WriteBlocks(data []byte, startBlockIdx int64) (int, error)
+	EraseBlocks(startBlock, numBlocks int64) error
+	NumberOfBlocks() int64
+	BlockSize() int
+	Close() error
+}
+
+// SDCardMulti exposes the optional multi-block read path.  It is separate
+// from SDCard because the generic SD card contract only needs block I/O.
+type SDCardMulti interface {
+	SDCard
+	ReadBlocksMulti(dst []byte, startBlockIdx int64) (int, error)
+}
+
+// SDCardInfo exposes card identity and negotiated bus information.
+type SDCardInfo interface {
+	Size() int64
+	WriteBlockSize() int64
+	EraseBlockSize() int64
+	BusWidth() int
+	OCRRaw() uint32
+	HighCapacity() bool
+	SDv2() bool
+	CSDVersion() uint8
+	CIDRaw() [16]byte
+	CSDRaw() [16]byte
+}
+
+// SDCardDebug exposes the bring-up diagnostics used by board examples.
+// It is separate from SDCard so the normal storage API stays small.
+type SDCardDebug interface {
+	DataLineLevels() (d0, d1, d2, d3 bool)
+	DebugState() (ctrl, clkdiv, clksrc, clkena uint32)
+	TransferDebug() (rintsts, idsts, ctrl, bmod, status uint32)
+	LastR1() uint32
+	DMAState() (dbaddr, bytcnt, blksiz, pldmnd, idinten uint32)
+	PIOState() (rintsts, status, bytcnt, blksiz uint32)
+	DescriptorState() (w0, w1, w2, w3 uint32)
+	ClockState() (peri1, peri2, ref0, ref2, aonRst uint32)
+}
+
+type sdmmc struct {
+	mu          sync.Mutex
+	active      bool
+	initialized bool
+
 	hw  *esp.SDHOST_Type
 	cfg SDMMCConfig
 
@@ -209,19 +270,54 @@ func sdmmcDescriptor() *esp32p4sdmmc.Descriptor {
 	return sdmmcDescriptorAt(0)
 }
 
-// NewSDMMCController returns a slot-0 SDMMC controller for the given pins.
-func NewSDMMCController(config SDMMCConfig) *SDMMC {
-	return &SDMMC{
+// NewSDMMC returns a slot-0 SD card controller for the given pins.
+// It does not access the card; call Init to power and initialize it.
+func NewSDMMC(config SDMMCConfig) (SDCard, error) {
+	return &sdmmc{
 		hw:   esp.SDHOST,
 		cfg:  config,
 		desc: sdmmcDescriptor(),
-	}
+	}, nil
 }
 
+// sdmmcActiveMu serializes controller creation and shutdown.  The DMA
+// bounce pools and descriptor ring are package-global, so only one slot-0
+// controller may be active at a time.
+var sdmmcActiveMu sync.Mutex
+var sdmmcActive bool
+
+var _ SDCard = (*sdmmc)(nil)
+var _ SDCardMulti = (*sdmmc)(nil)
+var _ SDCardInfo = (*sdmmc)(nil)
+var _ SDCardDebug = (*sdmmc)(nil)
+
 // Init powers the card, brings up the controller, and runs the SD
-// initialization sequence. It leaves the card in 4-bit mode (if supported)
-// at 20 MHz.
-func (d *SDMMC) Init() error {
+// initialization sequence.  Only one controller may be active at a time.
+func (d *sdmmc) Init() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.initialized {
+		return nil
+	}
+
+	sdmmcActiveMu.Lock()
+	if sdmmcActive {
+		sdmmcActiveMu.Unlock()
+		return ErrSDMMCInUse
+	}
+	sdmmcActive = true
+	d.active = true
+	sdmmcActiveMu.Unlock()
+
+	if err := d.initLocked(); err != nil {
+		d.releaseActiveLocked()
+		return err
+	}
+	d.initialized = true
+	return nil
+}
+
+func (d *sdmmc) initLocked() error {
 	if err := d.powerOn(); err != nil {
 		return ErrSDMMCPower
 	}
@@ -246,7 +342,7 @@ func (d *SDMMC) Init() error {
 	return nil
 }
 
-func (d *SDMMC) powerOn() error {
+func (d *sdmmc) powerOn() error {
 	// Fully remove card power. A controller reset alone does not reset a card
 	// that was left powered in a data/4-bit state; the physical reinsertion
 	// test works because it removes both VDD and the pin bias.
@@ -274,7 +370,7 @@ func (d *SDMMC) powerOn() error {
 
 // highZPins releases the SD lines while card power is off so the card cannot
 // be parasitic-powered through CMD/DAT pullups.
-func (d *SDMMC) highZPins() {
+func (d *sdmmc) highZPins() {
 	for _, p := range []Pin{d.cfg.CLK, d.cfg.CMD, d.cfg.D0, d.cfg.D1, d.cfg.D2, d.cfg.D3} {
 		if p != NoPin {
 			p.Configure(PinConfig{Mode: PinInput})
@@ -282,7 +378,7 @@ func (d *SDMMC) highZPins() {
 	}
 }
 
-func (d *SDMMC) enableBusClock() {
+func (d *sdmmc) enableBusClock() {
 	esp.HP_SYS_CLKRST.SetSOC_CLK_CTRL1_REG_SDMMC_SYS_CLK_EN(1)
 
 	// SDMMC's default source is PLL_F160M. This derived PLL has its own
@@ -305,7 +401,7 @@ func (d *SDMMC) enableBusClock() {
 
 // initPhaseDelay enables the SDIO driver/sample/self clock phases, matching
 // sdmmc_ll_init_phase_delay() in ESP-IDF.
-func (d *SDMMC) initPhaseDelay() {
+func (d *sdmmc) initPhaseDelay() {
 	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL02_REG_SDIO_LS_DRV_CLK_EN(1)
 	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL02_REG_SDIO_LS_SAM_CLK_EN(1)
 	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL02_REG_SDIO_LS_SLF_CLK_EN(1)
@@ -317,7 +413,7 @@ func (d *SDMMC) initPhaseDelay() {
 }
 
 // setHostClockDiv programs the first-stage SDMMC clock divider.
-func (d *SDMMC) setHostClockDiv(div uint32) {
+func (d *sdmmc) setHostClockDiv(div uint32) {
 	h, n, l, update := esp32p4sdmmc.ClockEdge(div)
 	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL02_REG_SDIO_LS_CLK_EDGE_H(h)
 	esp.HP_SYS_CLKRST.SetPERI_CLK_CTRL02_REG_SDIO_LS_CLK_EDGE_N(n)
@@ -328,7 +424,7 @@ func (d *SDMMC) setHostClockDiv(div uint32) {
 	}
 }
 
-func (d *SDMMC) configurePins() {
+func (d *sdmmc) configurePins() {
 	// Slot 0 uses the dedicated IOMUX function 0 on GPIO39-44.
 	d.configurePin(d.cfg.CLK, false)
 	d.configurePin(d.cfg.CMD, true)
@@ -338,7 +434,7 @@ func (d *SDMMC) configurePins() {
 	d.configurePin(d.cfg.D3, true)
 }
 
-func (d *SDMMC) configurePin(p Pin, pullup bool) {
+func (d *sdmmc) configurePin(p Pin, pullup bool) {
 	if p == NoPin {
 		return
 	}
@@ -352,7 +448,7 @@ func (d *SDMMC) configurePin(p Pin, pullup bool) {
 	p.mux().Set(mux)
 }
 
-func (d *SDMMC) resetController() error {
+func (d *sdmmc) resetController() error {
 	// ESP-IDF asserts controller, FIFO, and DMA reset together and waits for
 	// all three to self-clear. Write the full word to avoid a read-modify-write
 	// on a self-clearing register.
@@ -398,7 +494,7 @@ func (d *SDMMC) resetController() error {
 	return nil
 }
 
-func (d *SDMMC) setClock(freq uint32) error {
+func (d *sdmmc) setClock(freq uint32) error {
 	// Follow the ESP-IDF sequence: stop the card clock, update the CIU,
 	// program both dividers, update again, then re-enable the clock.
 	d.hw.CLKENA.ClearBits(1)
@@ -424,7 +520,7 @@ func (d *SDMMC) setClock(freq uint32) error {
 	return nil
 }
 
-func (d *SDMMC) updateClock() error {
+func (d *sdmmc) updateClock() error {
 	word := (esp32p4sdmmc.CommandOptions{Index: 0, UpdateClock: true}).Word()
 	d.hw.CMD.Set(word)
 	deadline := sdmmcDeadlineUS(sdmmcCmdTimeout)
@@ -437,7 +533,7 @@ func (d *SDMMC) updateClock() error {
 	return nil
 }
 
-func (d *SDMMC) initCard() error {
+func (d *sdmmc) initCard() error {
 	// Reset twice: the first CMD0 also sends the required 80 initialization
 	// clocks; the second gives a card that was left in a data/4-bit state a
 	// second chance to return to idle.
@@ -586,7 +682,7 @@ func (d *SDMMC) initCard() error {
 	return nil
 }
 
-func (d *SDMMC) waitReady() error {
+func (d *sdmmc) waitReady() error {
 	deadline := sdmmcDeadlineUS(sdmmcCmdTimeout)
 	for {
 		resp, err := d.command(esp32p4sdmmc.CommandOptions{
@@ -607,7 +703,7 @@ func (d *SDMMC) waitReady() error {
 	}
 }
 
-func (d *SDMMC) command(opts esp32p4sdmmc.CommandOptions, arg uint32) ([4]uint32, error) {
+func (d *sdmmc) command(opts esp32p4sdmmc.CommandOptions, arg uint32) ([4]uint32, error) {
 	var resp [4]uint32
 	if err := d.waitBitsClear(&d.hw.CMD, 1<<31, sdmmcCmdTimeout); err != nil {
 		return resp, err
@@ -655,7 +751,7 @@ func (d *SDMMC) command(opts esp32p4sdmmc.CommandOptions, arg uint32) ([4]uint32
 	return resp, nil
 }
 
-func (d *SDMMC) waitBitsClear(reg *volatile.Register32, mask uint32, timeoutUS uint32) error {
+func (d *sdmmc) waitBitsClear(reg *volatile.Register32, mask uint32, timeoutUS uint32) error {
 	deadline := sdmmcDeadlineUS(timeoutUS)
 	for reg.Get()&mask != 0 {
 		if sdmmcTicks() > deadline {
@@ -685,9 +781,20 @@ func sdmmcDeadlineUS(us uint32) uint64 {
 	return sdmmcTicks() + uint64(us)*40
 }
 
-// ReadBlocks reads len(dst) bytes starting at startBlockIdx. len(dst) must be
-// a multiple of 512.
-func (d *SDMMC) ReadBlocks(dst []byte, startBlockIdx int64) (int, error) {
+// ReadBlocks reads len(dst) bytes starting at the 512-byte block index
+// startBlockIdx.  len(dst) must be a multiple of 512.  It uses the selected
+// PIO or IDMAC path and returns the number of bytes transferred.  DMA uses
+// an internal bounce buffer, so the caller does not need cache alignment.
+func (d *sdmmc) ReadBlocks(dst []byte, startBlockIdx int64) (int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.initialized {
+		return 0, ErrSDMMCNotInitialized
+	}
+	return d.readBlocksLocked(dst, startBlockIdx)
+}
+
+func (d *sdmmc) readBlocksLocked(dst []byte, startBlockIdx int64) (int, error) {
 	if len(dst)%sdmmcBlockSize != 0 {
 		return 0, ErrSDMMCBlockSize
 	}
@@ -705,16 +812,25 @@ func (d *SDMMC) ReadBlocks(dst []byte, startBlockIdx int64) (int, error) {
 	return len(dst), nil
 }
 
-// ReadBlocksMulti reads len(dst) bytes starting at startBlockIdx using CMD18
-// with automatic CMD12 stop. len(dst) must be a multiple of 512. Single-block
-// remainders use the CMD17 path. Callers that need a fallback can retry with
-// ReadBlocks.
-func (d *SDMMC) ReadBlocksMulti(dst []byte, startBlockIdx int64) (int, error) {
+// ReadBlocksMulti reads len(dst) bytes starting at the 512-byte block index
+// startBlockIdx using CMD18 with automatic CMD12 stop.  len(dst) must be a
+// multiple of 512.  Single-block remainders and PIO mode use the CMD17 path.
+// Callers that need a per-block fallback can retry with ReadBlocks.
+func (d *sdmmc) ReadBlocksMulti(dst []byte, startBlockIdx int64) (int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.initialized {
+		return 0, ErrSDMMCNotInitialized
+	}
+	return d.readBlocksMultiLocked(dst, startBlockIdx)
+}
+
+func (d *sdmmc) readBlocksMultiLocked(dst []byte, startBlockIdx int64) (int, error) {
 	if len(dst)%sdmmcBlockSize != 0 {
 		return 0, ErrSDMMCBlockSize
 	}
 	if d.cfg.PIO {
-		return d.ReadBlocks(dst, startBlockIdx)
+		return d.readBlocksLocked(dst, startBlockIdx)
 	}
 	total := 0
 	for total < len(dst) {
@@ -737,9 +853,15 @@ func (d *SDMMC) ReadBlocksMulti(dst []byte, startBlockIdx int64) (int, error) {
 	return total, nil
 }
 
-// WriteBlocks writes len(data) bytes starting at startBlockIdx. len(data)
-// must be a multiple of 512.
-func (d *SDMMC) WriteBlocks(data []byte, startBlockIdx int64) (int, error) {
+// WriteBlocks writes len(data) bytes starting at the 512-byte block index
+// startBlockIdx.  len(data) must be a multiple of 512.  It uses the selected
+// PIO or IDMAC path and returns the number of bytes transferred.
+func (d *sdmmc) WriteBlocks(data []byte, startBlockIdx int64) (int, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.initialized {
+		return 0, ErrSDMMCNotInitialized
+	}
 	if len(data)%sdmmcBlockSize != 0 {
 		return 0, ErrSDMMCBlockSize
 	}
@@ -757,7 +879,7 @@ func (d *SDMMC) WriteBlocks(data []byte, startBlockIdx int64) (int, error) {
 	return len(data), nil
 }
 
-func (d *SDMMC) writeBlockPIO(src []byte, block int64) error {
+func (d *sdmmc) writeBlockPIO(src []byte, block int64) error {
 	// Disable IDMAC and use the CPU-visible FIFO.
 	d.hw.CTRL.ClearBits(sdmmcCtrlDMAEnable | sdmmcCtrlUseInternalDMA)
 	d.hw.BMOD.ClearBits(sdmmcBMODFB | sdmmcBMODDE)
@@ -846,7 +968,7 @@ func (d *SDMMC) writeBlockPIO(src []byte, block int64) error {
 	return nil
 }
 
-func (d *SDMMC) readBlockPIO(dst []byte, block int64) error {
+func (d *sdmmc) readBlockPIO(dst []byte, block int64) error {
 	// Disable IDMAC and take ownership of the FIFO. Reset the IDMAC first:
 	// a stale IDMAC/FIFO state can make BUFFIFO return the same word without
 	// advancing the read pointer.
@@ -937,7 +1059,7 @@ func (d *SDMMC) readBlockPIO(dst []byte, block int64) error {
 	return nil
 }
 
-func (d *SDMMC) transfer(buf []byte, block int64, write bool) error {
+func (d *sdmmc) transfer(buf []byte, block int64, write bool) error {
 	if len(buf) != sdmmcBlockSize {
 		return ErrSDMMCBlockSize
 	}
@@ -1033,7 +1155,7 @@ func (d *SDMMC) transfer(buf []byte, block int64, write bool) error {
 // transferMulti reads len(buf) bytes with CMD18 and automatic CMD12 stop.
 // The data is staged through a non-cacheable DMA buffer; the caller's buffer
 // is copied after the transfer.
-func (d *SDMMC) transferMulti(buf []byte, block int64) error {
+func (d *sdmmc) transferMulti(buf []byte, block int64) error {
 	if len(buf) == 0 || len(buf)%sdmmcBlockSize != 0 || len(buf) > sdmmcMultiBytes {
 		return ErrSDMMCBlockSize
 	}
@@ -1124,13 +1246,13 @@ func (d *SDMMC) transferMulti(buf []byte, block int64) error {
 	return nil
 }
 
-func (d *SDMMC) dmaEnable() {
+func (d *sdmmc) dmaEnable() {
 	d.hw.CTRL.SetBits(sdmmcCtrlDMAEnable | sdmmcCtrlUseInternalDMA)
 	d.hw.BMOD.SetBits(sdmmcBMODFB | sdmmcBMODDE)
 	d.hw.IDINTEN.Set(sdmmcIDMACRI | sdmmcIDMACTI | sdmmcIDMACNI)
 }
 
-func (d *SDMMC) dmaStop() {
+func (d *sdmmc) dmaStop() {
 	d.hw.CTRL.ClearBits(sdmmcCtrlDMAEnable | sdmmcCtrlUseInternalDMA)
 	d.hw.BMOD.ClearBits(sdmmcBMODFB | sdmmcBMODDE)
 	d.hw.CTRL.SetBits(sdmmcCtrlDMAReset)
@@ -1143,59 +1265,121 @@ func (d *SDMMC) dmaStop() {
 	}
 }
 
-// EraseBlocks is not implemented. FAT does not call it.
-func (d *SDMMC) EraseBlocks(startBlock, numBlocks int64) error {
+// EraseBlocks is not implemented.  It returns ErrSDMMCEraseUnsupported;
+// normal FAT writes use WriteBlocks and do not require an erase.
+func (d *sdmmc) EraseBlocks(startBlock, numBlocks int64) error {
 	return ErrSDMMCEraseUnsupported
 }
 
-// Sync is a no-op: card writes are committed by the transfer itself.
-func (d *SDMMC) Sync() error { return nil }
+// Sync is a no-op.  Card writes are committed by the transfer itself.
+func (d *sdmmc) Sync() error { return nil }
 
-// Close disables the card clock and powers the card off.
-func (d *SDMMC) Close() error {
+// Close disables the card clock and powers the card off.  It does not
+// reset controller state; do not issue block operations afterward.
+func (d *sdmmc) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.active {
+		return nil
+	}
+
 	d.hw.CLKENA.ClearBits(1)
 	if d.cfg.Power != NoPin {
 		d.cfg.Power.High() // active-low: off
 	}
+	var err error
 	if d.cfg.LDO != 0 {
-		return LDODisable(d.cfg.LDO)
+		err = LDODisable(d.cfg.LDO)
 	}
-	return nil
+	d.initialized = false
+	d.releaseActiveLocked()
+	return err
+}
+
+func (d *sdmmc) releaseActiveLocked() {
+	sdmmcActiveMu.Lock()
+	if d.active {
+		sdmmcActive = false
+		d.active = false
+	}
+	sdmmcActiveMu.Unlock()
 }
 
 // NumberOfBlocks returns the number of 512-byte blocks on the card.
-func (d *SDMMC) NumberOfBlocks() int64 { return d.numBlocks }
+func (d *sdmmc) NumberOfBlocks() int64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.numBlocks
+}
 
 // BlockSize returns the card block size in bytes.
-func (d *SDMMC) BlockSize() int { return sdmmcBlockSize }
+func (d *sdmmc) BlockSize() int { return sdmmcBlockSize }
+
+// Size returns the card capacity in bytes.
+func (d *sdmmc) Size() int64 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.numBlocks * int64(sdmmcBlockSize)
+}
+
+// WriteBlockSize returns the block size accepted by WriteBlocks.
+func (d *sdmmc) WriteBlockSize() int64 { return sdmmcBlockSize }
+
+// EraseBlockSize returns the nominal erase granularity.  EraseBlocks is
+// unsupported; this value is provided for block-device adapters.
+func (d *sdmmc) EraseBlockSize() int64 { return sdmmcBlockSize }
 
 // BusWidth returns the negotiated data bus width (1 or 4).
-func (d *SDMMC) BusWidth() int { return d.busWidth }
+func (d *sdmmc) BusWidth() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.busWidth
+}
 
 // OCRRaw returns the OCR response from ACMD41.
-func (d *SDMMC) OCRRaw() uint32 { return d.ocr }
+func (d *sdmmc) OCRRaw() uint32 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.ocr
+}
 
 // HighCapacity reports whether the card reported SDHC/SDXC capacity.
-func (d *SDMMC) HighCapacity() bool { return d.highCapacity }
+func (d *sdmmc) HighCapacity() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.highCapacity
+}
 
 // SDv2 reports whether CMD8 identified an SD v2 card.
-func (d *SDMMC) SDv2() bool { return d.sdV2 }
+func (d *sdmmc) SDv2() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.sdV2
+}
 
 // CSDVersion returns the decoded CSD structure version (1 or 2).
-func (d *SDMMC) CSDVersion() uint8 { return esp32p4sdmmc.CSDVersion(d.csd) }
+func (d *sdmmc) CSDVersion() uint8 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return esp32p4sdmmc.CSDVersion(d.csd)
+}
 
 // DataLineLevels returns the current GPIO input levels of D0-D3. This is a
 // read-only diagnostic; it does not drive the lines.
-func (d *SDMMC) DataLineLevels() (d0, d1, d2, d3 bool) {
+func (d *sdmmc) DataLineLevels() (d0, d1, d2, d3 bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return d.cfg.D0.Get(), d.cfg.D1.Get(), d.cfg.D2.Get(), d.cfg.D3.Get()
 }
 
 // DebugState returns the raw SDHOST control/clock registers for bring-up.
-func (d *SDMMC) DebugState() (ctrl, clkdiv, clksrc, clkena uint32) {
+func (d *sdmmc) DebugState() (ctrl, clkdiv, clksrc, clkena uint32) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return d.hw.CTRL.Get(), d.hw.CLKDIV.Get(), d.hw.CLKSRC.Get(), d.hw.CLKENA.Get()
 }
 
-func (d *SDMMC) captureTransferState() {
+func (d *sdmmc) captureTransferState() {
 	d.lastRint = d.hw.RINTSTS.Get()
 	d.lastIdsts = d.hw.IDSTS.Get()
 	d.lastCtrl = d.hw.CTRL.Get()
@@ -1204,30 +1388,44 @@ func (d *SDMMC) captureTransferState() {
 }
 
 // TransferDebug returns the data-transfer status captured before cleanup.
-func (d *SDMMC) TransferDebug() (rintsts, idsts, ctrl, bmod, status uint32) {
+func (d *sdmmc) TransferDebug() (rintsts, idsts, ctrl, bmod, status uint32) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return d.lastRint, d.lastIdsts, d.lastCtrl, d.lastBmod, d.lastStatus
 }
 
 // LastR1 returns the most recent R1 response word.
-func (d *SDMMC) LastR1() uint32 { return d.lastR1 }
+func (d *sdmmc) LastR1() uint32 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.lastR1
+}
 
 // DMAState returns the raw IDMAC setup registers.
-func (d *SDMMC) DMAState() (dbaddr, bytcnt, blksiz, pldmnd, idinten uint32) {
+func (d *sdmmc) DMAState() (dbaddr, bytcnt, blksiz, pldmnd, idinten uint32) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return d.hw.DBADDR.Get(), d.hw.BYTCNT.Get(), d.hw.BLKSIZ.Get(), d.hw.PLDMND.Get(), d.hw.IDINTEN.Get()
 }
 
 // PIOState returns the raw status registers used by the FIFO path.
-func (d *SDMMC) PIOState() (rintsts, status, bytcnt, blksiz uint32) {
+func (d *sdmmc) PIOState() (rintsts, status, bytcnt, blksiz uint32) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return d.hw.RINTSTS.Get(), d.hw.STATUS.Get(), d.hw.BYTCNT.Get(), d.hw.BLKSIZ.Get()
 }
 
 // DescriptorState returns the first four IDMAC descriptor words.
-func (d *SDMMC) DescriptorState() (w0, w1, w2, w3 uint32) {
+func (d *sdmmc) DescriptorState() (w0, w1, w2, w3 uint32) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return d.desc.Word[0], d.desc.Word[1], d.desc.Word[2], d.desc.Word[3]
 }
 
 // ClockState returns the raw HP_SYS_CLKRST and LP_AON reset registers.
-func (d *SDMMC) ClockState() (peri1, peri2, ref0, ref2, aonRst uint32) {
+func (d *sdmmc) ClockState() (peri1, peri2, ref0, ref2, aonRst uint32) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	return esp.HP_SYS_CLKRST.PERI_CLK_CTRL01.Get(),
 		esp.HP_SYS_CLKRST.PERI_CLK_CTRL02.Get(),
 		esp.HP_SYS_CLKRST.REF_CLK_CTRL0.Get(),
@@ -1236,7 +1434,15 @@ func (d *SDMMC) ClockState() (peri1, peri2, ref0, ref2, aonRst uint32) {
 }
 
 // CIDRaw returns the 16-byte card identification register.
-func (d *SDMMC) CIDRaw() [16]byte { return d.cid }
+func (d *sdmmc) CIDRaw() [16]byte {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.cid
+}
 
 // CSDRaw returns the 16-byte card-specific data register.
-func (d *SDMMC) CSDRaw() [16]byte { return d.csd }
+func (d *sdmmc) CSDRaw() [16]byte {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.csd
+}
