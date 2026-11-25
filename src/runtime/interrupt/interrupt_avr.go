@@ -2,7 +2,7 @@
 
 package interrupt
 
-import "device"
+import "device/avr"
 
 // State represents the previous global interrupt state.
 type State uint8
@@ -17,11 +17,7 @@ type State uint8
 // Critical sections can be nested. Make sure to call Restore in the same order
 // as you called Disable (this happens naturally with the pattern above).
 func Disable() (state State) {
-	// SREG is at I/O address 0x3f.
-	return State(device.AsmFull(`
-		in {}, 0x3f
-		cli
-	`, nil))
+	return State(avr.DisableInterrupts())
 }
 
 // Restore restores interrupts to what they were before. Give the previous state
@@ -29,10 +25,7 @@ func Disable() (state State) {
 // calling Disable, this will not re-enable interrupts, allowing for nested
 // critical sections.
 func Restore(state State) {
-	// SREG is at I/O address 0x3f.
-	device.AsmFull("out 0x3f, {state}", map[string]interface{}{
-		"state": state,
-	})
+	avr.EnableInterrupts(uint8(state))
 }
 
 // In returns whether the system is currently in an interrupt.
