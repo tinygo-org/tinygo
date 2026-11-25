@@ -2,10 +2,7 @@
 
 package runtime
 
-import (
-	"device/riscv"
-	"sync/atomic"
-)
+import "device/riscv"
 
 // Spin until the time is up, or until another hart ends the sleep. esp32p4
 // sleeps the same way.
@@ -16,36 +13,16 @@ func sleepTicks(d timeUnit) {
 	}
 }
 
-// State used to distinguish scheduler wakeups from other software interrupts.
-var schedulerWakePending [numCPU]atomic.Uint32
+// QEMU virt has no external interrupt that can wake a hart, so a wait on
+// every hart at once is a deadlock.
+const hasExternalWakeups = false
 
-// Put the scheduler to sleep, since there are no tasks to run.
-// This will unlock the scheduler lock, and must be called with the scheduler
-// lock held.
-func schedulerUnlockAndWait() {
-	hartID := currentCPU()
-
-	// Mark the current hart as sleeping.
-	waitingCores |= 1 << hartID
-
-	// If this is the last core awake and is going to sleep, the scheduler is
-	// deadlocked.
-	// We can do this check since this is not baremetal: there won't be any
-	// external interrupts that might unblock a goroutine.
-	if waitingCores == (1<<numCPU)-1 {
-		runtimeFatal("all cores are sleeping - deadlock!")
-	}
-
-	// wfi wakes on a pending interrupt even with MSTATUS.MIE clear, so a wake
-	// sent after the unlock is not lost. Interrupts go on for a moment after
-	// each wake, so a GC pause request can run.
-	state := schedulerLock.unlockMasked()
-	for schedulerWakePending[hartID].Swap(0) == 0 {
-		riscv.Asm("wfi")
-		riscv.MSTATUS.SetBits(riscv.MSTATUS_MIE)
-		riscv.MSTATUS.ClearBits(riscv.MSTATUS_MIE)
-	}
-	schedulerLock.lockMasked(state)
+// wfi wakes on a pending interrupt even with MSTATUS.MIE clear, so a wake sent
+// after the unlock is not lost. MIE goes on briefly so a GC pause request can run.
+func coreWait() {
+	riscv.Asm("wfi")
+	riscv.MSTATUS.SetBits(riscv.MSTATUS_MIE)
+	riscv.MSTATUS.ClearBits(riscv.MSTATUS_MIE)
 }
 
 // End schedulerUnlockAndWait on the given hart.
