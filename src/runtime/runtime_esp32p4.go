@@ -44,6 +44,7 @@ func main() {
 }
 
 func init() {
+	machine.EnableCPLL360()
 	// The PSRAM driver allocates, so it runs after the heap is ready.
 	startPSRAM()
 	machine.InitSerial()
