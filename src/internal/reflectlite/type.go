@@ -2037,6 +2037,14 @@ func StructOf(fields []StructField) Type {
 		}
 	}
 
+	if size > 0 && len(rawFields) > 0 && rawFields[len(rawFields)-1].Type.Size() == 0 {
+		// Pad a zero-sized final field by a byte, as the compiler does, so a
+		// pointer to it does not point past the end of the object.
+		size++
+		if size == 0 || uint64(size) > uint64(^uint32(0)) {
+			panic("reflect.StructOf: struct size would exceed virtual address space")
+		}
+	}
 	alignedSize := align(size, alignment)
 	if alignedSize < size || uint64(alignedSize) > uint64(^uint32(0)) {
 		panic("reflect.StructOf: struct size would exceed virtual address space")

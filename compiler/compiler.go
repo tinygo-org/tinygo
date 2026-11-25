@@ -522,6 +522,12 @@ func (c *context) makeLLVMType(goType types.Type) llvm.Type {
 		for i := 0; i < typ.NumFields(); i++ {
 			members[i] = c.getLLVMType(typ.Field(i).Type())
 		}
+		if n := len(members); n > 0 && c.targetData.TypeAllocSize(members[n-1]) == 0 &&
+			c.targetData.TypeAllocSize(c.ctx.StructType(members, false)) > 0 {
+			// Pad a zero-sized final field by a byte, as in Sizeof. The
+			// padding member comes last, so field indices are unchanged.
+			members = append(members, llvm.ArrayType(c.ctx.Int8Type(), 1))
+		}
 		return c.ctx.StructType(members, false)
 	case *types.TypeParam:
 		return c.getLLVMType(typ.Underlying())

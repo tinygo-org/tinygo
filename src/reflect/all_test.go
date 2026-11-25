@@ -6244,7 +6244,7 @@ func TestStructOfTooLarge(t *testing.T) {
 			},
 		},
 		{
-			shouldPanic: false,
+			shouldPanic: true, // overflow while adding trailing byte for zero-sized fields
 			fields: []StructField{
 				{Name: "F1", Type: bigType},
 				{Name: "F2", Type: ArrayOf(2, t1)},

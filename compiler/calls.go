@@ -716,7 +716,11 @@ func (c *context) flattenAggregateType(t llvm.Type, name string, goType types.Ty
 						maxLen = c.maxSliceSize(c.getLLVMType(goType.Elem()))
 					}
 				case *types.Struct:
-					suffix = goType.Field(i).Name()
+					if i < goType.NumFields() {
+						suffix = goType.Field(i).Name()
+					} else {
+						suffix = "pad" // the padding after a zero-sized final field
+					}
 				case *types.Basic:
 					switch goType.Kind() {
 					case types.Complex64, types.Complex128:
@@ -781,6 +785,9 @@ func extractSubfield(t types.Type, field int) types.Type {
 	}
 	switch t := t.Underlying().(type) {
 	case *types.Struct:
+		if field >= t.NumFields() {
+			return nil // the padding after a zero-sized final field
+		}
 		return t.Field(field).Type()
 	case *types.Interface, *types.Slice, *types.Basic, *types.Signature:
 		// These Go types are (sometimes) implemented as LLVM structs but can't

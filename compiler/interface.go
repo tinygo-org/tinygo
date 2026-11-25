@@ -490,7 +490,7 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			}, typeFieldTypes...)
 		}
 		globalType := types.NewStruct(typeFieldTypes, nil)
-		global = llvm.AddGlobal(c.mod, c.getLLVMType(globalType), globalName)
+		global = llvm.AddGlobal(c.mod, c.getTypeCodeLLVMType(globalType), globalName)
 		if isLocal {
 			c.interfaceTypes.Set(typ, global)
 		}
@@ -2005,4 +2005,21 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 	}
 
 	return wrapper
+}
+
+// getTypeCodeLLVMType returns the LLVM type of a type code global, whose layout
+// getTypeCode describes as a Go struct. It is getLLVMType without the padding
+// after a zero-sized final field: a type code ends in an array whose length can
+// be zero (the fields of struct{}, an empty method set), nothing can take the
+// address of that array, and the padding would add a byte to such type codes.
+func (c *context) getTypeCodeLLVMType(t types.Type) llvm.Type {
+	st, ok := t.(*types.Struct)
+	if !ok {
+		return c.getLLVMType(t)
+	}
+	members := make([]llvm.Type, st.NumFields())
+	for i := range members {
+		members[i] = c.getTypeCodeLLVMType(st.Field(i).Type())
+	}
+	return c.ctx.StructType(members, false)
 }

@@ -1,0 +1,7 @@
+endsEmpty: 4097
+endsZeroArray: 2
+onlyEmpty: 0
+nested: 4098
+emptyFirst: 3
+array of endsEmpty: 8194
+end field inside object: true
