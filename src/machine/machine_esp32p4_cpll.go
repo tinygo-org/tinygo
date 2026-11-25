@@ -106,6 +106,8 @@ func cpllConfigure() bool {
 // Returns true if the PLL calibration succeeded and the clock switch completed.
 // On failure, the CPU remains at 40 MHz XTAL — the system is still functional.
 func EnableCPLL360() bool {
+	coreVoltage()
+
 	// Step 1: Power on CPLL.
 	cpllPowerOn()
 
@@ -124,6 +126,53 @@ func EnableCPLL360() bool {
 	riscv.Asm("fence.i")
 
 	return true
+}
+
+// coreVoltage sets the core regulators and DCDC from the eFuse calibration.
+// See ESP-IDF esp_hw_support/port/esp32p4/rtc_clk_init.c rtc_clk_init and pmu_param.c.
+func coreVoltage() {
+	sys2, sys4 := esp.EFUSE.RD_MAC_SYS_2.Get(), esp.EFUSE.RD_MAC_SYS_4.Get()
+	blkVersion := (sys2>>11&3)*100 + sys2>>8&7
+	chipRevision := ((sys2>>23&1)<<2|sys2>>4&3)*100 + sys2&0xf
+
+	hpDbias, lpDbias := uint32(24), uint32(29)
+	if blkVersion >= 2 && blkVersion != 100 {
+		if v := sys4 >> 16 & 0xf; v > 0 {
+			hpDbias = min(v+16, 31)
+		}
+		if v := sys4 >> 20 & 0xf; v > 0 {
+			lpDbias = min(v+20, 31)
+		}
+	}
+
+	pmu := esp.PMU
+	pmu.SetHP_ACTIVE_HP_REGULATOR0_HP_ACTIVE_HP_REGULATOR_XPD(1)
+	pmu.SetHP_ACTIVE_HP_REGULATOR0_HP_ACTIVE_HP_REGULATOR_DBIAS(hpDbias)
+	pmu.SetHP_SLEEP_LP_REGULATOR0_HP_SLEEP_LP_REGULATOR_DBIAS(lpDbias)
+	dcmVset := max(pmu.GetHP_ACTIVE_HP_REGULATOR0_HP_DBIAS_VOL(), 27)
+	if chipRevision >= 301 {
+		pmu.SetDCM_CTRL_DCDC_FB_RES_FORCE_PD(1)
+	}
+	pmu.SetDCM_CTRL_DCDC_DONE_FORCE(0)
+	pmu.SetDCM_CTRL_DCDC_ON_REQ(1)
+	pmu.SetPOWER_DCDC_SWITCH_FORCE_DCDC_SWITCH_PU(0)
+	pmu.SetPOWER_DCDC_SWITCH_FORCE_DCDC_SWITCH_PD(0)
+	pmu.SetHP_ACTIVE_BIAS_HP_ACTIVE_DCM_VSET(dcmVset)
+	pmu.SetHP_ACTIVE_HP_REGULATOR0_DIG_REGULATOR0_DBIAS_SEL(1)
+	xtalDelay(1000)
+	if chipRevision >= 301 {
+		esp.LP_SYS.SetSYS_CTRL_LP_FIB_SEL(0xef)
+		pmu.SetDCM_CTRL_DCDC_FB_RES_FORCE_PD(0)
+		xtalDelay(10)
+	}
+	pmu.SetHP_ACTIVE_HP_REGULATOR0_HP_ACTIVE_HP_REGULATOR_XPD(0)
+}
+
+// xtalDelay waits at least us microseconds while the CPU runs from the 40 MHz XTAL.
+func xtalDelay(us int) {
+	for i := 0; i < us*40; i++ {
+		riscv.Asm("nop")
+	}
 }
 
 // cpllSetDividers configures the clock dividers for 360 MHz CPLL operation.
