@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
-	"golang.org/x/tools/go/ssa"
 	"strings"
+
+	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -55,9 +56,9 @@ func (b *builder) createMakeMap(expr *ssa.MakeMap) (llvm.Value, error) {
 		equalFn = b.getRuntimeFunctionValue("memequal", hashmapKeyEqualSignature())
 	} else {
 		fn := b.getOrGenerateKeyHashFunc(keyType)
-		hashFn = b.createFuncValue(fn, llvm.ConstNull(b.dataPtrType), hashmapKeyHashSignature())
+		hashFn = b.createFuncValue(fn, b.dataPtrNull, hashmapKeyHashSignature())
 		fn = b.getOrGenerateKeyEqualFunc(keyType)
-		equalFn = b.createFuncValue(fn, llvm.ConstNull(b.dataPtrType), hashmapKeyEqualSignature())
+		equalFn = b.createFuncValue(fn, b.dataPtrNull, hashmapKeyEqualSignature())
 	}
 
 	hashmap := b.createRuntimeCall("hashmapMakeGeneric", []llvm.Value{
@@ -87,15 +88,15 @@ func (c *context) getHashmapTypeInfo(mapType *types.Map, pos token.Pos) llvm.Val
 
 	// Keep this in sync with runtime.hashmapBucket and
 	// runtime.hashmapBucketHeaderSize.
-	pointerSize := c.targetData.TypeAllocSize(c.dataPtrType)
+	pointerSize := uint64(c.ptrBits) / 8
 	headerSize := (uint64(8) + pointerSize + 7) &^ 7
 	headerPadding := headerSize - uint64(8) - pointerSize
 	bucketFields := []llvm.Type{
-		llvm.ArrayType(c.ctx.Int8Type(), hashmapBucketSlots),
+		llvm.ArrayType(c.i8, hashmapBucketSlots),
 		c.dataPtrType,
 	}
 	if headerPadding != 0 {
-		bucketFields = append(bucketFields, llvm.ArrayType(c.ctx.Int8Type(), int(headerPadding)))
+		bucketFields = append(bucketFields, llvm.ArrayType(c.i8, int(headerPadding)))
 	}
 	bucketFields = append(bucketFields,
 		llvm.ArrayType(llvmKeySlotType, hashmapBucketSlots),
@@ -136,7 +137,7 @@ func (b *builder) getRuntimeFunctionValue(name string, sig *types.Signature) llv
 		panic("unknown runtime function: " + name)
 	}
 	_, llvmFn := b.getFunction(member.(*ssa.Function))
-	return b.createFuncValue(llvmFn, llvm.ConstNull(b.dataPtrType), sig)
+	return b.createFuncValue(llvmFn, b.dataPtrNull, sig)
 }
 
 // createMapLookup returns the value in a map. It calls a runtime function
@@ -155,7 +156,7 @@ func (b *builder) createMapLookup(keyType, valueType types.Type, m llvm.Value, k
 	// nil maps, and they'll need to zero the value pointer by that number of
 	// bytes.
 	mapValueSize := result.valueSize
-	if mapValueSize.Type().IntTypeWidth() > b.uintptrType.IntTypeWidth() {
+	if mapValueSize.Type().IntTypeWidth() > b.ptrBits {
 		mapValueSize = llvm.ConstTrunc(mapValueSize, b.uintptrType)
 	}
 
@@ -268,7 +269,7 @@ func (b *builder) createMapIteratorNext(rangeVal ssa.Value, llvmRangeVal, it llv
 	b.emitLifetimeEnd(mapValueAlloca, mapValueSize)
 
 	// Construct the *ssa.Next return value: {ok, mapKey, mapValue}
-	tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{b.ctx.Int1Type(), llvmKeyType, llvmValueType}, false))
+	tuple := llvm.Undef(b.ctx.StructType([]llvm.Type{b.i1, llvmKeyType, llvmValueType}, false))
 	tuple = b.CreateInsertValue(tuple, ok, 0, "")
 	tuple = b.CreateInsertValue(tuple, mapKey, 1, "")
 	tuple = b.CreateInsertValue(tuple, mapValue, 2, "")
@@ -383,7 +384,7 @@ func (b *builder) getOrGenerateKeyHashFunc(keyType types.Type) llvm.Value {
 
 	// Create the LLVM function type:
 	// (key ptr, size uintptr, seed uintptr, context ptr) -> i32
-	fnType := llvm.FunctionType(b.ctx.Int32Type(), []llvm.Type{
+	fnType := llvm.FunctionType(b.i32, []llvm.Type{
 		b.dataPtrType, b.uintptrType, b.uintptrType, b.dataPtrType,
 	}, false)
 	fn := llvm.AddFunction(b.mod, name, fnType)
@@ -418,7 +419,7 @@ func (b *builder) getOrGenerateKeyEqualFunc(keyType types.Type) llvm.Value {
 
 	// Create the LLVM function type:
 	// (x ptr, y ptr, n uintptr, context ptr) -> i1
-	fnType := llvm.FunctionType(b.ctx.Int1Type(), []llvm.Type{
+	fnType := llvm.FunctionType(b.i1, []llvm.Type{
 		b.dataPtrType, b.dataPtrType, b.uintptrType, b.dataPtrType,
 	}, false)
 	fn := llvm.AddFunction(b.mod, name, fnType)
@@ -465,7 +466,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 			// Complex hash: hash real and imaginary parts as floats.
 			if keyType.Kind() == types.Complex64 {
 				realPtr := keyPtr
-				imagPtr := b.CreateInBoundsGEP(b.ctx.Int8Type(), keyPtr, []llvm.Value{
+				imagPtr := b.CreateInBoundsGEP(b.i8, keyPtr, []llvm.Value{
 					llvm.ConstInt(b.uintptrType, 4, false),
 				}, "")
 				realHash := b.createRuntimeCall("hashmapFloat32Hash", []llvm.Value{realPtr, seed}, "hash.real")
@@ -473,7 +474,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 				return b.CreateXor(realHash, imagHash, "")
 			}
 			realPtr := keyPtr
-			imagPtr := b.CreateInBoundsGEP(b.ctx.Int8Type(), keyPtr, []llvm.Value{
+			imagPtr := b.CreateInBoundsGEP(b.i8, keyPtr, []llvm.Value{
 				llvm.ConstInt(b.uintptrType, 8, false),
 			}, "")
 			realHash := b.createRuntimeCall("hashmapFloat64Hash", []llvm.Value{realPtr, seed}, "hash.real")
@@ -492,9 +493,9 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
 		return b.createRuntimeCall("hashmapInterfacePtrHash", []llvm.Value{keyPtr, size, seed}, "hash")
 	case *types.Struct:
-		hash := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-		multiplier := llvm.ConstInt(b.ctx.Int32Type(), 31, false)
-		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+		hash := llvm.ConstInt(b.i32, 0, false)
+		multiplier := llvm.ConstInt(b.i32, 31, false)
+		zero := llvm.ConstInt(b.i32, 0, false)
 		for i := 0; i < keyType.NumFields(); i++ {
 			if keyType.Field(i).Name() == "_" {
 				continue // blank fields are ignored in Go equality
@@ -504,7 +505,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 			if b.targetData.TypeAllocSize(llvmFieldType) == 0 {
 				continue // skip zero-sized fields
 			}
-			idx := llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)
+			idx := llvm.ConstInt(b.i32, uint64(i), false)
 			fieldPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, idx}, "")
 			fieldHash := b.generateKeyHash(fieldType, llvmFieldType, fieldPtr, seed)
 			hash = b.CreateXor(b.CreateMul(hash, multiplier, ""), fieldHash, "")
@@ -520,12 +521,12 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 			return b.createRuntimeCall("hash32", []llvm.Value{keyPtr, size, seed}, "hash")
 		}
 		if arrayLen == 0 {
-			return llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			return llvm.ConstInt(b.i32, 0, false)
 		}
-		multiplier := llvm.ConstInt(b.ctx.Int32Type(), 31, false)
+		multiplier := llvm.ConstInt(b.i32, 31, false)
 		if arrayLen <= hashArrayUnrollLimit {
-			hash := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			hash := llvm.ConstInt(b.i32, 0, false)
+			zero := llvm.ConstInt(b.i32, 0, false)
 			for i := 0; i < int(arrayLen); i++ {
 				idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
 				elemPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, idx}, "")
@@ -534,8 +535,8 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 			}
 			return hash
 		}
-		initHash := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
-		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+		initHash := llvm.ConstInt(b.i32, 0, false)
+		zero := llvm.ConstInt(b.i32, 0, false)
 
 		loopEntry := b.GetInsertBlock()
 		loopBody := b.ctx.AddBasicBlock(loopEntry.Parent(), "hash.array.body")
@@ -545,7 +546,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 		b.SetInsertPointAtEnd(loopBody)
 
 		phiI := b.CreatePHI(b.uintptrType, "i")
-		phiHash := b.CreatePHI(b.ctx.Int32Type(), "hash.acc")
+		phiHash := b.CreatePHI(b.i32, "hash.acc")
 
 		elemPtr := b.CreateInBoundsGEP(llvmKeyType, keyPtr, []llvm.Value{zero, phiI}, "")
 		elemHash := b.generateKeyHash(elemType, llvmElemType, elemPtr, seed)
@@ -555,7 +556,7 @@ func (b *builder) generateKeyHash(keyType types.Type, llvmKeyType llvm.Type, key
 		b.CreateCondBr(cond, loopBody, loopDone)
 
 		bodyEnd := b.GetInsertBlock()
-		phiI.AddIncoming([]llvm.Value{llvm.ConstInt(b.uintptrType, 0, false), nextI},
+		phiI.AddIncoming([]llvm.Value{b.uintptrZero, nextI},
 			[]llvm.BasicBlock{loopEntry, bodyEnd})
 		phiHash.AddIncoming([]llvm.Value{initHash, newHash},
 			[]llvm.BasicBlock{loopEntry, bodyEnd})
@@ -599,8 +600,8 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 			yReal := b.CreateLoad(floatType, yPtr, "y.real")
 			realEq := b.CreateFCmp(llvm.FloatOEQ, xReal, yReal, "eq.real")
 			// Imaginary parts
-			xImagPtr := b.CreateInBoundsGEP(b.ctx.Int8Type(), xPtr, []llvm.Value{imagOffset}, "")
-			yImagPtr := b.CreateInBoundsGEP(b.ctx.Int8Type(), yPtr, []llvm.Value{imagOffset}, "")
+			xImagPtr := b.CreateInBoundsGEP(b.i8, xPtr, []llvm.Value{imagOffset}, "")
+			yImagPtr := b.CreateInBoundsGEP(b.i8, yPtr, []llvm.Value{imagOffset}, "")
 			xImag := b.CreateLoad(floatType, xImagPtr, "x.imag")
 			yImag := b.CreateLoad(floatType, yImagPtr, "y.imag")
 			imagEq := b.CreateFCmp(llvm.FloatOEQ, xImag, yImag, "eq.imag")
@@ -618,8 +619,8 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 		size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(llvmKeyType), false)
 		return b.createRuntimeCall("hashmapInterfaceEqual", []llvm.Value{xPtr, yPtr, size}, "eq")
 	case *types.Struct:
-		result := llvm.ConstInt(b.ctx.Int1Type(), 1, false) // start with true
-		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+		result := b.i1True // start with true
+		zero := llvm.ConstInt(b.i32, 0, false)
 		for i := 0; i < keyType.NumFields(); i++ {
 			if keyType.Field(i).Name() == "_" {
 				continue // blank fields are ignored in Go equality
@@ -629,7 +630,7 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 			if b.targetData.TypeAllocSize(llvmFieldType) == 0 {
 				continue // skip zero-sized fields
 			}
-			idx := llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false)
+			idx := llvm.ConstInt(b.i32, uint64(i), false)
 			xFieldPtr := b.CreateInBoundsGEP(llvmKeyType, xPtr, []llvm.Value{zero, idx}, "")
 			yFieldPtr := b.CreateInBoundsGEP(llvmKeyType, yPtr, []llvm.Value{zero, idx}, "")
 			fieldEq := b.generateKeyEqual(fieldType, llvmFieldType, xFieldPtr, yFieldPtr, fn)
@@ -646,11 +647,11 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 			return b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "eq")
 		}
 		if arrayLen == 0 {
-			return llvm.ConstInt(b.ctx.Int1Type(), 1, false)
+			return b.i1True
 		}
 		if arrayLen <= hashArrayUnrollLimit {
-			result := llvm.ConstInt(b.ctx.Int1Type(), 1, false)
-			zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+			result := b.i1True
+			zero := llvm.ConstInt(b.i32, 0, false)
 			for i := 0; i < int(arrayLen); i++ {
 				idx := llvm.ConstInt(b.uintptrType, uint64(i), false)
 				xElemPtr := b.CreateInBoundsGEP(llvmKeyType, xPtr, []llvm.Value{zero, idx}, "")
@@ -660,7 +661,7 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 			}
 			return result
 		}
-		zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+		zero := llvm.ConstInt(b.i32, 0, false)
 
 		loopEntry := b.GetInsertBlock()
 		loopBody := b.ctx.AddBasicBlock(loopEntry.Parent(), "eq.array.body")
@@ -681,7 +682,7 @@ func (b *builder) generateKeyEqual(keyType types.Type, llvmKeyType llvm.Type, xP
 		b.CreateCondBr(exitLoop, loopDone, loopBody)
 
 		bodyEnd := b.GetInsertBlock()
-		phiI.AddIncoming([]llvm.Value{llvm.ConstInt(b.uintptrType, 0, false), nextI},
+		phiI.AddIncoming([]llvm.Value{b.uintptrZero, nextI},
 			[]llvm.BasicBlock{loopEntry, bodyEnd})
 
 		b.SetInsertPointAtEnd(loopDone)

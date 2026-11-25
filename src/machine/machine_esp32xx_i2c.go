@@ -1,4 +1,4 @@
-//go:build (esp32c3 || esp32c6 || esp32s3) && !m5stamp_c3
+//go:build esp32c3 || esp32c6 || esp32s3 || esp32p4
 
 package machine
 
@@ -9,10 +9,14 @@ import (
 )
 
 type I2C struct {
-	Bus              *esp.I2C_Type
-	funcSCL, funcSDA uint32
-	useExt1          bool
-	txCmdBuf         [8]i2cCommand
+	Bus      *esp.I2C_Type
+	txCmdBuf [8]i2cCommand
+}
+
+// i2cBus holds the GPIO matrix signals of one I2C bus. i2cBusFor gives the
+// zero value for a bus that the chip does not support.
+type i2cBus struct {
+	sclOut, sdaOut uint32
 }
 
 // I2CConfig is used to store config info for I2C.
@@ -23,15 +27,22 @@ type I2CConfig struct {
 }
 
 const (
-	clkXTAL               = 0
-	clkFOSC               = 1
-	clkXTALFrequency      = uint32(40e6)
-	clkFOSCFrequency      = uint32(17.5e6)
-	i2cClkSourceFrequency = clkXTALFrequency
-	i2cClkSource          = clkXTAL
+	// 0 is XTAL_CLK in the I2C, C6 PCR and P4 HP_SYS_CLKRST clock selects. See ESP-IDF
+	// hal/{esp32c3,esp32c6,esp32s3,esp32p4}/include/hal/i2c_ll.h i2c_ll_set_source_clk.
+	i2cClockSource = 0
+	i2cClockFreq   = 40_000_000 // XTAL_CLK on the C3, C6, S3 and P4.
 )
 
+// Configure configures the I2C bus for use.
 func (i2c *I2C) Configure(config I2CConfig) error {
+	bus := i2cBusFor(i2c.Bus)
+	if bus.sclOut == 0 {
+		return errI2CInvalidBus
+	}
+	return i2c.configure(config, bus)
+}
+
+func (i2c *I2C) configure(config I2CConfig, bus i2cBus) error {
 	if config.Frequency == 0 {
 		config.Frequency = 400 * KHz
 	}
@@ -45,30 +56,23 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 	i2c.initClock(config)
 	i2c.initNoiseFilter()
 	i2c.clearBus(config)
-	i2c.initPins(config)
-	i2c.initFrequency(config)
+	i2c.initPins(config, bus)
+	i2c.initFrequency(config.Frequency)
 	i2c.startMaster()
 	return nil
 }
 
-//go:inline
 func (i2c *I2C) initClock(config I2CConfig) {
-	if !i2c.useExt1 {
-		enableI2C0PeriphClock()
-	} else {
-		initI2CExt1Clock()
-	}
+	enableI2CClock(i2c.Bus)
 	// disable interrupts
 	i2c.Bus.INT_CLR.Set(0x3fff)
 	i2c.Bus.INT_ENA.ClearBits(0x3fff)
 
-	i2c.Bus.SetCLK_CONF_SCLK_SEL(i2cClkSource)
+	i2c.Bus.SetCLK_CONF_SCLK_SEL(i2cClockSource)
 	i2c.Bus.SetCLK_CONF_SCLK_ACTIVE(1)
-	i2c.Bus.SetCLK_CONF_SCLK_DIV_NUM(i2cClkSourceFrequency / (config.Frequency * 1024))
 	i2c.Bus.SetCTR_CLK_EN(1)
 }
 
-//go:inline
 func (i2c *I2C) initNoiseFilter() {
 	i2c.Bus.FILTER_CFG.Set(0x377)
 }
@@ -103,53 +107,48 @@ func (i2c *I2C) clearBus(config I2CConfig) {
 	wait()
 }
 
-//go:inline
-func (i2c *I2C) initPins(config I2CConfig) {
-	config.SDA.configure(PinConfig{Mode: PinOutput}, i2c.funcSDA)
-	inFunc(i2c.funcSDA).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDA)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
+func (i2c *I2C) initPins(config I2CConfig, bus i2cBus) {
+	config.SDA.configure(PinConfig{Mode: PinOutput}, bus.sdaOut)
+	inFunc(bus.sdaOut).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SDA)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
 	config.SDA.Set(true)
 	config.SDA.pinReg().SetBits(esp.GPIO_PIN_PAD_DRIVER)
+	// Enable internal pull-up so SCL/SDA can rise in open-drain mode even
+	// when no external pull-up is present.  This matches the ESP-IDF default
+	// and is required for SCL to reach VCC after the peripheral releases the
+	// line; without it the SCL positive-edge state stalls forever.
+	config.SDA.mux().SetBits(esp.IO_MUX_GPIO_FUN_WPU)
 	i2c.Bus.SetCTR_SDA_FORCE_OUT(1)
 
-	config.SCL.configure(PinConfig{Mode: PinOutput}, i2c.funcSCL)
-	inFunc(i2c.funcSCL).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SCL)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
+	config.SCL.configure(PinConfig{Mode: PinOutput}, bus.sclOut)
+	inFunc(bus.sclOut).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.SCL)<<esp.GPIO_FUNC_IN_SEL_CFG_IN_SEL_Pos)
 	config.SCL.Set(true)
-	// Configure the pad with the given IO mux configuration.
 	config.SCL.pinReg().SetBits(esp.GPIO_PIN_PAD_DRIVER)
+	config.SCL.mux().SetBits(esp.IO_MUX_GPIO_FUN_WPU)
 	i2c.Bus.SetCTR_SCL_FORCE_OUT(1)
 }
 
-//go:inline
-func (i2c *I2C) initFrequency(config I2CConfig) {
-
-	clkmDiv := i2cClkSourceFrequency/(config.Frequency*1024) + 1
-	sclkFreq := i2cClkSourceFrequency / clkmDiv
-	halfCycle := sclkFreq / config.Frequency / 2
-	// SCL
-	sclLow := halfCycle
-	sclWaitHigh := uint32(0)
-	if config.Frequency > 50000 {
-		sclWaitHigh = halfCycle / 8 // compensate the time when freq > 50K
+func (i2c *I2C) initFrequency(freq uint32) {
+	// See ESP-IDF hal/esp32c3/include/hal/i2c_ll.h i2c_ll_master_cal_bus_clk and
+	// i2c_ll_master_set_bus_timing, which are the same on the C3, C6, S3 and P4.
+	clkmDiv := i2cClockFreq/(freq*1024) + 1
+	halfCycle := i2cClockFreq / clkmDiv / freq / 2
+	waitHigh := halfCycle / 4
+	if freq >= 80*KHz {
+		waitHigh = halfCycle/2 - 2
 	}
-	sclHigh := halfCycle - sclWaitHigh
-	// SDA
-	sdaHold := halfCycle / 4
-	sda_sample := halfCycle / 2
-	setup := halfCycle
-	hold := halfCycle
 
-	i2c.Bus.SetSCL_LOW_PERIOD(sclLow - 1)
-	i2c.Bus.SetSCL_HIGH_PERIOD(sclHigh)
-	i2c.Bus.SetSCL_HIGH_PERIOD_SCL_WAIT_HIGH_PERIOD(25)
-	i2c.Bus.SetSCL_RSTART_SETUP_TIME(setup)
-	i2c.Bus.SetSCL_STOP_SETUP_TIME(setup)
-	i2c.Bus.SetSCL_START_HOLD_TIME(hold - 1)
-	i2c.Bus.SetSCL_STOP_HOLD_TIME(hold - 1)
-	i2c.Bus.SetSDA_SAMPLE_TIME(sda_sample)
-	i2c.Bus.SetSDA_HOLD_TIME(sdaHold)
+	setI2CClockDiv(i2c.Bus, clkmDiv-1)
+	i2c.Bus.SetSCL_LOW_PERIOD(halfCycle - 1)
+	i2c.Bus.SetSCL_HIGH_PERIOD(halfCycle - waitHigh)
+	i2c.Bus.SetSCL_HIGH_PERIOD_SCL_WAIT_HIGH_PERIOD(waitHigh)
+	i2c.Bus.SetSDA_HOLD_TIME(halfCycle/4 - 1)
+	i2c.Bus.SetSDA_SAMPLE_TIME(halfCycle/2 - 1)
+	i2c.Bus.SetSCL_RSTART_SETUP_TIME(halfCycle - 1)
+	i2c.Bus.SetSCL_STOP_SETUP_TIME(halfCycle - 1)
+	i2c.Bus.SetSCL_START_HOLD_TIME(halfCycle - 1)
+	i2c.Bus.SetSCL_STOP_HOLD_TIME(halfCycle - 1)
 }
 
-//go:inline
 func (i2c *I2C) startMaster() {
 	// FIFO mode for data
 	i2c.Bus.SetFIFO_CONF_NONFIFO_EN(0)
@@ -158,21 +157,57 @@ func (i2c *I2C) startMaster() {
 	i2c.Bus.SetFIFO_CONF_RX_FIFO_RST(0)
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(1)
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(0)
-	// set timeout value
+	// Bus-stuck timeout (TO): value in bits[4:0], enable in bit[5].
+	// Keep enable=0 (disabled) so normal clock stretching is not limited.
 	i2c.Bus.TO.Set(0x10)
+	// SCL state-machine watchdog timeouts.
+	// The 5-bit SCL_ST_TO_I2C / SCL_MAIN_ST_TO_I2C fields encode the timeout
+	// as 2^N source-clock cycles.  After reset on ESP32-P4 these default to 0
+	// (= 2^0 = 1 cycle ≈ 25 ns at 40 MHz), which fires before SCL can rise
+	// even with external pull-ups, stalling every transaction.
+	// Set both to the maximum (0x1f = 2^31 ≈ 53 s) to effectively disable them.
+	i2c.Bus.SCL_ST_TIME_OUT.Set(0x1f)
+	i2c.Bus.SCL_MAIN_ST_TIME_OUT.Set(0x1f)
 	// enable master mode
 	i2c.Bus.CTR.Set(0x113)
 	i2c.Bus.SetCTR_CONF_UPGATE(1)
 	i2c.resetMaster()
 }
 
-//go:inline
 func (i2c *I2C) resetMaster() {
-	// reset FSM
+	// Reset the I2C FSM.
+	// On chips where FSM_RST does not self-clear (e.g. ESP32-P4), the FSM
+	// stays in reset after CONF_UPGATE unless we explicitly write FSM_RST=0.
+	// With FSM_RST=1 latched, TRANS_START has no effect and INT_STATUS never
+	// fires.  Fix: toggle FSM_RST high→low with a CONF_UPGATE on each edge so
+	// the FSM is fully running before we start SCL bus recovery — the FSM must
+	// be running to generate the recovery pulses.
 	i2c.Bus.SetCTR_FSM_RST(1)
+	i2c.Bus.SetCTR_CONF_UPGATE(1) // Trigger FSM reset
+	i2c.Bus.SetCTR_FSM_RST(0)
+	i2c.Bus.SetCTR_CONF_UPGATE(1) // Release FSM from reset; FSM now in IDLE
+
+	// Generate up to 9 SCL pulses to recover a stuck SDA line.
+	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_NUM(9)
+	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_EN(1)
 	i2c.Bus.SetSCL_STRETCH_CONF_SLAVE_SCL_STRETCH_EN(1)
 	i2c.Bus.SetCTR_CONF_UPGATE(1)
 	i2c.Bus.FILTER_CFG.Set(0x377)
+	// Wait for hardware to clear SCL_RST_SLV_EN after sending 9 recovery pulses.
+	// Timeout of 10ms: at 100 kHz SCL, 9 pulses take ~90 µs; 10ms is conservative.
+	deadline := nanotime() + 10_000_000
+	for i2c.Bus.GetSCL_SP_CONF_SCL_RST_SLV_EN() != 0 {
+		if nanotime() > deadline {
+			break
+		}
+	}
+	// Force-clear bus recovery bits and slave SCL stretch enable, then apply.
+	// SLAVE_SCL_STRETCH_EN is a slave-mode feature; leaving it set in master
+	// mode causes the FSM to stall waiting for SCL release that never arrives.
+	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_EN(0)
+	i2c.Bus.SetSCL_SP_CONF_SCL_RST_SLV_NUM(0)
+	i2c.Bus.SetSCL_STRETCH_CONF_SLAVE_SCL_STRETCH_EN(0)
+	i2c.Bus.SetCTR_CONF_UPGATE(1)
 }
 
 type i2cCommandType = uint32
@@ -182,9 +217,9 @@ type i2cAck = uint32
 // Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1227
 const (
 	i2cCMD_RSTART   i2cCommandType = 6 << 11
-	i2cCMD_WRITE    i2cCommandType = 1<<11 | 1<<8  // WRITE + ack_check_en
-	i2cCMD_READ     i2cCommandType = 3 << 11       // READ
-	i2cCMD_READLAST i2cCommandType = 3<<11 | 1<<10 // READ + NACK
+	i2cCMD_WRITE    i2cCommandType = 1<<11 | 1<<8 // WRITE + ack_check_en (slave must ACK)
+	i2cCMD_READ     i2cCommandType = 3 << 11      // READ; no ack_check_en — master drives ACK, not slave; ack_check_en causes false NACK_INT on open-drain lines
+	i2cCMD_READLAST i2cCommandType = 3<<11 | 4<<8 // READ last byte: ack_val=1 (master sends NACK to end read)
 	i2cCMD_STOP     i2cCommandType = 2 << 11
 	i2cCMD_END      i2cCommandType = 4 << 11
 )
@@ -213,8 +248,11 @@ func (i2c *I2C) transmit(addr uint16, cmd []i2cCommand, timeoutMS int) error {
 		}
 	}
 
-	// Reset the FIFOs, bytes left after a NACK would go out in the next transaction.
-	// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1456
+	// Flush TX and RX FIFOs before each transaction.  After a NACK or other
+	// early abort, the TX FIFO may still contain bytes that were loaded but
+	// never sent (e.g. data bytes following a NACKed address byte).  Without
+	// this flush, those stale bytes are prepended to the next transaction,
+	// corrupting the first byte(s) sent on the bus.
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(1)
 	i2c.Bus.SetFIFO_CONF_TX_FIFO_RST(0)
 	i2c.Bus.SetFIFO_CONF_RX_FIFO_RST(1)
@@ -250,7 +288,8 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				// Own WRITE plus END for the address, else an address NACK hangs the controller.
 				// Same as ESP-IDF https://github.com/espressif/esp-idf/blob/v4.4.8/components/driver/i2c.c#L1296
 				needAddress = false
-				i2c.Bus.SetDATA_FIFO_RDATA((uint32(addr) & 0x7f) << 1)
+				i2c.Bus.DATA.Set((uint32(addr) & 0x7f) << 1)
+				count--
 				i2c.Bus.SLAVE_ADDR.Set(uint32(addr))
 				reg.Set(i2cCMD_WRITE | 1)
 				reg = nextAddress(reg)
@@ -258,8 +297,12 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				reg = nil
 				break
 			}
+			if len(c.data) == 0 {
+				cmdIdx++
+				break
+			}
 			for ; count > 0 && c.head < len(c.data); count, c.head = count-1, c.head+1 {
-				i2c.Bus.SetDATA_FIFO_RDATA(uint32(c.data[c.head]))
+				i2c.Bus.DATA.Set(uint32(c.data[c.head]))
 			}
 			reg.Set(i2cCMD_WRITE | uint32(32-count))
 			reg = nextAddress(reg)
@@ -276,7 +319,7 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 			if needAddress {
 				// Own WRITE plus END for the address, see i2cCMD_WRITE above.
 				needAddress = false
-				i2c.Bus.SetDATA_FIFO_RDATA((uint32(addr)&0x7f)<<1 | 1)
+				i2c.Bus.DATA.Set((uint32(addr)&0x7f)<<1 | 1)
 				i2c.Bus.SLAVE_ADDR.Set(uint32(addr))
 				reg.Set(i2cCMD_WRITE | 1)
 				reg = nextAddress(reg)
@@ -292,7 +335,7 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 				reg.Set(i2cCMD_WRITE | 1)
 
 				reg = nextAddress(reg)
-				i2c.Bus.SetDATA_FIFO_RDATA((uint32(addr)&0x7f)<<1 | 1)
+				i2c.Bus.DATA.Set((uint32(addr)&0x7f)<<1 | 1)
 				needRestart = false
 			}
 			count := 32
@@ -351,8 +394,16 @@ func (i2c *I2C) runCommands(addr uint16, cmd []i2cCommand, timeoutMS int) error 
 			}
 			switch {
 			case mask&esp.I2C_INT_STATUS_NACK_INT_ST_Msk != 0:
+				// Slave NACK: device absent or refused a data byte.
+				// i2cCMD_READLAST uses ack_check_en=0, so the master's own last-byte
+				// NACK (ack_val=1) does NOT trigger NACK_INT; any NACK_INT here is
+				// a real slave-side refusal and must be reported as an error.
+				// The I2C FSM auto-returns to IDLE after a NACK, so no FSM reset is
+				// needed here.  The TX FIFO is flushed at the top of each transmit()
+				// call, so stale bytes do not carry over to the next transaction.
 				return errI2CAckExpected
 			case mask&esp.I2C_INT_STATUS_TIME_OUT_INT_ST_Msk != 0:
+				i2c.resetMaster()
 				if readTo != nil {
 					return errI2CReadTimeout
 				}
@@ -379,7 +430,10 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 
 	cmd := i2c.txCmdBuf[:0]
 	cmd = append(cmd, i2cCommand{cmd: i2cCMD_RSTART})
-	if len(w) > 0 {
+	if len(w) > 0 || len(r) == 0 {
+		// Always add a WRITE phase so the device address byte is sent and any
+		// NACK (device absent) can be detected.  For len(r)==0 with empty w
+		// this sends only the address byte — the canonical I2C scan probe.
 		cmd = append(cmd, i2cCommand{cmd: i2cCMD_WRITE, data: w})
 	}
 	if len(r) > 0 {
@@ -391,6 +445,11 @@ func (i2c *I2C) Tx(addr uint16, w, r []byte) (err error) {
 }
 
 func (i2c *I2C) SetBaudRate(br uint32) error {
+	if br == 0 {
+		return errInvalidI2CBaudrate
+	}
+	i2c.initFrequency(br)
+	i2c.Bus.SetCTR_CONF_UPGATE(1)
 	return nil
 }
 

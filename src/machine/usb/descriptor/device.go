@@ -1,7 +1,7 @@
 package descriptor
 
 import (
-	"internal/binary"
+	"internal/byteorder"
 )
 
 const (
@@ -25,7 +25,7 @@ func (d DeviceType) Type(v uint8) {
 }
 
 func (d DeviceType) USB(v uint16) {
-	binary.LittleEndian.PutUint16(d.data[2:4], v)
+	byteorder.LEPutUint16(d.data[2:4], v)
 }
 
 func (d DeviceType) DeviceClass(v uint8) {
@@ -45,15 +45,15 @@ func (d DeviceType) MaxPacketSize0(v uint8) {
 }
 
 func (d DeviceType) VendorID(v uint16) {
-	binary.LittleEndian.PutUint16(d.data[8:10], v)
+	byteorder.LEPutUint16(d.data[8:10], v)
 }
 
 func (d DeviceType) ProductID(v uint16) {
-	binary.LittleEndian.PutUint16(d.data[10:12], v)
+	byteorder.LEPutUint16(d.data[10:12], v)
 }
 
 func (d DeviceType) Device(v uint16) {
-	binary.LittleEndian.PutUint16(d.data[12:14], v)
+	byteorder.LEPutUint16(d.data[12:14], v)
 }
 
 func (d DeviceType) Manufacturer(v uint8) {

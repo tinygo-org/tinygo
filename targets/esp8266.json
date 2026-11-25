@@ -3,7 +3,7 @@
 	"inheritable-only": true,
 	"cpu": "esp8266",
 	"features": "+debug,+density,+exception,+extendedl32r,+highpriinterrupts,+interrupt,+mul32,+nsa,+prid,+regprotect,+rvector,+timerint",
-	"build-tags": ["esp8266", "esp"],
+	"build-tags": ["esp8266", "esp", "machine.uart"],
 	"scheduler": "tasks",
 	"linker": "ld.lld",
 	"default-stack-size": 2048,

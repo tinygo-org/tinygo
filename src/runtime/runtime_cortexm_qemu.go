@@ -11,32 +11,20 @@ import (
 	"unsafe"
 )
 
-var timestamp timeUnit
-
 //export Reset_Handler
 func main() {
 	preinit()
+	initSysTick()
 	run()
 
 	// Signal successful exit.
 	exit(0)
 }
 
-func ticksToNanoseconds(ticks timeUnit) int64 {
-	return int64(ticks)
-}
-
-func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns)
-}
-
-func sleepTicks(d timeUnit) {
-	// TODO: actually sleep here for the given time.
-	timestamp += d
-}
-
-func ticks() timeUnit {
-	return timestamp
+// QEMU clocks the LM3S6965 at 200 MHz / (SYSDIV + 1) = 12.5 MHz from its reset RCC.
+// See ssys_calculate_system_clock in QEMU hw/arm/stellaris.c.
+func sysTickFrequency() uint32 {
+	return 12_500_000
 }
 
 // UART0 output register.
@@ -54,10 +42,6 @@ func getchar() byte {
 func buffered() int {
 	// dummy, TODO
 	return 0
-}
-
-func waitForEvents() {
-	arm.Asm("wfe")
 }
 
 func abort() {

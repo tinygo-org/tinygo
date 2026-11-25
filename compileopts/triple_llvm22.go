@@ -2,11 +2,11 @@
 
 package compileopts
 
-import "strings"
-
-// ClangTriple returns the target triple to pass to Clang's --target flag.
-// LLVM 22 deprecated the "wasm32-unknown-wasi" triple in favor of
-// "wasm32-unknown-wasip1", so we substitute it here to avoid warnings.
-func ClangTriple(triple string) string {
-	return strings.Replace(triple, "wasm32-unknown-wasi", "wasm32-unknown-wasip1", 1)
+// LLVMTriple returns the target triple for Clang and for LLVM modules.
+// LLVM 22 deprecated "wasm32-unknown-wasi" in favor of "wasm32-unknown-wasip1".
+func LLVMTriple(triple string) string {
+	if triple == "wasm32-unknown-wasi" {
+		return "wasm32-unknown-wasip1"
+	}
+	return triple
 }

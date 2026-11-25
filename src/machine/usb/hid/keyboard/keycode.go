@@ -5,8 +5,6 @@ type Keycode uint16
 
 // keycode returns the given Unicode codepoint translated to a Keycode sequence.
 // Unicode codepoints greater than U+FFFF are unsupported.
-//
-//go:inline
 func keycode(p uint16) Keycode {
 	if p < 0x80 {
 		return ascii[p]
@@ -18,7 +16,6 @@ func keycode(p uint16) Keycode {
 	return 0
 }
 
-//go:inline
 func deadkey(c Keycode) Keycode {
 	switch c & deadkeysMask {
 	case acuteAccentBits:
@@ -35,13 +32,10 @@ func deadkey(c Keycode) Keycode {
 	return 0
 }
 
-//go:inline
 func (c Keycode) mask() Keycode { return c & keycodeMask }
 
-//go:inline
 func (c Keycode) key() uint8 { return uint8(c & keyMask) }
 
-//go:inline
 func (c Keycode) mod() uint8 {
 	var m Keycode
 	if 0 != c&shiftMask {
@@ -53,7 +47,6 @@ func (c Keycode) mod() uint8 {
 	return uint8(m)
 }
 
-//go:inline
 func (c Keycode) Shift() Keycode { return c | KeyModifierShift }
 
 const (

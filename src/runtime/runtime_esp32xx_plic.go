@@ -15,12 +15,6 @@ func init() {
 	machine.InitSerial()
 }
 
-func abort() {
-	for {
-		riscv.Asm("wfi")
-	}
-}
-
 // interruptInit initializes the interrupt controller.
 func interruptInit() {
 	riscv.DisableInterrupts()

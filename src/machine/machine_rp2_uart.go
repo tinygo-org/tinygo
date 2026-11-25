@@ -1,11 +1,35 @@
-//go:build rp2040 || rp2350
+//go:build (rp2040 || rp2350) && machine.uart
 
 package machine
 
 import (
 	"device/rp"
+	"errors"
 	"runtime/interrupt"
 )
+
+var (
+	UART0  = &_UART0
+	_UART0 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    rp.UART0,
+	}
+
+	UART1  = &_UART1
+	_UART1 = UART{
+		Buffer: NewRingBuffer(),
+		Bus:    rp.UART1,
+	}
+
+	errSamePins         = errors.New("UART: invalid pin combination")
+	errWrongBitSize     = errors.New("UART: invalid data size")
+	errWrongStopBitSize = errors.New("UART: invalid bit size")
+)
+
+func init() {
+	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
+	UART1.Interrupt = interrupt.New(rp.IRQ_UART1_IRQ, _UART1.handleInterrupt)
+}
 
 // UART on the RP2040.
 type UART struct {
@@ -16,19 +40,17 @@ type UART struct {
 
 // Configure the UART.
 func (uart *UART) Configure(config UARTConfig) error {
-	initUART(uart)
-
-	// Default baud rate to 115200.
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
-
 	// Use default pins if pins are not set.
 	if config.TX == 0 && config.RX == 0 {
 		// use default pins
 		config.TX = UART_TX_PIN
 		config.RX = UART_RX_PIN
 	}
+	if config.TX == config.RX {
+		return errSamePins
+	}
+
+	initUART(uart)
 
 	uart.SetBaudRate(config.BaudRate)
 
@@ -106,6 +128,9 @@ func (uart *UART) Close() error {
 
 // SetBaudRate sets the baudrate to be used for the UART.
 func (uart *UART) SetBaudRate(br uint32) {
+	if br == 0 {
+		br = 115200
+	}
 	div := 8 * CPUFrequency() / br
 
 	ibrd := div >> 7
@@ -155,16 +180,25 @@ func (uart *UART) flush() {
 
 // SetFormat for number of data bits, stop bits, and parity for the UART.
 func (uart *UART) SetFormat(databits, stopbits uint8, parity UARTParity) error {
-	var pen, pev uint8
+	if databits < 5 || databits > 8 {
+		return errWrongBitSize
+	}
+	if stopbits < 1 || stopbits > 2 {
+		return errWrongStopBitSize
+	}
+	lcr := uint32(databits-5) << rp.UART0_UARTLCR_H_WLEN_Pos
+	if stopbits == 2 {
+		lcr |= rp.UART0_UARTLCR_H_STP2
+	}
 	if parity != ParityNone {
-		pen = rp.UART0_UARTLCR_H_PEN
+		lcr |= rp.UART0_UARTLCR_H_PEN
 	}
 	if parity == ParityEven {
-		pev = rp.UART0_UARTLCR_H_EPS
+		lcr |= rp.UART0_UARTLCR_H_EPS
 	}
-	uart.Bus.UARTLCR_H.SetBits(uint32((databits-5)<<rp.UART0_UARTLCR_H_WLEN_Pos |
-		(stopbits-1)<<rp.UART0_UARTLCR_H_STP2_Pos |
-		pen | pev))
+	const mask = rp.UART0_UARTLCR_H_WLEN_Msk | rp.UART0_UARTLCR_H_STP2 |
+		rp.UART0_UARTLCR_H_PEN | rp.UART0_UARTLCR_H_EPS | rp.UART0_UARTLCR_H_SPS
+	uart.Bus.UARTLCR_H.ReplaceBits(lcr, mask, 0)
 
 	return nil
 }

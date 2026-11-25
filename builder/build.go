@@ -34,6 +34,7 @@ import (
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/compiler"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"github.com/tinygo-org/tinygo/interp"
 	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/stacksize"
@@ -194,7 +195,14 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 		defer unlock()
 		libcDependencies = append(libcDependencies, libcJob)
 	case "wasi-libc":
-		libcJob, unlock, err := libWasiLibc.load(config, tmpdir)
+		lib := libWasiLibc
+		if slices.Contains(config.BuildTags(), "wasip2") {
+			if llvm.VersionMajor < 22 {
+				return nil, fmt.Errorf("target wasip2 requires clang 22 or newer, but TinyGo uses LLVM %s", llvm.Version)
+			}
+			lib = libWasiLibcWasip2
+		}
+		libcJob, unlock, err := lib.load(config, tmpdir)
 		if err != nil {
 			return nil, err
 		}
@@ -241,7 +249,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 		DefaultStackSize:   config.StackSize(),
 		MaxStackAlloc:      config.MaxStackAlloc(),
 		NeedsStackObjects:  config.NeedsStackObjects(),
-		Debug:              !config.Options.SkipDWARF, // emit DWARF except when -internal-nodwarf is passed
+		Debug:              config.Debug() && !config.Options.SkipDWARF, // emit DWARF unless -no-debug or -internal-nodwarf is passed
 		Nobounds:           config.Options.Nobounds,
 		PanicStrategy:      config.PanicStrategy(),
 		PanicUnwind:        config.PanicUnwind(),
@@ -645,24 +653,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 				if err != nil {
 					return fmt.Errorf("failed to load bitcode file: %w", err)
 				}
-				// Resolve duplicate function definitions before linking.
-				// This can happen when a newer Go version adds a function
-				// body in a standard library package that was previously
-				// just a declaration provided by //go:linkname from the
-				// runtime. In that case, keep the existing (runtime)
-				// definition by weakening the new one's linkage so the
-				// LLVM linker discards it in favor of the existing one.
-				for fn := pkgMod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
-					if fn.IsDeclaration() {
-						continue
-					}
-					existing := mod.NamedFunction(fn.Name())
-					if existing.IsNil() || existing.IsDeclaration() {
-						continue
-					}
-					fn.SetLinkage(llvm.LinkOnceODRLinkage)
-				}
-				err = linker.LinkModule(pkgMod)
+				err = linkPackageModule(linker, mod, pkgMod)
 				if err != nil {
 					return fmt.Errorf("failed to link module: %w", err)
 				}
@@ -687,7 +678,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			transform.AddStandardAttributes(llvmInitFn, config)
 			llvmInitFn.Param(0).SetName("context")
 			block := mod.Context().AddBasicBlock(llvmInitFn, "entry")
-			irbuilder := mod.Context().NewBuilder()
+			irbuilder := mod.NewBuilder()
 			defer irbuilder.Dispose()
 			irbuilder.SetInsertPointAtEnd(block)
 			if debugInitAll {
@@ -708,7 +699,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			// non-exported functions by setting the visibility to hidden or
 			// (for thunks) to linkonce_odr linkage. Change the linkage here to
 			// internal to benefit much more from interprocedural optimizations.
-			for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+			for fn := range llvmutil.Functions(mod) {
 				if fn.Visibility() == llvm.HiddenVisibility {
 					fn.SetVisibility(llvm.DefaultVisibility)
 					fn.SetLinkage(llvm.InternalLinkage)
@@ -718,7 +709,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			}
 
 			// Do the same for globals.
-			for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+			for global := range llvmutil.Globals(mod) {
 				if global.Visibility() == llvm.HiddenVisibility {
 					global.SetVisibility(llvm.DefaultVisibility)
 					global.SetLinkage(llvm.InternalLinkage)
@@ -1113,7 +1104,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 			if witPackage != "" && witWorld != "" {
 
 				// wasm-tools component embed -w wasi:cli/command
-				// 		$$(tinygo env TINYGOROOT)/lib/wasi-cli/wit/ main.wasm -o embedded.wasm
+				// 		$$(tinygo env TINYGOROOT)/lib/wasi-libc/wasi/p2/wit/ main.wasm -o embedded.wasm
 				componentEmbedInputFile := result.Binary
 				result.Binary = result.Executable + ".wasm-component-embed"
 				args := []string{
@@ -1230,7 +1221,7 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 		if err != nil {
 			return nil, err
 		}
-	case "esp32", "esp32-img", "esp32c3", "esp32s3", "esp32c6", "esp32h2", "esp8266":
+	case "esp32", "esp32-img", "esp32c3", "esp32s3", "esp32c6", "esp32h2", "esp32p4", "esp8266":
 		// Special format for the ESP family of chips (parsed by the ROM
 		// bootloader).
 		result.Binary = filepath.Join(tmpdir, "main"+outext)
@@ -1387,10 +1378,54 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 	return outfile.Name(), outfile.Close()
 }
 
+// linkPackageModule links pkgMod into mod.
+//
+// Resolve duplicate function definitions before linking. This can happen when
+// a newer Go version adds a function body in a standard library package that
+// was previously just a declaration provided by //go:linkname from the
+// runtime. In that case, keep the existing (runtime) definition by weakening
+// the new one's linkage so the LLVM linker discards it in favor of the
+// existing one. Internal functions never clash, the linker renames them.
+func linkPackageModule(linker llvm.Linker, mod, pkgMod llvm.Module) error {
+	for fn := range llvmutil.Functions(pkgMod) {
+		if fn.IsDeclaration() || fn.Linkage() == llvm.InternalLinkage || fn.Linkage() == llvm.PrivateLinkage {
+			continue
+		}
+		existing := mod.NamedFunction(fn.Name())
+		if existing.IsNil() || existing.IsDeclaration() {
+			continue
+		}
+		fn.SetLinkage(llvm.LinkOnceODRLinkage)
+	}
+	attributes := make(map[string]llvmutil.FunctionUsageAttributes)
+	for fn := range llvmutil.Functions(pkgMod) {
+		attrs := llvmutil.ReadFunctionUsageAttributes(fn)
+		attrs = attrs.Merge(llvmutil.ReadFunctionUsageAttributes(mod.NamedFunction(fn.Name())))
+		if len(attrs) != 0 {
+			attributes[fn.Name()] = attrs
+		}
+	}
+	if err := linker.LinkModule(pkgMod); err != nil {
+		return err
+	}
+	for name, attrs := range attributes {
+		fn := mod.NamedFunction(name)
+		if fn.IsNil() {
+			continue
+		}
+		attrs.Apply(fn)
+	}
+	return nil
+}
+
 // optimizeProgram runs a series of optimizations and transformations that are
 // needed to convert a program to its final form. Some transformations are not
 // optional and must be run as the compiler expects them to run.
 func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
+	if _, speedLevel, _ := config.OptLevel(); speedLevel == 0 && slices.Contains(config.BuildTags(), "esp32") && slices.Contains(config.BuildTags(), "machine.psram") {
+		// The ESP32 PSRAM start-up must run from IRAM, which needs the inliner.
+		return errors.New("ESP32 PSRAM targets need -opt=1 or higher")
+	}
 	if err := transform.PrepareRuntimeStartup(mod); err != nil {
 		return err
 	}
@@ -1531,10 +1566,10 @@ func determineStackSizes(mod llvm.Module, executable string) ([]string, map[stri
 	var callsIndirectFunction []string
 	gowrappers := []string{}
 	gowrapperNames := make(map[string]string)
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		// Determine which functions call a function pointer.
-		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+		for bb := range llvmutil.BasicBlocks(fn) {
+			for inst := range llvmutil.Instructions(bb) {
 				if inst.IsACallInst().IsNil() {
 					continue
 				}

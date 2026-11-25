@@ -8,8 +8,6 @@ import (
 	"internal/task"
 	"machine"
 	_ "machine/usb/cdc"
-	"math/bits"
-	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -55,85 +53,6 @@ func sleepTicks(d timeUnit) {
 	// Busy loop
 	sleepUntil := ticks() + d
 	for ticks() < sleepUntil {
-	}
-}
-
-// Currently sleeping core, or 0xff.
-// Must only be accessed with the scheduler lock held.
-var sleepingCore uint8 = 0xff
-
-// Return whether another core is sleeping.
-// May only be called with the scheduler lock held.
-func hasSleepingCore() bool {
-	return sleepingCore != 0xff
-}
-
-// Almost identical to sleepTicks, except that it will unlock/lock the scheduler
-// while sleeping and is interruptible by interruptSleepTicksMulticore.
-// This may only be called with the scheduler lock held.
-func sleepTicksMulticore(d timeUnit) {
-	sleepingCore = uint8(currentCPU())
-
-	// Note: interruptSleepTicksMulticore will be able to interrupt this, since
-	// it executes the "sev" instruction which would make sleepTicks return
-	// immediately without sleeping. Even if it happens while configuring the
-	// sleep operation.
-
-	schedulerLock.Unlock()
-	sleepTicks(d)
-	schedulerLock.Lock()
-
-	sleepingCore = 0xff
-}
-
-// Interrupt an ongoing call to sleepTicksMulticore on another core.
-func interruptSleepTicksMulticore(wakeup timeUnit) {
-	arm.Asm("sev")
-}
-
-// Bitset of cores waiting in schedulerUnlockAndWait.
-// Must only be accessed with the scheduler lock held.
-var waitingCores uint8
-
-// Set to 1 by schedulerWakeCore to end a wait in schedulerUnlockAndWait.
-var schedulerWakePending [2]uint32
-
-// Put the scheduler to sleep, since there are no tasks to run.
-// This will unlock the scheduler lock, and must be called with the scheduler
-// lock held.
-func schedulerUnlockAndWait() {
-	core := currentCPU()
-	waitingCores |= 1 << core
-	schedulerWakePending[core] = 0
-	schedulerLock.Unlock()
-
-	// The sev in Unlock also sets the local event register, so one wfe returns at once.
-	// See the Arm Cortex-M33 Devices Generic User Guide (100235) section 4.13.11.
-	for volatile.LoadUint32(&schedulerWakePending[core]) == 0 {
-		arm.Asm("wfe")
-	}
-	schedulerLock.Lock()
-}
-
-// Wake another core, if one is waiting or sleeping. Must be called with the
-// scheduler lock held.
-func schedulerWake() {
-	if waitingCores != 0 {
-		schedulerWakeCore(uint32(bits.TrailingZeros8(waitingCores)))
-	} else if hasSleepingCore() {
-		interruptSleepTicksMulticore(0)
-	}
-}
-
-// Wake the given core if it is waiting or sleeping. Must be called with the
-// scheduler lock held.
-func schedulerWakeCore(core uint32) {
-	if waitingCores&(1<<core) != 0 {
-		waitingCores &^= 1 << core
-		volatile.StoreUint32(&schedulerWakePending[core], 1)
-		arm.Asm("sev")
-	} else if uint32(sleepingCore) == core {
-		interruptSleepTicksMulticore(0)
 	}
 }
 
@@ -322,10 +241,12 @@ var (
 	flashSafeLock = spinLock{id: 24}
 )
 
+// resetSpinLocks runs before initHeap, so it must not allocate.
+//
+//go:noheap
 func resetSpinLocks() {
 	for i := uint8(0); i < numSpinlocks; i++ {
-		l := &spinLock{id: i}
-		l.spinlock().Set(0)
+		(*volatile.Register32)(unsafe.Add(unsafe.Pointer(&rp.SIO.SPINLOCK0), i*4)).Set(0)
 	}
 }
 
@@ -350,27 +271,6 @@ func (l *spinLock) Lock() {
 func (l *spinLock) Unlock() {
 	l.spinlock().Set(0)
 	arm.Asm("sev")
-}
-
-// schedulerSpinLock keeps interrupts off while held. An interrupt handler on
-// this core that wakes a goroutine would otherwise spin on a lock that the
-// code it interrupted holds.
-type schedulerSpinLock struct {
-	spinLock
-	state [numCPU]interrupt.State
-}
-
-func (l *schedulerSpinLock) Lock() {
-	core := currentCPU()
-	state := interrupt.Disable()
-	l.spinLock.Lock()
-	l.state[core] = state
-}
-
-func (l *schedulerSpinLock) Unlock() {
-	state := l.state[currentCPU()]
-	l.spinLock.Unlock()
-	interrupt.Restore(state)
 }
 
 // Wait until a signal is received, indicating that it can resume from the
@@ -404,8 +304,10 @@ func machineInit()
 
 func init() {
 	machineInit()
+	startPSRAM()
 
 	machine.InitSerial()
+	checkPSRAM()
 }
 
 func prerun() {

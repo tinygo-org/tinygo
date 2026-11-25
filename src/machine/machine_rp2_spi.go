@@ -203,7 +203,6 @@ func (spi *SPI) initSPI(config SPIConfig) (err error) {
 	return err
 }
 
-//go:inline
 func (spi *SPI) setFormat(mode uint8) {
 	cpha := uint32(mode) & 1
 	cpol := uint32(mode>>1) & 1
@@ -215,14 +214,11 @@ func (spi *SPI) setFormat(mode uint8) {
 }
 
 // reset resets SPI and waits until reset is done.
-//
-//go:inline
 func (spi *SPI) reset() {
 	resetVal := spi.deinit()
 	unresetBlockWait(resetVal)
 }
 
-//go:inline
 func (spi *SPI) deinit() (resetVal uint32) {
 	switch spi.Bus {
 	case rp.SPI0:

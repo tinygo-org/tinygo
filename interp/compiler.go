@@ -6,6 +6,7 @@ package interp
 import (
 	"strings"
 
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -22,6 +23,7 @@ type function struct {
 	locals     map[llvm.Value]int
 	deferFrame llvm.Value
 	deferStack llvm.Value
+	attributes llvmutil.FunctionUsageAttributes
 }
 
 // basicBlock represents a LLVM basic block and contains a slice of
@@ -73,17 +75,17 @@ func opcodeName(inst llvm.Value) string {
 // that the interpreter doesn't have to call into LLVM.
 func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 	fn := &function{
-		llvmFn: llvmFn,
-		name:   llvmFn.Name(),
-		params: llvmFn.Params(),
-		locals: make(map[llvm.Value]int),
+		llvmFn:     llvmFn,
+		name:       llvmFn.Name(),
+		params:     llvmFn.Params(),
+		attributes: llvmutil.ReadFunctionUsageAttributes(llvmFn),
 	}
 	if llvmFn.IsDeclaration() {
 		// Nothing to do.
 		return fn
 	}
 
-	for inst := llvmFn.EntryBasicBlock().FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+	for inst := range llvmutil.Instructions(llvmFn.EntryBasicBlock()) {
 		if inst.IsACallInst().IsNil() || inst.CalledValue().Name() != "runtime.setupDeferFrame" {
 			continue
 		}
@@ -92,23 +94,31 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 		if frame.IsAAllocaInst().IsNil() || stack.IsACallInst().IsNil() || !strings.HasPrefix(stack.CalledValue().Name(), "llvm.stacksave") {
 			continue
 		}
-		use := stack.FirstUse()
-		if !use.IsNil() && use.User() == inst && use.NextUse().IsNil() {
+		onlyUse := true
+		for user := range llvmutil.Uses(stack) {
+			if user != inst {
+				onlyUse = false
+				break
+			}
+		}
+		if onlyUse {
 			fn.deferFrame = frame
 			fn.deferStack = stack
 		}
 	}
 
-	for i, param := range fn.params {
-		fn.locals[param] = i
-	}
-
 	// Make a map of all the blocks, to quickly find the block number for a
 	// given branch instruction.
 	blockIndices := make(map[llvm.Value]int)
-	for llvmBB := llvmFn.FirstBasicBlock(); !llvmBB.IsNil(); llvmBB = llvm.NextBasicBlock(llvmBB) {
+	for llvmBB := range llvmutil.BasicBlocks(llvmFn) {
 		index := len(blockIndices)
 		blockIndices[llvmBB.AsValue()] = index
+	}
+
+	// Every parameter and instruction gets a local.
+	fn.locals = make(map[llvm.Value]int, len(fn.params)+llvmFn.InstructionsCount())
+	for i, param := range fn.params {
+		fn.locals[param] = i
 	}
 	blockIndex := func(bb llvm.BasicBlock) literalValue {
 		// A missing block would otherwise silently become block 0 (the entry
@@ -121,12 +131,12 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 	}
 
 	// Compile every block.
-	for llvmBB := llvmFn.FirstBasicBlock(); !llvmBB.IsNil(); llvmBB = llvm.NextBasicBlock(llvmBB) {
+	for llvmBB := range llvmutil.BasicBlocks(llvmFn) {
 		bb := &basicBlock{}
 		fn.blocks = append(fn.blocks, bb)
 
 		// Compile every instruction in the block.
-		for llvmInst := llvmBB.FirstInstruction(); !llvmInst.IsNil(); llvmInst = llvm.NextInstruction(llvmInst) {
+		for llvmInst := range llvmutil.Instructions(llvmBB) {
 			// Create instruction skeleton.
 			opcode := llvmInst.InstructionOpcode()
 			inst := instruction{
@@ -223,7 +233,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				llvmCalledValue := llvmInst.CalledValue()
 				if !llvmCalledValue.IsAFunction().IsNil() {
 					name := llvmCalledValue.Name()
-					if name == "llvm.dbg.value" || strings.HasPrefix(name, "llvm.lifetime.") {
+					if name == "llvm.dbg.value" || name == "llvm.assume" || strings.HasPrefix(name, "llvm.lifetime.") {
 						// These intrinsics should not be interpreted, they are not
 						// relevant to the execution of this function.
 						continue
@@ -252,6 +262,25 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				inst.operands = []value{
 					r.getValue(llvmInst.Operand(0)),
 					r.getValue(llvmInst.Operand(1)),
+				}
+			case llvm.AtomicRMW:
+				// atomicrmw: [ptr, value, binop]
+				inst.name = llvmInst.Name()
+				inst.operands = []value{
+					r.getValue(llvmInst.Operand(0)),
+					r.getValue(llvmInst.Operand(1)),
+					literalValue{uint8(llvmInst.AtomicRMWBinOp())},
+				}
+			case llvm.AtomicCmpXchg:
+				// cmpxchg: [ptr, cmp, new, resultSize, successOffset]
+				inst.name = llvmInst.Name()
+				resultType := llvmInst.Type()
+				inst.operands = []value{
+					r.getValue(llvmInst.Operand(0)),
+					r.getValue(llvmInst.Operand(1)),
+					r.getValue(llvmInst.Operand(2)),
+					literalValue{r.targetData.TypeAllocSize(resultType)},
+					literalValue{r.targetData.ElementOffset(resultType, 1)},
 				}
 			case llvm.Alloca:
 				// Alloca allocates stack space for local variables.
@@ -288,7 +317,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 						// struct field index for when the GEP must be done at
 						// runtime.
 						inst.operands = append(inst.operands, literalValue{elementOffset}, literalValue{^uint64(index)})
-						elementType = elementType.StructElementTypes()[index]
+						elementType = elementType.StructTypeAtIndex(int(index))
 					case llvm.ArrayTypeKind:
 						elementType = elementType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(elementType)
@@ -316,7 +345,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					switch indexingType.TypeKind() {
 					case llvm.StructTypeKind:
 						offset += r.targetData.ElementOffset(indexingType, int(index))
-						indexingType = indexingType.StructElementTypes()[index]
+						indexingType = indexingType.StructTypeAtIndex(int(index))
 					case llvm.ArrayTypeKind:
 						indexingType = indexingType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(indexingType)
@@ -341,7 +370,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					switch indexingType.TypeKind() {
 					case llvm.StructTypeKind:
 						offset += r.targetData.ElementOffset(indexingType, int(index))
-						indexingType = indexingType.StructElementTypes()[index]
+						indexingType = indexingType.StructTypeAtIndex(int(index))
 					case llvm.ArrayTypeKind:
 						indexingType = indexingType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(indexingType)
@@ -449,6 +478,8 @@ var instructionNameMap = [...]string{
 	llvm.Load:          "load",
 	llvm.Store:         "store",
 	llvm.GetElementPtr: "getelementptr",
+	llvm.AtomicCmpXchg: "cmpxchg",
+	llvm.AtomicRMW:     "atomicrmw",
 
 	// Cast Operators
 	llvm.Trunc:    "trunc",

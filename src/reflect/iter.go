@@ -61,15 +61,14 @@ func rangeNum[T int8 | int16 | int32 | int64 | int |
 // Uint, Uint8, Uint16, Uint32, Uint64, Uintptr,
 // Array, Chan, Map, Slice, or String.
 func (v Value) Seq() iter.Seq[Value] {
-	// TODO: canRangeFunc
-	// if canRangeFunc(v.typ()) {
-	// 	return func(yield func(Value) bool) {
-	// 		rf := MakeFunc(v.Type().In(0), func(in []Value) []Value {
-	// 			return []Value{ValueOf(yield(in[0]))}
-	// 		})
-	// 		v.Call([]Value{rf})
-	// 	}
-	// }
+	if v.Kind() == Func && canRangeFunc(v.Type(), 1) {
+		return func(yield func(Value) bool) {
+			rf := MakeFunc(v.Type().In(0), func(in []Value) []Value {
+				return []Value{ValueOf(yield(in[0]))}
+			})
+			v.Call([]Value{rf})
+		}
+	}
 	switch v.Kind() {
 	case Int:
 		return rangeNum[int](v.Int(), v.Type())
@@ -148,15 +147,14 @@ func (v Value) Seq() iter.Seq[Value] {
 // If v's kind is Pointer, the pointer element type must have kind Array.
 // Otherwise v's kind must be Array, Map, Slice, or String.
 func (v Value) Seq2() iter.Seq2[Value, Value] {
-	// TODO: canRangeFunc2
-	// if canRangeFunc2(v.typ()) {
-	// 	return func(yield func(Value, Value) bool) {
-	// 		rf := MakeFunc(v.Type().In(0), func(in []Value) []Value {
-	// 			return []Value{ValueOf(yield(in[0], in[1]))}
-	// 		})
-	// 		v.Call([]Value{rf})
-	// 	}
-	// }
+	if v.Kind() == Func && canRangeFunc(v.Type(), 2) {
+		return func(yield func(Value, Value) bool) {
+			rf := MakeFunc(v.Type().In(0), func(in []Value) []Value {
+				return []Value{ValueOf(yield(in[0], in[1]))}
+			})
+			v.Call([]Value{rf})
+		}
+	}
 	switch v.Kind() {
 	case Pointer:
 		if v.Elem().Kind() != Array {

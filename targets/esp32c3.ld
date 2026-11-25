@@ -66,6 +66,7 @@ SECTIONS
         *(.sbss)
         *(.sbss.*)
         *(.bss .bss.*)
+        *(COMMON)
         . = ALIGN (4);
         _ebss = ABSOLUTE(.);
     } >DRAM
@@ -104,6 +105,7 @@ SECTIONS
     .iram : ALIGN(4)
     {
         *(.iram*)
+        *(.text.iram.*)
         *(.wifislprxiram*)
         *(.wifiextrairam*)
         *(.wifi0iram*)

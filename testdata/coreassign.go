@@ -3,6 +3,7 @@ package main
 import (
 	"machine"
 	"runtime"
+	"runtime/interrupt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -121,4 +122,70 @@ func main() {
 		wokeInTime <- !busyOver.Load()
 	}()
 	println("sleeping task wakes while another core is busy:", <-wokeInTime)
+	println("channel select keeps interrupts enabled:", testChannelInterrupts())
+}
+
+func testChannelInterrupts() bool {
+	var channels [16]chan int
+	for i := range channels {
+		channels[i] = make(chan int)
+	}
+	var stopped atomic.Bool
+	var masked atomic.Bool
+	var ready sync.WaitGroup
+	var observers sync.WaitGroup
+	for core := 0; core < 2; core++ {
+		ready.Add(1)
+		observers.Add(1)
+		go func(core int) {
+			defer observers.Done()
+			machine.AssignCore(core)
+			ready.Done()
+			for !stopped.Load() {
+				before := interrupt.Disable()
+				disabled := interrupt.Disable()
+				interrupt.Restore(disabled)
+				interrupt.Restore(before)
+				if before == disabled {
+					masked.Store(true)
+				}
+				runtime.Gosched()
+			}
+		}(core)
+	}
+	ready.Wait()
+	var workers sync.WaitGroup
+	for core := 0; core < 2; core++ {
+		workers.Add(1)
+		go func(core int) {
+			defer workers.Done()
+			machine.AssignCore(core)
+			for i := 0; i < 1000; i++ {
+				select {
+				case <-channels[0]:
+				case <-channels[1]:
+				case <-channels[2]:
+				case <-channels[3]:
+				case <-channels[4]:
+				case <-channels[5]:
+				case <-channels[6]:
+				case <-channels[7]:
+				case <-channels[8]:
+				case <-channels[9]:
+				case <-channels[10]:
+				case <-channels[11]:
+				case <-channels[12]:
+				case <-channels[13]:
+				case <-channels[14]:
+				case <-channels[15]:
+				default:
+				}
+				runtime.Gosched()
+			}
+		}(core)
+	}
+	workers.Wait()
+	stopped.Store(true)
+	observers.Wait()
+	return !masked.Load()
 }

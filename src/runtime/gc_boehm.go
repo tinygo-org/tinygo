@@ -87,6 +87,10 @@ func markCurrentGoroutineStack(sp uintptr) {
 	libgc_push_all_stack(sp, stackBottom)
 }
 
+// markLiveStack is not needed because markCurrentGoroutineStack already pushes
+// the live part of the stack.
+func markLiveStack(sp uintptr) {}
+
 //go:noinline
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	if size == 0 {
@@ -224,10 +228,10 @@ func ReadMemStats(m *MemStats) {
 
 	// Fill in MemStats as well as we can, given the information that bdwgc
 	// provides to us.
-	m.HeapIdle = uint64(gcMemStats.free_bytes_full - gcMemStats.unmapped_bytes)
-	m.HeapInuse = uint64(gcMemStats.heapsize_full - gcMemStats.unmapped_bytes)
+	m.HeapIdle = uint64(gcMemStats.free_bytes_full)
+	m.HeapInuse = uint64(gcMemStats.heapsize_full - gcMemStats.free_bytes_full)
 	m.HeapReleased = uint64(gcMemStats.unmapped_bytes)
-	m.HeapSys = uint64(m.HeapInuse + m.HeapIdle)
+	m.HeapSys = uint64(gcMemStats.heapsize_full)
 	m.GCSys = 0 // not provided by bdwgc
 	m.TotalAlloc = uint64(gcMemStats.allocd_bytes_before_gc + gcMemStats.bytes_allocd_since_gc)
 	m.Mallocs = gcMallocs

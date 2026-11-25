@@ -319,7 +319,7 @@ func (pwm *pwmGroup) setPeriod(period uint64) error {
 //	cycles = (TOP+1) * (CSRPHCorrect + 1) * (DIV_INT + DIV_FRAC/16)
 func (pwm *pwmGroup) setClockDiv(Int, frac uint8) {
 	pwm.DIV.ReplaceBits((uint32(frac)<<rp.PWM_CH0_DIV_FRAC_Pos)|
-		u32max(uint32(Int), 1)<<rp.PWM_CH0_DIV_INT_Pos, rp.PWM_CH0_DIV_FRAC_Msk|rp.PWM_CH0_DIV_INT_Msk, 0)
+		max(uint32(Int), 1)<<rp.PWM_CH0_DIV_INT_Pos, rp.PWM_CH0_DIV_FRAC_Msk|rp.PWM_CH0_DIV_INT_Msk, 0)
 }
 
 // Set the highest value the counter will reach before returning to 0. Also

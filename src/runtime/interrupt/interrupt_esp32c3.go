@@ -24,7 +24,7 @@ var tinygo_saved_ra uintptr
 //	    ...
 //	}).Enable()
 func (i Interrupt) Enable() error {
-	if i.num < 1 && i.num > 31 {
+	if i.num < 1 || i.num > 31 {
 		return errors.New("interrupt for ESP32-C3 must be in range of 1 through 31")
 	}
 	mask := riscv.DisableInterrupts()

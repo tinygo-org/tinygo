@@ -218,8 +218,8 @@ func (dev *USBDevice) Configure(config UARTConfig) {
 	setUSBOTGInput(usbOTGAVALIDSignal, gpioMatrixConstLow)
 
 	// D- is GPIO19 and D+ is GPIO20.
-	GPIO19.ioMuxReg().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
-	GPIO20.ioMuxReg().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
+	GPIO19.mux().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
+	GPIO20.mux().ReplaceBits(3, 3, esp.IO_MUX_GPIO_FUN_DRV_Pos)
 
 	waitUSBBits(&esp.USB0.GRSTCTL, grstAHBIDL, grstAHBIDL)
 	esp.USB0.GRSTCTL.SetBits(grstCSRST)
@@ -544,8 +544,11 @@ func AckUsbOutTransfer(ep uint32) {
 // back to back SETUP packets.
 func armEP0Out() {
 	state := lockUSBRegs()
-	otgOutEP(0).TSIZ.Set(3<<29 | 1<<19 | usb.EndpointPacketSize)
-	otgOutEP(0).CTL.SetBits(depctlEPENA | depctlCNAK)
+	// DOEPTSIZ0 must not change while EP0 OUT is enabled, see USB_EP0_OutStart in the STM32 HAL.
+	if !otgOutEP(0).CTL.HasBits(depctlEPENA) {
+		otgOutEP(0).TSIZ.Set(3<<29 | 1<<19 | usb.EndpointPacketSize)
+		otgOutEP(0).CTL.SetBits(depctlEPENA | depctlCNAK)
+	}
 	unlockUSBRegs(state)
 }
 

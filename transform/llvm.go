@@ -3,22 +3,14 @@ package transform
 import (
 	"slices"
 
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
 // Return a list of values (actually, instructions) where this value is used as
 // an operand.
 func getUses(value llvm.Value) []llvm.Value {
-	if value.IsNil() {
-		return nil
-	}
-	var uses []llvm.Value
-	use := value.FirstUse()
-	for !use.IsNil() {
-		uses = append(uses, use.User())
-		use = use.NextUse()
-	}
-	return uses
+	return slices.Collect(llvmutil.Uses(value))
 }
 
 // hasUses returns whether the given value has any uses. It is equivalent to
@@ -52,6 +44,16 @@ func typeHasPointers(typ llvm.Type) bool {
 	return false
 }
 
+// elementType returns the type of element i of the struct or array type typ.
+func elementType(typ llvm.Type, i int) llvm.Type {
+	switch typ.TypeKind() {
+	case llvm.StructTypeKind:
+		return typ.StructTypeAtIndex(i)
+	default:
+		return typ.ElementType()
+	}
+}
+
 // stripPointerCasts strips instruction pointer casts (getelementptr and
 // bitcast) and returns the original value without the casts.
 func stripPointerCasts(value llvm.Value) llvm.Value {
@@ -68,4 +70,31 @@ func stripPointerCasts(value llvm.Value) llvm.Value {
 		}
 	}
 	return value
+}
+
+// memoryEffects holds two bits, ref and mod, per memory location. See
+// https://github.com/llvm/llvm-project/blob/94ebcfd16dac67486bae624f74e1c5c789448bae/llvm/include/llvm/Support/ModRef.h#L62
+type memoryEffects uint64
+
+var memoryAttrKind = llvm.AttributeKindID("memory")
+
+// readMemoryEffects returns the memory effects of fn. A function without a
+// memory attribute may read and write any memory.
+func readMemoryEffects(fn llvm.Value) memoryEffects {
+	attr := fn.GetEnumFunctionAttribute(memoryAttrKind)
+	if attr.IsNil() {
+		return ^memoryEffects(0)
+	}
+	return memoryEffects(attr.GetEnumValue())
+}
+
+// onlyAccessesArgMem returns whether the function reads or writes only memory
+// that its pointer arguments point to.
+func (effects memoryEffects) onlyAccessesArgMem() bool {
+	return effects>>2 == 0
+}
+
+// onlyReadsMemory returns whether the function writes no memory.
+func (effects memoryEffects) onlyReadsMemory() bool {
+	return effects&0xaaaaaaaa == 0
 }

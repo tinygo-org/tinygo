@@ -54,7 +54,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	initializer := llvm.ConstNull(globalLLVMType)
 	initializer = b.CreateInsertValue(initializer, funcContext, 0, "")
 	initializer = b.CreateInsertValue(initializer, funcPtr, 1, "")
-	initializer = b.CreateInsertValue(initializer, llvm.ConstNamedStruct(globalLLVMType.StructElementTypes()[2], []llvm.Value{
+	initializer = b.CreateInsertValue(initializer, llvm.ConstNamedStruct(globalLLVMType.StructTypeAtIndex(2), []llvm.Value{
 		llvm.ConstInt(b.intType, uint64(id.Int64()), true),
 	}), 2, "")
 	global.SetInitializer(initializer)
@@ -87,7 +87,7 @@ func (b *builder) createInterruptGlobal(instr *ssa.CallCommon) (llvm.Value, erro
 	if strings.HasPrefix(b.Triple, "avr") {
 		useFn := b.mod.NamedFunction("runtime/interrupt.use")
 		if useFn.IsNil() {
-			useFnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{interrupt.Type()}, false)
+			useFnType := llvm.FunctionType(b.void, []llvm.Type{interrupt.Type()}, false)
 			useFn = llvm.AddFunction(b.mod, "runtime/interrupt.use", useFnType)
 		}
 		b.CreateCall(useFn.GlobalValueType(), useFn, []llvm.Value{interrupt}, "")

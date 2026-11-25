@@ -1,6 +1,6 @@
 {
-  "inherits": ["cortex-m4"],
-  "build-tags": ["mksnanov3", "stm32f407", "stm32f4", "stm32"],
+  "inherits": ["stm32f4"],
+  "build-tags": ["mksnanov3", "stm32f407"],
   "serial": "uart",
   "linkerscript": "targets/stm32f407.ld",
   "extra-files": [

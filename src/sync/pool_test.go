@@ -1,6 +1,7 @@
 package sync_test
 
 import (
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -46,5 +47,20 @@ func TestPool_noNew(t *testing.T) {
 	i1 := p.Get()
 	if i1 != nil {
 		t.Errorf("pool without New returned %v, want nil", i1)
+	}
+}
+
+func TestPoolDropsAfterTwoCollections(t *testing.T) {
+	p := sync.Pool{New: func() any { return &testItem{} }}
+	p.Put(&testItem{val: 7})
+	runtime.GC()
+	if x := p.Get().(*testItem); x.val != 7 {
+		t.Errorf("item lost after one collection: got %v", x.val)
+	}
+	p.Put(&testItem{val: 8})
+	runtime.GC()
+	runtime.GC()
+	if x := p.Get().(*testItem); x.val != 0 {
+		t.Errorf("item kept after two collections: got %v", x.val)
 	}
 }

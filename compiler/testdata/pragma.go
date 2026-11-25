@@ -18,6 +18,16 @@ var alignedGlobal [4]uint32
 //go:align 16
 var alignedGlobal16 [4]uint32
 
+// Define a global in a different package using go:linkname.
+//
+//go:linkname linkedGlobalDefinition somepkg.linkedGlobalDefinition
+var linkedGlobalDefinition uint32 = 0
+
+// Import a global from a different package using go:linkname.
+//
+//go:linkname linkedGlobalDeclaration somepkg.linkedGlobalDeclaration
+var linkedGlobalDeclaration uint32
+
 // Test exported functions.
 //
 //export extern_func

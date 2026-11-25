@@ -7,6 +7,8 @@ void variadic0();
 void variadic2(int x, int y, ...);
 void variadicNoescape(int *a, ...);
 static void staticfunc(int x);
+void arrayParam(int a[4]);
+void incompleteArrayParam(const int a[]);
 
 // Global variable signatures.
 extern int someValue;
@@ -25,6 +27,8 @@ func accessFunctions() {
 	C.variadic2(3, 5)
 	C.variadicNoescape(nil)
 	C.staticfunc(3)
+	C.arrayParam(nil)
+	C.incompleteArrayParam(nil)
 	C.notEscapingFunction(nil)
 }
 

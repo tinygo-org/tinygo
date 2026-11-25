@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -69,8 +69,8 @@ func (b *builder) deferInitFunc() {
 		// The field index must match the DeferPtr field in runtime.deferFrame,
 		// defined in src/runtime/panic.go.
 		b.deferPtr = b.CreateInBoundsGEP(deferFrameType, b.deferFrame, []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), 6, false), // DeferPtr field
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, 6, false), // DeferPtr field
 		}, "deferPtr")
 		stackPointer := b.readStackPointer()
 		b.createRuntimeCall("setupDeferFrame", []llvm.Value{b.deferFrame, stackPointer}, "")
@@ -81,7 +81,7 @@ func (b *builder) deferInitFunc() {
 	} else {
 		// Create defer list pointer.
 		b.deferPtr = b.CreateAlloca(b.dataPtrType, "deferPtr")
-		b.CreateStore(llvm.ConstPointerNull(b.dataPtrType), b.deferPtr)
+		b.CreateStore(b.dataPtrNull, b.deferPtr)
 	}
 }
 
@@ -113,7 +113,7 @@ func (b *builder) createLandingPad() {
 // continuing normally instead of resuming after a longjmp.
 func (b *builder) createCheckpoint(ptr llvm.Value) llvm.Value {
 	if b.archFamily() == "xtensa" {
-		fnType := llvm.FunctionType(b.ctx.Int32Type(), []llvm.Type{b.dataPtrType}, false)
+		fnType := llvm.FunctionType(b.i32, []llvm.Type{b.dataPtrType}, false)
 		fn := b.mod.NamedFunction("setjmp")
 		if fn.IsNil() {
 			fn = llvm.AddFunction(b.mod, "setjmp", fnType)
@@ -121,7 +121,7 @@ func (b *builder) createCheckpoint(ptr llvm.Value) llvm.Value {
 		}
 		result := b.CreateCall(fnType, fn, []llvm.Value{ptr}, "setjmp")
 		result.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("returns_twice"), 0))
-		return b.CreateICmp(llvm.IntEQ, result, llvm.ConstInt(b.ctx.Int32Type(), 0, false), "setjmp.result")
+		return b.CreateICmp(llvm.IntEQ, result, llvm.ConstInt(b.i32, 0, false), "setjmp.result")
 	}
 
 	// Construct inline assembly equivalents of setjmp.
@@ -199,7 +199,7 @@ mov x0, #0
 		// Note: the Y register (R28:R29) is a fixed register and therefore
 		// needs to be saved manually. TODO: do this only once per function with
 		// a defer frame, not for every call.
-		resultType = b.ctx.Int8Type()
+		resultType = b.i8
 		asmString = `
 ldi r24, pm_lo8(1f)
 ldi r25, pm_hi8(1f)
@@ -401,11 +401,11 @@ func (l *llvmValueList) append(values ...llvm.Value) {
 func (b *builder) loadDeferredCallParams(structType llvm.Type, ptr llvm.Value) []llvm.Value {
 	fieldTypes := structType.StructElementTypes()
 	values := make([]llvm.Value, 0, len(fieldTypes)-2)
-	zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+	zero := llvm.ConstInt(b.i32, 0, false)
 	for i := 2; i < len(fieldTypes); i++ {
 		fieldPtr := b.CreateInBoundsGEP(structType, ptr, []llvm.Value{
 			zero,
-			llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+			llvm.ConstInt(b.i32, uint64(i), false),
 		}, "gep")
 		values = append(values, b.CreateLoad(fieldTypes[i], fieldPtr, "param"))
 	}
@@ -453,7 +453,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
 		values = newLLVMValueList(callback, next)
-		exported := b.getFunctionInfo(callee).exported
+		exported := b.getFunctionInfo(callee).isExported()
 		abi := b.getFunctionABI(callee.Signature, exported)
 		values.append(b.getCallArguments(instr.Call.Args, abi.params)...)
 
@@ -589,7 +589,7 @@ func (b *builder) createRunDefers() {
 	//     for stack != nil {
 	b.SetInsertPointAtEnd(loophead)
 	deferData := b.CreateLoad(b.dataPtrType, b.deferPtr, "")
-	stackIsNil := b.CreateICmp(llvm.IntEQ, deferData, llvm.ConstPointerNull(deferData.Type()), "stackIsNil")
+	stackIsNil := b.CreateICmp(llvm.IntEQ, deferData, b.dataPtrNull, "stackIsNil")
 	b.CreateCondBr(stackIsNil, end, loop)
 
 	// Create loop body:
@@ -598,14 +598,14 @@ func (b *builder) createRunDefers() {
 	//     switch stack.callback {
 	b.SetInsertPointAtEnd(loop)
 	nextStackGEP := b.CreateInBoundsGEP(deferType, deferData, []llvm.Value{
-		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(b.ctx.Int32Type(), 1, false), // .next field
+		llvm.ConstInt(b.i32, 0, false),
+		llvm.ConstInt(b.i32, 1, false), // .next field
 	}, "stack.next.gep")
 	nextStack := b.CreateLoad(b.dataPtrType, nextStackGEP, "stack.next")
 	b.CreateStore(nextStack, b.deferPtr)
 	gep := b.CreateInBoundsGEP(deferType, deferData, []llvm.Value{
-		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(b.ctx.Int32Type(), 0, false), // .callback field
+		llvm.ConstInt(b.i32, 0, false),
+		llvm.ConstInt(b.i32, 0, false), // .callback field
 	}, "callback.gep")
 	callback := b.CreateLoad(b.uintptrType, gep, "callback")
 	sw := b.CreateSwitch(callback, unreachable, len(b.allDeferFuncs))
@@ -669,7 +669,7 @@ func (b *builder) createRunDefers() {
 				// Add the context parameter. An interface call cannot also be a
 				// closure but we have to supply the parameter anyway for platforms
 				// with a strict calling convention.
-				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
+				forwardParams = append(forwardParams, b.dataPtrUndef)
 			}
 			forwardParams = b.prependIndirectResult(callback.Signature(), false, forwardParams, "defer.result")
 
@@ -680,7 +680,7 @@ func (b *builder) createRunDefers() {
 
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{b.uintptrType, b.dataPtrType}
-			exported := b.getFunctionInfo(callback).exported
+			exported := b.getFunctionInfo(callback).isExported()
 			abi := b.getFunctionABI(callback.Signature, exported)
 			valueTypes = b.appendStoredParamTypes(valueTypes, abi.params)
 			deferredCallType := b.ctx.StructType(valueTypes, false)
@@ -693,7 +693,7 @@ func (b *builder) createRunDefers() {
 			if !exported {
 				// Add the context parameter. We know it is ignored by the receiving
 				// function, but we have to pass one anyway.
-				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
+				forwardParams = append(forwardParams, b.dataPtrUndef)
 			}
 			forwardParams = b.prependIndirectResult(callback.Signature, exported, forwardParams, "defer.result")
 

@@ -1,0 +1,5 @@
+{
+	"inherits": ["cortex-m33", "stm32"],
+	"inheritable-only": true,
+	"build-tags": ["stm32u5", "machine.spi"]
+}

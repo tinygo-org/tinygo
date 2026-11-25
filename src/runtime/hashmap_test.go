@@ -9,11 +9,15 @@ import (
 
 func checkClone[K comparable, V comparable](t *testing.T, m map[K]V) {
 	t.Helper()
-	c := maps.Clone(m)
-	if len(c) != len(m) {
-		t.Fatalf("len(clone) = %d, want %d", len(c), len(m))
-	}
+	want := make(map[K]V, len(m))
 	for k, v := range m {
+		want[k] = v
+	}
+	c := maps.Clone(m)
+	if len(c) != len(want) {
+		t.Fatalf("len(clone) = %d, want %d", len(c), len(want))
+	}
+	for k, v := range want {
 		cv, ok := c[k]
 		if !ok {
 			t.Fatalf("clone missing key %v", k)
@@ -22,15 +26,23 @@ func checkClone[K comparable, V comparable](t *testing.T, m map[K]V) {
 			t.Fatalf("clone[%v] = %v, want %v", k, cv, v)
 		}
 	}
-	n := len(m)
 	for k := range c {
 		delete(c, k)
 	}
 	if len(c) != 0 {
 		t.Fatalf("len(clone) = %d after deleting all keys, want 0", len(c))
 	}
-	if len(m) != n {
-		t.Fatalf("len(original) = %d after deleting from clone, want %d", len(m), n)
+	if len(m) != len(want) {
+		t.Fatalf("len(original) = %d after deleting from clone, want %d", len(m), len(want))
+	}
+	for k, v := range want {
+		mv, ok := m[k]
+		if !ok {
+			t.Fatalf("original missing key %v after deleting from clone", k)
+		}
+		if mv != v {
+			t.Fatalf("original[%v] = %v after deleting from clone, want %v", k, mv, v)
+		}
 	}
 }
 
@@ -108,9 +120,19 @@ func TestMapCloneIndirect(t *testing.T) {
 		v.a[5] = -1
 		c[k] = v
 	}
-	for k, v := range m {
-		if v.a[5] != k.a[0]*7 {
-			t.Fatalf("writing to clone changed original value for key %d", k.a[0])
+	if len(m) != 300 {
+		t.Fatalf("len(original) = %d after writing to clone, want 300", len(m))
+	}
+	for i := range 300 {
+		var k, want bigValue
+		k.a[0], k.a[39] = int64(i), int64(-i)
+		want.a[5] = int64(i * 7)
+		v, ok := m[k]
+		if !ok {
+			t.Fatalf("original missing key %d after writing to clone", i)
+		}
+		if v != want {
+			t.Fatalf("original[%d] = %v after writing to clone, want %v", i, v, want)
 		}
 	}
 }
@@ -153,8 +175,29 @@ func TestMapCloneGrow(t *testing.T) {
 	for i := 100; i < 10000; i++ {
 		c[i] = i
 	}
+	if len(c) != 10000 {
+		t.Fatalf("len(clone) = %d after growing clone, want 10000", len(c))
+	}
+	for i := range 10000 {
+		v, ok := c[i]
+		if !ok {
+			t.Fatalf("clone missing key %d after growing clone", i)
+		}
+		if v != i {
+			t.Fatalf("clone[%d] = %d after growing clone, want %d", i, v, i)
+		}
+	}
 	if len(m) != 100 {
 		t.Fatalf("len(original) = %d after growing clone, want 100", len(m))
+	}
+	for i := range 100 {
+		v, ok := m[i]
+		if !ok {
+			t.Fatalf("original missing key %d after growing clone", i)
+		}
+		if v != i {
+			t.Fatalf("original[%d] = %d after growing clone, want %d", i, v, i)
+		}
 	}
 	checkClone(t, c)
 }

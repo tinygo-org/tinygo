@@ -1,7 +1,7 @@
 ; ModuleID = 'zeromap.go'
 source_filename = "zeromap.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
-target triple = "wasm32-unknown-wasi"
+target triple = "wasm32-unknown-wasip1"
 
 %main.hasPadding = type { i1, i32, i1 }
 %runtime._string = type { ptr, i32 }
@@ -149,7 +149,7 @@ entry:
   ret i1 %6
 }
 
-declare i1 @runtime.stringEqual(ptr readonly, i32, ptr readonly, i32, ptr) #0
+declare i1 @runtime.stringEqual(ptr readonly, i32 range(i32 0, -2147483648), ptr readonly, i32 range(i32 0, -2147483648), ptr) #0
 
 declare ptr @runtime.hashmapMakeGeneric(i32, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr) #0
 
@@ -249,6 +249,66 @@ eq.array.body:                                    ; preds = %eq.array.body, %ent
 eq.array.done:                                    ; preds = %eq.array.body
   ret i1 %eq
 }
+
+; Function Attrs: noinline nounwind
+define hidden void @main.testBinarySet(ptr dereferenceable_or_null(52) %m, i32 %key, i32 %value, ptr %context) unnamed_addr #2 {
+entry:
+  %hashmap.key = alloca i32, align 4
+  %hashmap.value = alloca i32, align 4
+  call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.value)
+  store i32 %value, ptr %hashmap.value, align 4
+  call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.key)
+  store i32 %key, ptr %hashmap.key, align 4
+  call void @runtime.hashmapBinarySet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, ptr undef) #4
+  call void @llvm.lifetime.end.p0(ptr nonnull %hashmap.key)
+  call void @llvm.lifetime.end.p0(ptr nonnull %hashmap.value)
+  ret void
+}
+
+declare void @runtime.hashmapBinarySet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), ptr) #0
+
+; Function Attrs: noinline nounwind
+define hidden i32 @main.testBinaryGet(ptr dereferenceable_or_null(52) %m, i32 %key, ptr %context) unnamed_addr #2 {
+entry:
+  %hashmap.key = alloca i32, align 4
+  %hashmap.value = alloca i32, align 4
+  call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.value)
+  call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.key)
+  store i32 %key, ptr %hashmap.key, align 4
+  %0 = call i1 @runtime.hashmapBinaryGet(ptr %m, ptr nonnull %hashmap.key, ptr nonnull %hashmap.value, i32 4, ptr undef) #4
+  call void @llvm.lifetime.end.p0(ptr nonnull %hashmap.key)
+  %1 = load i32, ptr %hashmap.value, align 4
+  call void @llvm.lifetime.end.p0(ptr nonnull %hashmap.value)
+  ret i32 %1
+}
+
+declare i1 @runtime.hashmapBinaryGet(ptr dereferenceable_or_null(52), ptr captures(none), ptr captures(none), i32, ptr) #0
+
+; Function Attrs: noinline nounwind
+define hidden void @main.testBinaryDelete(ptr dereferenceable_or_null(52) %m, i32 %key, ptr %context) unnamed_addr #2 {
+entry:
+  %hashmap.key = alloca i32, align 4
+  call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.key)
+  store i32 %key, ptr %hashmap.key, align 4
+  call void @runtime.hashmapBinaryDelete(ptr %m, ptr nonnull %hashmap.key, ptr undef) #4
+  call void @llvm.lifetime.end.p0(ptr nonnull %hashmap.key)
+  ret void
+}
+
+declare void @runtime.hashmapBinaryDelete(ptr dereferenceable_or_null(52), ptr captures(none), ptr) #0
+
+; Function Attrs: noinline nounwind
+define hidden void @main.testStringSet(ptr dereferenceable_or_null(52) %m, ptr readonly %key.data, i32 range(i32 0, -2147483648) %key.len, i32 %value, ptr %context) unnamed_addr #2 {
+entry:
+  %hashmap.value = alloca i32, align 4
+  call void @llvm.lifetime.start.p0(ptr nonnull %hashmap.value)
+  store i32 %value, ptr %hashmap.value, align 4
+  call void @runtime.hashmapStringSet(ptr %m, ptr %key.data, i32 %key.len, ptr nonnull %hashmap.value, ptr undef) #4
+  call void @llvm.lifetime.end.p0(ptr nonnull %hashmap.value)
+  ret void
+}
+
+declare void @runtime.hashmapStringSet(ptr dereferenceable_or_null(52), ptr readonly, i32 range(i32 0, -2147483648), ptr captures(none), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.main(ptr %context) unnamed_addr #1 {

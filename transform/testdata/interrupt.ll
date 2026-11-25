@@ -7,6 +7,7 @@ target triple = "armv7em-none-eabi"
 %"runtime/interrupt.handle" = type { ptr, i32, %"runtime/interrupt.Interrupt" }
 %"runtime/interrupt.Interrupt" = type { i32 }
 
+@"runtime/interrupt.$interrupt0" = private unnamed_addr constant %"runtime/interrupt.handle" { ptr @machine.UART0, i32 ptrtoint (ptr @"(*machine.UART).handleInterrupt$bound" to i32), %"runtime/interrupt.Interrupt" { i32 0 } }
 @"runtime/interrupt.$interrupt2" = private unnamed_addr constant %"runtime/interrupt.handle" { ptr @machine.UART0, i32 ptrtoint (ptr @"(*machine.UART).handleInterrupt$bound" to i32), %"runtime/interrupt.Interrupt" { i32 2 } }
 @machine.UART0 = internal global %machine.UART { ptr @"machine$alloc.335" }
 @"machine$alloc.335" = internal global %machine.RingBuffer zeroinitializer
@@ -23,7 +24,13 @@ define void @runtime.initAll(ptr nocapture readnone) unnamed_addr {
 entry:
   call void @"device/arm.SetPriority"(i32 ptrtoint (ptr @"runtime/interrupt.$interrupt2" to i32), i32 192, ptr undef)
   call void @"device/arm.EnableIRQ"(i32 ptrtoint (ptr @"runtime/interrupt.$interrupt2" to i32), ptr undef)
+  call void @"runtime/interrupt.use"(%"runtime/interrupt.Interrupt" { i32 ptrtoint (ptr @"runtime/interrupt.$interrupt0" to i32) })
   call void @"runtime/interrupt.use"(%"runtime/interrupt.Interrupt" { i32 ptrtoint (ptr @"runtime/interrupt.$interrupt2" to i32) })
+  ret void
+}
+
+define void @POWER_CLOCK_IRQHandler() {
+  call void @"runtime/interrupt.callHandlers"(i32 0, ptr undef)
   ret void
 }
 

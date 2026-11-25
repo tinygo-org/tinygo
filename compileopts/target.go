@@ -28,6 +28,7 @@ type TargetSpec struct {
 	Triple           string   `json:"llvm-target,omitempty"`
 	CPU              string   `json:"cpu,omitempty"`
 	ABI              string   `json:"target-abi,omitempty"` // roughly equivalent to -mabi= flag
+	Arch             string   `json:"arch,omitempty"`       // -march= flag for C code
 	Features         string   `json:"features,omitempty"`
 	GOOS             string   `json:"goos,omitempty"`
 	GOARCH           string   `json:"goarch,omitempty"`
@@ -247,6 +248,11 @@ func loadTarget(options *Options) (*TargetSpec, error) {
 	case "", "auto", "explicit", "none":
 	default:
 		return nil, fmt.Errorf("%s: invalid panic-unwind option %q", options.Target, spec.PanicUnwind)
+	}
+	for _, flag := range spec.CFlags {
+		if strings.HasPrefix(flag, "-march=") {
+			return nil, fmt.Errorf("%s: use the arch property instead of %s in cflags", options.Target, flag)
+		}
 	}
 
 	if spec.Scheduler == "asyncify" {

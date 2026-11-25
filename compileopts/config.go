@@ -23,6 +23,8 @@ const (
 	MaximumGoMinorVersion = 27
 )
 
+const MaxTypePointerDepth = 5
+
 // Library versions. Whenever an existing library is changed, this number should
 // be added/increased so that existing caches are invalidated.
 //
@@ -30,11 +32,13 @@ const (
 // builder.Library struct but that's hard to do since we want to know the
 // library path in advance in several places).
 var libVersions = map[string]int{
-	"musl":         3,
-	"bdwgc":        4,
-	"picolibc":     2,
-	"wasmbuiltins": 1,
-	"compiler-rt":  1,
+	"musl":             3,
+	"bdwgc":            4,
+	"picolibc":         2,
+	"wasmbuiltins":     1,
+	"compiler-rt":      1,
+	"wasi-libc":        1,
+	"wasi-libc-wasip2": 1,
 }
 
 // Config keeps all configuration affecting the build in a single struct.
@@ -352,6 +356,9 @@ func (c *Config) LibraryPath(name string) string {
 	if c.ABI() != "" {
 		archname += "-" + c.ABI()
 	}
+	if c.Target.Arch != "" {
+		archname += "-" + c.Target.Arch
+	}
 	if c.Target.SoftFloat {
 		archname += "-softfloat"
 	}
@@ -440,7 +447,7 @@ func (c *Config) CFlags(libclang bool) []string {
 	// Use the same optimization level as TinyGo.
 	cflags = append(cflags, "-O"+c.Options.Opt)
 	// Set the LLVM target triple.
-	cflags = append(cflags, "--target="+ClangTriple(c.Triple()))
+	cflags = append(cflags, "--target="+LLVMTriple(c.Triple()))
 	// Set the -mcpu (or similar) flag.
 	if c.Target.CPU != "" {
 		if c.GOARCH() == "amd64" || c.GOARCH() == "386" {
@@ -457,6 +464,9 @@ func (c *Config) CFlags(libclang bool) []string {
 	// Set the -mabi flag, if needed.
 	if c.ABI() != "" {
 		cflags = append(cflags, "-mabi="+c.ABI())
+	}
+	if c.Target.Arch != "" {
+		cflags = append(cflags, "-march="+c.Target.Arch)
 	}
 	return cflags
 }
@@ -554,6 +564,9 @@ func (c *Config) LDFlags() []string {
 	ldflags = append(ldflags, "-L", root)
 	if c.Target.LinkerScript != "" {
 		ldflags = append(ldflags, "-T", c.Target.LinkerScript)
+	}
+	if c.Target.Linker == "wasm-ld" && c.Scheduler() == "none" && c.Options.StackSize != 0 {
+		ldflags = append(ldflags, "-z", fmt.Sprintf("stack-size=%d", c.Options.StackSize))
 	}
 	ldflags = append(ldflags, c.Options.ExtLDFlags...)
 

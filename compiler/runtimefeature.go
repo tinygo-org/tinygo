@@ -28,7 +28,7 @@ func (b *builder) markRuntimeFeatureUse(call *ssa.CallCommon) {
 
 	marker := b.mod.NamedFunction(markerName)
 	if marker.IsNil() {
-		marker = llvm.AddFunction(b.mod, markerName, llvm.FunctionType(b.ctx.VoidType(), nil, false))
+		marker = llvm.AddFunction(b.mod, markerName, llvm.FunctionType(b.void, nil, false))
 	}
 	b.CreateCall(marker.GlobalValueType(), marker, nil, "")
 }

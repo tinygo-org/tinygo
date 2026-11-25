@@ -13,6 +13,11 @@ import (
 
 func fixCommand(t *testing.T, dir string, args ...string) (int, string) {
 	t.Helper()
+	return fixCommandEnv(t, dir, nil, args...)
+}
+
+func fixCommandEnv(t *testing.T, dir string, env []string, args ...string) (int, string) {
+	t.Helper()
 	root, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -20,6 +25,7 @@ func fixCommand(t *testing.T, dir string, args ...string) (int, string) {
 	cmd := exec.Command(os.Args[0], append([]string{"test-main", "fix"}, args...)...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "TINYGOROOT="+root, "GOWORK=off", "GOFLAGS=")
+	cmd.Env = append(cmd.Env, env...)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		return 0, string(output)
@@ -140,6 +146,27 @@ func TestFixExcludesUnbuildableTargetTests(t *testing.T) {
 	if status != 1 || !strings.Contains(output, "+var X any") ||
 		strings.Contains(output, "missingTargetAPI") {
 		t.Fatalf("fix without tests status=%d:\n%s", status, output)
+	}
+}
+
+func TestFixLibcHeaders(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":  "module example.com/libc\n\ngo 1.25.0\n",
+		"libc.go": "package libc\n\n// #include <stdint.h>\nimport \"C\"\n",
+		"x.go":    "package libc\n\nvar X interface{}\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Use an empty cache so that no earlier build has created the libc headers.
+	env := []string{"XDG_CACHE_HOME=" + t.TempDir()}
+	status, output := fixCommandEnv(t, dir, env, "-target=cortex-m-qemu", "-diff", "-any")
+	if status != 1 || !strings.Contains(output, "+var X any") {
+		t.Fatalf("status=%d:\n%s", status, output)
 	}
 }
 

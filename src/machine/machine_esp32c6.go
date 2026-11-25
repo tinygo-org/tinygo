@@ -18,7 +18,10 @@ const cpuInterruptFromPin = 6
 
 // CPU interrupts 3, 4 and 7 are bound to the CLINT and cannot be used.
 // See ESP-IDF esp_hw_support/port/esp32c6/esp_cpu_intr.c.
-const cpuInterruptFromUART = 13
+const (
+	cpuInterruptFromUART0 = 13
+	cpuInterruptFromUART1 = 14
+)
 
 // CPUFrequency returns the current CPU frequency of the chip.
 // Currently it is a fixed frequency but it may allow changing in the future.
@@ -144,8 +147,6 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	}
 }
 
-func initI2CExt1Clock() {}
-
 // outFunc returns the FUNCx_OUT_SEL_CFG register used for configuring the
 // output function selection.
 func (p Pin) outFunc() *volatile.Register32 {
@@ -153,7 +154,7 @@ func (p Pin) outFunc() *volatile.Register32 {
 }
 
 func (p Pin) pinReg() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.PIN0)) + uintptr(p)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.PIN0), uintptr(p)*4))
 }
 
 // inFunc returns the FUNCy_IN_SEL_CFG register used for configuring the input
@@ -282,6 +283,11 @@ func setupPinInterrupt() error {
 	}).Enable()
 }
 
+func init() {
+	UART0.interrupt = interrupt.New(cpuInterruptFromUART0, _UART0.serveInterrupt)
+	UART1.interrupt = interrupt.New(cpuInterruptFromUART1, _UART1.serveInterrupt)
+}
+
 var (
 	DefaultUART = UART0
 
@@ -290,85 +296,51 @@ var (
 	UART1  = &_UART1
 	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
 
-	onceUart            = sync.Once{}
 	errSamePins         = errors.New("UART: invalid pin combination")
 	errWrongUART        = errors.New("UART: unsupported UARTn")
 	errWrongBitSize     = errors.New("UART: invalid data size")
 	errWrongStopBitSize = errors.New("UART: invalid bit size")
 )
 
-type UART struct {
-	Bus                  *esp.UART_Type
-	Buffer               *RingBuffer
-	ParityErrorDetected  bool // set when parity error detected
-	DataErrorDetected    bool // set when data corruption detected
-	DataOverflowDetected bool // set when data overflow detected in UART FIFO buffer or RingBuffer
-}
-
-const (
-	defaultDataBits = 8
-	defaultStopBit  = 1
-	defaultParity   = ParityNone
-
-	uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
-		esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
-		esp.UART_INT_ENA_FRM_ERR_INT_ENA |
-		esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA |
-		esp.UART_INT_ENA_GLITCH_DET_INT_ENA
-
-	pplClockFreq = 80e6
-)
+const uartClockFreq = 80_000_000 // PLL_F80M_CLK, PCR SCLK_SEL 1. See ESP-IDF hal/esp32c6/include/hal/uart_ll.h uart_ll_set_sclk.
 
 type registerSet struct {
+	cpuInterrupt     uint32
 	interruptMapReg  *volatile.Register32
 	gpioMatrixSignal uint32
 }
 
-func (uart *UART) Configure(config UARTConfig) error {
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
-	if uart.Bus == esp.UART0 && config.TX == 0 && config.RX == 0 {
-		// Default UART0 pins. See ESP-IDF soc/esp32c6/include/soc/uart_pins.h.
-		config.TX = GPIO16
-		config.RX = GPIO17
-	}
-	if config.TX == config.RX {
-		return errSamePins
-	}
-	switch {
-	case uart.Bus == esp.UART0:
-		return uart.configure(config, registerSet{
+func busFor(bus *esp.UART_Type) registerSet {
+	switch bus {
+	case esp.UART0:
+		return registerSet{
+			cpuInterrupt:     cpuInterruptFromUART0,
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART0_INTR_MAP,
 			gpioMatrixSignal: 6,
-		})
-	case uart.Bus == esp.UART1:
-		return uart.configure(config, registerSet{
+		}
+	case esp.UART1:
+		return registerSet{
+			cpuInterrupt:     cpuInterruptFromUART1,
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART1_INTR_MAP,
 			gpioMatrixSignal: 9,
-		})
+		}
+	default:
+		return registerSet{}
 	}
-	return errWrongUART
 }
 
 func (uart *UART) configure(config UARTConfig, regs registerSet) error {
-	initUARTClock(uart.Bus)
-
 	// - disable TX/RX clock to make sure the UART transmitter or receiver is not at work during configuration
 	uart.Bus.SetCLK_CONF_TX_SCLK_EN(0)
 	uart.Bus.SetCLK_CONF_RX_SCLK_EN(0)
 
-	// - default clock source: 1=XTAL_CLK, 2=RC_FAST_CLK, 3=FOSC_CLK
-	//   On C6, SCLK_SEL=1 selects XTAL (40 MHz). Use FOSC (80 MHz) for
-	//   better baud-rate accuracy.
-	uart.Bus.SetCLK_CONF_SCLK_SEL(3) // FOSC_CLK (80 MHz)
 	// reset divisor of the divider via UART_SCLK_DIV_NUM, UART_SCLK_DIV_A, and UART_SCLK_DIV_B
 	uart.Bus.SetCLK_CONF_SCLK_DIV_NUM(0)
 	uart.Bus.SetCLK_CONF_SCLK_DIV_A(0)
 	uart.Bus.SetCLK_CONF_SCLK_DIV_B(0)
 
 	uart.SetBaudRate(config.BaudRate)
-	uart.SetFormat(defaultDataBits, defaultStopBit, defaultParity)
+	uart.setFormat(defaultDataBits, defaultStopBit, defaultParity)
 
 	// - set UART mode
 	uart.Bus.SetRS485_CONF_RS485_EN(0)
@@ -382,7 +354,7 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 	uart.Bus.SetREG_UPDATE(1)
 
 	uart.setupPins(config, regs)
-	uart.configureInterrupt(regs.interruptMapReg)
+	uart.configureInterrupt(regs)
 	uart.enableTransmitter()
 	uart.enableReceiver()
 
@@ -392,13 +364,15 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 	return nil
 }
 
-func (uart *UART) SetFormat(dataBits, stopBits int, parity UARTParity) error {
-	if dataBits < 5 {
-		return errWrongBitSize
+// uartSync copies the configuration registers into the UART core clock domain.
+// See ESP-IDF hal/esp32c6/include/hal/uart_ll.h uart_ll_update.
+func uartSync(bus *esp.UART_Type) {
+	bus.SetREG_UPDATE(1)
+	for bus.GetREG_UPDATE() != 0 {
 	}
-	if stopBits > 1 {
-		return errWrongStopBitSize
-	}
+}
+
+func (uart *UART) setFormat(dataBits, stopBits int, parity UARTParity) {
 	// - data length
 	uart.Bus.SetCONF0_BIT_NUM(uint32(dataBits - 5))
 	// - stop bit
@@ -414,10 +388,9 @@ func (uart *UART) SetFormat(dataBits, stopBits int, parity UARTParity) error {
 		uart.Bus.SetCONF0_PARITY_EN(1)
 		uart.Bus.SetCONF0_PARITY(1)
 	}
-	return nil
 }
 
-func initUARTClock(bus *esp.UART_Type) {
+func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 	// On ESP32-C6, UART clock is controlled via PCR (Peripheral Clock Reset).
 	switch bus {
 	case esp.UART0:
@@ -427,7 +400,7 @@ func initUARTClock(bus *esp.UART_Type) {
 		esp.PCR.SetUART0_CONF_UART0_RST_EN(1)
 		esp.PCR.SetUART0_CONF_UART0_RST_EN(0)
 		bus.SetCLK_CONF_RST_CORE(0)
-		// Configure SCLK divisor in PCR
+		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_SEL(1)
 		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_NUM(0)
 		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_A(0)
 		esp.PCR.SetUART0_SCLK_CONF_UART0_SCLK_DIV_B(0)
@@ -438,6 +411,7 @@ func initUARTClock(bus *esp.UART_Type) {
 		esp.PCR.SetUART1_CONF_UART1_RST_EN(1)
 		esp.PCR.SetUART1_CONF_UART1_RST_EN(0)
 		bus.SetCLK_CONF_RST_CORE(0)
+		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_SEL(1)
 		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_NUM(0)
 		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_A(0)
 		esp.PCR.SetUART1_SCLK_CONF_UART1_SCLK_DIV_B(0)
@@ -449,10 +423,7 @@ func initUARTClock(bus *esp.UART_Type) {
 }
 
 func (uart *UART) SetBaudRate(baudRate uint32) {
-	// based on esp-idf
-	max_div := uint32((1 << 12) - 1)
-	sclk_div := (pplClockFreq + (max_div * baudRate) - 1) / (max_div * baudRate)
-	clk_div := (pplClockFreq << 4) / (baudRate * sclk_div)
+	clk_div, sclk_div := uartDividers(baudRate)
 	uart.Bus.SetCLKDIV(clk_div >> 4)
 	uart.Bus.SetCLKDIV_FRAG(clk_div & 0xf)
 	// On C6, the SCLK divisor is in the PCR register.
@@ -464,100 +435,28 @@ func (uart *UART) SetBaudRate(baudRate uint32) {
 	}
 }
 
-func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
-	config.RX.Configure(PinConfig{Mode: PinInputPullup})
-	config.TX.Configure(PinConfig{Mode: PinInputPullup})
+func uartEnableTX(pin Pin) {}
 
-	// link TX with GPIO signal X (technical reference manual, GPIO matrix)
-	if config.InvertTX {
-		config.TX.outFunc().Set(regs.gpioMatrixSignal | esp.GPIO_FUNC_OUT_SEL_CFG_INV_SEL)
-	} else {
-		config.TX.outFunc().Set(regs.gpioMatrixSignal)
-	}
-	// link RX with GPIO signal X and route signals via GPIO matrix
-	if config.InvertRX {
-		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX) | esp.GPIO_FUNC_IN_SEL_CFG_IN_INV_SEL)
-	} else {
-		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX))
-	}
+func uartSetTXFIFORST(bus *esp.UART_Type, value uint32) {
+	bus.SetCONF0_TXFIFO_RST(value)
 }
 
-func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) {
-	// Disable all UART interrupts
-	uart.Bus.INT_ENA.ClearBits(0x0ffff)
-
-	intrMapReg.Set(cpuInterruptFromUART)
-	onceUart.Do(func() {
-		_ = interrupt.New(cpuInterruptFromUART, func(i interrupt.Interrupt) {
-			UART0.serveInterrupt(0)
-			UART1.serveInterrupt(1)
-		}).Enable()
-	})
+func uartSetRXFIFORST(bus *esp.UART_Type, value uint32) {
+	bus.SetCONF0_RXFIFO_RST(value)
 }
 
-func (uart *UART) serveInterrupt(num int) {
-	// get interrupt status
-	interrutFlag := uart.Bus.INT_ST.Get()
-	if (interrutFlag & uartInterrupts) == 0 {
-		return
+// GetRNG returns 32-bit random numbers from the ESP32-C6 true random number generator.
+// The noise sources are RC_FAST_CLK and the SAR ADC, ESP32-C6 TRM v1.1 chapter 22.
+func GetRNG() (ret uint32, err error) {
+	if esp.LP_PERI.GetCLK_EN_RNG_CK_EN() == 0 {
+		esp.LP_PERI.SetCLK_EN_RNG_CK_EN(1)
 	}
-
-	// block UART interrupts while processing
-	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
-
-	if interrutFlag&esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA > 0 {
-		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
-			b := uart.Bus.GetFIFO_RXFIFO_RD_BYTE()
-			if !uart.Buffer.Put(byte(b & 0xff)) {
-				uart.DataOverflowDetected = true
-			}
-		}
+	if esp.LP_CLKRST.GetCLK_TO_HP_ICG_HP_FOSC() == 0 {
+		esp.LP_CLKRST.SetCLK_TO_HP_ICG_HP_FOSC(1)
 	}
-	if interrutFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA > 0 {
-		uart.ParityErrorDetected = true
+	if esp.PCR.GetSARADC_CLKM_CONF_SARADC_CLKM_EN() == 0 {
+		esp.PCR.SetSARADC_CONF_SARADC_REG_CLK_EN(1)
+		esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1)
 	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA {
-		uart.DataErrorDetected = true
-	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA {
-		uart.DataOverflowDetected = true
-	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA {
-		uart.DataErrorDetected = true
-	}
-
-	// Clear the UART interrupt status
-	uart.Bus.INT_CLR.SetBits(interrutFlag)
-	uart.Bus.INT_CLR.ClearBits(interrutFlag)
-	// Enable interrupts
-	uart.Bus.INT_ENA.Set(uartInterrupts)
+	return esp.LP_PERI.GetRNG_DATA(), nil
 }
-
-const uart_empty_thresh_default = 10
-
-func (uart *UART) enableTransmitter() {
-	uart.Bus.SetCONF0_TXFIFO_RST(1)
-	uart.Bus.SetCONF0_TXFIFO_RST(0)
-	uart.Bus.SetCONF1_TXFIFO_EMPTY_THRHD(uart_empty_thresh_default)
-}
-
-func (uart *UART) enableReceiver() {
-	uart.Bus.SetCONF0_RXFIFO_RST(1)
-	uart.Bus.SetCONF0_RXFIFO_RST(0)
-	uart.Bus.SetCONF1_RXFIFO_FULL_THRHD(1)
-	uart.Bus.SetINT_ENA_RXFIFO_FULL_INT_ENA(1)
-	uart.Bus.SetINT_ENA_FRM_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_PARITY_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_GLITCH_DET_INT_ENA(1)
-	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
-}
-
-func (uart *UART) writeByte(b byte) error {
-	for (uart.Bus.STATUS.Get()&esp.UART_STATUS_TXFIFO_CNT_Msk)>>esp.UART_STATUS_TXFIFO_CNT_Pos >= 128 {
-		// Wait until there is space in the transmit buffer.
-	}
-	uart.Bus.FIFO.Set(uint32(b))
-	return nil
-}
-
-func (uart *UART) flush() {}

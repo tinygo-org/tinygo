@@ -43,6 +43,9 @@ func Normalize(s string) string {
 	// older LLVM matches the golden files.
 	s = lifetimeSizeArgRe.ReplaceAllString(s, "$1")
 
+	// LLVM 22 renamed the wasm32-unknown-wasi triple to wasm32-unknown-wasip1.
+	s = strings.ReplaceAll(s, `target triple = "wasm32-unknown-wasi"`, `target triple = "wasm32-unknown-wasip1"`)
+
 	return s
 }
 

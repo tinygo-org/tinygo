@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -83,7 +83,7 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 
 	// Create a builder, to insert instructions that could not be evaluated at
 	// compile time.
-	r.builder = mod.Context().NewBuilder()
+	r.builder = mod.NewBuilder()
 	defer r.builder.Dispose()
 
 	// Create a dummy alloca in the entry block that we can set the insert point
@@ -106,7 +106,7 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 	// }
 	// This function gets a list of these call instructions.
 	var initCalls []llvm.Value
-	for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+	for inst := range llvmutil.Instructions(bb) {
 		if inst == dummy {
 			continue
 		}
@@ -158,6 +158,7 @@ func Run(mod llvm.Module, timeout time.Duration, maxLoopIterations int, debug bo
 		for index, obj := range mem.objects {
 			r.objects[index] = obj
 		}
+		llvmutil.ReadFunctionUsageAttributes(initAll).Merge(mem.attributes).Apply(initAll)
 	}
 	r.pkgName = ""
 
@@ -237,7 +238,7 @@ func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug 
 
 	// Create a builder, to insert instructions that could not be evaluated at
 	// compile time.
-	r.builder = mod.Context().NewBuilder()
+	r.builder = mod.NewBuilder()
 	defer r.builder.Dispose()
 	r.builder.SetInsertPointAtEnd(entry)
 
@@ -293,6 +294,7 @@ func RunFunc(fn llvm.Value, timeout time.Duration, maxLoopIterations int, debug 
 	// Finalize: remove the old init function and replace it with the new
 	// (.init.tmp) function.
 	r.builder.CreateRetVoid()
+	pkgMem.attributes.Apply(newFn)
 	fnName := fn.Name()
 	fn.ReplaceAllUsesWith(newFn)
 	fn.EraseFromParentAsFunction()

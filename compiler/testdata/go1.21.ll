@@ -1,7 +1,7 @@
 ; ModuleID = 'go1.21.go'
 source_filename = "go1.21.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
-target triple = "wasm32-unknown-wasi"
+target triple = "wasm32-unknown-wasip1"
 
 %runtime._string = type { ptr, i32 }
 
@@ -87,7 +87,7 @@ entry:
 declare double @llvm.minimum.f64(double, double) #2
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.minString(ptr readonly %a.data, i32 %a.len, ptr readonly %b.data, i32 %b.len, ptr %context) unnamed_addr #1 {
+define hidden %runtime._string @main.minString(ptr readonly %a.data, i32 range(i32 0, -2147483648) %a.len, ptr readonly %b.data, i32 range(i32 0, -2147483648) %b.len, ptr %context) unnamed_addr #1 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1
@@ -101,7 +101,7 @@ entry:
   ret %runtime._string %5
 }
 
-declare i1 @runtime.stringLess(ptr readonly, i32, ptr readonly, i32, ptr) #0
+declare i1 @runtime.stringLess(ptr readonly, i32 range(i32 0, -2147483648), ptr readonly, i32 range(i32 0, -2147483648), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i32 @main.maxInt(i32 %a, i32 %b, ptr %context) unnamed_addr #1 {
@@ -134,7 +134,7 @@ entry:
 declare float @llvm.maximum.f32(float, float) #2
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.maxString(ptr readonly %a.data, i32 %a.len, ptr readonly %b.data, i32 %b.len, ptr %context) unnamed_addr #1 {
+define hidden %runtime._string @main.maxString(ptr readonly %a.data, i32 range(i32 0, -2147483648) %a.len, ptr readonly %b.data, i32 range(i32 0, -2147483648) %b.len, ptr %context) unnamed_addr #1 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1
@@ -149,9 +149,9 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.clearSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.clearSlice(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
-  %0 = shl i32 %s.len, 2
+  %0 = shl nuw i32 %s.len, 2
   call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
   ret void
 }
@@ -160,7 +160,7 @@ entry:
 declare void @llvm.memset.p0.i32(ptr writeonly captures(none), i8, i32, i1 immarg) #3
 
 ; Function Attrs: nounwind
-define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }

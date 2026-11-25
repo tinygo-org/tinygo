@@ -1,6 +1,6 @@
 {
-    "inherits": ["cortex-m4"],
-    "build-tags": [ "stm32wle5","stm32wlx", "stm32"],
+    "inherits": ["stm32wlx"],
+    "build-tags": ["stm32wle5"],
     "extra-files": [
       "src/device/stm32/stm32wle5.s"
     ],

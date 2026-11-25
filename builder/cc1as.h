@@ -14,13 +14,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Config/llvm-config.h"
+
 /// Helper class for representing a single invocation of the assembler.
 struct AssemblerInvocation {
   /// @name Target Options
   /// @{
 
   /// The name of the target triple to assemble for.
+#if LLVM_VERSION_MAJOR >= 22
   llvm::Triple Triple;
+#else
+  std::string Triple;
+#endif
 
   /// If given, the name of the target CPU to determine which instructions
   /// are legal.
@@ -142,7 +148,11 @@ struct AssemblerInvocation {
 
 public:
   AssemblerInvocation() {
+#if LLVM_VERSION_MAJOR >= 22
     Triple = llvm::Triple();
+#else
+    Triple = "";
+#endif
     NoInitialTextSection = 0;
     InputFile = "-";
     OutputPath = "-";

@@ -1,7 +1,7 @@
 package descriptor
 
 import (
-	"internal/binary"
+	"internal/byteorder"
 )
 
 const (
@@ -25,7 +25,7 @@ func (d ConfigurationType) Type(v uint8) {
 }
 
 func (d ConfigurationType) TotalLength(v uint16) {
-	binary.LittleEndian.PutUint16(d.data[2:4], v)
+	byteorder.LEPutUint16(d.data[2:4], v)
 }
 
 func (d ConfigurationType) NumInterfaces(v uint8) {

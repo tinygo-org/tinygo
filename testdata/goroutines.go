@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,13 +52,13 @@ func main() {
 
 	time.Sleep(2 * time.Millisecond)
 
-	var x int
+	var x atomic.Int32
 	go func() {
 		time.Sleep(2 * time.Millisecond)
-		x = 1
+		x.Store(1)
 	}()
 	time.Sleep(time.Second / 2)
-	println("closure go call result:", x)
+	println("closure go call result:", x.Load())
 
 	time.Sleep(2 * time.Millisecond)
 
@@ -190,7 +191,7 @@ func testGoOnBuiltins() {
 		println("error: expected closed channel to return 0, false")
 	}
 
-	// Test delete builtin.
+	// Test delete builtin. This intentionally races under Go's race detector.
 	m := map[string]int{"foo": 3}
 	go delete(m, "foo")
 	time.Sleep(time.Millisecond)

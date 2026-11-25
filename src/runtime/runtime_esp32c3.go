@@ -34,7 +34,9 @@ func main() {
 	// to protect against stack overflows. See
 	// esp_cpu_configure_region_protection in ESP-IDF.
 
-	// Disable Timer 0 watchdog.
+	// Disable Timer 0 watchdog. Unlock it first, as ESP-IDF does in
+	// bootloader_support/src/bootloader_init.c bootloader_config_wdt.
+	esp.TIMG0.WDTWPROTECT.Set(0x50D83AA1)
 	esp.TIMG0.WDTCONFIG0.Set(0)
 
 	// Disable RTC watchdog.
@@ -77,13 +79,6 @@ func main() {
 func init() {
 	// Initialize UART.
 	machine.InitSerial()
-}
-
-func abort() {
-	// lock up forever
-	for {
-		riscv.Asm("wfi")
-	}
 }
 
 // interruptInit initialize the interrupt controller and called from runtime once.

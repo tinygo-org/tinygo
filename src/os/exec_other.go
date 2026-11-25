@@ -9,6 +9,8 @@ var (
 	Kill      Signal = syscall.SIGKILL
 )
 
+type processState struct{}
+
 func findProcess(pid int) (*Process, error) {
 	return &Process{Pid: pid}, nil
 }
@@ -16,6 +18,14 @@ func findProcess(pid int) (*Process, error) {
 func (p *Process) release() error {
 	p.Pid = -1
 	return nil
+}
+
+func (p *Process) wait() (*ProcessState, error) {
+	return nil, ErrNotImplemented
+}
+
+func (p *Process) signal(sig Signal) error {
+	return ErrNotImplemented
 }
 
 func forkExec(_ string, _ []string, _ *ProcAttr) (pid int, err error) {

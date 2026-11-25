@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"sort"
 
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -140,7 +141,7 @@ func (c *context) getFunctionABIWithReceiver(sig *types.Signature, exported, int
 // ValidateWasmFunctionParameters checks the final LLVM module before the
 // WebAssembly backend expands aggregate parameters into scalar values.
 func ValidateWasmFunctionParameters(mod llvm.Module) error {
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		if fn.IsDeclaration() && fn.FirstUse().IsNil() {
 			continue
 		}
@@ -164,7 +165,7 @@ func ValidateWasmFunctionParameters(mod llvm.Module) error {
 func (c *context) getLLVMResultType(sig *types.Signature) llvm.Type {
 	switch sig.Results().Len() {
 	case 0:
-		return c.ctx.VoidType()
+		return c.void
 	case 1:
 		return c.getLLVMType(sig.Results().At(0).Type())
 	default:
@@ -299,7 +300,7 @@ func (c *context) getLLVMFunctionType(typ *types.Signature) llvm.Type {
 		// memory. Returning void avoids that expansion and cannot be demoted
 		// again. Keep the result pointer first so the context remains last.
 		paramTypes = append(paramTypes, c.dataPtrType)
-		returnType = c.ctx.VoidType()
+		returnType = c.void
 	}
 	for _, param := range abi.params {
 		if param.indirect {
@@ -339,5 +340,6 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 
 	// Create the closure.
 	_, fn := b.getFunction(f)
+	b.markReflectFunctionValue(f, fn)
 	return b.createFuncValue(fn, context, f.Signature), nil
 }

@@ -239,9 +239,8 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// archs:
 		//    return (errorFlag != 0) ? -resultCode : resultCode;
 		// At least on QEMU with the O32 ABI, the error code is always positive.
-		zero := llvm.ConstInt(b.uintptrType, 0, false)
-		isError := b.CreateICmp(llvm.IntNE, errorFlag, zero, "")
-		negativeResult := b.CreateSub(zero, resultCode, "")
+		isError := b.CreateICmp(llvm.IntNE, errorFlag, b.uintptrZero, "")
+		negativeResult := b.CreateSub(b.uintptrZero, resultCode, "")
 		result := b.CreateSelect(isError, negativeResult, resultCode, "")
 		return result, nil
 
@@ -266,16 +265,17 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		//         err = -syscallResult
 		//     }
 		//     return syscallResult, 0, err
-		zero := llvm.ConstInt(b.uintptrType, 0, false)
-		inrange1 := b.CreateICmp(llvm.IntSLT, syscallResult, llvm.ConstInt(b.uintptrType, 0, false), "")
+		inrange1 := b.CreateICmp(llvm.IntSLT, syscallResult, b.uintptrZero, "")
 		inrange2 := b.CreateICmp(llvm.IntSGT, syscallResult, llvm.ConstInt(b.uintptrType, 0xfffffffffffff000, true), "") // -4096
 		hasError := b.CreateAnd(inrange1, inrange2, "")
-		errResult := b.CreateSelect(hasError, b.CreateSub(zero, syscallResult, ""), zero, "syscallError")
+		errResult := b.CreateSelect(hasError, b.CreateSub(b.uintptrZero, syscallResult, ""), b.uintptrZero, "syscallError")
 		retval := llvm.Undef(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
 		retval = b.CreateInsertValue(retval, syscallResult, 0, "")
-		retval = b.CreateInsertValue(retval, zero, 1, "")
+		retval = b.CreateInsertValue(retval, b.uintptrZero, 1, "")
 		retval = b.CreateInsertValue(retval, errResult, 2, "")
 		return retval, nil
+	case "darwin":
+		return b.createDarwinSyscall(call)
 	case "windows":
 		// On Windows, syscall.Syscall* is basically just a function pointer
 		// call. This is complicated in gc because of stack switching and the
@@ -300,7 +300,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// Prepare some functions that will be called later.
 		setLastError := b.mod.NamedFunction("SetLastError")
 		if setLastError.IsNil() {
-			llvmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.ctx.Int32Type()}, false)
+			llvmType := llvm.FunctionType(b.void, []llvm.Type{b.i32}, false)
 			setLastError = llvm.AddFunction(b.mod, "SetLastError", llvmType)
 			if isI386 {
 				setLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
@@ -308,7 +308,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		}
 		getLastError := b.mod.NamedFunction("GetLastError")
 		if getLastError.IsNil() {
-			llvmType := llvm.FunctionType(b.ctx.Int32Type(), nil, false)
+			llvmType := llvm.FunctionType(b.i32, nil, false)
 			getLastError = llvm.AddFunction(b.mod, "GetLastError", llvmType)
 			if isI386 {
 				getLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
@@ -326,7 +326,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		// On windows/386, we also need to save/restore the stack pointer. I'm
 		// not entirely sure why this is needed, but without it these calls
 		// change the stack pointer leading to a crash soon after.
-		setLastErrorCall := b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.ctx.Int32Type())}, "")
+		setLastErrorCall := b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.i32)}, "")
 		var sp llvm.Value
 		if isI386 {
 			setLastErrorCall.SetInstructionCallConv(llvm.X86StdcallCallConv)
@@ -341,7 +341,7 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		if isI386 {
 			errResult.SetInstructionCallConv(llvm.X86StdcallCallConv)
 		}
-		if b.uintptrType != b.ctx.Int32Type() {
+		if b.uintptrType != b.i32 {
 			errResult = b.CreateZExt(errResult, b.uintptrType, "err.uintptr")
 		}
 
@@ -354,6 +354,73 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+b.GOOS+"/"+b.GOARCH)
 	}
+}
+
+// createDarwinSyscall emits a direct system call. The carry flag is set on error.
+// See src/syscall/asm_darwin_arm64.s and asm_darwin_amd64.s in upstream Go.
+func (b *builder) createDarwinSyscall(call *ssa.CallCommon) (llvm.Value, error) {
+	var regs []string
+	var asm, clobbers string
+	num := b.getValue(call.Args[0], getPos(call))
+	switch b.GOARCH {
+	case "arm64":
+		regs = []string{"x16", "x0", "x1", "x2", "x3", "x4", "x5"}
+		asm = "svc #0x80\ncset $0, cs"
+		clobbers = ",~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x17},~{cc},~{memory}"
+	case "amd64":
+		regs = []string{"rax", "rdi", "rsi", "rdx", "r10", "r8", "r9"}
+		asm = "syscall\nsetc ${0:b}\nmovzbq ${0:b}, $0"
+		clobbers = ",~{rcx},~{r11},~{flags},~{memory}"
+		num = b.CreateAdd(num, llvm.ConstInt(b.uintptrType, 0x2000000, false), "")
+	default:
+		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOARCH for darwin syscall: "+b.GOARCH)
+	}
+	if len(call.Args)-1 > len(regs)-1 {
+		return llvm.Value{}, b.makeError(call.Pos(), "too many arguments for darwin syscall")
+	}
+
+	// All registers are outputs because the kernel may change them. Only
+	// the registers that carry arguments are inputs, like upstream.
+	args := []llvm.Value{num}
+	for _, arg := range call.Args[1:] {
+		args = append(args, b.getValue(arg, getPos(call)))
+	}
+	var constraints strings.Builder
+	constraints.WriteString("=&r")
+	for _, reg := range regs {
+		constraints.WriteString(",={" + reg + "}")
+	}
+	argTypes := make([]llvm.Type, len(args))
+	for i := range args {
+		constraints.WriteString("," + strconv.Itoa(i+1))
+		argTypes[i] = b.uintptrType
+	}
+	constraints.WriteString(clobbers)
+	resultTypes := make([]llvm.Type, len(regs)+1)
+	for i := range resultTypes {
+		resultTypes[i] = b.uintptrType
+	}
+	fnType := llvm.FunctionType(b.ctx.StructType(resultTypes, false), argTypes, false)
+	target := llvm.InlineAsm(fnType, asm, constraints.String(), true, false, 0, false)
+	result := b.CreateCall(fnType, target, args, "")
+
+	// Results are in x0 and x1 on arm64, rax and rdx on amd64.
+	r1Index, r2Index := 2, 3
+	if b.GOARCH == "amd64" {
+		r1Index, r2Index = 1, 4
+	}
+	carry := b.CreateExtractValue(result, 0, "")
+	r1 := b.CreateExtractValue(result, r1Index, "")
+	r2 := b.CreateExtractValue(result, r2Index, "")
+
+	// On error return -1, 0, errno.
+	isError := b.CreateICmp(llvm.IntNE, carry, b.uintptrZero, "")
+	allOnes := llvm.ConstAllOnes(b.uintptrType)
+	retval := llvm.Undef(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
+	retval = b.CreateInsertValue(retval, b.CreateSelect(isError, allOnes, r1, ""), 0, "")
+	retval = b.CreateInsertValue(retval, b.CreateSelect(isError, b.uintptrZero, r2, ""), 1, "")
+	retval = b.CreateInsertValue(retval, b.CreateSelect(isError, r1, b.uintptrZero, ""), 2, "")
+	return retval, nil
 }
 
 // createSyscalln emits instructions for the syscall.syscalln function on
@@ -380,13 +447,13 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 		argsSlice := b.getValue(call.Args[2], getPos(call))
 		argsPtr = b.CreateExtractValue(argsSlice, 0, "args.data")
 	} else {
-		argsPtr = llvm.ConstNull(b.dataPtrType)
+		argsPtr = b.dataPtrNull
 	}
 
 	// Prepare SetLastError and GetLastError.
 	setLastError := b.mod.NamedFunction("SetLastError")
 	if setLastError.IsNil() {
-		llvmType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.ctx.Int32Type()}, false)
+		llvmType := llvm.FunctionType(b.void, []llvm.Type{b.i32}, false)
 		setLastError = llvm.AddFunction(b.mod, "SetLastError", llvmType)
 		if isI386 {
 			setLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
@@ -394,7 +461,7 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 	}
 	getLastError := b.mod.NamedFunction("GetLastError")
 	if getLastError.IsNil() {
-		llvmType := llvm.FunctionType(b.ctx.Int32Type(), nil, false)
+		llvmType := llvm.FunctionType(b.i32, nil, false)
 		getLastError = llvm.AddFunction(b.mod, "GetLastError", llvmType)
 		if isI386 {
 			getLastError.SetFunctionCallConv(llvm.X86StdcallCallConv)
@@ -427,7 +494,7 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 		var paramTypes []llvm.Type
 		for j := 0; j < i; j++ {
 			gep := b.CreateInBoundsGEP(b.uintptrType, argsPtr, []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(j), false),
+				llvm.ConstInt(b.i32, uint64(j), false),
 			}, "")
 			arg := b.CreateLoad(b.uintptrType, gep, "")
 			params = append(params, arg)
@@ -435,7 +502,7 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 		}
 
 		// SetLastError(0)
-		setCall := b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.ctx.Int32Type())}, "")
+		setCall := b.CreateCall(setLastError.GlobalValueType(), setLastError, []llvm.Value{llvm.ConstNull(b.i32)}, "")
 		var sp llvm.Value
 		if isI386 {
 			setCall.SetInstructionCallConv(llvm.X86StdcallCallConv)
@@ -455,7 +522,7 @@ func (b *builder) createSyscalln(call *ssa.CallCommon) (llvm.Value, error) {
 		if isI386 {
 			errResult.SetInstructionCallConv(llvm.X86StdcallCallConv)
 		}
-		if b.uintptrType != b.ctx.Int32Type() {
+		if b.uintptrType != b.i32 {
 			errResult = b.CreateZExt(errResult, b.uintptrType, "err.uintptr")
 		}
 
@@ -489,7 +556,7 @@ func (b *builder) createRawSyscallNoError(call *ssa.CallCommon) (llvm.Value, err
 	}
 	retval := llvm.ConstNull(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType}, false))
 	retval = b.CreateInsertValue(retval, syscallResult, 0, "")
-	retval = b.CreateInsertValue(retval, llvm.ConstInt(b.uintptrType, 0, false), 1, "")
+	retval = b.CreateInsertValue(retval, b.uintptrZero, 1, "")
 	return retval, nil
 }
 
@@ -602,7 +669,7 @@ func (b *builder) createDarwinImportedFunctionAddr(name string, pos token.Pos) l
 			b.addError(pos, "cgo_import_dynamic remote symbol "+name+" is already a global variable")
 			return llvm.Value{}
 		}
-		llvmFnType := llvm.FunctionType(b.ctx.VoidType(), nil, false)
+		llvmFnType := llvm.FunctionType(b.void, nil, false)
 		llvmFn = llvm.AddFunction(b.mod, name, llvmFnType)
 	}
 	return b.CreatePtrToInt(llvmFn, b.uintptrType, "")

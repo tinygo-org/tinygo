@@ -4,7 +4,6 @@ package machine
 
 import (
 	"device/rp"
-	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -19,26 +18,6 @@ const (
 	// is48Pin notes whether the chip is RP2040 with 32 pins or RP2350 with 48 pins.
 	is48Pin = _NUMBANK0_GPIOS == 48
 )
-
-// UART on the RP2040
-var (
-	UART0  = &_UART0
-	_UART0 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART0,
-	}
-
-	UART1  = &_UART1
-	_UART1 = UART{
-		Buffer: NewRingBuffer(),
-		Bus:    rp.UART1,
-	}
-)
-
-func init() {
-	UART0.Interrupt = interrupt.New(rp.IRQ_UART0_IRQ, _UART0.handleInterrupt)
-	UART1.Interrupt = interrupt.New(rp.IRQ_UART1_IRQ, _UART1.handleInterrupt)
-}
 
 //go:linkname machineInit runtime.machineInit
 func machineInit() {
@@ -126,14 +105,6 @@ func boolToBit(a bool) uint32 {
 		return 1
 	}
 	return 0
-}
-
-//go:inline
-func u32max(a, b uint32) uint32 {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 //go:inline

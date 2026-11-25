@@ -713,6 +713,9 @@ func scanConservative(addr, len uintptr) {
 	for len >= unsafe.Sizeof(addr) {
 		root := *(*uintptr)(unsafe.Pointer(addr))
 		markRoot(addr, root)
+		if gcScanSwapped {
+			markRoot(addr, root<<8|root>>8)
+		}
 
 		addr += unsafe.Alignof(addr)
 		len -= unsafe.Alignof(addr)
@@ -723,6 +726,25 @@ func markCurrentGoroutineStack(sp uintptr) {
 	// This could be optimized by only marking the stack area that's currently
 	// in use.
 	markRoot(0, sp)
+}
+
+// stackBodySize rounds size up to the size that alloc really provides. The last
+// word of such an object sits right before its header.
+func stackBodySize(size uintptr) uintptr {
+	header := unsafe.Sizeof(objHeader{})
+	return (size+header+bytesPerBlock-1)&^(bytesPerBlock-1) - header
+}
+
+// markLiveStack scans the live part of the current goroutine stack now, before
+// later calls on this stack overwrite the registers pushed by scanCurrentStack.
+func markLiveStack(sp uintptr) {
+	if isOnHeap(sp) {
+		last := blockFromAddr(sp).findHead()
+		end := last.address() + bytesPerBlock - unsafe.Sizeof(objHeader{})
+		if end > sp {
+			scanConservative(sp, end-sp)
+		}
+	}
 }
 
 // finishMark finishes the marking process by scanning all heap objects on scanList.
@@ -740,6 +762,10 @@ func finishMark() {
 			// This object doesn't contain any pointers.
 			// This is a fast path for objects like make([]int, 4096).
 			// It skips the length calculation.
+			if obj.layout.isStack() {
+				// A goroutine stack, of which only parts are roots.
+				stackReached(uintptr(unsafe.Pointer(obj)))
+			}
 			continue
 		}
 

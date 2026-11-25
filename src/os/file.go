@@ -294,6 +294,9 @@ type fd interface {
 
 // Fd returns the file handle referencing the open file.
 func (f *File) Fd() uintptr {
+	if f == nil {
+		return ^uintptr(0)
+	}
 	handle, ok := f.handle.(fd)
 	if ok {
 		return handle.Fd()

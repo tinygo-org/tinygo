@@ -2,7 +2,11 @@ package compiler
 
 import (
 	"flag"
+	"go/ast"
+	"go/importer"
+	"go/parser"
 	"go/scanner"
+	"go/token"
 	"go/types"
 	"os"
 	"slices"
@@ -11,9 +15,9 @@ import (
 	"testing"
 
 	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
 	"github.com/tinygo-org/tinygo/internal/ir"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
@@ -26,6 +30,150 @@ type testCase struct {
 	file      string
 	target    string
 	scheduler string
+}
+
+func TestChannelLayouts(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	target, err := compileopts.LoadTarget(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := &compileopts.Config{Options: options, Target: target}
+	program, err := loader.Load(config, "./testdata/channel.go", types.Config{
+		Sizes: types.SizesFor("gc", "386"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := program.Parse(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"channelOp", "chanSelectState"} {
+		runtimeType := program.Packages["runtime"].Pkg.Scope().Lookup(name).Type().Underlying().(*types.Struct)
+		reflectType := program.Packages["internal/reflectlite"].Pkg.Scope().Lookup(name).Type().Underlying().(*types.Struct)
+		if runtimeType.NumFields() != reflectType.NumFields() {
+			t.Fatalf("%s field counts differ: runtime=%d, reflectlite=%d", name, runtimeType.NumFields(), reflectType.NumFields())
+		}
+		runtimeFields := make([]*types.Var, runtimeType.NumFields())
+		reflectFields := make([]*types.Var, reflectType.NumFields())
+		for i := range runtimeFields {
+			runtimeFields[i] = runtimeType.Field(i)
+			reflectFields[i] = reflectType.Field(i)
+			if runtimeFields[i].Name() != reflectFields[i].Name() {
+				t.Errorf("%s field %d names differ: runtime=%s, reflectlite=%s", name, i, runtimeFields[i].Name(), reflectFields[i].Name())
+			}
+		}
+		for _, test := range []struct {
+			arch  string
+			sizes types.Sizes
+		}{
+			{"avr", &types.StdSizes{WordSize: 2, MaxAlign: 1}},
+			{"386", types.SizesFor("gc", "386")},
+			{"amd64", types.SizesFor("gc", "amd64")},
+		} {
+			t.Run(name+"/"+test.arch, func(t *testing.T) {
+				sizes := test.sizes
+				if sizes.Sizeof(runtimeType) != sizes.Sizeof(reflectType) || sizes.Alignof(runtimeType) != sizes.Alignof(reflectType) {
+					t.Error("runtime and reflectlite struct sizes or alignments differ")
+				}
+				if !slices.Equal(sizes.Offsetsof(runtimeFields), sizes.Offsetsof(reflectFields)) {
+					t.Error("runtime and reflectlite field offsets differ")
+				}
+				for i := range runtimeFields {
+					if sizes.Sizeof(runtimeFields[i].Type()) != sizes.Sizeof(reflectFields[i].Type()) {
+						t.Errorf("field %s sizes differ", runtimeFields[i].Name())
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestReflectGenericTypeName(t *testing.T) {
+	const source = `package names
+import "unsafe"
+type Box[T any] struct{}
+type Pair[A, B any] struct{}
+type Token int
+type Alias = Token
+type Int = int
+var byteBox Box[byte]
+var runeBox Box[rune]
+var anyBox Box[any]
+var aliasBox Box[Alias]
+var pointerBox Box[*Alias]
+var arrayBox Box[[2]byte]
+var mapBox Box[map[Alias][]rune]
+var channelBox Box[chan (<-chan Alias)]
+var sendBox Box[chan<- Alias]
+var receiveBox Box[<-chan Alias]
+var functionBox Box[func(value Alias, rest ...byte) (result []rune, err error)]
+var emptyStructBox Box[struct{}]
+var blankBox Box[struct { _ int }]
+var structBox Box[struct { X byte; value Alias ` + "`json:\"value\"`" + ` }]
+var embeddedBox Box[struct { Token }]
+var embeddedPointerBox Box[struct { *Token }]
+var embeddedAliasBox Box[struct { Int }]
+var embeddedGenericBox Box[struct { Box[int] }]
+var interfaceBox Box[interface { z(); Exported(value int) bool; a() }]
+var unsafeBox Box[unsafe.Pointer]
+var pairBox Pair[Alias, Box[byte]]
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "names.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := types.Config{Importer: importer.Default()}
+	pkg, err := config.Check("example.com/names", fset, []*ast.File{file}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, want string
+	}{
+		{"byteBox", "Box[uint8]"},
+		{"runeBox", "Box[int32]"},
+		{"anyBox", "Box[interface {}]"},
+		{"aliasBox", "Box[example.com/names.Token]"},
+		{"pointerBox", "Box[*example.com/names.Token]"},
+		{"arrayBox", "Box[[2]uint8]"},
+		{"mapBox", "Box[map[example.com/names.Token][]int32]"},
+		{"channelBox", "Box[chan (<-chan example.com/names.Token)]"},
+		{"sendBox", "Box[chan<- example.com/names.Token]"},
+		{"receiveBox", "Box[<-chan example.com/names.Token]"},
+		{"functionBox", "Box[func(example.com/names.Token, ...uint8) ([]int32, error)]"},
+		{"emptyStructBox", "Box[struct {}]"},
+		{"blankBox", "Box[struct { example.com/names._ int }]"},
+		{"structBox", `Box[struct { X uint8; example.com/names.value example.com/names.Token "json:\"value\"" }]`},
+		{"embeddedBox", "Box[struct { example.com/names.Token }]"},
+		{"embeddedPointerBox", "Box[struct { *example.com/names.Token }]"},
+		{"embeddedAliasBox", "Box[struct { Int = int }]"},
+		{"embeddedGenericBox", "Box[struct { Box = example.com/names.Box[int] }]"},
+		{"interfaceBox", "Box[interface { Exported(int) bool; example.com/names.a(); example.com/names.z() }]"},
+		{"unsafeBox", "Box[unsafe.Pointer]"},
+		{"pairBox", "Pair[example.com/names.Token,example.com/names.Box[uint8]]"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			typ := pkg.Scope().Lookup(test.name).Type().(*types.Named)
+			if got := reflectTypeName(typ); got != test.want {
+				t.Errorf("name = %q, want %q", got, test.want)
+			}
+		})
+	}
+	box := pkg.Scope().Lookup("Box").Type()
+	for _, path := range []string{"example.com/one", "example.com/two"} {
+		fieldPkg := types.NewPackage(path, "same")
+		field := types.NewVar(token.NoPos, fieldPkg, "value", types.Typ[types.Int])
+		arg := types.NewStruct([]*types.Var{field}, nil)
+		instance, err := types.Instantiate(nil, box, []types.Type{arg}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := reflectTypeName(instance.(*types.Named)), "Box[struct { "+path+".value int }]"; got != want {
+			t.Errorf("name = %q, want %q", got, want)
+		}
+	}
 }
 
 // Basic tests for the compiler. Build some Go files and compare the output with
@@ -45,6 +193,7 @@ func TestCompiler(t *testing.T) {
 		{"pointer.go", "", ""},
 		{"slice.go", "", ""},
 		{"rangeloop.go", "", ""},
+		{"clearloop.go", "", ""},
 		{"string.go", "", ""},
 		{"float.go", "", ""},
 		{"interface.go", "", ""},
@@ -60,6 +209,9 @@ func TestCompiler(t *testing.T) {
 		{"large.go", "", ""},
 		{"go1.20.go", "", ""},
 		{"go1.21.go", "", ""},
+		{"lenrange.go", "", ""},
+		{"lenrange.go", "arduino", ""},
+		{"lenrange-wasmexport.go", "", ""},
 	}
 	if goMinor >= 27 {
 		tests = append(tests, testCase{"go1.27.go", "", ""})
@@ -130,6 +282,29 @@ func TestCompiler(t *testing.T) {
 
 			if diff := ir.Diff(string(expected), mod.String()); diff != "" {
 				t.Errorf("output does not match expected output (re-run with -update to regenerate):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestWasmExportBasicBlockContext(t *testing.T) {
+	for _, scheduler := range []string{"none", "asyncify"} {
+		t.Run(scheduler, func(t *testing.T) {
+			mod, errs := testCompilePackage(t, &compileopts.Options{
+				Target:    "wasm",
+				Scheduler: scheduler,
+			}, "lenrange-wasmexport.go")
+			if len(errs) != 0 {
+				t.Fatal(errs)
+			}
+			defer mod.Dispose()
+
+			fn := mod.NamedFunction("main.exportString#wasmexport")
+			if fn.IsNil() {
+				t.Fatal("wasm export wrapper not found")
+			}
+			if got := fn.EntryBasicBlock().AsValue().Type().Context(); got != mod.Context() {
+				t.Fatalf("wasm export entry block context = %v, want %v", got, mod.Context())
 			}
 		})
 	}
@@ -266,6 +441,61 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 		}
 		if paramType := fn.GlobalValueType().ParamTypes()[0]; paramType.TypeKind() != llvm.PointerTypeKind {
 			t.Errorf("%s aggregate parameter was promoted to %s", name, paramType)
+		}
+	}
+}
+
+func TestLargeAggregateZeroStore(t *testing.T) {
+	mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "aggregate-storage.go")
+	defer mod.Dispose()
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"main.resetStorage", "main.resetArray"} {
+		ir := mod.NamedFunction(name).String()
+		if strings.Contains(ir, "store %main.storageValue") || strings.Contains(ir, "store [4096 x i8]") {
+			t.Errorf("%s stores a full zero aggregate", name)
+		}
+		if !strings.Contains(ir, "@llvm.memset.") {
+			t.Errorf("%s does not zero storage with memset", name)
+		}
+	}
+	if ir := mod.NamedFunction("main.resetStorage").String(); !strings.Contains(ir, "i32 4100, i1 false") {
+		t.Error("struct reset does not zero the full storage")
+	}
+	if ir := mod.NamedFunction("main.resetArray").String(); !strings.Contains(ir, "i32 4096, i1 false") {
+		t.Error("array reset does not zero the full storage")
+	}
+	if ir := mod.NamedFunction("main.resetSmallArray").String(); !strings.Contains(ir, "store [4 x i8] zeroinitializer") {
+		t.Error("small zero aggregate no longer uses a direct store")
+	}
+}
+
+func TestLargeAggregateDebugValue(t *testing.T) {
+	mod, errs := testCompilePackageWithDebug(t, &compileopts.Options{Target: "wasm"}, "aggregate-storage.go", true)
+	defer mod.Dispose()
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	ir := mod.NamedFunction("main.copyStorage").String()
+	if strings.Contains(ir, "load %main.storageValue") {
+		t.Error("debug value loads the full aggregate")
+	}
+	if !strings.Contains(ir, "!DIExpression(DW_OP_deref)") {
+		t.Error("indirect debug value has no dereference expression")
+	}
+	if !strings.Contains(ir, "@llvm.memcpy.") {
+		t.Error("aggregate value does not preserve its copy")
+	}
+	for line := range strings.Lines(mod.NamedFunction("main.compareArray").String()) {
+		if strings.Contains(line, "#dbg_value(ptr %src,") && strings.Contains(line, "DW_OP_deref") {
+			t.Errorf("debug value reads through the source pointer, which changes later: %s", strings.TrimSpace(line))
 		}
 	}
 }
@@ -503,7 +733,7 @@ func TestValidateWasmFunctionParameters(t *testing.T) {
 			defer ctx.Dispose()
 			mod := ctx.NewModule("test")
 			defer mod.Dispose()
-			builder := ctx.NewBuilder()
+			builder := mod.NewBuilder()
 			defer builder.Dispose()
 
 			paramTypes := make([]llvm.Type, test.params)
@@ -758,4 +988,78 @@ func testCompilePackageWithDebug(t *testing.T, options *compileopts.Options, fil
 	ssaPkg := program.Package(pkg.Pkg)
 	ssaPkg.Build()
 	return CompilePackage(file, pkg, ssaPkg, machine, compilerConfig, false)
+}
+
+func TestReflectMethodRetentionMarkers(t *testing.T) {
+	mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "reflect-method-dce.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	for _, tc := range []struct {
+		name  string
+		names string
+		all   bool
+	}{
+		{"constantValue", "Keep", false},
+		{"constantType", "Keep", false},
+		{"multipleNames", "Keep Other", false},
+		{"invalidName", "", false},
+		{"unexportedName", "", false},
+		{"dynamicValue", "", true},
+		{"dynamicType", "", true},
+		{"indexedValue", "", true},
+		{"indexedType", "", true},
+		{"invokedMethod", "", true},
+		{"promotedMethodByName", "Keep", false},
+		{"boundValue", "", true},
+		{"escapedValue", "", true},
+		{"escapedType", "", true},
+		{"methodExpression", "", true},
+		{"iterateValue", "", true},
+		{"iterateType", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fn := mod.NamedFunction("main." + tc.name)
+			if fn.IsNil() {
+				t.Fatal("missing lookup function")
+			}
+			all := fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-method")
+			names := fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-method-names")
+			if got := !all.IsNil(); got != tc.all {
+				t.Errorf("all-method marker = %v, want %v", got, tc.all)
+			}
+			if !tc.all && names.IsNil() {
+				t.Fatal("missing constant-name marker")
+			}
+			if fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-makefunc").IsNil() {
+				t.Error("missing bound-method adapter marker")
+			}
+			if !names.IsNil() {
+				if got := names.GetStringValue(); got != tc.names {
+					t.Errorf("method names = %q, want %q", got, tc.names)
+				}
+			}
+		})
+	}
+
+	wrappers := 0
+	for fn := range llvmutil.Functions(mod) {
+		if !strings.HasPrefix(fn.Name(), "(struct{reflect.Value}).") || fn.BasicBlocksCount() == 0 {
+			continue
+		}
+		wrappers++
+		for _, kind := range []string{"tinygo-reflect-method", "tinygo-reflect-method-names", "tinygo-reflect-makefunc"} {
+			if !fn.GetStringAttributeAtIndex(-1, kind).IsNil() {
+				t.Errorf("reflection wrapper %s has %s", fn.Name(), kind)
+			}
+		}
+	}
+	if wrappers == 0 {
+		t.Fatal("no reflection wrappers were compiled")
+	}
 }

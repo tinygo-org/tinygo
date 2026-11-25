@@ -31,7 +31,7 @@ func (p Pin) Configure(config PinConfig) {
 	port, mask := p.getPortMask()
 	// The DDRx register can be found by subtracting one from the PORTx
 	// register, as this appears to be the case for many (most? all?) AVR chips.
-	ddr := (*volatile.Register8)(unsafe.Pointer(uintptr(unsafe.Pointer(port)) - 1))
+	ddr := (*volatile.Register8)(unsafe.Add(unsafe.Pointer(port), -1))
 	if config.Mode == PinOutput {
 		// set output bit
 		ddr.SetBits(mask)
@@ -72,7 +72,7 @@ func (p Pin) Get() bool {
 	// As noted above, the PINx register is always two registers below the PORTx
 	// register, so we can find it simply by subtracting two from the PORTx
 	// register address.
-	pin := (*volatile.Register8)(unsafe.Pointer(uintptr(unsafe.Pointer(port)) - 2)) // PINA, PINB, etc
+	pin := (*volatile.Register8)(unsafe.Add(unsafe.Pointer(port), -2)) // PINA, PINB, etc
 	return (pin.Get() & mask) > 0
 }
 

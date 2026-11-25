@@ -10,10 +10,10 @@ import (
 type T struct{ x int }
 
 var (
-	ranCount     int
-	clearedRan   int
-	f1Ran        int
-	f2Ran        int
+	ranCount     atomic.Int32
+	clearedRan   atomic.Int32
+	f1Ran        atomic.Int32
+	f2Ran        atomic.Int32
 	sink         int
 	interiorDone [4]atomic.Int32
 )
@@ -47,21 +47,21 @@ func scrubStack(depth int) int {
 //go:noinline
 func allocAndDrop() {
 	p := &T{x: 42}
-	runtime.SetFinalizer(p, func(*T) { ranCount++ })
+	runtime.SetFinalizer(p, func(*T) { ranCount.Add(1) })
 }
 
 //go:noinline
 func allocRegisterClear() {
 	p := &T{x: 1}
-	runtime.SetFinalizer(p, func(*T) { clearedRan++ })
+	runtime.SetFinalizer(p, func(*T) { clearedRan.Add(1) })
 	runtime.SetFinalizer(p, nil)
 }
 
 //go:noinline
 func allocRegisterReplace() {
 	p := &T{x: 2}
-	runtime.SetFinalizer(p, func(*T) { f1Ran++ })
-	runtime.SetFinalizer(p, func(*T) { f2Ran++ })
+	runtime.SetFinalizer(p, func(*T) { f1Ran.Add(1) })
+	runtime.SetFinalizer(p, func(*T) { f2Ran.Add(1) })
 }
 
 // testFires checks that a finalizer runs after its object is collected, and
@@ -71,12 +71,12 @@ func allocRegisterReplace() {
 // finalizers already ran inline during GC).
 func testFires() {
 	allocAndDrop()
-	for i := 0; i < 100 && ranCount == 0; i++ {
+	for i := 0; i < 100 && ranCount.Load() == 0; i++ {
 		sink += scrubStack(40)
 		runtime.GC()
 		runtime.Gosched()
 	}
-	if ranCount == 0 {
+	if ranCount.Load() == 0 {
 		panic("finalizer: never ran after object became unreachable")
 	}
 	for i := 0; i < 100; i++ {
@@ -84,7 +84,7 @@ func testFires() {
 		runtime.GC()
 		runtime.Gosched()
 	}
-	if ranCount != 1 {
+	if ranCount.Load() != 1 {
 		panic("finalizer: ran more than once")
 	}
 }
@@ -97,7 +97,7 @@ func testClear() {
 		runtime.GC()
 		runtime.Gosched()
 	}
-	if clearedRan != 0 {
+	if clearedRan.Load() != 0 {
 		panic("finalizer: ran after being cleared with nil")
 	}
 }
@@ -106,15 +106,15 @@ func testClear() {
 // one runs, and only once.
 func testReplace() {
 	allocRegisterReplace()
-	for i := 0; i < 100 && f2Ran == 0; i++ {
+	for i := 0; i < 100 && f2Ran.Load() == 0; i++ {
 		sink += scrubStack(40)
 		runtime.GC()
 		runtime.Gosched()
 	}
-	if f1Ran != 0 {
+	if f1Ran.Load() != 0 {
 		panic("finalizer: replaced finalizer f1 still ran")
 	}
-	if f2Ran != 1 {
+	if f2Ran.Load() != 1 {
 		panic("finalizer: replacement finalizer f2 did not run exactly once")
 	}
 }

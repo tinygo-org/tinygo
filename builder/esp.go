@@ -108,10 +108,37 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		segments = ramSegments
 
 	case "esp32s3":
+		// The DBUS cache window runs to 0x3E000000, but its upper half is
+		// reserved for PSRAM (targets/esp32s3.ld), which is never backed by
+		// flash. Only the DROM half below 0x3D000000 is flash-mapped.
 		var ramSegments []*espImageSegment
 		for _, seg := range segments {
-			if (seg.addr >= 0x3C000000 && seg.addr < 0x3E000000) ||
+			if (seg.addr >= 0x3C000000 && seg.addr < 0x3D000000) ||
 				(seg.addr >= 0x42000000 && seg.addr < 0x44000000) {
+				flashSegments = append(flashSegments, seg)
+			} else {
+				ramSegments = append(ramSegments, seg)
+			}
+		}
+		segments = ramSegments
+
+	case "esp32c6", "esp32h2":
+		// Flash window from SOC_IROM_LOW to SOC_IROM_HIGH in ESP-IDF soc.h.
+		var ramSegments []*espImageSegment
+		for _, seg := range segments {
+			if seg.addr >= 0x42000000 && seg.addr < 0x43000000 {
+				flashSegments = append(flashSegments, seg)
+			} else {
+				ramSegments = append(ramSegments, seg)
+			}
+		}
+		segments = ramSegments
+
+	case "esp32p4":
+		// Flash window from SOC_IROM_LOW to SOC_IROM_HIGH in ESP-IDF soc.h.
+		var ramSegments []*espImageSegment
+		for _, seg := range segments {
+			if seg.addr >= 0x40000000 && seg.addr < 0x44000000 {
 				flashSegments = append(flashSegments, seg)
 			} else {
 				ramSegments = append(ramSegments, seg)
@@ -185,7 +212,7 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 					return fmt.Errorf("ESP32-S3: multiple IROM segments")
 				}
 				esp32s3IromSegment = seg
-			case seg.addr >= 0x3C000000 && seg.addr < 0x3E000000:
+			case seg.addr >= 0x3C000000 && seg.addr < 0x3D000000:
 				if esp32s3DromSegment != nil {
 					return fmt.Errorf("ESP32-S3: multiple DROM segments")
 				}
@@ -328,6 +355,7 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		"esp32c6": 0x000d,
 		"esp32h2": 0x0010,
 		"esp32s3": 0x0009,
+		"esp32p4": 0x0012,
 	}[chip]
 
 	// SPI flash speed/size byte (byte 3 of header):
@@ -340,11 +368,12 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 		"esp32c6": 0x10, // 80MHz=0x00, 2MB=0x10 (C6 uses different freq encoding)
 		"esp32h2": 0x1f, // 48MHz=0x0F, 2MB=0x10
 		"esp32s3": 0x1f, // 80MHz=0x0F, 2MB=0x10
+		"esp32p4": 0x10, // 40MHz=0x00, 2MB=0x10 (ESP32P4ROM inherits ESP32 flash-frequency encoding)
 	}[chip]
 
 	// Image header.
 	switch chip {
-	case "esp32", "esp32c3", "esp32s3", "esp32c6", "esp32h2":
+	case "esp32", "esp32c3", "esp32s3", "esp32c6", "esp32h2", "esp32p4":
 		// Header format:
 		// https://github.com/espressif/esp-idf/blob/v4.3/components/bootloader_support/include/esp_app_format.h#L71
 		// Note: not adding a SHA256 hash as the binary is modified by
@@ -502,6 +531,26 @@ func makeESPFirmwareImage(infile, outfile, format string) error {
 			offset := int(seg.addr & 0x7FFFFF)
 			if outf.Len() > offset {
 				return fmt.Errorf("ESP32-C3: segment at 0x%x overlaps the previous one", seg.addr)
+			}
+			outf.Write(make([]byte, offset-outf.Len()))
+			outf.Write(seg.data)
+		}
+	}
+
+	// The startup code maps flash 1:1 at windowBase and this image starts at
+	// flash offset imageStart. See src/device/esp/esp32c6.S and esp32p4.S.
+	if chip == "esp32c6" || chip == "esp32h2" || chip == "esp32p4" {
+		windowBase, imageStart := uint32(0x42000000), 0
+		if chip == "esp32p4" {
+			windowBase, imageStart = 0x40000000, 0x2000
+		}
+		sort.SliceStable(flashSegments, func(i, j int) bool {
+			return flashSegments[i].addr < flashSegments[j].addr
+		})
+		for _, seg := range flashSegments {
+			offset := int(seg.addr-windowBase) - imageStart
+			if outf.Len() > offset {
+				return fmt.Errorf("%s: segment at 0x%x overlaps the previous one", chip, seg.addr)
 			}
 			outf.Write(make([]byte, offset-outf.Len()))
 			outf.Write(seg.data)

@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
@@ -94,6 +95,17 @@ type PackageJSON struct {
 	}
 }
 
+// PackageJSONFlag returns a go list -json flag naming only the fields of
+// PackageJSON. Plain -json makes go1.28 run cgo to compute Stale (#6357).
+func PackageJSONFlag() string {
+	t := reflect.TypeFor[PackageJSON]()
+	names := make([]string, t.NumField())
+	for i := range names {
+		names[i] = t.Field(i).Name
+	}
+	return "-json=" + strings.Join(names, ",")
+}
+
 // Package holds a loaded package, its imports, and its parsed files.
 type Package struct {
 	PackageJSON
@@ -159,7 +171,7 @@ func load(config *compileopts.Config, inputs []string, typeChecker types.Config,
 	}
 
 	// List the dependencies of this package, in raw JSON format.
-	extraArgs := []string{"-json", "-deps", "-e"}
+	extraArgs := []string{PackageJSONFlag(), "-deps", "-e"}
 	if config.TestConfig.CompileTestBinary {
 		extraArgs = append(extraArgs, "-test")
 	}

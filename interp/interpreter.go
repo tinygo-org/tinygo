@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -22,6 +23,7 @@ const DefaultMaxInterpBlockEntries = 1000
 
 func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames []value, depth int) (value, memoryView, *Error) {
 	mem := memoryView{r: r, parent: parentMem}
+	mem.attributes = mem.attributes.Merge(fn.attributes)
 	frames = slices.Grow(frames, len(fn.locals))[:len(fn.locals)] // make room for this call's slots; a reallocation copies nothing
 	locals, frames := frames, frames[len(fn.locals):]             // take this call's slots from the head, keep the free space after them for children
 	clear(locals)                                                 // these slots may hold values from an earlier sibling
@@ -293,53 +295,6 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 			}
 			callFn := r.getFunction(fnPtr.llvmValue(&mem))
 			switch {
-			case callFn.name == "sync/atomic.SwapInt32" || callFn.name == "sync/atomic.SwapInt64" ||
-				callFn.name == "sync/atomic.SwapUint32" || callFn.name == "sync/atomic.SwapUint64" ||
-				callFn.name == "sync/atomic.SwapUintptr" || callFn.name == "sync/atomic.SwapPointer" ||
-				callFn.name == "sync/atomic.CompareAndSwapInt32" || callFn.name == "sync/atomic.CompareAndSwapInt64" ||
-				callFn.name == "sync/atomic.CompareAndSwapUint32" || callFn.name == "sync/atomic.CompareAndSwapUint64" ||
-				callFn.name == "sync/atomic.CompareAndSwapUintptr" || callFn.name == "sync/atomic.CompareAndSwapPointer":
-				ptr, err := operands[1].asPointer(r)
-				if err != nil {
-					return nil, mem, r.errorAt(inst, err)
-				}
-				if mem.hasExternalLoadOrStore(ptr) {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
-						return nil, mem, err
-					}
-					continue
-				}
-				old := mem.load(ptr, operands[2].len(r))
-				if old == nil {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
-						return nil, mem, err
-					}
-					continue
-				}
-				newValue := operands[2]
-				compare := strings.HasPrefix(callFn.name, "sync/atomic.CompareAndSwap")
-				if compare {
-					equal, err := r.interpretICmp(old, operands[2], llvm.IntEQ)
-					if err != nil {
-						return nil, mem, r.errorAt(inst, err)
-					}
-					if !equal {
-						locals[inst.localIndex] = literalValue{uint8(0)}
-						continue
-					}
-					newValue = operands[3]
-				}
-				if !mem.store(newValue, ptr) {
-					if err := r.runAtRuntime(fn, inst, locals, &mem, depth); err != nil {
-						return nil, mem, err
-					}
-					continue
-				}
-				if compare {
-					locals[inst.localIndex] = literalValue{uint8(1)}
-				} else {
-					locals[inst.localIndex] = old
-				}
 			case callFn.name == "runtime.trackPointer":
 				// Allocas and such are created as globals, so don't need a
 				// runtime.trackPointer.
@@ -369,7 +324,7 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 				if err != nil {
 					return nil, mem, err
 				}
-			case callFn.name == "internal/task.Pause":
+			case callFn.name == "internal/task.Pause" || callFn.name == "internal/task.PauseLocked":
 				// Task scheduling isn't possible at compile time.
 				return nil, mem, r.rollbackAt(inst, "goroutine would block")
 			case callFn.name == "runtime.fastrand" || callFn.name == "runtime.fastrand64":
@@ -639,20 +594,18 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 
 				// Load the signature of the to-be-called function.
 				llvmFn := inst.llvmInst.CalledValue()
-				invokeAttr := llvmFn.GetStringAttributeAtIndex(-1, "tinygo-invoke")
-				invokeName := invokeAttr.GetStringValue()
+				invokeName := llvmutil.ReadInterfaceStub(llvmFn).Invoke
 				signature := r.mod.NamedGlobal(invokeName)
 
 				// Iterate through all methods, looking for the one method that
 				// should be returned.
-				numMethods := int(r.builder.CreateExtractValue(methodSet, 0, "").ZExtValue())
 				var method llvm.Value
-				for i := range numMethods {
-					methodSignatureAgg := r.builder.CreateExtractValue(methodSet, 1, "")
-					methodSignature := r.builder.CreateExtractValue(methodSignatureAgg, i, "")
-					if methodSignature == signature {
-						methodAgg := r.builder.CreateExtractValue(methodSet, 2, "")
-						method = r.builder.CreateExtractValue(methodAgg, i, "")
+				signatures := methodSet.AggregateElement(1)
+				methods := methodSet.AggregateElement(2)
+				for i := range int(methodSet.AggregateElement(0).ZExtValue()) {
+					if signatures.AggregateElement(i) == signature {
+						method = methods.AggregateElement(i)
+						break
 					}
 				}
 				if method.IsNil() {
@@ -765,6 +718,73 @@ func (r *runner) run(fn *function, params []value, parentMem *memoryView, frames
 					return nil, mem, err
 				}
 			}
+		case llvm.AtomicRMW:
+			ptr, err := operands[0].asPointer(r)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
+			val := operands[1]
+			size := val.len(r)
+			var old value
+			if !inst.llvmInst.IsVolatile() && !mem.hasExternalLoadOrStore(ptr) && (size == 1 || size == 2 || size == 4 || size == 8) {
+				old = mem.load(ptr, size)
+			}
+			if old == nil {
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
+				if err != nil {
+					return nil, mem, err
+				}
+				continue
+			}
+			result, ok := r.interpretAtomicRMW(llvm.AtomicRMWBinOp(operands[2].(literalValue).value.(uint8)), old, val)
+			if !ok || !mem.store(result, ptr) {
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
+				if err != nil {
+					return nil, mem, err
+				}
+				continue
+			}
+			if r.debug {
+				r.debugf(depth, "atomicrmw: %v -> %v", operands, old)
+			}
+			locals[inst.localIndex] = old
+		case llvm.AtomicCmpXchg:
+			ptr, err := operands[0].asPointer(r)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
+			var old value
+			if !inst.llvmInst.IsVolatile() && !mem.hasExternalLoadOrStore(ptr) {
+				old = mem.load(ptr, operands[1].len(r))
+			}
+			if old == nil {
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
+				if err != nil {
+					return nil, mem, err
+				}
+				continue
+			}
+			equal, err := r.interpretICmp(old, operands[1], llvm.IntEQ)
+			if err != nil {
+				return nil, mem, r.errorAt(inst, err)
+			}
+			if equal && !mem.store(operands[2], ptr) {
+				err := r.runAtRuntime(fn, inst, locals, &mem, depth)
+				if err != nil {
+					return nil, mem, err
+				}
+				continue
+			}
+			// The result is {old, success}.
+			result := newRawValue(uint32(operands[3].(literalValue).value.(uint64)))
+			copy(result.buf, old.asRawValue(r).buf)
+			if equal {
+				result.buf[operands[4].(literalValue).value.(uint64)] = 1
+			}
+			if r.debug {
+				r.debugf(depth, "cmpxchg: %v -> %v", operands, result)
+			}
+			locals[inst.localIndex] = result
 		case llvm.Alloca:
 			// Alloca normally allocates some stack memory. In the interpreter,
 			// it allocates a global instead.
@@ -1152,6 +1172,45 @@ func (r *runner) interpretICmp(lhs, rhs value, predicate llvm.IntPredicate) (boo
 	}
 }
 
+// interpretAtomicRMW returns the value an atomicrmw stores. It returns false
+// if the operation must be done at runtime.
+func (r *runner) interpretAtomicRMW(op llvm.AtomicRMWBinOp, old, val value) (value, bool) {
+	if op == llvm.AtomicRMWBinOpXchg {
+		return val, true
+	}
+	oldUint, valUint, err := uintOperands(r, old, val)
+	if err != nil {
+		return nil, false
+	}
+	oldInt, valInt, _ := intOperands(r, old, val)
+	var result uint64
+	switch op {
+	case llvm.AtomicRMWBinOpAdd:
+		result = oldUint + valUint
+	case llvm.AtomicRMWBinOpSub:
+		result = oldUint - valUint
+	case llvm.AtomicRMWBinOpAnd:
+		result = oldUint & valUint
+	case llvm.AtomicRMWBinOpNand:
+		result = ^(oldUint & valUint)
+	case llvm.AtomicRMWBinOpOr:
+		result = oldUint | valUint
+	case llvm.AtomicRMWBinOpXor:
+		result = oldUint ^ valUint
+	case llvm.AtomicRMWBinOpMax:
+		result = uint64(max(oldInt, valInt))
+	case llvm.AtomicRMWBinOpMin:
+		result = uint64(min(oldInt, valInt))
+	case llvm.AtomicRMWBinOpUMax:
+		result = max(oldUint, valUint)
+	case llvm.AtomicRMWBinOpUMin:
+		result = min(oldUint, valUint)
+	default:
+		return nil, false
+	}
+	return makeLiteralInt(result, int(val.len(r)*8)), true
+}
+
 func uintOperands(r *runner, lhs, rhs value) (uint64, uint64, error) {
 	lhsUint, err := lhs.Uint(r)
 	if err != nil {
@@ -1208,6 +1267,7 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 			return r.errorAt(inst, err)
 		}
 		result = r.builder.CreateLoad(inst.llvmInst.Type(), operands[0], inst.name)
+		result.SetAlignment(inst.llvmInst.Alignment())
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
 		}
@@ -1223,12 +1283,29 @@ func (r *runner) runAtRuntime(fn *function, inst instruction, locals []value, me
 			}
 		}
 		result = r.builder.CreateStore(operands[0], operands[1])
+		result.SetAlignment(inst.llvmInst.Alignment())
 		if inst.llvmInst.IsVolatile() {
 			result.SetVolatile(true)
 		}
 		if ordering := inst.llvmInst.Ordering(); ordering != llvm.AtomicOrderingNotAtomic {
 			result.SetOrdering(ordering)
 		}
+	case llvm.AtomicRMW, llvm.AtomicCmpXchg:
+		for _, op := range operands {
+			err := mem.markExternalStore(op)
+			if err != nil {
+				return r.errorAt(inst, err)
+			}
+		}
+		if inst.opcode == llvm.AtomicRMW {
+			op := llvm.AtomicRMWBinOp(inst.operands[2].(literalValue).value.(uint8))
+			result = r.builder.CreateAtomicRMW(op, operands[0], operands[1], inst.llvmInst.Ordering(), inst.llvmInst.IsAtomicSingleThread())
+		} else {
+			result = r.builder.CreateAtomicCmpXchg(operands[0], operands[1], operands[2], inst.llvmInst.CmpXchgSuccessOrdering(), inst.llvmInst.CmpXchgFailureOrdering(), inst.llvmInst.IsAtomicSingleThread())
+		}
+		result.SetName(inst.name)
+		result.SetVolatile(inst.llvmInst.IsVolatile())
+		result.SetAlignment(inst.llvmInst.Alignment())
 	case llvm.BitCast:
 		result = r.builder.CreateBitCast(operands[0], inst.llvmInst.Type(), inst.name)
 	case llvm.PtrToInt:

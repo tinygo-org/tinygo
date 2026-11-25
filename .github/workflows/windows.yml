@@ -141,6 +141,8 @@ jobs:
         run: make smoketest-quick TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-test-windows:
+    # Pull requests skip the stdlib tests to save Windows runners.
+    if: github.event_name != 'pull_request'
     runs-on: windows-2022
     needs: build-windows
     steps:
@@ -161,6 +163,7 @@ jobs:
         run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
 
   stdlib-wasi-test-windows:
+    if: github.event_name != 'pull_request'
     runs-on: windows-2022
     needs: build-windows
     steps:

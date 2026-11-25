@@ -324,6 +324,65 @@ func TestWasmLegacyExport(t *testing.T) {
 	checkOutput(t, "testdata/wasi-legacy.txt", output.Bytes())
 }
 
+// Test that calling a //go:wasmexport function does not leak its goroutine
+// stack.
+func TestWasmExportHeapInuse(t *testing.T) {
+	t.Parallel()
+
+	tmpdir := t.TempDir()
+	options := optionsFromTarget("wasip1", sema)
+	options.BuildMode = "c-shared"
+	buildConfig, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := builder.Build("testdata/wasmexport-heap.go", ".wasm", tmpdir, buildConfig)
+	if err != nil {
+		t.Fatal("failed to build binary:", err)
+	}
+	data, err := os.ReadFile(result.Binary)
+	if err != nil {
+		t.Fatal("could not read wasm binary: ", err)
+	}
+
+	ctx := context.Background()
+	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+	defer r.Close(ctx)
+	wasi_snapshot_preview1.MustInstantiate(ctx, r)
+	mod, err := r.InstantiateWithConfig(ctx, data, wazero.NewModuleConfig().WithStartFunctions())
+	if err != nil {
+		t.Fatal("could not instantiate wasm module:", err)
+	}
+	call := func(name string) uint64 {
+		fn := mod.ExportedFunction(name)
+		if fn == nil {
+			t.Fatalf("missing export %s", name)
+		}
+		results, err := fn.Call(ctx)
+		if err != nil {
+			t.Fatalf("failed to call %s: %v", name, err)
+		}
+		if len(results) > 0 {
+			return results[0]
+		}
+		return 0
+	}
+	call("_initialize")
+
+	before := call("heapInuse")
+	const calls = 1000
+	for i := 0; i < calls; i++ {
+		call("noop")
+	}
+	after := call("heapInuse")
+
+	// A leaked stack is at least a few KiB per call, so this allows for
+	// ordinary heap growth but not for 1000 leaked stacks.
+	if after > before+1<<20 {
+		t.Errorf("HeapInuse grew from %d to %d bytes after %d exports", before, after, calls)
+	}
+}
+
 // Test js.FuncOf (for syscall/js).
 // This test might be extended in the future to cover more cases in syscall/js.
 func TestWasmFuncOf(t *testing.T) {
@@ -464,31 +523,43 @@ func TestWASIPanicTraceback(t *testing.T) {
 		t.Skip("skipping test in short mode")
 	}
 
-	options := optionsFromTarget("wasip1", sema)
-	config, err := builder.NewConfig(&options)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, test := range []struct {
+		mode  string
+		frame string
+	}{
+		{mode: "indirect", frame: "main.panicHere"},
+		{mode: "direct", frame: "main.inlinePanic"},
+	} {
+		t.Run(test.mode, func(t *testing.T) {
+			options := optionsFromTarget("wasip1", sema)
+			options.GlobalValues = map[string]map[string]string{
+				"main": {"mode": test.mode},
+			}
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := builder.Build("testdata/panic-traceback.go", ".wasm", t.TempDir(), config)
+			if err != nil {
+				t.Fatal("failed to build binary:", err)
+			}
+			data, err := os.ReadFile(result.Binary)
+			if err != nil {
+				t.Fatal("failed to read binary:", err)
+			}
 
-	result, err := builder.Build("testdata/panic-traceback.go", ".wasm", t.TempDir(), config)
-	if err != nil {
-		t.Fatal("failed to build binary:", err)
-	}
-	data, err := os.ReadFile(result.Binary)
-	if err != nil {
-		t.Fatal("failed to read binary:", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
-	defer r.Close(ctx)
-	wasi_snapshot_preview1.MustInstantiate(ctx, r)
-	_, err = r.InstantiateWithConfig(ctx, data, wazero.NewModuleConfig())
-	if err == nil {
-		t.Fatal("program unexpectedly exited successfully")
-	}
-	if !strings.Contains(err.Error(), "main.panicHere") {
-		t.Fatalf("panic traceback does not contain main.panicHere:\n%s", err)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			r := wazero.NewRuntimeWithConfig(ctx, wazero.NewRuntimeConfigInterpreter())
+			defer r.Close(ctx)
+			wasi_snapshot_preview1.MustInstantiate(ctx, r)
+			_, err = r.InstantiateWithConfig(ctx, data, wazero.NewModuleConfig())
+			if err == nil {
+				t.Fatal("program unexpectedly exited successfully")
+			}
+			if !strings.Contains(err.Error(), test.frame) {
+				t.Fatalf("panic traceback does not contain %s:\n%s", test.frame, err)
+			}
+		})
 	}
 }

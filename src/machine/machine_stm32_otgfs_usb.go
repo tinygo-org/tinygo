@@ -4,6 +4,7 @@ package machine
 
 import (
 	"device/stm32"
+	"internal/byteorder"
 	"machine/usb"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -72,18 +73,18 @@ type usbPowerRegs struct {
 
 // otgInEP returns the IN endpoint registers for physical endpoint ep.
 func otgInEP(ep uint32) *usbInEndpointRegs {
-	return (*usbInEndpointRegs)(unsafe.Pointer(uintptr(unsafe.Pointer(stm32.OTG_FS_GLOBAL)) + 0x900 + uintptr(ep)*0x20))
+	return (*usbInEndpointRegs)(unsafe.Add(unsafe.Pointer(stm32.OTG_FS_GLOBAL), 0x900+uintptr(ep)*0x20))
 }
 
 // otgOutEP returns the OUT endpoint registers for physical endpoint ep.
 func otgOutEP(ep uint32) *usbOutEndpointRegs {
-	return (*usbOutEndpointRegs)(unsafe.Pointer(uintptr(unsafe.Pointer(stm32.OTG_FS_GLOBAL)) + 0xB00 + uintptr(ep)*0x20))
+	return (*usbOutEndpointRegs)(unsafe.Add(unsafe.Pointer(stm32.OTG_FS_GLOBAL), 0xB00+uintptr(ep)*0x20))
 }
 
 // otgDFIFO returns a volatile pointer to the data FIFO for physical endpoint ep.
 // DFIFO[ep] is located at 0x50001000 + ep*0x1000.
 func otgDFIFO(ep uint32) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer(uintptr(unsafe.Pointer(stm32.OTG_FS_GLOBAL)) + 0x1000 + uintptr(ep)*0x1000))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(stm32.OTG_FS_GLOBAL), 0x1000+uintptr(ep)*0x1000))
 }
 
 // DCFG bit positions and masks.
@@ -432,14 +433,8 @@ func handleRxFIFO() {
 			// 8-byte SETUP packet: read exactly 2 words from DFIFO[0].
 			w0 := otgDFIFO(0).Get()
 			w1 := otgDFIFO(0).Get()
-			usbSetupBuf[0] = byte(w0)
-			usbSetupBuf[1] = byte(w0 >> 8)
-			usbSetupBuf[2] = byte(w0 >> 16)
-			usbSetupBuf[3] = byte(w0 >> 24)
-			usbSetupBuf[4] = byte(w1)
-			usbSetupBuf[5] = byte(w1 >> 8)
-			usbSetupBuf[6] = byte(w1 >> 16)
-			usbSetupBuf[7] = byte(w1 >> 24)
+			byteorder.LEPutUint32(usbSetupBuf[0:], w0)
+			byteorder.LEPutUint32(usbSetupBuf[4:], w1)
 
 		case rxPktstsSetupDone:
 			// SETUP transaction complete: process the buffered SETUP packet.

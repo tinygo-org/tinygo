@@ -1,6 +1,6 @@
 {
-    "inherits": ["cortex-m4"],
-    "build-tags": ["nucleol476rg", "stm32l476", "stm32l4x6", "stm32l4", "stm32"],
+    "inherits": ["stm32l4"],
+    "build-tags": ["nucleol476rg", "stm32l476", "stm32l4x6"],
     "serial": "uart",
     "linkerscript": "targets/stm32l4x6.ld",
     "extra-files": [

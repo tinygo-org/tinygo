@@ -11,8 +11,9 @@ import (
 	"go/token"
 	"os"
 	"regexp"
+	"strings"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -40,7 +41,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
 	ctx := mod.Context()
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 
 	// Determine the maximum alignment on this platform.
@@ -54,11 +55,14 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 	}
 
 	for _, heapalloc := range heapallocs {
-		logAllocs := printAllocs != nil && printAllocs.MatchString(heapalloc.InstructionParent().Parent().Name())
+		logAllocs := printAllocs != nil
+		report := func(reason string) {
+			reportHeapAlloc(heapalloc, reason, printAllocs, logger)
+		}
 		if heapalloc.Operand(0).IsAConstantInt().IsNil() {
 			// Do not allocate variable length arrays on the stack.
 			if logAllocs {
-				logger(getPosition(heapalloc), "size is not constant")
+				report("size is not constant")
 			}
 			continue
 		}
@@ -67,8 +71,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 		if size > maxStackAlloc {
 			// The maximum size for a stack allocation.
 			if logAllocs {
-				logger(getPosition(heapalloc),
-					fmt.Sprintf("object size %d exceeds maximum stack allocation size %d", size, maxStackAlloc))
+				report(fmt.Sprintf("object size %d exceeds maximum stack allocation size %d", size, maxStackAlloc))
 			}
 			continue
 		}
@@ -85,27 +88,14 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 			continue
 		}
 
-		// In general the pattern is:
-		//     %0 = call i8* @runtime.alloc(i32 %size, i8* null)
-		//     %1 = bitcast i8* %0 to type*
-		//     (use %1 only)
-		// But the bitcast might sometimes be dropped when allocating an *i8.
-		// The 'bitcast' variable below is thus usually a bitcast of the
-		// heapalloc but not always.
-		bitcast := heapalloc // instruction that creates the value
-		if uses := getUses(heapalloc); len(uses) == 1 && !uses[0].IsABitCastInst().IsNil() {
-			// getting only bitcast use
-			bitcast = uses[0]
-		}
-
-		if at := valueEscapesAt(bitcast); !at.IsNil() {
+		if at := valueEscapesAt(heapalloc); !at.IsNil() {
 			if logAllocs {
 				atPos := getPosition(at)
 				msg := "escapes at unknown line"
 				if atPos.Line != 0 {
 					msg = fmt.Sprintf("escapes at line %d", atPos.Line)
 				}
-				logger(getPosition(heapalloc), msg)
+				report(msg)
 			}
 			continue
 		}
@@ -123,7 +113,7 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 
 		// Insert alloca in the entry block. Do it here so that mem2reg can
 		// promote it to a SSA value.
-		fn := bitcast.InstructionParent().Parent()
+		fn := heapalloc.InstructionParent().Parent()
 		builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
 		allocaType := llvm.ArrayType(mod.Context().Int8Type(), int(size))
 		alloca := builder.CreateAlloca(allocaType, "stackalloc")
@@ -131,16 +121,46 @@ func OptimizeAllocs(mod llvm.Module, printAllocs *regexp.Regexp, maxStackAlloc u
 
 		// Zero the allocation inside the block where the value was originally allocated.
 		zero := llvm.ConstNull(alloca.AllocatedType())
-		builder.SetInsertPointBefore(bitcast)
+		builder.SetInsertPointBefore(heapalloc)
 		store := builder.CreateStore(zero, alloca)
 		store.SetAlignment(alignment)
 
-		// Replace heap alloc bitcast with stack alloc bitcast.
-		bitcast.ReplaceAllUsesWith(alloca)
-		if heapalloc != bitcast {
-			bitcast.EraseFromParentAsInstruction()
-		}
+		// Replace heap alloc with stack alloc.
+		heapalloc.ReplaceAllUsesWith(alloca)
 		heapalloc.EraseFromParentAsInstruction()
+	}
+}
+
+// reportHeapAlloc logs a heap allocation if its function matches the regexp.
+// An allocation inside a runtime function is also logged at the calls to that
+// function from other packages, so for example append is reported at its line.
+func reportHeapAlloc(heapalloc llvm.Value, reason string, re *regexp.Regexp, logger func(token.Position, string)) {
+	fn := heapalloc.InstructionParent().Parent()
+	if re.MatchString(fn.Name()) {
+		logger(getPosition(heapalloc), reason)
+	}
+	if !strings.HasPrefix(fn.Name(), "runtime.") {
+		return
+	}
+	visited := map[llvm.Value]struct{}{fn: {}}
+	work := []llvm.Value{fn}
+	for len(work) > 0 {
+		callee := work[len(work)-1]
+		work = work[:len(work)-1]
+		for call := range llvmutil.Uses(callee) {
+			if call.IsACallInst().IsNil() || call.CalledValue() != callee {
+				continue
+			}
+			caller := call.InstructionParent().Parent()
+			if strings.HasPrefix(caller.Name(), "runtime.") {
+				if _, ok := visited[caller]; !ok {
+					visited[caller] = struct{}{}
+					work = append(work, caller)
+				}
+			} else if re.MatchString(caller.Name()) {
+				logger(getPosition(call), fmt.Sprintf("%s, allocated in %s", reason, fn.Name()))
+			}
+		}
 	}
 }
 
@@ -217,8 +237,7 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 		a.results[key] = result
 	}()
 
-	uses := getUses(value)
-	for _, use := range uses {
+	for use := range llvmutil.Uses(value) {
 		if use.IsAInstruction().IsNil() {
 			panic("expected instruction use")
 		}
@@ -227,8 +246,12 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 				return result
 			}
-		case llvm.BitCast:
-			// A bitcast escapes if the casted-to value escapes.
+		case llvm.PHI:
+			if use.InstructionParent().InCycle() {
+				return escapeResult{escapeAt: use}
+			}
+			fallthrough
+		case llvm.BitCast, llvm.Select:
 			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 				return result
 			}
@@ -241,11 +264,6 @@ func (a *escapeAnalysis) valueEscapesAt(value llvm.Value, allowReturn bool) (res
 				if !result.merge(a.valueEscapesAt(use, allowReturn)) {
 					return result
 				}
-			}
-		case llvm.Select:
-			// A select escapes if the selected value escapes.
-			if !result.merge(a.valueEscapesAt(use, allowReturn)) {
-				return result
 			}
 		case llvm.Load:
 			// Load does not escape.
@@ -295,7 +313,7 @@ func (a *escapeAnalysis) callValueEscapesAt(call, value llvm.Value, allowReturn 
 		}
 		matched = true
 		index := i + 1 // param attributes start at 1
-		nocapture := llvmutil.IsNoCapture(called.GetEnumAttributeAtIndex(index, kindNoCapture))
+		nocapture := llvmutil.CapturesAtMostNullness(called.GetEnumAttributeAtIndex(index, kindNoCapture))
 		returnedParam := !called.GetEnumAttributeAtIndex(index, kindReturned).IsNil()
 		if returnedParam {
 			result.returned = true

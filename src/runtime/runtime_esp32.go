@@ -25,9 +25,9 @@ func main() {
 	esp.RTC_CNTL.WDTWPROTECT.Set(0x050D83AA1)
 
 	// Disable both watchdog timers that are enabled by default on startup.
-	// Note that these watchdogs can be protected, but the ROM bootloader
-	// doesn't seem to protect them.
+	// Unlock TIMG0 first, see ESP32 TRM v5.9 section 11.3.3 Write Protection.
 	esp.RTC_CNTL.WDTCONFIG0.Set(0)
+	esp.TIMG0.WDTWPROTECT.Set(0x50D83AA1)
 	esp.TIMG0.WDTCONFIG0.Set(0)
 
 	// Switch SoC clock source to PLL (instead of the default which is XTAL).
@@ -53,6 +53,9 @@ func main() {
 	// faster.
 	clearbss()
 
+	// PSRAM needs the 80MHz APB clock set above. Only with the machine.psram tag.
+	startPSRAM()
+
 	// Initialize main system timer used for time.Now.
 	initTimer()
 
@@ -67,6 +70,7 @@ func main() {
 	// Initialize UART. This enables the UART RX interrupt, which must happen
 	// after interruptInit so the INTENABLE bit is not cleared again.
 	machine.InitSerial()
+	checkPSRAM()
 
 	// Initialize the heap, call main.main, etc.
 	run()

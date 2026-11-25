@@ -1,7 +1,7 @@
 ; ModuleID = 'rangeloop.go'
 source_filename = "rangeloop.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
-target triple = "wasm32-unknown-wasi"
+target triple = "wasm32-unknown-wasip1"
 
 declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
@@ -12,7 +12,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.rangeCount(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
+define hidden i32 @main.rangeCount(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
@@ -32,7 +32,7 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.rangeIndexSum(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
+define hidden i32 @main.rangeIndexSum(ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
@@ -52,7 +52,7 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.countUp(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
+define hidden i32 @main.countUp(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %for.loop
 

@@ -1,6 +1,6 @@
 {
-  "inherits": ["cortex-m7"],
-  "build-tags": ["nucleoh753zi", "stm32h753", "stm32h7", "stm32"],
+  "inherits": ["stm32h7"],
+  "build-tags": ["nucleoh753zi", "stm32h753"],
   "serial": "uart",
   "linkerscript": "targets/stm32h7.ld",
   "extra-files": [

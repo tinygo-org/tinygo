@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -267,6 +269,18 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 		flags = append(flags, "-test.shuffle="+testConfig.Shuffle)
 	}
 
+	// Set the benchmark header values at link time.
+	testingGlobals := map[string]string{"benchPkgName": strings.TrimSuffix(pkgName, ".test")}
+	if isNativeRun(config) {
+		if name := hostCPUName(); name != "" {
+			testingGlobals["benchCPUName"] = name
+		}
+	}
+	globals := map[string]map[string]string{}
+	maps.Copy(globals, options.GlobalValues)
+	globals["testing"] = testingGlobals
+	options.GlobalValues = globals
+
 	logToStdout := testConfig.Verbose || testConfig.BenchRegexp != ""
 
 	var buf bytes.Buffer
@@ -341,31 +355,34 @@ func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, option
 	return passed, err
 }
 
-func dirsToModuleRootRel(maindir, modroot string) []string {
-	var dirs []string
-	last := ".."
-	// strip off path elements until we hit the module root
-	// adding `..`, `../..`, `../../..` until we're done
-	for maindir != modroot {
-		dirs = append(dirs, last)
-		last = filepath.Join(last, "..")
-		maindir = filepath.Dir(maindir)
-	}
-	dirs = append(dirs, ".")
-	return dirs
+// isNativeRun reports whether the test binary runs on this machine, not on an
+// emulator or baremetal target.
+func isNativeRun(config *compileopts.Config) bool {
+	return config.GOOS() == runtime.GOOS && config.GOARCH() == runtime.GOARCH &&
+		config.Target.Emulator == "" && !slices.Contains(config.BuildTags(), "baremetal")
 }
 
-func dirsToModuleRootAbs(maindir, modroot string) []string {
-	var dirs = []string{maindir}
-	last := filepath.Join(maindir, "..")
-	// strip off path elements until we hit the module root
-	// adding `..`, `../..`, `../../..` until we're done
-	for maindir != modroot {
-		dirs = append(dirs, last)
-		last = filepath.Join(last, "..")
-		maindir = filepath.Dir(maindir)
+// hostCPUName returns the host CPU model name, or an empty string if unknown.
+func hostCPUName() string {
+	switch runtime.GOOS {
+	case "darwin":
+		out, err := exec.Command("sysctl", "-n", "machdep.cpu.brand_string").Output()
+		if err == nil {
+			return strings.TrimSpace(string(out))
+		}
+	case "linux":
+		data, err := os.ReadFile("/proc/cpuinfo")
+		if err != nil {
+			return ""
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			key, value, ok := strings.Cut(line, ":")
+			if ok && (strings.TrimSpace(key) == "model name" || strings.TrimSpace(key) == "Model") {
+				return strings.TrimSpace(value)
+			}
+		}
 	}
-	return dirs
+	return ""
 }
 
 // validateOutputFormat checks if the output file extension matches the expected format
@@ -472,32 +489,10 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 	// Flash the binary to the MCU.
 	switch flashMethod {
 	case "", "command":
-		// Create the command.
-		flashCmd := config.Target.FlashCommand
-		flashCmdList, err := shlex.Split(flashCmd)
+		var flashCmdList []string
+		flashCmdList, port, err = prepareFlashCommand(config.Target, fileExt, result.Binary, port)
 		if err != nil {
-			return fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
-		}
-
-		if strings.Contains(flashCmd, "{port}") {
-			var err error
-			port, err = getDefaultPort(port, config.Target.SerialPort)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Fill in fields in the command template.
-		fileToken := "{" + fileExt[1:] + "}"
-		for i, arg := range flashCmdList {
-			arg = strings.ReplaceAll(arg, fileToken, result.Binary)
-			arg = strings.ReplaceAll(arg, "{port}", port)
-			flashCmdList[i] = arg
-		}
-
-		// Execute the command.
-		if len(flashCmdList) < 2 {
-			return fmt.Errorf("invalid flash command: %#v", flashCmd)
+			return err
 		}
 		cmd := executeCommand(config.Options, flashCmdList[0], flashCmdList[1:]...)
 		cmd.Stdout = os.Stdout
@@ -625,6 +620,29 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		return Monitor(result.Executable, port, config)
 	}
 	return nil
+}
+
+func prepareFlashCommand(target *compileopts.TargetSpec, fileExt, binary, port string) ([]string, string, error) {
+	flashCmd := target.FlashCommand
+	args, err := shlex.Split(flashCmd)
+	if err != nil {
+		return nil, port, fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
+	}
+	if strings.Contains(flashCmd, "{port}") {
+		port, err = getDefaultPort(port, target.SerialPort)
+		if err != nil {
+			return nil, port, err
+		}
+	}
+	fileToken := "{" + fileExt[1:] + "}"
+	for i, arg := range args {
+		arg = strings.ReplaceAll(arg, fileToken, binary)
+		args[i] = strings.ReplaceAll(arg, "{port}", port)
+	}
+	if len(args) < 2 {
+		return nil, port, fmt.Errorf("invalid flash command: %#v", flashCmd)
+	}
+	return args, port, nil
 }
 
 // Debug compiles and flashes a program to a microcontroller (just like Flash)
@@ -925,9 +943,12 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			// The runtime package has two variables (osArgs and osEnv) that are
 			// both strings, from which the parameters and environment variables
 			// are read.
-			config.Options.GlobalValues = map[string]map[string]string{
-				"runtime": runtimeGlobals,
-			}
+			// Keep any other values, such as those set by -ldflags or by
+			// tinygo test.
+			globals := map[string]map[string]string{}
+			maps.Copy(globals, config.Options.GlobalValues)
+			globals["runtime"] = runtimeGlobals
+			config.Options.GlobalValues = globals
 		}
 	} else {
 		// Pass environment variables and command line parameters as usual.
@@ -988,31 +1009,22 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 				emulator = emulator[1:]
 			}
 
-			wd, _ := os.Getwd()
-
-			// Below adds additional wasmtime flags in case a test reads files
-			// outside its directory, like "../testdata/e.txt". This allows any
-			// relative directory up to the module root, even if the test never
-			// reads any files.
-			if config.TestConfig.CompileTestBinary {
-				// Set working directory to package dir
-				wd = result.MainDir
-
-				// Add relative dirs (../, ../..) up to module root (for wasip1)
-				dirs := dirsToModuleRootRel(result.MainDir, result.ModuleRoot)
-
-				// Add absolute dirs up to module root (for wasip2)
-				dirs = append(dirs, dirsToModuleRootAbs(result.MainDir, result.ModuleRoot)...)
-
-				for _, d := range dirs {
-					emuArgs = append(emuArgs, "--dir="+d)
-				}
-			} else {
-				emuArgs = append(emuArgs, "--dir=.")
+			wd, err := os.Getwd()
+			if err != nil {
+				return result, err
 			}
 
-			emuArgs = append(emuArgs, "--dir="+wd)
-			emuArgs = append(emuArgs, "--env=PWD="+wd)
+			if config.TestConfig.CompileTestBinary {
+				// Resolve virtual GOROOT links created by loader/goroot.go.
+				wd, err = resolveDirectory(result.MainDir)
+				if err != nil {
+					return result, fmt.Errorf("could not resolve WASI test directory %q: %w", result.MainDir, err)
+				}
+			}
+
+			dirs, guestWD := wasmtimePreopens(wd, os.TempDir(), config.TestConfig.CompileTestBinary, emulator)
+			emuArgs = append(emuArgs, dirs...)
+			emuArgs = append(emuArgs, "--env=PWD="+guestWD)
 			for _, v := range environmentVars {
 				emuArgs = append(emuArgs, "--env", v)
 			}
@@ -1068,6 +1080,61 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		return result, &commandError{"failed to run compiled binary", result.Binary, err}
 	}
 	return result, nil
+}
+
+func wasmtimePreopens(wd, tmpDir string, test bool, emulator []string) ([]string, string) {
+	volume := filepath.VolumeName(wd)
+	guestWD := filepath.ToSlash(wd[len(volume):])
+	if guestWD == "" {
+		guestWD = "/"
+	}
+	var dirs []string
+	if test {
+		// Match Go's root mount in lib/wasm/go_wasip1_wasm_exec.
+		root := "/"
+		if volume != "" {
+			root = volume + string(filepath.Separator) + "::/"
+		}
+		dirs = append(dirs, "--dir="+root)
+	} else {
+		mount := wd
+		if volume != "" {
+			mount += "::" + guestWD
+		}
+		dirs = append(dirs, "--dir=.", "--dir="+mount)
+	}
+	if (!test || runtime.GOOS == "windows") && !hasWasmtimePreopen(emulator, "/tmp") {
+		dirs = append(dirs, "--dir="+tmpDir+"::/tmp")
+	}
+	return dirs, guestWD
+}
+
+func hasWasmtimePreopen(args []string, guestPath string) bool {
+	guestPath = strings.TrimLeft(guestPath, "/")
+	for i := 0; i < len(args); i++ {
+		dir, ok := strings.CutPrefix(args[i], "--dir=")
+		if args[i] == "--dir" && i+1 < len(args) {
+			i++
+			dir, ok = args[i], true
+		}
+		if !ok {
+			continue
+		}
+		_, guest, aliased := strings.Cut(dir, "::")
+		if !aliased {
+			guest = dir
+		}
+		// Match wasi-libc's leading-prefix handling, not path.Clean.
+		// See lib/wasi-libc/libc-bottom-half/sources/preopens.c (strip_prefixes).
+		guest = strings.TrimLeft(guest, "/")
+		for strings.HasPrefix(guest, "./") {
+			guest = strings.TrimLeft(guest[2:], "/")
+		}
+		if guest == guestPath || guest == guestPath+"/" {
+			return true
+		}
+	}
+	return false
 }
 
 func touchSerialPortAt1200bps(port string) (err error) {
@@ -1172,10 +1239,9 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 	}
 	defer flasher.Close()
 
-	chipName := flasher.ChipName()
-	offset := uint32(0x0)
-	if chipName == "ESP32" {
-		offset = 0x1000
+	offset, ok := flasher.BootloaderFlashOffset()
+	if !ok {
+		return fmt.Errorf("could not determine bootloader flash offset")
 	}
 
 	// Read the firmware binary
@@ -1757,7 +1823,7 @@ func getListOfPackages(pkgs []string, options *compileopts.Options) ([]loader.Pa
 	if err != nil {
 		return nil, err
 	}
-	cmd, err := loader.List(config, []string{"-json"}, pkgs)
+	cmd, err := loader.List(config, []string{loader.PackageJSONFlag()}, pkgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run `go list`: %w", err)
 	}
@@ -1815,6 +1881,7 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full, html)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
+	printBoundsString := flag.String("print-bounds", "", "regular expression of functions or source files for which remaining (non-elided) bounds checks should be printed")
 	printAllocsCoverString := flag.String("print-allocs-cover", "", "like -print-allocs, but in go coverage tool format")
 	printCommands := flag.Bool("x", false, "Print commands")
 	flagJSON := flag.Bool("json", false, "print output in JSON format")
@@ -1842,7 +1909,7 @@ func main() {
 	// stack size calculation and features like -size=short, -print-allocs=,
 	// etc. The -no-debug flag is used to strip it at link time. But for TinyGo
 	// development it can be useful to not emit debug information at all.
-	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, use -no-debug instead")
+	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, skip DWARF generation in the compiler (-no-debug implies this)")
 
 	var flagDeps, flagTest bool
 	if command == "help" || command == "list" {
@@ -1920,6 +1987,15 @@ func main() {
 		}
 	}
 
+	var printBounds *regexp.Regexp
+	if *printBoundsString != "" {
+		printBounds, err = regexp.Compile(*printBoundsString)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+
 	var ocdCommands []string
 	if *ocdCommandsString != "" {
 		ocdCommands = strings.Split(*ocdCommandsString, ",")
@@ -1965,6 +2041,7 @@ func main() {
 		PrintStacks:             *printStacks,
 		PrintAllocs:             printAllocs,
 		PrintAllocsCover:        printAllocsCover,
+		PrintBounds:             printBounds,
 		Tags:                    []string(tags),
 		TestConfig:              testConfig,
 		GlobalValues:            globalVarValues,
@@ -2091,7 +2168,11 @@ func main() {
 
 		// Build and run the tests concurrently.
 		// This uses an additional semaphore to reduce the memory usage.
+		// Run benchmarks one package at a time, like go test.
 		testSema := make(chan struct{}, cap(options.Semaphore))
+		if testConfig.BenchRegexp != "" {
+			testSema = make(chan struct{}, 1)
+		}
 		for i, pkg := range explicitPkgNames {
 			buf := &bufs[i]
 			testSema <- struct{}{}

@@ -6,7 +6,7 @@ import (
 	"device/arm"
 	"device/nrf"
 	"errors"
-	"internal/binary"
+	"internal/byteorder"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -301,8 +301,6 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 // SetBaudRate sets the I2C frequency. It has the side effect of also
 // enabling the I2C hardware if disabled beforehand.
-//
-//go:inline
 func (i2c *I2C) SetBaudRate(br uint32) error {
 	switch {
 	case br >= 400*KHz:
@@ -440,7 +438,7 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 
 	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
 		// write word
-		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize())])
+		*(*uint32)(unsafe.Pointer(address)) = byteorder.LEUint32(padded[j : j+int(f.WriteBlockSize())])
 		address += uintptr(f.WriteBlockSize())
 		waitWhileFlashBusy()
 	}

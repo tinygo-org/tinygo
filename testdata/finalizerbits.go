@@ -3,17 +3,20 @@ package main
 // Test finalizer registration, replacement, removal, and reused heap addresses.
 // The wasm target provides deterministic finalization for these tests.
 
-import "runtime"
+import (
+	"runtime"
+	"sync/atomic"
+)
 
 type box struct{ x int }
 
 const batch = 32
 
 var (
-	reregisteredRan int
-	replacedOldRan  int
-	replacedNewRan  int
-	churnRan        int
+	reregisteredRan atomic.Int32
+	replacedOldRan  atomic.Int32
+	replacedNewRan  atomic.Int32
+	churnRan        atomic.Int32
 	reuseFirstRan   int
 	reuseSecondRan  int
 	keptRan         int
@@ -42,17 +45,17 @@ func allocClearThenRegister() {
 	p := &box{x: 1}
 	runtime.SetFinalizer(p, func(*box) { panic("cleared finalizer ran") })
 	runtime.SetFinalizer(p, nil)
-	runtime.SetFinalizer(p, func(*box) { reregisteredRan++ })
+	runtime.SetFinalizer(p, func(*box) { reregisteredRan.Add(1) })
 }
 
 func testClearThenRegister() {
 	allocClearThenRegister()
-	for i := 0; i < 200 && reregisteredRan == 0; i++ {
+	for i := 0; i < 200 && reregisteredRan.Load() == 0; i++ {
 		sink += scrubStack(40)
 		runtime.GC()
 		runtime.Gosched()
 	}
-	if reregisteredRan != 1 {
+	if reregisteredRan.Load() != 1 {
 		panic("finalizerbits: re-registered finalizer did not run exactly once")
 	}
 }
@@ -61,22 +64,22 @@ func testClearThenRegister() {
 func allocRegisterTwice() {
 	for i := 0; i < batch; i++ {
 		p := &box{x: i}
-		runtime.SetFinalizer(p, func(*box) { replacedOldRan++ })
-		runtime.SetFinalizer(p, func(*box) { replacedNewRan++ })
+		runtime.SetFinalizer(p, func(*box) { replacedOldRan.Add(1) })
+		runtime.SetFinalizer(p, func(*box) { replacedNewRan.Add(1) })
 	}
 }
 
 func testRegisterTwiceLeavesOne() {
 	allocRegisterTwice()
-	for i := 0; i < 200 && replacedNewRan < batch; i++ {
+	for i := 0; i < 200 && replacedNewRan.Load() < batch; i++ {
 		sink += scrubStack(40)
 		runtime.GC()
 		runtime.Gosched()
 	}
-	if replacedOldRan != 0 {
+	if replacedOldRan.Load() != 0 {
 		panic("finalizerbits: replaced finalizer still ran")
 	}
-	if replacedNewRan != batch {
+	if replacedNewRan.Load() != batch {
 		panic("finalizerbits: replacement did not run exactly once per object")
 	}
 }
@@ -85,7 +88,7 @@ func testRegisterTwiceLeavesOne() {
 func allocChurn() {
 	p := &box{x: 3}
 	for i := 0; i < 64; i++ {
-		runtime.SetFinalizer(p, func(*box) { churnRan++ })
+		runtime.SetFinalizer(p, func(*box) { churnRan.Add(1) })
 		runtime.SetFinalizer(p, nil)
 	}
 }
@@ -97,7 +100,7 @@ func testChurnLeavesNothing() {
 		runtime.GC()
 		runtime.Gosched()
 	}
-	if churnRan != 0 {
+	if churnRan.Load() != 0 {
 		panic("finalizerbits: churned register/clear left a live registration")
 	}
 }

@@ -78,6 +78,75 @@ end:
   ret void
 }
 
+define i32 @testNonEscapingSelect(i1 %condition, ptr %other) {
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  %selected = select i1 %condition, ptr %alloc, ptr %other
+  %value = load i32, ptr %selected
+  ret i32 %value
+}
+
+define ptr @testEscapingSelect(i1 %condition, ptr %other) {
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  %selected = select i1 %condition, ptr %alloc, ptr %other
+  ret ptr %selected
+}
+
+define i32 @testNonEscapingPhi(i1 %condition, ptr %other) {
+entry:
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  br i1 %condition, label %allocated, label %existing
+allocated:
+  br label %merge
+existing:
+  br label %merge
+merge:
+  %selected = phi ptr [ %alloc, %allocated ], [ %other, %existing ]
+  %value = load i32, ptr %selected
+  ret i32 %value
+}
+
+define ptr @testEscapingPhi(i1 %condition, ptr %other) {
+entry:
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  br i1 %condition, label %allocated, label %existing
+allocated:
+  br label %merge
+existing:
+  br label %merge
+merge:
+  %selected = phi ptr [ %alloc, %allocated ], [ %other, %existing ]
+  ret ptr %selected
+}
+
+define i32 @testLoopCarriedPhi(i32 %count, ptr %initial) {
+entry:
+  br label %loop
+loop:
+  %index = phi i32 [ 0, %entry ], [ %next, %loop ]
+  %previous = phi ptr [ %initial, %entry ], [ %alloc, %loop ]
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  store i32 %index, ptr %alloc
+  %value = load i32, ptr %previous
+  %next = add i32 %index, 1
+  %done = icmp eq i32 %next, %count
+  br i1 %done, label %end, label %loop
+end:
+  ret i32 %value
+}
+
+define i32 @testPointerPhiCycle(i1 %condition) {
+entry:
+  %alloc = call align 4 ptr @runtime.alloc(i32 4, ptr inttoptr (i32 3 to ptr))
+  br label %loop
+loop:
+  %selected = phi ptr [ %alloc, %entry ], [ %next, %loop ]
+  %next = getelementptr i8, ptr %selected, i32 0
+  br i1 %condition, label %loop, label %end
+end:
+  %value = load i32, ptr %selected
+  ret i32 %value
+}
+
 ; Test a zero-sized allocation.
 define void @testZeroSizedAlloc() {
   %alloc = call align 1 ptr @runtime.alloc(i32 0, ptr inttoptr (i32 3 to ptr))

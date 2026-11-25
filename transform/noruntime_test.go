@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -15,7 +15,7 @@ func TestNoRuntimeRoots(t *testing.T) {
 			defer ctx.Dispose()
 			mod := ctx.NewModule("test")
 			defer mod.Dispose()
-			builder := ctx.NewBuilder()
+			builder := mod.NewBuilder()
 			defer builder.Dispose()
 			fnType := llvm.FunctionType(ctx.VoidType(), nil, false)
 			marked := llvm.AddFunction(mod, "marked", fnType)

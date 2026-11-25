@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 
 	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -106,7 +106,7 @@ func CreateStackSizeLoads(mod llvm.Module, config *compileopts.Config) ([]string
 	llvmutil.AppendToGlobal(mod, "llvm.used", append([]llvm.Value{stackSizesGlobal}, functionValues...)...)
 
 	// Replace the calls with loads from the new global with stack sizes.
-	irbuilder := ctx.NewBuilder()
+	irbuilder := mod.NewBuilder()
 	defer irbuilder.Dispose()
 	for i, function := range functions {
 		for _, use := range functionMap[function] {

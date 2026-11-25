@@ -2,11 +2,16 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -14,19 +19,172 @@ import (
 	"github.com/tinygo-org/tinygo/goenv"
 )
 
+func TestReflectMethodReferences(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name        string
+		declaration string
+		call        string
+	}{
+		{"expression", "var lookup = reflect.Type.MethodByName", `lookup(reflect.TypeOf(target{}), "Kept")`},
+		{"bound", "var lookup = reflect.TypeOf(target{}).MethodByName", `lookup("Kept")`},
+		{"interface", `func lookup(t interface{ MethodByName(string) (reflect.Method, bool) }) (reflect.Method, bool) {
+			return t.MethodByName("Kept")
+		}`, `lookup(reflect.TypeOf(target{}))`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := `package main
+import "reflect"
+type target struct{}
+func (target) Kept() {}
+` + tc.declaration + `
+func main() {
+	method, ok := ` + tc.call + `
+	if !ok || method.Name != "Kept" {
+		panic("indirect method lookup lost metadata")
+	}
+}`
+			path := filepath.Join(t.TempDir(), "main.go")
+			if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			options := optionsFromTarget("", sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			_, err = buildAndRun(path, config, &output, nil, nil, 2*time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatalf("indirect method lookup failed: %v\n%s", err, output.String())
+			}
+		})
+	}
+}
+
+func TestReflectMakeFuncReachability(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name, source string
+	}{
+		{"function value", `
+var makeCallback = reflect.MakeFunc
+
+func main() {
+	f := makeCallback(reflect.TypeFor[func(int) int](), func(args []reflect.Value) []reflect.Value {
+		return args
+	}).Interface().(func(int) int)
+	if f(42) != 42 {
+		panic("wrong callback result")
+	}
+}`},
+		{"Seq", `
+func values(yield func(int) bool) {
+	yield(42)
+}
+
+func main() {
+	var got int64
+	for value := range reflect.ValueOf(values).Seq() {
+		got += value.Int()
+	}
+	if got != 42 {
+		panic("wrong sequence result")
+	}
+}`},
+		{"Seq2", `
+func pairs(yield func(int, int) bool) {
+	yield(1, 42)
+}
+
+func main() {
+	var key, value int64
+	for k, v := range reflect.ValueOf(pairs).Seq2() {
+		key, value = k.Int(), v.Int()
+	}
+	if key != 1 || value != 42 {
+		panic("wrong sequence pair")
+	}
+}`},
+		{"dead indirect ABI boxing", `
+import "os"
+
+type method interface{ Value() int }
+type first int
+type second int
+type dead struct{}
+
+func (v first) Value() int  { return int(v) }
+func (v second) Value() int { return int(v) + 1 }
+func (dead) Value() int {
+	f := reflect.MakeFunc(reflect.TypeFor[func() int](), func([]reflect.Value) []reflect.Value {
+		return []reflect.Value{reflect.ValueOf(7)}
+	}).Interface().(func() int)
+	return f()
+}
+
+var sink method
+
+//go:noinline
+func deadBox() [16384]byte {
+	sink = dead{}
+	return [16384]byte{}
+}
+
+func main() {
+	n := len(os.Args)
+	want := n
+	if n > 1 {
+		sink = first(n)
+	} else {
+		sink = second(n)
+		want++
+	}
+	if sink.Value() != want {
+		panic("wrong interface dispatch result")
+	}
+}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "main.go")
+			if err := os.WriteFile(path, []byte("package main\nimport \"reflect\"\n"+tc.source), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			options := optionsFromTarget("", sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			_, err = buildAndRun(path, config, &output, nil, nil, 2*time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatalf("reflected program failed: %v\n%s", err, output.String())
+			}
+		})
+	}
+}
+
 func TestBuild(t *testing.T) {
 	t.Parallel()
 
 	tests := []string{
+		"aggregatestorage.go",
 		"alias.go",
 		"atomic.go",
 		"binop.go",
-		"buildinfo.go",
 		"calls.go",
 		"cgo/",
 		"channel.go",
 		"chanrecover.go",
+		"clearloop.go",
 		"coreassign.go",
+		"coreswake.go",
 		"embed/",
 		"finalizer.go",
 		"finalizerbits.go",
@@ -34,7 +192,10 @@ func TestBuild(t *testing.T) {
 		"finalizerinvariants.go",
 		"finalizerlarge.go",
 		"float.go",
+		"gc-register-root.go",
+		"gc-saved-register.go",
 		"gc.go",
+		"gcstacks.go",
 		"generics.go",
 		"go1.21.go",
 		"go1.22/",
@@ -44,6 +205,7 @@ func TestBuild(t *testing.T) {
 		"init_multi.go",
 		"interface-blank.go",
 		"interface.go",
+		"makeslice.go",
 		"json.go",
 		"localtypes/",
 		"localtypes.go",
@@ -54,16 +216,24 @@ func TestBuild(t *testing.T) {
 		"print.go",
 		"promoted.go",
 		"reflect.go",
+		"reflect-method-values.go",
+		"reflect-promoted-lookup.go",
 		"signal.go",
 		"signalnotify.go",
 		"slice.go",
+		"slicebounds.go",
+		"slicegrow.go",
 		"sort.go",
 		"stdlib.go",
 		"string.go",
+		"stringfrombytes.go",
+		"stringfrombytes_stress.go",
 		"structs.go",
 		"testing.go",
+		"timer_node_reuse_gc.go",
 		"timers.go",
 		"typealias.go",
+		"typeassert-typeid.go",
 		"zeroalloc.go",
 	}
 
@@ -85,15 +255,40 @@ func TestBuild(t *testing.T) {
 		t.Parallel()
 		hostOptions := optionsFromTarget("", sema)
 		runPlatTests(hostOptions, tests, t)
+		for _, name := range gcStackNativeTests {
+			t.Run(name, func(t *testing.T) {
+				if runtime.GOOS == "windows" && (name == "gcstacks-stale.go" || name == "gcstacks-blocked.go") {
+					t.Skip("boehm scans whole goroutine stacks with the tasks scheduler")
+				}
+				t.Parallel()
+				runTest(name, hostOptions, t, nil, nil)
+			})
+		}
+		for _, skipped := range gcStackNativeSkipped {
+			t.Run(skipped.name, func(t *testing.T) {
+				t.Skip(skipped.reason)
+			})
+		}
 		t.Run("testing.go-verbose", func(t *testing.T) {
 			t.Parallel()
 			runTest("testing-verbose.go", hostOptions, t, nil, nil)
+		})
+		t.Run("testing-bench.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("testing-bench.go", hostOptions, t, nil, nil)
 		})
 
 		// scheduler.threads needs threadID, which exists only on Linux and Darwin.
 		// scheduler.none does not link on Windows.
 		switch runtime.GOOS {
 		case "darwin", "linux":
+			t.Run("gcstacks-blocked.go-gc=boehm-scheduler=tasks", func(t *testing.T) {
+				t.Parallel()
+				options := compileopts.Options(hostOptions)
+				options.GC = "boehm"
+				options.Scheduler = "tasks"
+				runTest("gcstacks-blocked.go", options, t, nil, nil)
+			})
 			for _, scheduler := range []string{"threads", "none"} {
 				t.Run("finalizerinvariants.go-gc-conservative-scheduler-"+scheduler, func(t *testing.T) {
 					t.Parallel()
@@ -200,7 +395,23 @@ func TestBuild(t *testing.T) {
 			opts.Opt = "0"
 			emuCheck(t, opts)
 			runTestWithConfig("gc.go", t, opts, nil, nil)
+			runTestWithConfig("gc-register-root.go", t, opts, nil, nil)
 		})
+
+		// At -opt=0 the compiler keeps roots in callee-saved registers
+		// across a call. The host only runs the block GC when asked for it.
+		if runtime.GOOS == "darwin" || runtime.GOOS == "linux" {
+			for _, gc := range []string{"conservative", "precise"} {
+				t.Run("opt=0-scheduler=tasks-gc="+gc, func(t *testing.T) {
+					t.Parallel()
+					opts := optionsFromTarget("", sema)
+					opts.Opt = "0"
+					opts.GC = gc
+					opts.Scheduler = "tasks"
+					runTestWithConfig("gc-register-root.go", t, opts, nil, nil)
+				})
+			}
+		}
 
 		t.Run("gc=none-runtime-panic", func(t *testing.T) {
 			t.Parallel()
@@ -290,6 +501,11 @@ func TestBuild(t *testing.T) {
 
 			runPlatTests(optionsFromTarget("wasm", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasm", sema), t)
+			runGCStackTests(t, optionsFromTarget("wasm", sema))
+			t.Run("gcstacks-finalizer.go", func(t *testing.T) {
+				t.Parallel()
+				runTest("gcstacks-finalizer.go", optionsFromTarget("wasm", sema), t, nil, nil)
+			})
 			// Test with -gc=boehm.
 			t.Run("gc.go-boehm", func(t *testing.T) {
 				t.Parallel()
@@ -304,6 +520,11 @@ func TestBuild(t *testing.T) {
 			options := optionsFromTarget("wasip1", sema)
 			runPlatTests(options, tests, t)
 			runGCLivenessTest(options, t)
+			runGCStackTests(t, options)
+			runGCStackSizeTests(t, options)
+			t.Run("gcstacks-finalizer.go", func(t *testing.T) {
+				t.Skip("finalizers only run deterministically on the wasm target")
+			})
 			t.Run("cgo-realloc", func(t *testing.T) {
 				runTest("cgo-realloc/", options, t, nil, nil)
 			})
@@ -329,6 +550,7 @@ func TestBuild(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("wasip2", sema), tests, t)
 			runGCLivenessTest(optionsFromTarget("wasip2", sema), t)
+			runGCStackTests(t, optionsFromTarget("wasip2", sema))
 		})
 	}
 
@@ -396,6 +618,66 @@ func TestESP32QEMU(t *testing.T) {
 	}
 }
 
+// gcStackNativeTests stress goroutine stacks and the GC. They run on the host
+// and on the wasm targets. gcstacks.go is part of the main list of tests.
+var gcStackNativeTests = []string{
+	"gcdiff.go",
+	"gcstacks-blocked.go",
+	"gcstacks-exit.go",
+	"gcstacks-panics.go",
+	"gcstacks-queues.go",
+	"gcstacks-stale.go",
+}
+
+// gcStackNativeSkipped are stack tests that do not work with the boehm GC and
+// the schedulers the host uses.
+var gcStackNativeSkipped = []struct{ name, reason string }{
+	{"gcstacks-soak.go", "the host does not free the stacks of leaked goroutines"},
+	{"gcstacks-scale.go", "collection time on the host depends on its scheduler"},
+	{"gcstacks-finalizer.go", "finalizers do not run with the boehm GC"},
+}
+
+// gcStackTests are the tests for the wasm targets, where leaked goroutines can
+// be freed.
+var gcStackTests = append(slices.Clone(gcStackNativeTests), "gcstacks-soak.go")
+
+func runGCStackTests(t *testing.T, options compileopts.Options) {
+	t.Helper()
+	for _, name := range gcStackTests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			runTest(name, options, t, nil, nil)
+		})
+	}
+
+	// The collector must find the same live objects as one that never frees.
+	t.Run("gcdiff.go-leaking", func(t *testing.T) {
+		t.Parallel()
+		leaking := options
+		leaking.GC = "leaking"
+		runTest("gcdiff.go", leaking, t, nil, nil)
+	})
+
+	// This one measures time, so it does not run in parallel with the others.
+	t.Run("gcstacks-scale.go", func(t *testing.T) {
+		runTest("gcstacks-scale.go", options, t, nil, nil)
+	})
+}
+
+// runGCStackSizeTests runs the stack scanning test with goroutine stack sizes
+// that are not multiples of the block size.
+func runGCStackSizeTests(t *testing.T, options compileopts.Options) {
+	t.Helper()
+	for _, size := range []uint64{9001, 16393, 33333, 65545, 100003} {
+		t.Run(fmt.Sprintf("gcstacks.go-stack-size-%d", size), func(t *testing.T) {
+			t.Parallel()
+			sized := options
+			sized.StackSize = size
+			runTest("gcstacks.go", sized, t, nil, nil)
+		})
+	}
+}
+
 func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 	emuCheck(t, options)
 
@@ -425,21 +707,26 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// output order, so only run it with non-threaded schedulers.
 			continue
 		}
-		if name == "coreassign.go" && scheduler != "cores" {
-			// Core assignment needs the cores scheduler.
+		if name == "timer_node_reuse_gc.go" {
+			// Other targets are too slow or lack 64-bit atomics.
+			isHost := options.Target == "" && options.GOOS == goenv.Get("GOOS") && options.GOARCH == goenv.Get("GOARCH")
+			if !isHost && options.Target != "wasip1" && options.Target != "riscv-qemu" {
+				continue
+			}
+		}
+		if (name == "coreassign.go" || name == "coreswake.go") && scheduler != "cores" {
+			// These tests need the cores scheduler.
 			continue
 		}
-		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386") {
+		if name == "slicegrow.go" && (isBaremetal || spec.GC == "leaking") {
+			// These targets grow slices to the next power of two.
+			continue
+		}
+		if options.GOOS == "linux" && (options.GOARCH == "arm" || options.GOARCH == "386" || options.GOARCH == "mips" || options.GOARCH == "mipsle") {
 			switch name {
 			case "timers.go":
 				// Timer tests do not work because syscall.seek is implemented
 				// as Assembly in mainline Go and causes linker failure
-				continue
-			}
-		}
-		if options.GOOS == "linux" && (options.GOARCH == "mips" || options.GOARCH == "mipsle") {
-			if name == "atomic.go" || name == "timers.go" {
-				// 64-bit atomic operations aren't currently supported on MIPS.
 				continue
 			}
 		}
@@ -455,13 +742,29 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			// is still covered by larger targets such as riscv-qemu.
 			continue
 		}
+		if options.Target == "cortex-m-qemu" && name == "gcstacks.go" {
+			// Too many goroutines for the LM3S6965's RAM.
+			continue
+		}
+		if options.Target == "riscv-qemu" && name == "gcstacks.go" && scheduler == "tasks" {
+			// Other targets cover the tasks scheduler, and this run takes 34 seconds.
+			continue
+		}
 		if options.Target == "simavr" {
 			// Not all tests are currently supported on AVR.
 			// Skip the ones that aren't.
 			switch name {
-			case "reflect.go":
+			case "reflect.go", "reflect-method-values.go", "reflect-promoted-lookup.go", "typeassert-typeid.go":
 				// Reflect tests do not run correctly, probably because of the
 				// limited amount of memory.
+				continue
+
+			case "aggregatestorage.go", "stringfrombytes_stress.go":
+				// Needs more RAM than AVR has.
+				continue
+
+			case "slicebounds.go":
+				// Reslicing returns wrong lengths on AVR, also without the len <= cap assume.
 				continue
 
 			case "map_bigkey.go":
@@ -469,15 +772,20 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// map keys, overflowing the goroutine stack (384 bytes).
 				continue
 
-			case "gc.go":
-				// Does not pass due to high mark false positive rate.
+			case "gc.go", "gc-register-root.go":
+				// High mark false positive rate, and runtime.GC does not
+				// return. See the finalizerinvariants.go exclusion below.
 				continue
 
 			case "chanrecover.go":
 				// runtime.GC in testdata/chanrecover.go crashes in the AVR stack scanner.
 				continue
 
-			case "buildinfo.go", "json.go", "stdlib.go", "testing.go":
+			case "gcstacks.go":
+				// Too many goroutines for the available RAM.
+				continue
+
+			case "buildinfo.go", "json.go", "localtypes.go", "stdlib.go", "testing.go":
 				// Too big for AVR. Doesn't fit in flash/RAM.
 				continue
 
@@ -503,8 +811,8 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		}
 		if options.GOOS == "windows" {
 			switch name {
-			case "signal.go", "signalnotify.go":
-				// os/signal does not link on Windows.
+			case "signal.go":
+				// The Windows runtime does not deliver signals.
 				continue
 			}
 		}
@@ -542,6 +850,9 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 				// These tests exceed simavr's default 384-byte goroutine stack.
 				testOptions.StackSize = 512
 			}
+			if testOptions.Target == "cortex-m-qemu" && name == "reflect-method-values.go" {
+				testOptions.StackSize = 8192
+			}
 			runTest(name, testOptions, t, nil, nil)
 		})
 	}
@@ -563,6 +874,12 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		t.Run("filesystem.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("filesystem.go", options, t, nil, nil)
+		})
+	}
+	if options.Target == "" && (options.GOOS == "darwin" || options.GOOS == "linux") {
+		t.Run("syscall.go", func(t *testing.T) {
+			t.Parallel()
+			runTest("syscall.go", options, t, nil, nil)
 		})
 	}
 	if options.Target == "wasm" || isBaremetal {

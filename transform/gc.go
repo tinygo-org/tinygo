@@ -3,13 +3,9 @@ package transform
 import (
 	"strings"
 
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
-
-// This is somewhat ugly to access through the API.
-// https://github.com/llvm/llvm-project/blob/94ebcfd16dac67486bae624f74e1c5c789448bae/llvm/include/llvm/Support/ModRef.h#L62
-// https://github.com/llvm/llvm-project/blob/94ebcfd16dac67486bae624f74e1c5c789448bae/llvm/include/llvm/Support/ModRef.h#L87
-const shiftExcludeArgMem = 2
 
 // MakeGCStackSlots converts all calls to runtime.trackPointer to explicit
 // stores to stack slots that are scannable by the GC.
@@ -39,7 +35,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	}
 
 	ctx := mod.Context()
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
@@ -51,8 +47,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 
 	// External functions may indirectly suspend the goroutine or perform a heap allocation.
 	// Their callers should get stack objects.
-	memAttr := llvm.AttributeKindID("memory")
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		if _, ok := trackFuncs[fn]; ok {
 			continue // already found
 		}
@@ -65,8 +60,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			continue
 		}
 
-		mem := fn.GetEnumFunctionAttribute(memAttr)
-		if !mem.IsNil() && mem.GetEnumValue()>>shiftExcludeArgMem == 0 {
+		if readMemoryEffects(fn).onlyAccessesArgMem() {
 			// This does not access non-argument memory.
 			// Exclude it.
 			continue
@@ -80,14 +74,14 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	// calls.
 	// This takes less than 5ms for ~100kB of WebAssembly but would perhaps be
 	// faster when written in C++ (to avoid the CGo overhead).
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		if _, ok := trackFuncs[fn]; ok {
 			continue // already found
 		}
 
 	scanBody:
-		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-			for call := bb.FirstInstruction(); !call.IsNil(); call = llvm.NextInstruction(call) {
+		for bb := range llvmutil.BasicBlocks(fn) {
+			for call := range llvmutil.Instructions(bb) {
 				if call.IsACallInst().IsNil() {
 					continue // only looking at calls
 				}
@@ -143,8 +137,8 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 		// Find all calls to runtime.trackPointer in this function.
 		var calls []llvm.Value
 		var returns []llvm.Value
-		for bb := fn.FirstBasicBlock(); !bb.IsNil(); bb = llvm.NextBasicBlock(bb) {
-			for inst := bb.FirstInstruction(); !inst.IsNil(); inst = llvm.NextInstruction(inst) {
+		for bb := range llvmutil.BasicBlocks(fn) {
+			for inst := range llvmutil.Instructions(bb) {
 				switch inst.InstructionOpcode() {
 				case llvm.Call:
 					if inst.CalledValue() == trackPointer {
@@ -197,7 +191,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 				// be re-evaluated has its slot overwritten on the way round
 				// and so only roots the value the current iteration selected,
 				// so remember it and give its inputs slots below.
-				if blockInCycle(ptr.InstructionParent()) {
+				if ptr.InstructionParent().InCycle() {
 					cyclicPHIs = append(cyclicPHIs, ptr)
 				}
 			case llvm.ExtractValue, llvm.BitCast:
@@ -255,7 +249,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 						// Constants and arguments cannot be given a slot here.
 						continue
 					}
-					if incoming.InstructionOpcode() == llvm.PHI && blockInCycle(incoming.InstructionParent()) {
+					if incoming.InstructionOpcode() == llvm.PHI && incoming.InstructionParent().InCycle() {
 						worklist = append(worklist, incoming)
 					}
 					if stripped := stripPointerCasts(incoming); !stripped.IsAAllocaInst().IsNil() {
@@ -368,7 +362,7 @@ func makeGCGlobalRoots(mod llvm.Module) bool {
 	targetData := llvm.NewTargetData(mod.DataLayout())
 	defer targetData.Dispose()
 	var roots []gcGlobalRootRange
-	for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+	for global := range llvmutil.Globals(mod) {
 		if strings.HasPrefix(global.Name(), "llvm.") ||
 			global.IsGlobalConstant() ||
 			global.Initializer().IsNil() ||
@@ -393,7 +387,7 @@ func makeGCGlobalRoots(mod llvm.Module) bool {
 	rootArray.SetGlobalConstant(true)
 	rootArray.SetLinkage(llvm.InternalLinkage)
 
-	builder := ctx.NewBuilder()
+	builder := mod.NewBuilder()
 	defer builder.Dispose()
 
 	entry := ctx.AddBasicBlock(rootCount, "entry")
@@ -508,7 +502,7 @@ func markParentFunctions(marked map[llvm.Value]struct{}, fn llvm.Value) {
 	for len(worklist) != 0 {
 		fn := worklist[len(worklist)-1]
 		worklist = worklist[:len(worklist)-1]
-		for _, use := range getUses(fn) {
+		for use := range llvmutil.Uses(fn) {
 			if use.IsACallInst().IsNil() || use.CalledValue() != fn {
 				// Not the parent function.
 				continue
@@ -520,34 +514,4 @@ func markParentFunctions(marked map[llvm.Value]struct{}, fn llvm.Value) {
 			}
 		}
 	}
-}
-
-// blockInCycle returns whether bb lies on a cycle, that is, whether it is
-// reachable from itself and so can execute more than once per call. This is
-// broader than being a loop header: a merge inside a loop body also qualifies,
-// and its slot is overwritten each iteration just the same.
-func blockInCycle(bb llvm.BasicBlock) bool {
-	// Walk forward from bb and look for an edge back into it.
-	seen := map[llvm.BasicBlock]struct{}{}
-	worklist := []llvm.BasicBlock{bb}
-	for len(worklist) != 0 {
-		cur := worklist[len(worklist)-1]
-		worklist = worklist[:len(worklist)-1]
-		term := cur.LastInstruction()
-		if term.IsNil() {
-			continue
-		}
-		for i := 0; i < term.SuccessorsCount(); i++ {
-			succ := term.Successor(i)
-			if succ == bb {
-				return true
-			}
-			if _, ok := seen[succ]; ok {
-				continue
-			}
-			seen[succ] = struct{}{}
-			worklist = append(worklist, succ)
-		}
-	}
-	return false
 }

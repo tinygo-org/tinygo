@@ -1,4 +1,4 @@
-//go:build xtensa && !esp32s3 && !esp32
+//go:build xtensa
 
 package interrupt
 
@@ -28,12 +28,4 @@ func Restore(state State) {
 	device.AsmFull("wsr {state}, PS", map[string]interface{}{
 		"state": state,
 	})
-}
-
-// In returns whether the system is currently in an interrupt.
-//
-// Warning: interrupts have not been implemented for Xtensa yet so this always
-// returns false.
-func In() bool {
-	return false
 }

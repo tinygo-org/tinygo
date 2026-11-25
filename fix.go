@@ -96,6 +96,10 @@ func runFix(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+	if err := builder.MakeLibcHeaders(config); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
 	machine, err := compiler.NewTargetMachine(&compiler.Config{
 		Triple: config.Triple(), CPU: config.CPU(), Features: config.Features(),
 		CodeModel: config.CodeModel(), RelocationModel: config.RelocationModel(),

@@ -1,4 +1,4 @@
-//go:build darwin || (linux && !baremetal && !wasip1 && !wasm_unknown && !wasip2 && !nintendoswitch)
+//go:build darwin || (linux && !baremetal && !tinygo.wasm && !nintendoswitch)
 
 package runtime
 
@@ -248,6 +248,17 @@ func nanosecondsToTicks(ns int64) timeUnit {
 
 func sleepTicks(d timeUnit) {
 	until := ticks() + d
+
+	if !hasScheduler {
+		var sleepFutex futex.Futex
+		for {
+			sleepFutex.WaitUntil(0, uint64(ticksToNanoseconds(d)))
+			d = until - ticks()
+			if d <= 0 {
+				return
+			}
+		}
+	}
 
 	for {
 		// Sleep for the given amount of time.

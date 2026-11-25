@@ -129,7 +129,6 @@ var typeTests = []pair{
 	}{},
 		"struct { c chan *int32; d float32 }",
 	},
-	/* // TODO(tinygo): No function support
 	{struct{ x (func(a int8, b int32)) }{}, "func(int8, int32)"},
 	{struct {
 		x struct {
@@ -137,7 +136,7 @@ var typeTests = []pair{
 		}
 	}{},
 		"struct { c func(chan *reflect_test.integer, *int8) }",
-	}, */
+	},
 	{struct {
 		x struct {
 			a int8
@@ -202,7 +201,6 @@ var typeTests = []pair{
 	}{},
 		`struct { a int8 "reflect:\"hi \\x00there\\t\\n\\\"\\\\\"" }`,
 	},
-	/* // TODO(tinygo):  Functions not supported
 	{struct {
 		x struct {
 			f func(args ...int)
@@ -226,7 +224,6 @@ var typeTests = []pair{
 	}{},
 		"struct { int32; int64 }",
 	},
-	*/
 }
 
 var valueTests = []pair{
@@ -252,18 +249,16 @@ var valueTests = []pair{
 	{new(**integer), "**reflect_test.integer(0)"},
 	{new(map[string]int32), "map[string]int32{<can't iterate on maps>}"},
 	{new(chan<- string), "chan<- string"},
-	//{new(func(a int8, b int32)), "func(int8, int32)(0)"}, // TODO(tinygo): No function support
+	{new(func(a int8, b int32)), "func(int8, int32)(0)"},
 	{new(struct {
 		c chan *int32
 		d float32
 	}),
 		"struct { c chan *int32; d float32 }{chan *int32, 0}",
 	},
-	/* // TODO(tinygo): No function support
 	{new(struct{ c func(chan *integer, *int8) }),
 		"struct { c func(chan *reflect_test.integer, *int8) }{func(chan *reflect_test.integer, *int8)(0)}",
 	},
-	*/
 	{new(struct {
 		a int8
 		b int32
@@ -771,8 +766,6 @@ func TestInterfaceValue(t *testing.T) {
 	}
 }
 
-/*
-
 func TestFunctionValue(t *testing.T) {
 	var x any = func() {}
 	v := ValueOf(x)
@@ -781,8 +774,6 @@ func TestFunctionValue(t *testing.T) {
 	}
 	assert(t, v.Type().String(), "func()")
 }
-
-*/
 
 func TestGrow(t *testing.T) {
 	v := ValueOf([]int(nil))
@@ -1593,7 +1584,6 @@ func TestIsZero(t *testing.T) {
 		}
 	}
 
-	/* // TODO(tinygo): panic/recover support
 	func() {
 		defer func() {
 			if r := recover(); r == nil {
@@ -1602,7 +1592,6 @@ func TestIsZero(t *testing.T) {
 		}()
 		(Value{}).IsZero()
 	}()
-	*/
 }
 
 // extra comment for gofmt
@@ -1715,8 +1704,6 @@ func TestNilMap(t *testing.T) {
 	mv.SetMapIndex(ValueOf("hi"), Value{})
 }
 
-/* // TODO(tinygo): missing chan reflect support
-
 func TestChan(t *testing.T) {
 	for loop := 0; loop < 2; loop++ {
 		var c chan int
@@ -1823,6 +1810,54 @@ type caseInfo struct {
 	closed    bool
 	helper    func()
 	panic     bool
+}
+
+type exhaustive struct {
+	r    *rand.Rand
+	pos  int
+	last []choice
+}
+
+type choice struct {
+	off int
+	n   int
+	max int
+}
+
+func (x *exhaustive) Next() bool {
+	if x.r == nil {
+		x.r = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	x.pos = 0
+	if x.last == nil {
+		x.last = []choice{}
+		return true
+	}
+	for i := len(x.last) - 1; i >= 0; i-- {
+		c := &x.last[i]
+		if c.n+1 < c.max {
+			c.n++
+			x.last = x.last[:i+1]
+			return true
+		}
+	}
+	return false
+}
+
+func (x *exhaustive) Choose(max int) int {
+	if x.pos >= len(x.last) {
+		x.last = append(x.last, choice{x.r.Intn(max), 0, max})
+	}
+	c := &x.last[x.pos]
+	x.pos++
+	if c.max != max {
+		panic("inconsistent use of exhaustive tester")
+	}
+	return (c.n + c.off) % max
+}
+
+func (x *exhaustive) Maybe() bool {
+	return x.Choose(2) == 1
 }
 
 var allselect = flag.Bool("allselect", false, "exhaustive select test")
@@ -2185,8 +2220,6 @@ func fmtSelect(info []caseInfo) string {
 	return buf.String()
 }
 
-// TODO(tinygo): missing func/method/call support
-
 type two [2]uintptr
 
 // Difficult test for function call because of
@@ -2277,6 +2310,8 @@ func TestCallWithStruct(t *testing.T) {
 	}
 }
 
+/*
+
 func TestCallReturnsEmpty(t *testing.T) {
 	// Issue 21717: past-the-end pointer write in Call with
 	// nonzero-sized frame and zero-sized return value.
@@ -2300,6 +2335,8 @@ func TestCallReturnsEmpty(t *testing.T) {
 	}
 	runtime.KeepAlive(v)
 }
+
+*/
 
 func TestMakeFunc(t *testing.T) {
 	f := dummy
@@ -2460,8 +2497,6 @@ func TestMakeFuncInvalidReturnAssignments(t *testing.T) {
 	})
 }
 
-*/
-
 type Point struct {
 	x, y int
 }
@@ -2510,8 +2545,6 @@ func (p *Point) Int32Method(x int32) int32 {
 	return x
 }
 
-/*
-// TODO(tinygo): missing method support
 func TestMethod(t *testing.T) {
 	// Non-curried method of type.
 	p := Point{3, 4}
@@ -2968,8 +3001,6 @@ func TestInterfaceSet(t *testing.T) {
 	}
 }
 
-*/
-
 type T1 struct {
 	a string
 	int
@@ -3286,8 +3317,6 @@ func TestFieldPkgPath(t *testing.T) {
 	})
 }
 
-/*
-
 func TestMethodPkgPath(t *testing.T) {
 	type I interface {
 		x()
@@ -3344,10 +3373,6 @@ func TestVariadicType(t *testing.T) {
 	t.Error(s)
 }
 
-*/
-
-/*
-
 type inner struct {
 	x int
 }
@@ -3357,21 +3382,23 @@ type outer struct {
 	inner
 }
 
-func (*inner) M() {}
-func (*outer) M() {}
+func (i *inner) M() int { return i.x }
+func (o *outer) M() int { return o.y }
 
 func TestNestedMethods(t *testing.T) {
-	typ := TypeOf((*outer)(nil))
-	if typ.NumMethod() != 1 || typ.Method(0).Func.UnsafePointer() != ValueOf((*outer).M).UnsafePointer() {
-		t.Errorf("Wrong method table for outer: (M=%p)", (*outer).M)
-		for i := 0; i < typ.NumMethod(); i++ {
-			m := typ.Method(i)
-			t.Errorf("\t%d: %s %p\n", i, m.Name, m.Func.UnsafePointer())
-		}
+	receiver := ValueOf(&outer{y: 42, inner: inner{x: 17}})
+	typ := receiver.Type()
+	if got := typ.NumMethod(); got != 1 {
+		t.Fatalf("outer has %d methods, want 1", got)
+	}
+	method := typ.Method(0)
+	if !method.Func.IsValid() || method.Func.Type() != TypeOf((*outer).M) {
+		t.Fatalf("wrong method function for outer: %v", method.Func)
+	}
+	if got := method.Func.Call([]Value{receiver})[0].Int(); got != 42 {
+		t.Errorf("reflected outer.M returned %d, want 42", got)
 	}
 }
-
-*/
 
 type unexp struct{}
 
@@ -3405,11 +3432,9 @@ func (i *InnerInt) M() int {
 	return i.X
 }
 
-/*
-
 func TestEmbeddedMethods(t *testing.T) {
 	typ := TypeOf((*OuterInt)(nil))
-	if typ.NumMethod() != 1 || typ.Method(0).Func.UnsafePointer() != ValueOf((*OuterInt).M).UnsafePointer() {
+	if typ.NumMethod() != 1 || typ.Method(0).Func.Type() != ValueOf((*OuterInt).M).Type() {
 		t.Errorf("Wrong method table for OuterInt: (m=%p)", (*OuterInt).M)
 		for i := 0; i < typ.NumMethod(); i++ {
 			m := typ.Method(i)
@@ -3433,8 +3458,6 @@ func TestEmbeddedMethods(t *testing.T) {
 	}
 }
 
-*/
-
 type FuncDDD func(...any) error
 
 func (f FuncDDD) M() {}
@@ -3446,7 +3469,6 @@ func TestNumMethodOnDDD(t *testing.T) {
 	}
 }
 
-/*
 func TestPtrTo(t *testing.T) {
 	// This block of code means that the ptrToThis field of the
 	// reflect data for *unsafe.Pointer is non zero, see
@@ -3459,7 +3481,17 @@ func TestPtrTo(t *testing.T) {
 
 	typ := TypeOf(z)
 	for i = 0; i < 100; i++ {
-		typ = PointerTo(typ)
+		next := PointerTo(typ)
+		if got := PointerTo(typ); got != next {
+			t.Fatalf("PointerTo returned distinct types %v and %v", next, got)
+		}
+		typ = next
+		if i == 2 {
+			var deep *****unsafe.Pointer
+			if typ != TypeOf(deep) {
+				t.Fatalf("PointerTo returned %v, want static type %v", typ, TypeOf(deep))
+			}
+		}
 	}
 	for i = 0; i < 100; i++ {
 		typ = typ.Elem()
@@ -3492,8 +3524,6 @@ func TestPtrToGC(t *testing.T) {
 		}
 	}
 }
-
-*/
 
 func TestAddr(t *testing.T) {
 	var p struct {
@@ -3616,6 +3646,9 @@ func TestIndex(t *testing.T) {
 	if v != xa[2] {
 		t.Errorf("xa.Index(2) = %v; expected %v", v, xa[2])
 	}
+	inline := ValueOf([1]byte{7})
+	shouldPanic("array index out of range", func() { inline.Index(-1) })
+	shouldPanic("array index out of range", func() { inline.Index(1) })
 	s := "0123456789"
 	v = ValueOf(s).Index(3).Interface().(byte)
 	if v != s[3] {
@@ -3739,8 +3772,6 @@ func TestSetLenCap(t *testing.T) {
 	shouldPanic("SetCap", func() { va.SetCap(8) })
 }
 
-/*
-
 func TestVariadic(t *testing.T) {
 	var b strings.Builder
 	V := ValueOf
@@ -3786,8 +3817,6 @@ func TestStructArg(t *testing.T) {
 		t.Errorf("function called with (%v, %v), want (%v, %v)", gotA, gotB, wantA, wantB)
 	}
 }
-
-*/
 
 var tagGetTests = []struct {
 	Tag   StructTag
@@ -3890,8 +3919,6 @@ type Public struct {
 func (p *Public) M() {
 }
 
-/*
-
 func TestUnexported(t *testing.T) {
 	var pub Public
 	pub.S = "S"
@@ -3931,8 +3958,6 @@ func TestUnexported(t *testing.T) {
 	shouldPanic("Interface", func() { v.Elem().FieldByName("y").Interface() })
 	shouldPanic("Method", func() { v.Type().Method(0) })
 }
-
-*/
 
 func TestSetPanic(t *testing.T) {
 	ok := func(f func()) { f() }
@@ -4026,8 +4051,6 @@ func (t timp) W() {}
 func (t timp) Y() {}
 func (t timp) w() {}
 func (t timp) y() {}
-
-/*
 
 func TestCallPanic(t *testing.T) {
 	type t0 interface {
@@ -4145,8 +4168,6 @@ func TestValuePanic(t *testing.T) {
 	shouldPanic("call of reflect.Value.TrySend on string Value", func() { vo("").TrySend(vo("")) })
 	shouldPanic("call of reflect.Value.Uint on float64 Value", func() { vo(0.0).Uint() })
 }
-
-*/
 
 func shouldPanic(expect string, f func()) {
 	defer func() {
@@ -4805,8 +4826,6 @@ func TestConvert(t *testing.T) {
 	}
 }
 
-/*
-
 func TestConvertPanic(t *testing.T) {
 	s := make([]byte, 4)
 	p := new([8]byte)
@@ -4850,8 +4869,6 @@ func TestConvertSlice2Array(t *testing.T) {
 		}
 	}
 }
-
-*/
 
 var gFloat32 float32
 
@@ -6648,102 +6665,10 @@ func TestAllocsInterfaceSmall(t *testing.T) {
 	}
 }
 
-// An exhaustive is a mechanism for writing exhaustive or stochastic tests.
-// The basic usage is:
-//
-//	for x.Next() {
-//		... code using x.Maybe() or x.Choice(n) to create test cases ...
-//	}
-//
-// Each iteration of the loop returns a different set of results, until all
-// possible result sets have been explored. It is okay for different code paths
-// to make different method call sequences on x, but there must be no
-// other source of non-determinism in the call sequences.
-//
-// When faced with a new decision, x chooses randomly. Future explorations
-// of that path will choose successive values for the result. Thus, stopping
-// the loop after a fixed number of iterations gives somewhat stochastic
-// testing.
-//
-// Example:
-//
-//	for x.Next() {
-//		v := make([]bool, x.Choose(4))
-//		for i := range v {
-//			v[i] = x.Maybe()
-//		}
-//		fmt.Println(v)
-//	}
-//
-// prints (in some order):
-//
-//	[]
-//	[false]
-//	[true]
-//	[false false]
-//	[false true]
-//	...
-//	[true true]
-//	[false false false]
-//	...
-//	[true true true]
-//	[false false false false]
-//	...
-//	[true true true true]
-type exhaustive struct {
-	r    *rand.Rand
-	pos  int
-	last []choice
-}
-
-type choice struct {
-	off int
-	n   int
-	max int
-}
-
-func (x *exhaustive) Next() bool {
-	if x.r == nil {
-		x.r = rand.New(rand.NewSource(time.Now().UnixNano()))
-	}
-	x.pos = 0
-	if x.last == nil {
-		x.last = []choice{}
-		return true
-	}
-	for i := len(x.last) - 1; i >= 0; i-- {
-		c := &x.last[i]
-		if c.n+1 < c.max {
-			c.n++
-			x.last = x.last[:i+1]
-			return true
-		}
-	}
-	return false
-}
-
-func (x *exhaustive) Choose(max int) int {
-	if x.pos >= len(x.last) {
-		x.last = append(x.last, choice{x.r.Intn(max), 0, max})
-	}
-	c := &x.last[x.pos]
-	x.pos++
-	if c.max != max {
-		panic("inconsistent use of exhaustive tester")
-	}
-	return (c.n + c.off) % max
-}
-
-func (x *exhaustive) Maybe() bool {
-	return x.Choose(2) == 1
-}
-
 func GCFunc(args []Value) []Value {
 	runtime.GC()
 	return []Value{}
 }
-
-/*
 
 func TestReflectFuncTraceback(t *testing.T) {
 	f := MakeFunc(TypeOf(func() {}), GCFunc)
@@ -6758,8 +6683,6 @@ func TestReflectMethodTraceback(t *testing.T) {
 		t.Errorf("Call returned %d; want 8", i)
 	}
 }
-
-*/
 
 func TestSmallZero(t *testing.T) {
 	type T [10]byte
@@ -6929,6 +6852,8 @@ func TestCallArgLive(t *testing.T) {
 	*CallGC = false
 }
 
+*/
+
 func TestMakeFuncStackCopy(t *testing.T) {
 	target := func(in []Value) []Value {
 		runtime.GC()
@@ -6970,8 +6895,6 @@ func TestValueString(t *testing.T) {
 	}
 }
 
-*/
-
 func TestInvalid(t *testing.T) {
 	// Used to have inconsistency between IsValid() and Kind() != Invalid.
 	type T struct{ v any }
@@ -6985,8 +6908,6 @@ func TestInvalid(t *testing.T) {
 		t.Errorf("field elem: IsValid=%v, Kind=%v, want false, Invalid", v.IsValid(), v.Kind())
 	}
 }
-
-/*
 
 // Issue 8917.
 func TestLargeGCProg(t *testing.T) {
@@ -7126,6 +7047,8 @@ func clobber() {
 	}
 	runtime.GC()
 }
+
+/*
 
 func TestFuncLayout(t *testing.T) {
 	align := func(x uintptr) uintptr {
@@ -7498,6 +7421,8 @@ func TestTypeOfTypeOf(t *testing.T) {
 	check("SliceOf", SliceOf(TypeOf(T{})))
 }
 
+*/
+
 type XM struct{ _ bool }
 
 func (*XM) String() string { return "" }
@@ -7510,6 +7435,8 @@ func TestPtrToMethods(t *testing.T) {
 		t.Fatal("does not implement Stringer, but should")
 	}
 }
+
+/*
 
 func TestMapAlloc(t *testing.T) {
 	m := ValueOf(make(map[int]int, 10))
@@ -7541,6 +7468,8 @@ func TestMapAlloc(t *testing.T) {
 	// map, but to still catch a regression where we keep re-allocating in the hashmap as new entries are added.
 }
 
+*/
+
 func TestChanAlloc(t *testing.T) {
 	// Note: for a chan int, the return Value must be allocated, so we
 	// use a chan *int instead.
@@ -7557,8 +7486,6 @@ func TestChanAlloc(t *testing.T) {
 	// a limitation of escape analysis. If that is ever fixed the
 	// allocs < 0.5 condition will trigger and this test should be fixed.
 }
-
-*/
 
 type TheNameOfThisTypeIsExactly255BytesLongSoWhenTheCompilerPrependsTheReflectTestPackageNameAndExtraStarTheLinkerRuntimeAndReflectPackagesWillHaveToCorrectlyDecodeTheSecondLengthByte0123456789_0123456789_0123456789_0123456789_0123456789_012345678 int
 
@@ -7825,8 +7752,6 @@ func TestIssue22031(t *testing.T) {
 	}
 }
 
-/*
-
 type NonExportedFirst int
 
 func (i NonExportedFirst) ΦExported()       {}
@@ -7842,8 +7767,6 @@ func TestIssue22073(t *testing.T) {
 	// Shouldn't panic.
 	m.Call(nil)
 }
-
-*/
 
 func TestMapIterNonEmptyMap(t *testing.T) {
 	m := map[string]int{"one": 1, "two": 2, "three": 3}
@@ -8032,8 +7955,6 @@ func iterateToString(it *MapIter) string {
 	return "[" + strings.Join(got, ", ") + "]"
 }
 
-/*
-
 func TestConvertibleTo(t *testing.T) {
 	t1 := ValueOf(example1.MyStruct{}).Type()
 	t2 := ValueOf(example2.MyStruct{}).Type()
@@ -8050,8 +7971,6 @@ func TestConvertibleTo(t *testing.T) {
 		t.Fatalf("(%s).ConvertibleTo(%s) = true, want false", t3, t4)
 	}
 }
-
-*/
 
 func TestSetIter(t *testing.T) {
 	data := map[string]int{
@@ -8634,8 +8553,6 @@ func TestValue_EqualNonComparable(t *testing.T) {
 	}
 }
 
-/*
-
 func TestInitFuncTypes(t *testing.T) {
 	n := 100
 	var wg sync.WaitGroup
@@ -8652,5 +8569,3 @@ func TestInitFuncTypes(t *testing.T) {
 	}
 	wg.Wait()
 }
-
-*/

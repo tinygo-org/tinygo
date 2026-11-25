@@ -70,6 +70,11 @@ func parseGCLayout(layout unsafe.Pointer) gcLayout {
 // gcLayout tracks pointer locations in a heap object.
 type gcLayout uintptr
 
+// isStack returns whether this is the layout of a goroutine stack.
+func (layout gcLayout) isStack() bool {
+	return layout == gcLayout(gclayout.Stack)
+}
+
 func (layout gcLayout) pointerFree() bool {
 	return layout&1 != 0 && layout>>(sizeFieldBits+1) == 0
 }

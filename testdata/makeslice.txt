@@ -1,0 +1,12 @@
+zeroLenCapOfSlice 0 4
+lenOfSlice 4 4
+lenAndCapOfSlice 4 4
+zeroLenCapOfCap 0 2
+zeroLenCapOfString 0 5
+zeroLenCapOfArray 0 5
+narrowUnsigned 7 7
+constants 2 8
+stringToTriples 0 5
+bytesToWords 0 4
+stringToTriplesHuge true
+bytesToWordsHuge true

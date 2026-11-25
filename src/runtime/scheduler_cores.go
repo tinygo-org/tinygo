@@ -144,8 +144,31 @@ func assignCore(core int) {
 	task.PauseLocked()
 }
 
+// reserveTimerRoom makes sure the timer queue can take one more node, plus one
+// re-added node for each core running a timer callback, without allocating.
+// Allocating with the lock held can start a GC that waits for a core spinning on
+// the lock with interrupts off. The lock is released while allocating. Call with
+// the scheduler lock held.
+func reserveTimerRoom() {
+	for {
+		need := timerQueueRoom(numCPU)
+		if !timerQueueFull(need) {
+			return
+		}
+		n := 2*need + 1
+		if timerQueue != nil && 2*cap(timerQueue.nodes)+1 > n {
+			n = 2*cap(timerQueue.nodes) + 1
+		}
+		schedulerLock.Unlock()
+		h := &timerHeap{nodes: make([]*timerNode, 0, n)}
+		schedulerLock.Lock()
+		timerQueueGrow(h)
+	}
+}
+
 func addTimer(tn *timerNode) {
 	schedulerLock.Lock()
+	reserveTimerRoom()
 	timerQueueAdd(tn)
 	interruptSleepTicksMulticore(tn.whenTicks())
 	schedulerLock.Unlock()
@@ -153,7 +176,7 @@ func addTimer(tn *timerNode) {
 
 // reAddTimer finishes firing a timer. It re-adds periodic timers unless they
 // were stopped or reset while the callback was running.
-func reAddTimer(tn *timerNode) {
+func reAddTimer(tn *timerNode, delta int64) {
 	schedulerLock.Lock()
 
 	// Remove the timer from the firing list before re-adding it to the queue,
@@ -161,27 +184,34 @@ func reAddTimer(tn *timerNode) {
 	// firing list a second time (which would corrupt the list).
 	firingTimersRemove(tn)
 
-	if tn.stopped {
+	if tn.stopped || tn.timer.stopped {
 		// The timer was stopped or reset while its callback was running. Don't
 		// re-add it: a stopped ticker must stay stopped, and a reset ticker has
 		// already been re-added by resetTimer.
+		freeTimerNode(tn)
 		schedulerLock.Unlock()
 		return
 	}
 	if tn.timer.period == 0 {
+		freeTimerNode(tn)
 		schedulerLock.Unlock()
 		return
 	}
-	tn.timer.when += tn.timer.period
+	tn.timer.when = tn.timer.nextWhen(delta)
+	if tn.timer.isChan && tn.timer.blocked == 0 {
+		tn.timer.pausedNode = tn
+		schedulerLock.Unlock()
+		return
+	}
 	timerQueueAdd(tn)
 	interruptSleepTicksMulticore(tn.whenTicks())
 	schedulerLock.Unlock()
 }
 
-func removeTimer(t *timer) *timerNode {
+func removeTimer(t *timer, stopFiring bool) *timerNode {
 	schedulerLock.Lock()
 	n := timerQueueRemove(t)
-	if n == nil {
+	if n == nil && stopFiring {
 		// The timer wasn't in the queue. It might be running its callback right
 		// now; if so, mark it stopped so it won't be re-added.
 		firingTimerStop(t)
@@ -392,6 +422,17 @@ func lockAtomics() interrupt.State {
 func unlockAtomics(mask interrupt.State) {
 	atomicsLock.Unlock()
 	interrupt.Restore(mask)
+}
+
+// lockTimers takes the scheduler lock, which guards the timer queue and the
+// timer node free list.
+func lockTimers() interrupt.State {
+	schedulerLock.Lock()
+	return 0
+}
+
+func unlockTimers(mask interrupt.State) {
+	schedulerLock.Unlock()
 }
 
 var systemStack [numCPU]uintptr
