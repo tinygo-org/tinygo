@@ -16,17 +16,13 @@ runs:
       run: |
         echo "go_version=$(go env GOVERSION)" >> "$GITHUB_OUTPUT"
         echo "submodules=$(git ls-tree HEAD lib/avr lib/cmsis-svd lib/nrfx lib/stm32-svd lib/py32-svd | git hash-object --stdin)" >> "$GITHUB_OUTPUT"
+        echo "device=$(git rev-parse HEAD:src/device)" >> "$GITHUB_OUTPUT"
     - name: Restore device files
       id: restore
       uses: actions/cache/restore@v5
       with:
         path: src/device
-        key: gen-device-v1-${{ runner.os }}-${{ steps.inputs.outputs.go_version }}-${{ steps.inputs.outputs.submodules }}-${{ hashFiles('make/gen-device.mk', 'tools/gen-device-avr/**', 'tools/gen-device-svd/**') }}
-    - name: Restore tracked device files
-      # The cache also holds the hand-written files that share these directories.
-      if: steps.restore.outputs.cache-hit == 'true'
-      shell: bash
-      run: git checkout -- src/device
+        key: gen-device-v1-${{ runner.os }}-${{ steps.inputs.outputs.go_version }}-${{ steps.inputs.outputs.submodules }}-${{ steps.inputs.outputs.device }}-${{ hashFiles('make/gen-device.mk', 'tools/gen-device-avr/**', 'tools/gen-device-svd/**') }}
     - name: Generate device files
       if: steps.restore.outputs.cache-hit != 'true'
       shell: bash
