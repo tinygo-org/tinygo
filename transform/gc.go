@@ -161,14 +161,19 @@ func makeGCStackSlots(mod llvm.Module, sites *shadowSites) bool {
 		initialStackObject = builder.CreateInsertValue(initialStackObject, numSlotsValue, 1, "")
 		builder.CreateStore(initialStackObject, stackObject)
 
-		// Update stack start.
-		parent := builder.CreateLoad(stackChainStartType, stackChainStart, "")
-		gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
-			llvm.ConstInt(ctx.Int32Type(), 0, false),
-			llvm.ConstInt(ctx.Int32Type(), 0, false),
-		}, "")
-		builder.CreateStore(parent, gep)
-		builder.CreateStore(stackObject, stackChainStart)
+		// Update stack start. With sites, compiler glue is left out of the
+		// chain, as asyncify may run its entry again on a rewind.
+		link := sites == nil || fn.Subprogram().C != nil
+		var parent llvm.Value
+		if link {
+			parent = builder.CreateLoad(stackChainStartType, stackChainStart, "")
+			gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
+				llvm.ConstInt(ctx.Int32Type(), 0, false),
+				llvm.ConstInt(ctx.Int32Type(), 0, false),
+			}, "")
+			builder.CreateStore(parent, gep)
+			builder.CreateStore(stackObject, stackChainStart)
+		}
 
 		// Do a store to the stack object after each new pointer that is created.
 		for i, ptr := range pointers {
@@ -194,6 +199,9 @@ func makeGCStackSlots(mod llvm.Module, sites *shadowSites) bool {
 		// Make sure this stack object is popped from the linked list of stack
 		// objects at return.
 		for _, ret := range returns {
+			if !link {
+				break
+			}
 			// Check for any tail calls at this return.
 			prev := llvm.PrevInstruction(ret)
 			if !prev.IsNil() && !prev.IsABitCastInst().IsNil() {
