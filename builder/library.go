@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 
@@ -81,46 +82,13 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		return nil, nil, err
 	}
 
-	// Make headers if needed.
+	err = l.makeHeaderDir(config)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	headerPath := filepath.Join(outdir, "include")
 	target := config.Triple()
-	if l.makeHeaders != nil {
-		if _, err = os.Stat(headerPath); err != nil {
-			temporaryHeaderPath, err := os.MkdirTemp(outdir, "include.tmp*")
-			if err != nil {
-				return nil, nil, err
-			}
-			defer os.RemoveAll(temporaryHeaderPath)
-			err = l.makeHeaders(target, temporaryHeaderPath)
-			if err != nil {
-				return nil, nil, err
-			}
-			err = os.Chmod(temporaryHeaderPath, 0o755) // TempDir uses 0o700 by default
-			if err != nil {
-				return nil, nil, err
-			}
-			err = os.Rename(temporaryHeaderPath, headerPath)
-			if err != nil {
-				switch {
-				case errors.Is(err, fs.ErrExist):
-					// Another invocation of TinyGo also seems to have already created the headers.
-
-				case runtime.GOOS == "windows" && errors.Is(err, fs.ErrPermission):
-					// On Windows, a rename with a destination directory that already
-					// exists does not result in an IsExist error, but rather in an
-					// access denied error. To be sure, check for this case by checking
-					// whether the target directory exists.
-					if _, err := os.Stat(headerPath); err == nil {
-						break
-					}
-					fallthrough
-
-				default:
-					return nil, nil, err
-				}
-			}
-		}
-	}
 
 	remapDir := filepath.Join(os.TempDir(), "tinygo-"+l.name)
 	if config.TrimPath() {
@@ -315,4 +283,74 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	return job, func() {
 		once.Do(unlock)
 	}, nil
+}
+
+// makeHeaderDir creates the library header files if they don't exist yet.
+func (l *Library) makeHeaderDir(config *compileopts.Config) error {
+	if l.makeHeaders == nil {
+		return nil
+	}
+	outdir := config.LibraryPath(l.name)
+	headerPath := filepath.Join(outdir, "include")
+	if _, err := os.Stat(headerPath); err == nil {
+		return nil
+	}
+	err := os.MkdirAll(outdir, 0o777)
+	if err != nil {
+		return err
+	}
+	temporaryHeaderPath, err := os.MkdirTemp(outdir, "include.tmp*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(temporaryHeaderPath)
+	err = l.makeHeaders(config.Triple(), temporaryHeaderPath)
+	if err != nil {
+		return err
+	}
+	err = os.Chmod(temporaryHeaderPath, 0o755) // TempDir uses 0o700 by default
+	if err != nil {
+		return err
+	}
+	err = os.Rename(temporaryHeaderPath, headerPath)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, fs.ErrExist):
+		// Another invocation of TinyGo also seems to have already created the headers.
+		return nil
+	case runtime.GOOS == "windows" && errors.Is(err, fs.ErrPermission):
+		// On Windows, a rename with a destination directory that already
+		// exists does not result in an IsExist error, but rather in an
+		// access denied error. To be sure, check for this case by checking
+		// whether the target directory exists.
+		if _, statErr := os.Stat(headerPath); statErr == nil {
+			return nil
+		}
+		return err
+	default:
+		return err
+	}
+}
+
+// MakeLibcHeaders creates the libc headers that CGo needs to parse C code for
+// this target. Build does this as part of building the libc.
+func MakeLibcHeaders(config *compileopts.Config) error {
+	switch config.Target.Libc {
+	case "picolibc":
+		return libPicolibc.makeHeaderDir(config)
+	case "musl":
+		return libMusl.makeHeaderDir(config)
+	case "wasi-libc":
+		if slices.Contains(config.BuildTags(), "wasip2") {
+			return libWasiLibcWasip2.makeHeaderDir(config)
+		}
+		return libWasiLibc.makeHeaderDir(config)
+	case "wasmbuiltins":
+		return libWasmBuiltins.makeHeaderDir(config)
+	case "mingw-w64":
+		return libMinGW.makeHeaderDir(config)
+	default:
+		return nil
+	}
 }
