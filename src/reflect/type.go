@@ -97,6 +97,7 @@ package reflect
 import (
 	"internal/reflectlite"
 	"iter"
+	"sync"
 	"unsafe"
 )
 
@@ -622,7 +623,60 @@ func ArrayOf(n int, t Type) Type {
 	return toType(reflectlite.ArrayOf(n, toRawType(t)))
 }
 
+type hashCache struct {
+	sync.Mutex // Guards stores on m.
+	m          sync.Map
+}
+
+func (c *hashCache) Load(hash uintptr, match func(any) bool) (any, bool) {
+	if entries, ok := c.m.Load(hash); ok {
+		for _, entry := range entries.([]any) {
+			if match(entry) {
+				return entry, true
+			}
+		}
+	}
+	return nil, false
+}
+
+func (c *hashCache) LoadOrStore(hash uintptr, match func(any) bool, val any) any {
+	c.Lock()
+	defer c.Unlock()
+	var entries []any
+	if existing, ok := c.m.Load(hash); ok {
+		entries = existing.([]any)
+		for _, entry := range entries {
+			if match(entry) {
+				return entry
+			}
+		}
+	}
+	c.m.Store(hash, append(entries, val))
+	return val
+}
+
+var (
+	structLookupCache     hashCache
+	structLookupCacheOnce sync.Once
+	funcLookupCache       hashCache
+	funcLookupCacheOnce   sync.Once
+)
+
+func initStructLookupCache() {
+	structLookupCacheOnce.Do(func() {
+		reflectlite.SetStructLookupCache(&structLookupCache)
+	})
+}
+
+func initFuncLookupCache() {
+	funcLookupCacheOnce.Do(func() {
+		reflectlite.SetFuncLookupCache(&funcLookupCache)
+	})
+}
+
 func StructOf(fields []StructField) Type {
+	initStructLookupCache()
+	initFuncLookupCache()
 	rawFields := make([]reflectlite.StructField, len(fields))
 	for i, field := range fields {
 		var typ reflectlite.Type
@@ -647,6 +701,7 @@ func MapOf(key, value Type) Type {
 }
 
 func FuncOf(in, out []Type, variadic bool) Type {
+	initFuncLookupCache()
 	rawIn := make([]reflectlite.Type, len(in))
 	for i, t := range in {
 		rawIn[i] = toRawType(t)

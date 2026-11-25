@@ -360,12 +360,35 @@ type dynamicStructType struct {
 	layoutData    []byte
 }
 
-type structCacheEntry struct {
-	typ  *RawType
-	next *structCacheEntry
+//go:linkname memhash runtime.memhash
+func memhash(p unsafe.Pointer, seed, s uintptr) uintptr
+
+// HashCache caches dynamic types indexed by hash.
+// Package reflect installs sync.Map-backed caches here.
+type HashCache interface {
+	Load(hash uintptr, match func(any) bool) (any, bool)
+	LoadOrStore(hash uintptr, match func(any) bool, val any) any
 }
 
-var structLookupCache atomic.Pointer[structCacheEntry]
+var structLookupCache atomic.Pointer[HashCache]
+
+func SetStructLookupCache(c HashCache) {
+	structLookupCache.CompareAndSwap(nil, &c)
+}
+
+func loadHashCache(cache *atomic.Pointer[HashCache], hash uintptr, match func(any) bool) (any, bool) {
+	if ptr := cache.Load(); ptr != nil {
+		return (*ptr).Load(hash, match)
+	}
+	return nil, false
+}
+
+func loadOrStoreHashCache(cache *atomic.Pointer[HashCache], hash uintptr, match func(any) bool, val any) any {
+	if ptr := cache.Load(); ptr != nil {
+		return (*ptr).LoadOrStore(hash, match, val)
+	}
+	return val
+}
 
 //go:extern internal/reflectlite.structTypeLinks
 var structTypeLinks **RawType
@@ -398,10 +421,13 @@ type funcCacheEntry struct {
 	in      []*RawType
 	out     []*RawType
 	storage []byte
-	next    *funcCacheEntry
 }
 
-var funcLookupCache atomic.Pointer[funcCacheEntry]
+var funcLookupCache atomic.Pointer[HashCache]
+
+func SetFuncLookupCache(c HashCache) {
+	funcLookupCache.CompareAndSwap(nil, &c)
+}
 
 //go:extern internal/reflectlite.funcTypeLinks
 var funcTypeLinks **RawType
@@ -2043,12 +2069,14 @@ func StructOf(fields []StructField) Type {
 	}
 	size = alignedSize
 
-	if typ := loadCachedStructType(rawFields); typ != nil {
-		return typ
+	hash := hashStructFields(rawFields)
+	match := func(entry any) bool { return structTypeMatches(entry.(*RawType), rawFields) }
+	if typ, ok := loadHashCache(&structLookupCache, hash, match); ok {
+		return typ.(*RawType)
 	}
 	for _, typ := range unsafe.Slice(structTypeLinks, structTypeLinksLen) {
 		if structTypeMatches(typ, rawFields) {
-			return loadOrStoreCachedStructType(rawFields, typ)
+			return loadOrStoreHashCache(&structLookupCache, hash, match, typ).(*RawType)
 		}
 	}
 
@@ -2101,7 +2129,7 @@ func StructOf(fields []StructField) Type {
 	}
 	dynamic.layout, dynamic.layoutData = makeStructGCLayout(rawFields, size)
 	dynamic.ptrTo = (*RawType)(unsafe.Add(unsafe.Pointer(&dynamic.RawType), 1))
-	return loadOrStoreCachedStructType(rawFields, &dynamic.RawType)
+	return loadOrStoreHashCache(&structLookupCache, hash, match, &dynamic.RawType).(*RawType)
 }
 
 func isValidFieldName(name string) bool {
@@ -2148,29 +2176,22 @@ func structTypeMatches(typ *RawType, fields []rawStructField) bool {
 	return true
 }
 
-func loadCachedStructType(fields []rawStructField) *RawType {
-	for entry := structLookupCache.Load(); entry != nil; entry = entry.next {
-		if structTypeMatches(entry.typ, fields) {
-			return entry.typ
-		}
-	}
-	return nil
+func hashString(seed uintptr, s string) uintptr {
+	return memhash(unsafe.Pointer(unsafe.StringData(s)), seed, uintptr(len(s)))
 }
 
-func loadOrStoreCachedStructType(fields []rawStructField, typ *RawType) *RawType {
-	entry := &structCacheEntry{typ: typ}
-	for {
-		head := structLookupCache.Load()
-		for existing := head; existing != nil; existing = existing.next {
-			if structTypeMatches(existing.typ, fields) {
-				return existing.typ
-			}
-		}
-		entry.next = head
-		if structLookupCache.CompareAndSwap(head, entry) {
-			return typ
+func hashStructFields(fields []rawStructField) uintptr {
+	h := uintptr(len(fields))
+	for _, field := range fields {
+		h = hashString(h, field.Name)
+		h = hashString(h, field.PkgPath)
+		h = memhash(unsafe.Pointer(&field.Type), h, unsafe.Sizeof(field.Type))
+		h = hashString(h, string(field.Tag))
+		if field.Anonymous {
+			h ^= 1
 		}
 	}
+	return h
 }
 
 func makeStructGCLayout(fields []rawStructField, size uintptr) (unsafe.Pointer, []byte) {
@@ -2297,12 +2318,14 @@ func FuncOf(in, out []Type, variadic bool) Type {
 }
 
 func funcOf(rawIn, rawOut []*RawType, variadic bool) *RawType {
-	if typ := loadCachedFuncType(rawIn, rawOut, variadic); typ != nil {
-		return typ
+	hash := hashFuncType(rawIn, rawOut, variadic)
+	match := func(entry any) bool { return funcTypeMatches(entry.(*funcCacheEntry).typ, rawIn, rawOut, variadic) }
+	if entry, ok := loadHashCache(&funcLookupCache, hash, match); ok {
+		return entry.(*funcCacheEntry).typ
 	}
 	for _, typ := range unsafe.Slice(funcTypeLinks, funcTypeLinksLen) {
 		if funcTypeMatches(typ, rawIn, rawOut, variadic) {
-			return loadOrStoreCachedFuncType(rawIn, rawOut, variadic, typ, nil)
+			return loadOrStoreHashCache(&funcLookupCache, hash, match, &funcCacheEntry{typ: typ}).(*funcCacheEntry).typ
 		}
 	}
 
@@ -2320,7 +2343,12 @@ func funcOf(rawIn, rawOut []*RawType, variadic bool) *RawType {
 	inOut := unsafe.Slice((**RawType)(unsafe.Pointer(&typ.inOut)), len(rawIn)+len(rawOut))
 	copy(inOut, rawIn)
 	copy(inOut[len(rawIn):], rawOut)
-	return loadOrStoreCachedFuncType(rawIn, rawOut, variadic, &typ.RawType, storage)
+	return loadOrStoreHashCache(&funcLookupCache, hash, match, &funcCacheEntry{
+		typ:     &typ.RawType,
+		in:      rawIn,
+		out:     rawOut,
+		storage: storage,
+	}).(*funcCacheEntry).typ
 }
 
 func funcTypeMatches(typ *RawType, in, out []*RawType, variadic bool) bool {
@@ -2347,34 +2375,19 @@ func funcTypeMatches(typ *RawType, in, out []*RawType, variadic bool) bool {
 	return true
 }
 
-func loadCachedFuncType(in, out []*RawType, variadic bool) *RawType {
-	for entry := funcLookupCache.Load(); entry != nil; entry = entry.next {
-		if funcTypeMatches(entry.typ, in, out, variadic) {
-			return entry.typ
-		}
+func hashFuncType(in, out []*RawType, variadic bool) uintptr {
+	h := uintptr(len(in))*31 ^ uintptr(len(out))
+	if variadic {
+		h = h*31 + 1
 	}
-	return nil
-}
-
-func loadOrStoreCachedFuncType(in, out []*RawType, variadic bool, typ *RawType, storage []byte) *RawType {
-	entry := &funcCacheEntry{
-		typ:     typ,
-		in:      in,
-		out:     out,
-		storage: storage,
+	elemSize := unsafe.Sizeof((*RawType)(nil))
+	if len(in) > 0 {
+		h = memhash(unsafe.Pointer(unsafe.SliceData(in)), h, uintptr(len(in))*elemSize)
 	}
-	for {
-		head := funcLookupCache.Load()
-		for existing := head; existing != nil; existing = existing.next {
-			if funcTypeMatches(existing.typ, in, out, variadic) {
-				return existing.typ
-			}
-		}
-		entry.next = head
-		if funcLookupCache.CompareAndSwap(head, entry) {
-			return typ
-		}
+	if len(out) > 0 {
+		h = memhash(unsafe.Pointer(unsafe.SliceData(out)), h, uintptr(len(out))*elemSize)
 	}
+	return h
 }
 
 const maxVarintLen32 = 5

@@ -536,8 +536,6 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	if hasTag("gc.boehm") || darwin {
 		r.skipTest("internal/synctest", `^TestWaitGroupManyBubbles$`)
 	}
-	// Concurrent FuncOf and StructOf creation times out.
-	r.skipTest("internal/synctest", `^TestReflectFuncOf$`)
 	// Bubble ownership checks start subprocesses.
 	if !linux {
 		r.skipTest("internal/synctest", `^(TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount)$`)
