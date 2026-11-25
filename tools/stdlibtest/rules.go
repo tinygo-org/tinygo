@@ -54,7 +54,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipPackage("os/signal")
 	// The plugin test programs fail to link libdl.
 	r.skipPackage("plugin")
-	// Weak pointers stay non-nil after GC and after a finalizer is enqueued.
+	// Conservative stack scanning keeps test pointers live across runtime.GC.
 	r.skipPackage("weak")
 	// TinyGo's build tags leave no runnable Linux tests.
 	r.skipPackage("embed")

@@ -135,19 +135,6 @@ type Cleanup struct{}
 
 func (c Cleanup) Stop() {}
 
-//go:linkname registerWeakPointer weak.runtime_registerWeakPointer
-func registerWeakPointer(ptr unsafe.Pointer) unsafe.Pointer {
-	// TODO: unimplemented.
-	// I hope not implementing this won't break anything, like packages that
-	// expect weak pointers to be GC'd before they actually are.
-	return ptr
-}
-
-//go:linkname makeStrongFromWeak weak.runtime_makeStrongFromWeak
-func makeStrongFromWeak(ptr unsafe.Pointer) unsafe.Pointer {
-	return ptr
-}
-
 var godebugDefault string // set by the builder
 var godebugStartup string
 var godebugEmpty string

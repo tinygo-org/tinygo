@@ -422,6 +422,19 @@ func finalizerRunner() {
 //export tinygo_runtime_bdwgc_register_finalizer
 func libgc_register_finalizer(uintptr, uintptr) uintptr
 
+//export GC_general_register_disappearing_link
+func libgc_register_disappearing_link(unsafe.Pointer, uintptr) int32
+
+func registerWeakHandle(h *weakHandle, ptr unsafe.Pointer) {
+	gcLock.Lock()
+	base := libgc_base(uintptr(ptr))
+	if base != 0 {
+		libgc_register_disappearing_link(unsafe.Pointer(&h.ptr), base)
+	}
+	gcResumeWorld()
+	gcLock.Unlock()
+}
+
 //export GC_should_invoke_finalizers
 func libgc_should_invoke_finalizers() int32
 
