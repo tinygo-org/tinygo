@@ -69,6 +69,18 @@ You can also use the same syntax as Go 1.24+:
 GOOS=wasip1 GOARCH=wasm tinygo build -buildmode=c-shared -o add.wasm add.go
 ```
 
+When running WASI programs with Wasmtime, `tinygo run` grants access to the
+current directory and the temporary directory.
+The current directory is also available at its absolute host path,
+with the drive or share prefix omitted on Windows.
+This keeps `PWD` and relative file access consistent.
+
+WASI tests run through `tinygo test` have read/write access to the host
+filesystem, matching [Go's WASI test wrapper](https://go.dev/src/lib/wasm/go_wasip1_wasm_exec).
+On Windows, this includes the drive or share containing the package and
+the temporary directory.
+Tests are not sandboxed. Only run tests you trust.
+
 ## Installation
 
 See the [getting started instructions](https://tinygo.org/getting-started/) for information on how to install TinyGo, as well as how to run the TinyGo compiler using our Docker container.
@@ -78,6 +90,8 @@ See the [getting started instructions](https://tinygo.org/getting-started/) for 
 ### Embedded
 
 You can compile TinyGo programs for over 150 different microcontroller boards.
+Firmware output extensions depend on the target. For example, RP2040 and
+RP2350 targets support `.elf`, `.hex`, and `.uf2` firmware outputs.
 
 For more information, please see https://tinygo.org/docs/reference/microcontrollers/
 

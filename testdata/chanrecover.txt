@@ -1,0 +1,37 @@
+plain send: runtime error: send on closed channel
+after plain send: select ok
+reuse plain send: runtime error: send on closed channel
+reuse receive: 0 false
+reuse select default: runtime error: send on closed channel
+reuse receive: 0 false
+reuse close: runtime error: close of closed channel
+after reuse: select ok
+select default: runtime error: send on closed channel
+after select default: select ok
+select blocking: runtime error: send on closed channel
+after select blocking: select ok
+select later case: runtime error: send on closed channel
+after select later case: select ok
+select loop recovered: 200
+after select loop: select ok
+close twice: runtime error: close of closed channel
+close nil: runtime error: close of nil channel
+after close: select ok
+inner defer ran
+outer: runtime error: send on closed channel
+after nested: select ok
+first: runtime error: send on closed channel
+final: string: second
+after repanic: select ok
+named result: 42
+select in defer ok
+after select in defer: select ok
+blocked sender: runtime error: send on closed channel
+blocked sender done
+after blocked sender: select ok
+blocked select sender: runtime error: send on closed channel
+blocked select sender done
+after blocked select sender: select ok
+goroutine stress ok: true
+after goroutine stress: select ok
+done

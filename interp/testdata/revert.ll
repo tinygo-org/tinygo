@@ -5,6 +5,21 @@ declare void @externalCall(i64)
 
 declare i64 @ptrHash(ptr nocapture)
 
+declare void @modifyAtomic(ptr)
+
+declare void @"internal/task.PauseLocked"(ptr)
+
+define i32 @"sync/atomic.SwapUint32"(ptr %addr, i32 %new, ptr %context) {
+  %old = atomicrmw xchg ptr %addr, i32 %new syncscope("singlethread") seq_cst, align 4
+  ret i32 %old
+}
+
+define i1 @"sync/atomic.CompareAndSwapUint32"(ptr %addr, i32 %old, i32 %new, ptr %context) {
+  %pair = cmpxchg ptr %addr, i32 %old, i32 %new syncscope("singlethread") seq_cst seq_cst, align 4
+  %swapped = extractvalue { i32, i1 } %pair, 1
+  ret i1 %swapped
+}
+
 @foo.knownAtRuntime = global i64 0
 @bar.knownAtRuntime = global i64 0
 @baz.someGlobal = external global [3 x {i64, i32}]
@@ -14,6 +29,15 @@ declare i64 @ptrHash(ptr nocapture)
 @y.ready = global i32 0
 @z.bloom = global i64 0
 @z.arr = global [32 x i8] zeroinitializer
+@atomic.value = global i32 0
+@atomic.old = global i32 0
+@atomic.success = global i1 false
+@atomic.failure = global i1 false
+@atomic.seen = global i32 0
+@atomic.runtimeOld = global i32 0
+@atomic.runtimeSuccess = global i1 false
+@atomic.runtimeSeen = global i32 0
+@pause.lock = global i32 0
 
 define void @runtime.initAll() unnamed_addr {
 entry:
@@ -22,8 +46,10 @@ entry:
   call void @bar.init(ptr undef)
   call void @main.init(ptr undef)
   call void @x.init(ptr undef)
+  call void @atomic.init(ptr undef)
   call void @y.init(ptr undef)
   call void @z.init(ptr undef)
+  call void @pause.init(ptr undef)
   ret void
 }
 
@@ -78,6 +104,27 @@ end:
   ret void
 }
 
+define internal void @atomic.init(ptr %context) unnamed_addr {
+  store atomic i32 7, ptr @atomic.value seq_cst, align 4
+  %old = call i32 @"sync/atomic.SwapUint32"(ptr @atomic.value, i32 9, ptr undef)
+  store i32 %old, ptr @atomic.old
+  %success = call i1 @"sync/atomic.CompareAndSwapUint32"(ptr @atomic.value, i32 9, i32 11, ptr undef)
+  store i1 %success, ptr @atomic.success
+  %failure = call i1 @"sync/atomic.CompareAndSwapUint32"(ptr @atomic.value, i32 9, i32 13, ptr undef)
+  store i1 %failure, ptr @atomic.failure
+  %seen = load atomic i32, ptr @atomic.value seq_cst, align 4
+  store i32 %seen, ptr @atomic.seen
+  call void @modifyAtomic(ptr @atomic.value)
+  %runtimeOld = call i32 @"sync/atomic.SwapUint32"(ptr @atomic.value, i32 15, ptr undef)
+  store i32 %runtimeOld, ptr @atomic.runtimeOld
+  %runtimeSuccess = call i1 @"sync/atomic.CompareAndSwapUint32"(ptr @atomic.value, i32 15, i32 17, ptr undef)
+  store i1 %runtimeSuccess, ptr @atomic.runtimeSuccess
+  %runtimeSeen = load atomic i32, ptr @atomic.value seq_cst, align 4
+  store i32 %runtimeSeen, ptr @atomic.runtimeSeen
+  store atomic i32 19, ptr @atomic.value seq_cst, align 4
+  ret void
+}
+
 define internal void @z.init(ptr %context) unnamed_addr {
   ; This can be safely expanded.
   call void @z.setArr(ptr @z.bloom, i64 1, ptr @z.bloom)
@@ -112,5 +159,18 @@ define internal void @z.set(ptr %ptr, ptr %context) unnamed_addr {
   %old = load i64, ptr %context
   %new = or i64 %old, %bit
   store i64 %new, ptr %context
+  ret void
+}
+
+define internal void @pause.init(ptr %context) unnamed_addr {
+  call void @pause.sleep(ptr undef)
+  ret void
+}
+
+define internal void @pause.sleep(ptr %context) unnamed_addr {
+  ; The lock is held while the goroutine is paused, so this call must be
+  ; reverted as a whole.
+  store atomic i32 1, ptr @pause.lock seq_cst, align 4
+  call void @"internal/task.PauseLocked"(ptr undef)
   ret void
 }

@@ -72,9 +72,7 @@ func (a ADC) Get() uint16 {
 	// PCSEL already set for all channels in InitADC (must be written while ADEN=0).
 
 	// Set up regular sequence: 1 conversion, channel in SQ1
-	// Note: ADC_SQR1_SQ1_Pos (0xC) in the device header is wrong for the 14-bit ADC1/ADC2.
-	// RM0456 shows SQ1 at bits [10:6] = position 6.
-	stm32.ADC1.SQR1.Set(ch << 6) // L=0 means 1 conversion
+	stm32.ADC1.SQR1.Set(ch << stm32.ADC_SQR1_SQ1_Pos) // L=0 means 1 conversion
 
 	// Start conversion
 	stm32.ADC1.CR.SetBits(stm32.ADC_CR_ADSTART)

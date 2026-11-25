@@ -76,6 +76,8 @@ const (
 
 // UART pins
 const (
-	UART_RX_PIN = D20
-	UART_TX_PIN = D21
+	UART0_RX_PIN = D20
+	UART0_TX_PIN = D21
+	UART_TX_PIN  = UART0_TX_PIN
+	UART_RX_PIN  = UART0_RX_PIN
 )

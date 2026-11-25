@@ -5,6 +5,7 @@ package machine
 import (
 	"device/tkey"
 	"errors"
+	"internal/byteorder"
 	"strconv"
 )
 
@@ -198,10 +199,7 @@ func CDI() []byte {
 	cdi := make([]byte, 32)
 	for i := 0; i < 8; i++ {
 		c := tkey.TK1.CDI_FIRST[i].Get()
-		cdi[i*4] = byte(c >> 24)
-		cdi[i*4+1] = byte(c >> 16)
-		cdi[i*4+2] = byte(c >> 8)
-		cdi[i*4+3] = byte(c)
+		byteorder.BEPutUint32(cdi[i*4:], c)
 	}
 	return cdi
 }
@@ -211,10 +209,7 @@ func UDI() []byte {
 	udi := make([]byte, 8)
 	for i := 0; i < 2; i++ {
 		c := tkey.TK1.UDI_FIRST[i].Get()
-		udi[i*4] = byte(c >> 24)
-		udi[i*4+1] = byte(c >> 16)
-		udi[i*4+2] = byte(c >> 8)
-		udi[i*4+3] = byte(c)
+		byteorder.BEPutUint32(udi[i*4:], c)
 	}
 	return udi
 }
@@ -225,10 +220,7 @@ func UDS() []byte {
 	uds := make([]byte, 32)
 	for i := 0; i < 8; i++ {
 		c := tkey.UDS.DATA[i].Get()
-		uds[i*4] = byte(c >> 24)
-		uds[i*4+1] = byte(c >> 16)
-		uds[i*4+2] = byte(c >> 8)
-		uds[i*4+3] = byte(c)
+		byteorder.BEPutUint32(uds[i*4:], c)
 	}
 	return uds
 }

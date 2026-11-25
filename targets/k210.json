@@ -5,6 +5,9 @@
 	"features": "+64bit,+a,+c,+d,+f,+m,+zaamo,+zalrsc,+zicsr,+zifencei,+zmmul,-relax",
 	"build-tags": [
 		"k210",
+		"machine.uart",
+		"machine.spi",
+		"machine.i2c",
 		"kendryte"
 	],
 	"code-model": "medium"

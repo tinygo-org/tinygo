@@ -17,6 +17,22 @@ const xtalClock = 40_000000       // 40MHz
 const apbClock = 80_000000        // 80MHz
 const cryptoPWMClock = 160_000000 // 160MHz
 
+// CurrentCore returns the core number the call was made from.
+func CurrentCore() int {
+	return int(currentCPU())
+}
+
+//go:linkname currentCPU runtime.currentCPU
+func currentCPU() uint32
+
+// NumCores returns number of cores available on the device.
+func NumCores() int { return 2 }
+
+// CPUFrequency returns the CPU frequency set by the runtime at boot.
+func CPUFrequency() uint32 {
+	return 240e6 // 240MHz
+}
+
 // GetCPUFrequency returns the current CPU frequency of the chip.
 func GetCPUFrequency() (uint32, error) {
 	switch esp.SYSTEM.GetSYSCLK_CONF_SOC_CLK_SEL() {
@@ -62,10 +78,6 @@ func SetCPUFrequency(frequency uint32) error {
 	}
 	return errors.New("machine: Unsupported CPU frequency selected. Supported: 80, 160, 240 MHz")
 }
-
-var (
-	ErrInvalidSPIBus = errors.New("machine: invalid SPI bus")
-)
 
 const (
 	PinOutput PinMode = iota
@@ -194,7 +206,7 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	}
 
 	// Set configuration
-	ioRegister := p.ioMuxReg()
+	ioRegister := p.mux()
 	ioRegister.Set(ioConfig)
 
 	switch config.Mode {
@@ -227,9 +239,9 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	}
 }
 
-// ioMuxReg returns the IO_MUX_n_REG register used for configuring the io mux for
-// this pin
-func (p Pin) ioMuxReg() *volatile.Register32 {
+// mux returns the I/O mux configuration register corresponding to the given
+// GPIO pin.
+func (p Pin) mux() *volatile.Register32 {
 	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.IO_MUX.GPIO0), uintptr(p)*4))
 }
 

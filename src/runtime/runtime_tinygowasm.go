@@ -65,14 +65,6 @@ func buffered() int {
 	return 0
 }
 
-//go:linkname now time.now
-func now() (sec int64, nsec int32, mono int64) {
-	mono = nanotime()
-	sec = mono / (1000 * 1000 * 1000)
-	nsec = int32(mono - sec*(1000*1000*1000))
-	return
-}
-
 // Abort executes the wasm 'unreachable' instruction.
 func abort() {
 	trap()
@@ -89,6 +81,11 @@ func syscall_Exit(code int) {
 
 func mainReturnExit() {
 	syscall_Exit(0)
+}
+
+// flushStdio flushes the C stdio buffers without exiting.
+func flushStdio() {
+	__stdio_exit()
 }
 
 // TinyGo does not yet support any form of parallelism on WebAssembly, so these

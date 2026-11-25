@@ -1,0 +1,19 @@
+nil and empty ok
+subslice: 1 2 0 0 5 6
+empty subslice: 2
+bytes: hello 0 0
+floats: true true true true
+pointers: true true true
+alias: 0 0 0
+global: 0 0 0
+reset: 1 0 0 4
+rangeint: 1 0 0 4
+for: 1 0 0 4
+empty receiver ok
+records: 0 true true 0 6 d
+complex: true true
+strings: x true true 0
+self-referential: recovered: false cleared: true
+recovered: true
+recovered: true
+recovered: true

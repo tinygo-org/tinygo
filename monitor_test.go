@@ -25,6 +25,7 @@ func TestTraceback(t *testing.T) {
 		GOOS:          runtime.GOOS,
 		GOARCH:        runtime.GOARCH,
 		Opt:           "z",
+		Semaphore:     sema,
 		InterpTimeout: time.Minute,
 		Debug:         true,
 	})

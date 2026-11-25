@@ -1,11 +1,11 @@
 ; ModuleID = 'goroutine.go'
 source_filename = "goroutine.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
-target triple = "wasm32-unknown-wasi"
+target triple = "wasm32-unknown-wasip1"
 
 @"main$string" = internal unnamed_addr constant [4 x i8] c"test", align 1
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -141,27 +141,27 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.copyBuiltinGoroutine(ptr %dst.data, i32 %dst.len, i32 %dst.cap, ptr %src.data, i32 %src.len, i32 %src.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.copyBuiltinGoroutine(ptr %dst.data, i32 range(i32 0, -2147483648) %dst.len, i32 range(i32 0, -2147483648) %dst.cap, ptr %src.data, i32 range(i32 0, -2147483648) %src.len, i32 range(i32 0, -2147483648) %src.cap, ptr %context) unnamed_addr #1 {
 entry:
   %copy.n = call i32 @llvm.umin.i32(i32 %dst.len, i32 %src.len)
   call void @llvm.memmove.p0.p0.i32(ptr align 1 %dst.data, ptr align 1 %src.data, i32 %copy.n, i1 false)
   ret void
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umin.i32(i32, i32) #7
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.memmove.p0.p0.i32(ptr nocapture writeonly, ptr nocapture readonly, i32, i1 immarg) #8
+declare void @llvm.memmove.p0.p0.i32(ptr writeonly captures(none), ptr readonly captures(none), i32, i1 immarg) #8
 
 ; Function Attrs: nounwind
-define hidden void @main.closeBuiltinGoroutine(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.closeBuiltinGoroutine(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   call void @runtime.chanClose(ptr %ch, ptr undef) #11
   ret void
 }
 
-declare void @runtime.chanClose(ptr dereferenceable_or_null(40), ptr) #0
+declare void @runtime.chanClose(ptr dereferenceable_or_null(44), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.startInterfaceMethod(ptr %itf.typecode, ptr %itf.value, ptr %context) unnamed_addr #1 {
@@ -204,7 +204,7 @@ attributes #3 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+cal
 attributes #4 = { allockind("alloc,zeroed") allocsize(0) "alloc-family"="runtime.alloc" "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #5 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="main.closureFunctionGoroutine$1" }
 attributes #6 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper" }
-attributes #7 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #7 = { nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none) }
 attributes #8 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 attributes #9 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-invoke"="reflect/methods.Print:func:{basic:string}{}" "tinygo-methods"="reflect/methods.Print:func:{basic:string}{}" }
 attributes #10 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" "tinygo-gowrapper"="interface:{Print:func:{basic:string}{}}.Print$invoke" }

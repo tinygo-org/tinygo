@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -156,8 +158,15 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 		defer os.RemoveAll(tmpdir)
 	}
 
+	// A directory output uses the default executable format, regardless of the
+	// directory name's extension.
+	buildOutpath := outpath
+	if fi, statErr := os.Stat(outpath); statErr == nil && fi.IsDir() {
+		buildOutpath = ""
+	}
+
 	// Do the build.
-	result, err := builder.Build(pkgName, outpath, tmpdir, config)
+	result, err := builder.Build(pkgName, buildOutpath, tmpdir, config)
 	if err != nil {
 		return err
 	}
@@ -215,10 +224,11 @@ func Build(pkgName, outpath string, config *compileopts.Config) error {
 
 // Test runs the tests in the given package. Returns whether the test passed and
 // possibly an error if the test failed to run.
-func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options, outpath string) (bool, error) {
+func Test(pkgName string, standardPackage bool, stdout, stderr io.Writer, options *compileopts.Options, outpath string) (bool, error) {
 	optionsCopy := *options
 	options = &optionsCopy
 	options.TestConfig.CompileTestBinary = true
+	options.TestConfig.StandardPackage = standardPackage
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return false, err
@@ -259,6 +269,18 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		flags = append(flags, "-test.shuffle="+testConfig.Shuffle)
 	}
 
+	// Set the benchmark header values at link time.
+	testingGlobals := map[string]string{"benchPkgName": strings.TrimSuffix(pkgName, ".test")}
+	if isNativeRun(config) {
+		if name := hostCPUName(); name != "" {
+			testingGlobals["benchCPUName"] = name
+		}
+	}
+	globals := map[string]map[string]string{}
+	maps.Copy(globals, options.GlobalValues)
+	globals["testing"] = testingGlobals
+	options.GlobalValues = globals
+
 	logToStdout := testConfig.Verbose || testConfig.BenchRegexp != ""
 
 	var buf bytes.Buffer
@@ -270,7 +292,9 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 
 	passed := false
 	var duration time.Duration
-	result, err := buildAndRun(pkgName, config, output, flags, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	var importPath string
+	_, err = buildAndRun(pkgName, config, output, flags, nil, 0, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+		importPath = strings.TrimSuffix(result.ImportPath, ".test")
 		if testConfig.CompileOnly || outpath != "" {
 			// Write test binary to the specified file name.
 			if outpath == "" {
@@ -315,13 +339,11 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 		return true, err
 	}
 
-	importPath := strings.TrimSuffix(result.ImportPath, ".test")
-
 	var w io.Writer = stdout
 	if logToStdout {
 		w = os.Stdout
 	}
-	if err, ok := err.(loader.NoTestFilesError); ok {
+	if err, ok := errors.AsType[*loader.NoTestFilesError](err); ok {
 		fmt.Fprintf(w, "?   \t%s\t[no test files]\n", err.ImportPath)
 		// Pretend the test passed - it at least didn't fail.
 		return true, nil
@@ -333,31 +355,34 @@ func Test(pkgName string, stdout, stderr io.Writer, options *compileopts.Options
 	return passed, err
 }
 
-func dirsToModuleRootRel(maindir, modroot string) []string {
-	var dirs []string
-	last := ".."
-	// strip off path elements until we hit the module root
-	// adding `..`, `../..`, `../../..` until we're done
-	for maindir != modroot {
-		dirs = append(dirs, last)
-		last = filepath.Join(last, "..")
-		maindir = filepath.Dir(maindir)
-	}
-	dirs = append(dirs, ".")
-	return dirs
+// isNativeRun reports whether the test binary runs on this machine, not on an
+// emulator or baremetal target.
+func isNativeRun(config *compileopts.Config) bool {
+	return config.GOOS() == runtime.GOOS && config.GOARCH() == runtime.GOARCH &&
+		config.Target.Emulator == "" && !slices.Contains(config.BuildTags(), "baremetal")
 }
 
-func dirsToModuleRootAbs(maindir, modroot string) []string {
-	var dirs = []string{maindir}
-	last := filepath.Join(maindir, "..")
-	// strip off path elements until we hit the module root
-	// adding `..`, `../..`, `../../..` until we're done
-	for maindir != modroot {
-		dirs = append(dirs, last)
-		last = filepath.Join(last, "..")
-		maindir = filepath.Dir(maindir)
+// hostCPUName returns the host CPU model name, or an empty string if unknown.
+func hostCPUName() string {
+	switch runtime.GOOS {
+	case "darwin":
+		out, err := exec.Command("sysctl", "-n", "machdep.cpu.brand_string").Output()
+		if err == nil {
+			return strings.TrimSpace(string(out))
+		}
+	case "linux":
+		data, err := os.ReadFile("/proc/cpuinfo")
+		if err != nil {
+			return ""
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			key, value, ok := strings.Cut(line, ":")
+			if ok && (strings.TrimSpace(key) == "model name" || strings.TrimSpace(key) == "Model") {
+				return strings.TrimSpace(value)
+			}
+		}
 	}
-	return dirs
+	return ""
 }
 
 // validateOutputFormat checks if the output file extension matches the expected format
@@ -429,6 +454,9 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 	}
 	// Validate output format before building
 	if outpath != "" {
+		if err := config.ValidateOutputExtension(filepath.Ext(outpath)); err != nil {
+			return err
+		}
 		if err := validateOutputFormat(outpath, fileExt); err != nil {
 			return err
 		}
@@ -461,32 +489,10 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 	// Flash the binary to the MCU.
 	switch flashMethod {
 	case "", "command":
-		// Create the command.
-		flashCmd := config.Target.FlashCommand
-		flashCmdList, err := shlex.Split(flashCmd)
+		var flashCmdList []string
+		flashCmdList, port, err = prepareFlashCommand(config.Target, fileExt, result.Binary, port)
 		if err != nil {
-			return fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
-		}
-
-		if strings.Contains(flashCmd, "{port}") {
-			var err error
-			port, err = getDefaultPort(port, config.Target.SerialPort)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Fill in fields in the command template.
-		fileToken := "{" + fileExt[1:] + "}"
-		for i, arg := range flashCmdList {
-			arg = strings.ReplaceAll(arg, fileToken, result.Binary)
-			arg = strings.ReplaceAll(arg, "{port}", port)
-			flashCmdList[i] = arg
-		}
-
-		// Execute the command.
-		if len(flashCmdList) < 2 {
-			return fmt.Errorf("invalid flash command: %#v", flashCmd)
+			return err
 		}
 		cmd := executeCommand(config.Options, flashCmdList[0], flashCmdList[1:]...)
 		cmd.Stdout = os.Stdout
@@ -614,6 +620,29 @@ func Flash(pkgName, port, outpath string, options *compileopts.Options) error {
 		return Monitor(result.Executable, port, config)
 	}
 	return nil
+}
+
+func prepareFlashCommand(target *compileopts.TargetSpec, fileExt, binary, port string) ([]string, string, error) {
+	flashCmd := target.FlashCommand
+	args, err := shlex.Split(flashCmd)
+	if err != nil {
+		return nil, port, fmt.Errorf("could not parse flash command %#v: %w", flashCmd, err)
+	}
+	if strings.Contains(flashCmd, "{port}") {
+		port, err = getDefaultPort(port, target.SerialPort)
+		if err != nil {
+			return nil, port, err
+		}
+	}
+	fileToken := "{" + fileExt[1:] + "}"
+	for i, arg := range args {
+		arg = strings.ReplaceAll(arg, fileToken, binary)
+		args[i] = strings.ReplaceAll(arg, "{port}", port)
+	}
+	if len(args) < 2 {
+		return nil, port, fmt.Errorf("invalid flash command: %#v", flashCmd)
+	}
+	return args, port, nil
 }
 
 // Debug compiles and flashes a program to a microcontroller (just like Flash)
@@ -872,7 +901,7 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 		return errInheritableOnly
 	}
 
-	_, err = buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result builder.BuildResult) error {
+	_, err = buildAndRun(pkgName, config, os.Stdout, cmdArgs, nil, 0, func(cmd *exec.Cmd, result *builder.BuildResult) error {
 		// Give the program our stdin, as `go run` does.
 		// See https://github.com/tinygo-org/tinygo/issues/1287
 		cmd.Stdin = os.Stdin
@@ -885,7 +914,7 @@ func Run(pkgName string, options *compileopts.Options, cmdArgs []string) error {
 // errors to os.Stderr. It takes care of emulators (qemu, wasmtime, etc) and
 // passes command line arguments and environment variables in a way appropriate
 // for the given emulator.
-func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result builder.BuildResult) error) (builder.BuildResult, error) {
+func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, cmdArgs, environmentVars []string, timeout time.Duration, run func(cmd *exec.Cmd, result *builder.BuildResult) error) (*builder.BuildResult, error) {
 	// Determine whether we're on a system that supports environment variables
 	// and command line parameters (operating systems, WASI) or not (baremetal,
 	// WebAssembly in the browser). If we're on a system without an environment,
@@ -914,9 +943,12 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 			// The runtime package has two variables (osArgs and osEnv) that are
 			// both strings, from which the parameters and environment variables
 			// are read.
-			config.Options.GlobalValues = map[string]map[string]string{
-				"runtime": runtimeGlobals,
-			}
+			// Keep any other values, such as those set by -ldflags or by
+			// tinygo test.
+			globals := map[string]map[string]string{}
+			maps.Copy(globals, config.Options.GlobalValues)
+			globals["runtime"] = runtimeGlobals
+			config.Options.GlobalValues = globals
 		}
 	} else {
 		// Pass environment variables and command line parameters as usual.
@@ -928,7 +960,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	// Create a temporary directory for intermediary files.
 	tmpdir, err := os.MkdirTemp("", "tinygo")
 	if err != nil {
-		return builder.BuildResult{}, err
+		return nil, err
 	}
 	if !config.Options.Work {
 		defer os.RemoveAll(tmpdir)
@@ -938,7 +970,7 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 	format, fileExt := config.EmulatorFormat()
 	result, err := builder.Build(pkgName, fileExt, tmpdir, config)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	// If needed, set a timeout on the command. This is done in tests so
@@ -977,31 +1009,22 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 				emulator = emulator[1:]
 			}
 
-			wd, _ := os.Getwd()
-
-			// Below adds additional wasmtime flags in case a test reads files
-			// outside its directory, like "../testdata/e.txt". This allows any
-			// relative directory up to the module root, even if the test never
-			// reads any files.
-			if config.TestConfig.CompileTestBinary {
-				// Set working directory to package dir
-				wd = result.MainDir
-
-				// Add relative dirs (../, ../..) up to module root (for wasip1)
-				dirs := dirsToModuleRootRel(result.MainDir, result.ModuleRoot)
-
-				// Add absolute dirs up to module root (for wasip2)
-				dirs = append(dirs, dirsToModuleRootAbs(result.MainDir, result.ModuleRoot)...)
-
-				for _, d := range dirs {
-					emuArgs = append(emuArgs, "--dir="+d)
-				}
-			} else {
-				emuArgs = append(emuArgs, "--dir=.")
+			wd, err := os.Getwd()
+			if err != nil {
+				return result, err
 			}
 
-			emuArgs = append(emuArgs, "--dir="+wd)
-			emuArgs = append(emuArgs, "--env=PWD="+wd)
+			if config.TestConfig.CompileTestBinary {
+				// Resolve virtual GOROOT links created by loader/goroot.go.
+				wd, err = resolveDirectory(result.MainDir)
+				if err != nil {
+					return result, fmt.Errorf("could not resolve WASI test directory %q: %w", result.MainDir, err)
+				}
+			}
+
+			dirs, guestWD := wasmtimePreopens(wd, os.TempDir(), config.TestConfig.CompileTestBinary, emulator)
+			emuArgs = append(emuArgs, dirs...)
+			emuArgs = append(emuArgs, "--env=PWD="+guestWD)
 			for _, v := range environmentVars {
 				emuArgs = append(emuArgs, "--env", v)
 			}
@@ -1057,6 +1080,61 @@ func buildAndRun(pkgName string, config *compileopts.Config, stdout io.Writer, c
 		return result, &commandError{"failed to run compiled binary", result.Binary, err}
 	}
 	return result, nil
+}
+
+func wasmtimePreopens(wd, tmpDir string, test bool, emulator []string) ([]string, string) {
+	volume := filepath.VolumeName(wd)
+	guestWD := filepath.ToSlash(wd[len(volume):])
+	if guestWD == "" {
+		guestWD = "/"
+	}
+	var dirs []string
+	if test {
+		// Match Go's root mount in lib/wasm/go_wasip1_wasm_exec.
+		root := "/"
+		if volume != "" {
+			root = volume + string(filepath.Separator) + "::/"
+		}
+		dirs = append(dirs, "--dir="+root)
+	} else {
+		mount := wd
+		if volume != "" {
+			mount += "::" + guestWD
+		}
+		dirs = append(dirs, "--dir=.", "--dir="+mount)
+	}
+	if (!test || runtime.GOOS == "windows") && !hasWasmtimePreopen(emulator, "/tmp") {
+		dirs = append(dirs, "--dir="+tmpDir+"::/tmp")
+	}
+	return dirs, guestWD
+}
+
+func hasWasmtimePreopen(args []string, guestPath string) bool {
+	guestPath = strings.TrimLeft(guestPath, "/")
+	for i := 0; i < len(args); i++ {
+		dir, ok := strings.CutPrefix(args[i], "--dir=")
+		if args[i] == "--dir" && i+1 < len(args) {
+			i++
+			dir, ok = args[i], true
+		}
+		if !ok {
+			continue
+		}
+		_, guest, aliased := strings.Cut(dir, "::")
+		if !aliased {
+			guest = dir
+		}
+		// Match wasi-libc's leading-prefix handling, not path.Clean.
+		// See lib/wasi-libc/libc-bottom-half/sources/preopens.c (strip_prefixes).
+		guest = strings.TrimLeft(guest, "/")
+		for strings.HasPrefix(guest, "./") {
+			guest = strings.TrimLeft(guest[2:], "/")
+		}
+		if guest == guestPath || guest == guestPath+"/" {
+			return true
+		}
+	}
+	return false
 }
 
 func touchSerialPortAt1200bps(port string) (err error) {
@@ -1161,20 +1239,15 @@ func flashBinUsingEsp32(port, resetMode, tmppath string, options *compileopts.Op
 	}
 	defer flasher.Close()
 
-	chipName := flasher.ChipName()
-	offset := uint32(0x0)
-	if chipName == "ESP32" {
-		offset = 0x1000
+	offset, ok := flasher.BootloaderFlashOffset()
+	if !ok {
+		return fmt.Errorf("could not determine bootloader flash offset")
 	}
 
 	// Read the firmware binary
 	data, err := os.ReadFile(tmppath)
 	if err != nil {
 		return err
-	}
-
-	if err := flasher.EraseFlash(progressFunc); err != nil {
-		return fmt.Errorf("erase failed: %v", err)
 	}
 
 	// Flash with progress reporting
@@ -1356,7 +1429,7 @@ func getDefaultPort(portFlag string, usbInterfaces []string) (port string, err e
 						if uint16(vid) == id[0] && uint16(pid) == id[1] {
 							primaryPorts = append(primaryPorts, p.Name)
 							foundPort = true
-							continue
+							break
 						}
 					}
 				}
@@ -1466,8 +1539,11 @@ extension:
 	.hex:
 			Create an Intel HEX file to flash it to a microcontroller.
 
+	.uf2:
+			Create a UF2 firmware file to flash it to a microcontroller.
+
 	.bin:
-			Similar, but create a binary file.
+			Create a raw binary file when supported by the target.
 
 	.wasm:
 			Compile and link a WebAssembly file.
@@ -1577,6 +1653,7 @@ commands:
 		ports:		list available serial ports
 		env:		list environment variables used during build
 		list:		run go list using the TinyGo root
+		fix:		apply Go fix analyzers using the TinyGo loader
 		clean:		empty cache directory (%s)
 		targets:	list targets
 		info:		show info for specified target
@@ -1587,6 +1664,7 @@ commands:
 var (
 	commandHelp = map[string]string{
 		"build":   usageBuild,
+		"fix":     usageFix,
 		"run":     usageRun,
 		"flash":   usageFlash,
 		"monitor": usageMonitor,
@@ -1718,31 +1796,34 @@ func (m globalValuesFlag) Set(value string) error {
 
 // parseGoLinkFlag parses the -ldflags parameter. Its primary purpose right now
 // is the -X flag, for setting the value of global string variables.
-func parseGoLinkFlag(flagsString string) (map[string]map[string]string, string, error) {
+func parseGoLinkFlag(flagsString string) (map[string]map[string]string, []string, error) {
 	set := flag.NewFlagSet("link", flag.ExitOnError)
 	globalVarValues := make(globalValuesFlag)
 	set.Var(globalVarValues, "X", "Set the value of the string variable to the given value.")
 	extLDFlags := set.String("extldflags", "", "additional flags to pass to external linker")
-	flags, err := shlex.Split(flagsString)
+	flags, err := goenv.SplitFlags(flagsString)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
 	err = set.Parse(flags)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
-	return map[string]map[string]string(globalVarValues), *extLDFlags, nil
+	externalFlags, err := goenv.SplitFlags(*extLDFlags)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not parse -extldflags: %w", err)
+	}
+	return map[string]map[string]string(globalVarValues), externalFlags, nil
 }
 
 // getListOfPackages returns a standard list of packages for a given list that might
 // include wildards using `go list`.
-// For example [./...] => ["pkg1", "pkg1/pkg12", "pkg2"]
-func getListOfPackages(pkgs []string, options *compileopts.Options) ([]string, error) {
+func getListOfPackages(pkgs []string, options *compileopts.Options) ([]loader.PackageJSON, error) {
 	config, err := builder.NewConfig(options)
 	if err != nil {
 		return nil, err
 	}
-	cmd, err := loader.List(config, nil, pkgs)
+	cmd, err := loader.List(config, []string{loader.PackageJSONFlag()}, pkgs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run `go list`: %w", err)
 	}
@@ -1754,13 +1835,17 @@ func getListOfPackages(pkgs []string, options *compileopts.Options) ([]string, e
 		return nil, err
 	}
 
-	var pkgNames []string
-	sc := bufio.NewScanner(outputBuf)
-	for sc.Scan() {
-		pkgNames = append(pkgNames, sc.Text())
+	var packages []loader.PackageJSON
+	decoder := json.NewDecoder(outputBuf)
+	for {
+		var pkg loader.PackageJSON
+		if err := decoder.Decode(&pkg); err == io.EOF {
+			return packages, nil
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to decode go list output: %w", err)
+		}
+		packages = append(packages, pkg)
 	}
-
-	return pkgNames, nil
 }
 
 func main() {
@@ -1773,8 +1858,9 @@ func main() {
 
 	opt := flag.String("opt", "z", "optimization level: 0, 1, 2, s, z")
 	gc := flag.String("gc", "", "garbage collector to use (none, leaking, conservative, custom, precise, boehm)")
+	libc := flag.String("libc", "", "libc to use on linux (musl, glibc)")
 	panicStrategy := flag.String("panic", "print", "panic strategy (print, trap)")
-	panicUnwind := flag.String("panic-unwind", "", "panic unwind strategy (auto, explicit)")
+	panicUnwind := flag.String("panic-unwind", "", "panic unwind strategy (auto, explicit, none)")
 	scheduler := flag.String("scheduler", "", "which scheduler to use (none, tasks, cores, threads, asyncify)")
 	serial := flag.String("serial", "", "which serial output to use (none, uart, usb, rtt)")
 	work := flag.Bool("work", false, "print the name of the temporary build directory and do not delete this directory on exit")
@@ -1795,6 +1881,7 @@ func main() {
 	printSize := flag.String("size", "", "print sizes (none, short, full, html)")
 	printStacks := flag.Bool("print-stacks", false, "print stack sizes of goroutines")
 	printAllocsString := flag.String("print-allocs", "", "regular expression of functions for which heap allocations should be printed")
+	printBoundsString := flag.String("print-bounds", "", "regular expression of functions or source files for which remaining (non-elided) bounds checks should be printed")
 	printAllocsCoverString := flag.String("print-allocs-cover", "", "like -print-allocs, but in go coverage tool format")
 	printCommands := flag.Bool("x", false, "Print commands")
 	flagJSON := flag.Bool("json", false, "print output in JSON format")
@@ -1822,7 +1909,7 @@ func main() {
 	// stack size calculation and features like -size=short, -print-allocs=,
 	// etc. The -no-debug flag is used to strip it at link time. But for TinyGo
 	// development it can be useful to not emit debug information at all.
-	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, use -no-debug instead")
+	skipDwarf := flag.Bool("internal-nodwarf", false, "internal flag, skip DWARF generation in the compiler (-no-debug implies this)")
 
 	var flagDeps, flagTest bool
 	if command == "help" || command == "list" {
@@ -1831,7 +1918,7 @@ func main() {
 	}
 	var outpath string
 	if command == "help" || command == "build" || command == "test" || command == "flash" {
-		flag.StringVar(&outpath, "o", "", "output filename")
+		flag.StringVar(&outpath, "o", "", "output filename (firmware extensions depend on target)")
 	}
 
 	var witPackage, witWorld string
@@ -1866,6 +1953,8 @@ func main() {
 	// library.
 	handleChdirFlag()
 	switch command {
+	case "fix":
+		os.Exit(runFix(os.Args[2:], os.Stdout, os.Stderr))
 	case "clang", "ld.lld", "wasm-ld":
 		err := builder.RunTool(command, os.Args[2:]...)
 		if err != nil {
@@ -1892,6 +1981,15 @@ func main() {
 	}
 	if printAllocsPattern != "" {
 		printAllocs, err = regexp.Compile(printAllocsPattern)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+
+	var printBounds *regexp.Regexp
+	if *printBoundsString != "" {
+		printBounds, err = regexp.Compile(*printBoundsString)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -1943,29 +2041,24 @@ func main() {
 		PrintStacks:             *printStacks,
 		PrintAllocs:             printAllocs,
 		PrintAllocsCover:        printAllocsCover,
+		PrintBounds:             printBounds,
 		Tags:                    []string(tags),
 		TestConfig:              testConfig,
 		GlobalValues:            globalVarValues,
+		ExtLDFlags:              extLDFlags,
 		Programmer:              *programmer,
 		OpenOCDCommands:         ocdCommands,
 		LLVMFeatures:            *llvmFeatures,
 		Monitor:                 *monitor,
 		BaudRate:                *baudrate,
 		Timeout:                 *timeout,
+		Libc:                    *libc,
 		WITPackage:              witPackage,
 		WITWorld:                witWorld,
 		GoCompatibility:         *gocompatibility,
 	}
 	if *printCommands {
 		options.PrintCommands = printCommand
-	}
-
-	if extLDFlags != "" {
-		options.ExtLDFlags, err = shlex.Split(extLDFlags)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "could not parse -extldflags:", err)
-			os.Exit(1)
-		}
 	}
 
 	err = options.Verify()
@@ -2058,10 +2151,7 @@ func main() {
 			bufs[i].done = make(chan struct{})
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			// Flush the output one test at a time.
 			// This ensures that outputs from different tests are not mixed together.
 			for i := range bufs {
@@ -2074,22 +2164,24 @@ func main() {
 					}
 				}
 			}
-		}()
+		})
 
 		// Build and run the tests concurrently.
 		// This uses an additional semaphore to reduce the memory usage.
+		// Run benchmarks one package at a time, like go test.
 		testSema := make(chan struct{}, cap(options.Semaphore))
-		for i, pkgName := range explicitPkgNames {
+		if testConfig.BenchRegexp != "" {
+			testSema = make(chan struct{}, 1)
+		}
+		for i, pkg := range explicitPkgNames {
 			buf := &bufs[i]
 			testSema <- struct{}{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				defer func() { <-testSema }()
 				defer close(buf.done)
 				stdout := (*testStdout)(buf)
 				stderr := (*testStderr)(buf)
-				passed, err := Test(pkgName, stdout, stderr, options, outpath)
+				passed, err := Test(pkg.ImportPath, pkg.Standard, stdout, stderr, options, outpath)
 				if err != nil {
 					wd, getwdErr := os.Getwd()
 					if getwdErr != nil {
@@ -2104,7 +2196,7 @@ func main() {
 					default:
 					}
 				}
-			}()
+			})
 		}
 
 		// Wait for all tests to finish.

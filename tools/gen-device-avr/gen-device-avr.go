@@ -65,7 +65,7 @@ type XMLInterrupt struct {
 }
 
 type Device struct {
-	metadata   map[string]interface{}
+	metadata   map[string]any
 	interrupts []Interrupt
 	types      []*PeripheralType
 	instances  []*PeripheralInstance
@@ -377,7 +377,7 @@ func readATDF(path string) (*Device, error) {
 	})
 
 	return &Device{
-		metadata: map[string]interface{}{
+		metadata: map[string]any{
 			"file":             filepath.Base(path),
 			"descriptorSource": "http://packs.download.atmel.com/",
 			"name":             device.Name,
@@ -484,7 +484,7 @@ type {{.Name}}_Type struct {
 {{end}}
 {{end}}
 `))
-	err = t.Execute(w, map[string]interface{}{
+	err = t.Execute(w, map[string]any{
 		"metadata":     device.metadata,
 		"pkgName":      filepath.Base(strings.TrimRight(outdir, "/")),
 		"interrupts":   device.interrupts,
@@ -518,7 +518,7 @@ type {{.Name}}_Type struct {
 				fmt.Fprintf(w, ": %s", register.Caption)
 			}
 			fmt.Fprintf(w, "\n")
-			allBits := map[string]interface{}{}
+			allBits := map[string]any{}
 			for _, bitfield := range register.Bitfields {
 				if bits.OnesCount(bitfield.Mask) == 1 {
 					fmt.Fprintf(w, "\t%s = 0x%x", bitfield.Name, bitfield.Mask)
@@ -534,7 +534,7 @@ type {{.Name}}_Type struct {
 					allBits[bitfield.Name] = nil
 				} else {
 					n := 0
-					for i := uint(0); i < 8; i++ {
+					for i := range uint(8) {
 						if (bitfield.Mask>>i)&1 == 0 {
 							continue
 						}

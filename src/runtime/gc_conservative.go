@@ -19,6 +19,10 @@ func parseGCLayout(layout unsafe.Pointer) gcLayout {
 type gcLayout struct {
 }
 
+func (l gcLayout) isStack() bool {
+	return false
+}
+
 func (l gcLayout) pointerFree() bool {
 	// We don't know whether this object contains pointers, so conservatively
 	// return false.

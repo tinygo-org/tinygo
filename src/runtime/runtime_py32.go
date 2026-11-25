@@ -2,13 +2,7 @@
 
 package runtime
 
-import (
-	"device/arm"
-	"machine"
-	"runtime/volatile"
-)
-
-var tickCounter volatile.Register64
+import "machine"
 
 //export Reset_Handler
 func main() {
@@ -16,44 +10,15 @@ func main() {
 
 	configureHSI()
 
-	configureSystemTimer()
+	initSysTick()
 	machine.InitSerial()
 
 	run()
 	exit(0)
 }
 
-// configureSystemTimer configures SysTick for 1ms ticks.
-func configureSystemTimer() {
-	arm.SetupSystemTimer(machine.CPUFrequency() / 1000)
-}
-
-func ticksToNanoseconds(value timeUnit) int64 {
-	return int64(value * 1000_000)
-}
-
-func nanosecondsToTicks(ns int64) timeUnit {
-	return timeUnit(ns / 1000_000)
-}
-
-//go:linkname ticks runtime.ticks
-func ticks() timeUnit {
-	return timeUnit(tickCounter.Get())
-}
-
-func sleepTicks(d timeUnit) {
-	if d <= 0 {
-		return
-	}
-	start := ticks()
-	stop := start + d
-	for ticks() < stop {
-		waitForEvents()
-	}
-}
-
-func waitForEvents() {
-	arm.Asm("wfe")
+func sysTickFrequency() uint32 {
+	return machine.CPUFrequency()
 }
 
 func putchar(c byte) {
@@ -66,9 +31,4 @@ func getchar() byte {
 	}
 	v, _ := machine.Serial.ReadByte()
 	return v
-}
-
-//export SysTick_Handler
-func handleSysTick() {
-	tickCounter.Set(tickCounter.Get() + 1)
 }

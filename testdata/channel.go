@@ -11,7 +11,122 @@ var wg sync.WaitGroup
 
 type intchan chan int
 
+var (
+	initValue   = 1
+	initPointer *int
+	initResult  int
+	initDone    = make(chan bool)
+)
+
+func initSet(p **int) {
+	**p = 2
+	initDone <- true
+}
+
+// The goroutine changes initValue through initPointer before init reads it,
+// so the read must not be done at compile time.
+func init() {
+	initPointer = &initValue
+	go initSet(&initPointer)
+	<-initDone
+	initResult = initValue
+}
+
+func testMixedSelects() {
+	for _, nonblocking := range []bool{false, true} {
+		received := false
+		in := make(chan int, 1)
+		out := make(chan int, 1)
+		for range 64 {
+			in <- 42
+			index, _, _ := selectMixedChannels([4]chan int{in, out}, nonblocking)
+			received = received || index == 0
+			if index == 1 {
+				<-in
+				<-out
+			}
+		}
+		if !received {
+			panic("mixed select always preferred the ready send")
+		}
+	}
+
+	for _, nonblocking := range []bool{false, true} {
+		for ready := -1; ready < 4; ready++ {
+			if ready < 0 && !nonblocking {
+				continue
+			}
+			var channels [4]chan int
+			if ready >= 0 {
+				channels[ready] = make(chan int, 1)
+				if ready%2 == 0 {
+					channels[ready] <- 42
+				}
+			}
+			index, value, ok := selectMixedChannels(channels, nonblocking)
+			if index != ready {
+				panic("mixed select case index")
+			}
+			if ready >= 0 && ready%2 == 0 && (value != 42 || !ok) {
+				panic("mixed select receive value")
+			}
+			if ready >= 0 && ready%2 != 0 && <-channels[ready] != 42 {
+				panic("mixed select send value")
+			}
+		}
+	}
+
+	var order []int
+	channel := func(index int) chan int {
+		order = append(order, index)
+		return nil
+	}
+	value := func(index int) int {
+		order = append(order, index)
+		return 42
+	}
+	select {
+	case <-channel(1):
+	case channel(2) <- value(3):
+	case <-channel(4):
+	default:
+	}
+	if len(order) != 4 || order[0] != 1 || order[1] != 2 || order[2] != 3 || order[3] != 4 {
+		panic("mixed select evaluation order")
+	}
+}
+
+func selectMixedChannels(channels [4]chan int, nonblocking bool) (int, int, bool) {
+	if nonblocking {
+		select {
+		case value, ok := <-channels[0]:
+			return 0, value, ok
+		case channels[1] <- 42:
+			return 1, 0, false
+		case value, ok := <-channels[2]:
+			return 2, value, ok
+		case channels[3] <- 42:
+			return 3, 0, false
+		default:
+			return -1, 0, false
+		}
+	}
+	select {
+	case value, ok := <-channels[0]:
+		return 0, value, ok
+	case channels[1] <- 42:
+		return 1, 0, false
+	case value, ok := <-channels[2]:
+		return 2, value, ok
+	case channels[3] <- 42:
+		return 3, 0, false
+	}
+}
+
 func main() {
+	testMixedSelects()
+	println("value set by goroutine in init:", initResult)
+
 	ch := make(chan int, 2)
 	ch <- 1
 	println("len, cap of channel:", len(ch), cap(ch), ch == nil)
@@ -249,10 +364,6 @@ func receive(ch <-chan int) {
 
 func sender(ch chan int) {
 	for i := 1; i <= 8; i++ {
-		if i == 4 {
-			time.Sleep(time.Millisecond)
-			println("slept")
-		}
 		ch <- i
 	}
 	close(ch)

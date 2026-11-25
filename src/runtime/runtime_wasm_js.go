@@ -1,5 +1,3 @@
-//go:build wasm && !wasip1
-
 package runtime
 
 var handleEvent func()
@@ -20,6 +18,18 @@ func ticksToNanoseconds(ticks timeUnit) int64 {
 func nanosecondsToTicks(ns int64) timeUnit {
 	return timeUnit(ns)
 }
+
+//go:linkname now time.now
+func now() (sec int64, nsec int32, mono int64) {
+	wall := walltime()
+	sec = wall / 1e9
+	nsec = int32(wall % 1e9)
+	mono = nanotime()
+	return
+}
+
+//go:wasmimport gojs runtime.walltime
+func walltime() int64
 
 // This function is called by the scheduler.
 // Schedule a call to runtime.scheduler, do not actually sleep.

@@ -17,7 +17,7 @@ import (
 // cause a panic.
 // The caller should make sure that index is at least as big as arrayLen.
 func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value) {
-	if b.info.nobounds {
+	if b.info.isNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
@@ -41,8 +41,11 @@ func (b *builder) createLookupBoundsCheck(arrayLen, index llvm.Value) {
 // normal meaning) and for creating a new slice, where 'capacity' means the
 // biggest possible slice capacity, 'low' means len and 'high' means cap. The
 // logic is the same in both cases.
-func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lowType, highType, maxType *types.Basic) {
-	if b.info.nobounds {
+//
+// highLeMax must only be true if high is the length and max is the capacity of
+// the same slice, so high > max cannot happen.
+func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lowType, highType, maxType *types.Basic, highLeMax bool) {
+	if b.info.isNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
@@ -68,12 +71,17 @@ func (b *builder) createSliceBoundsCheck(capacity, low, high, max llvm.Value, lo
 	high = b.extendInteger(high, highType, capacityType)
 	max = b.extendInteger(max, maxType, capacityType)
 
-	// Now do the bounds check: low > high || high > capacity
-	outOfBounds1 := b.CreateICmp(llvm.IntUGT, low, high, "slice.lowhigh")
-	outOfBounds2 := b.CreateICmp(llvm.IntUGT, high, max, "slice.highmax")
-	outOfBounds3 := b.CreateICmp(llvm.IntUGT, max, capacity, "slice.maxcap")
-	outOfBounds := b.CreateOr(outOfBounds1, outOfBounds2, "slice.lowmax")
-	outOfBounds = b.CreateOr(outOfBounds, outOfBounds3, "slice.lowcap")
+	// Now do the bounds check: low > high || high > max || max > capacity.
+	// Checks that can never fail are left out.
+	outOfBounds := b.CreateICmp(llvm.IntUGT, low, high, "slice.lowhigh")
+	if !highLeMax && high != max {
+		outOfBounds2 := b.CreateICmp(llvm.IntUGT, high, max, "slice.highmax")
+		outOfBounds = b.CreateOr(outOfBounds, outOfBounds2, "slice.lowmax")
+	}
+	if max != capacity {
+		outOfBounds3 := b.CreateICmp(llvm.IntUGT, max, capacity, "slice.maxcap")
+		outOfBounds = b.CreateOr(outOfBounds, outOfBounds3, "slice.lowcap")
+	}
 	b.createRuntimeAssert(outOfBounds, "slice", "slicePanic")
 }
 
@@ -124,7 +132,7 @@ func (b *builder) createUnsafeSliceStringCheck(name string, ptr, len llvm.Value,
 // createChanBoundsCheck creates a bounds check before creating a new channel to
 // check that the value is not too big for runtime.chanMake.
 func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, bufSizeType *types.Basic, pos token.Pos) {
-	if b.info.nobounds {
+	if b.info.isNoBounds() {
 		// The //go:nobounds pragma was added to the function to avoid bounds
 		// checking.
 		return
@@ -135,7 +143,7 @@ func (b *builder) createChanBoundsCheck(elementSize uint64, bufSize llvm.Value, 
 
 	// Calculate (^uintptr(0)) >> 1, which is the max value that fits in an
 	// uintptr if uintptrs were signed.
-	maxBufSize := b.CreateLShr(llvm.ConstNot(llvm.ConstInt(b.uintptrType, 0, false)), llvm.ConstInt(b.uintptrType, 1, false), "")
+	maxBufSize := b.CreateLShr(llvm.ConstAllOnes(b.uintptrType), llvm.ConstInt(b.uintptrType, 1, false), "")
 	if elementSize > maxBufSize.ZExtValue() {
 		b.addError(pos, fmt.Sprintf("channel element type is too big (%v bytes)", elementSize))
 		return
@@ -195,6 +203,7 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 	// We previously used a hack to make sure this wouldn't break escape
 	// analysis, but this is not necessary anymore since
 	// https://reviews.llvm.org/D60047 has been merged.
+	// NOTE: We cannot use b.dataPtrNull here because ptr may be in the function address space.
 	nilptr := llvm.ConstPointerNull(ptr.Type())
 	isnil := b.CreateICmp(llvm.IntEQ, ptr, nilptr, "")
 
@@ -205,7 +214,7 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 // createNegativeShiftCheck creates an assertion that panics if the given shift value is negative.
 // This function assumes that the shift value is signed.
 func (b *builder) createNegativeShiftCheck(shift llvm.Value) {
-	if b.info.nobounds {
+	if b.info.isNoBounds() {
 		// Function disabled bounds checking - skip shift check.
 		return
 	}
@@ -219,7 +228,7 @@ func (b *builder) createNegativeShiftCheck(shift llvm.Value) {
 // will be emitted. This follows the Go specification which says that a divide
 // by zero must cause a run time panic.
 func (b *builder) createDivideByZeroCheck(y llvm.Value) {
-	if b.info.nobounds {
+	if b.info.isNoBounds() {
 		return
 	}
 
@@ -288,4 +297,44 @@ func (b *builder) extendInteger(value llvm.Value, valueType types.Type, targetTy
 		}
 	}
 	return value
+}
+
+// createLenCapAssume tells LLVM that len <= cap, which it cannot infer from
+// the separate len and cap values of a slice.
+func (b *builder) createLenCapAssume(oldLen, oldCap llvm.Value) {
+	if b.info.isNoBounds() {
+		return
+	}
+	assume := b.mod.NamedFunction("llvm.assume")
+	if assume.IsNil() {
+		assume = llvm.AddFunction(b.mod, "llvm.assume", llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.ctx.Int1Type()}, false))
+	}
+	b.CreateCall(assume.GlobalValueType(), assume, []llvm.Value{b.CreateICmp(llvm.IntULE, oldLen, oldCap, "")}, "")
+}
+
+// lenIsUsed returns whether the length of slice v has a use other than
+// reslicing. Without one, the assume keeps an otherwise dead length alive.
+func lenIsUsed(v ssa.Value) bool {
+	refs := v.Referrers()
+	if refs == nil {
+		return false
+	}
+	for _, ref := range *refs {
+		switch ref := ref.(type) {
+		case *ssa.IndexAddr:
+			return true
+		case *ssa.Slice:
+			if ref.High == nil {
+				return true
+			}
+		case *ssa.Call:
+			if builtin, ok := ref.Call.Value.(*ssa.Builtin); ok {
+				switch builtin.Name() {
+				case "len", "copy", "append":
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

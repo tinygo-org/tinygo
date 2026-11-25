@@ -1,4 +1,4 @@
-//go:build baremetal || (tinygo.wasm && !wasip1 && !wasip2) || nintendoswitch
+//go:build baremetal || (tinygo.wasm && !tinygo.wasi) || nintendoswitch
 
 package os
 
@@ -14,6 +14,7 @@ var (
 	Stderr = NewFile(2, "/dev/stderr")
 )
 
+// DevNull is the null device. Reads return EOF and writes are discarded.
 const DevNull = "/dev/null"
 
 // isOS indicates whether we're running on a real operating system with

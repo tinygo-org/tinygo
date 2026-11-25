@@ -6,8 +6,8 @@
 // stored in IROM.
 //
 // The ESP32-C6 and ESP32-H2 have a unified IRAM/DRAM address space at
-// 0x40800000, and separate DROM (0x42800000) / IROM (0x42000000) flash-mapped
-// regions.
+// 0x40800000, and one flash-mapped region at 0x42000000 for code and
+// read-only data.
 
 .section .init
 .global call_start_cpu0
@@ -26,18 +26,18 @@ call_start_cpu0:
     call Cache_Invalidate_ICache_All
     call Cache_MMU_Init
 
-    // Set up flash mapping (both IROM and DROM).
+    // Set up flash mapping (code and read-only data).
     // On ESP32-C6 and ESP32-H2, Cache_Dbus_MMU_Set is replaced by
     // Cache_MSPI_MMU_Set which has an extra "sensitive" parameter.
     // C equivalent:
     //   Cache_MSPI_MMU_Set(0, 0, 0x42000000, 0, 64, 256, 0)
-    // Maps 16MB starting at 0x42000000, covering both IROM and DROM.
+    // Maps the first 16MB of flash 1:1 at 0x42000000.
     li a0, 0              // sensitive: no flash encryption
     li a1, 0              // ext_ram: MMU_ACCESS_FLASH
     li a2, 0x42000000     // vaddr: start of flash-mapped region
     li a3, 0              // paddr: physical address in the flash chip
     li a4, 64             // psize: always 64 (kilobytes)
-    li a5, 256            // num: pages (16MB / 64K = 256, covers IROM+DROM)
+    li a5, 256            // num: pages (16MB / 64K = 256)
     li a6, 0              // fixed
     call Cache_MSPI_MMU_Set
 

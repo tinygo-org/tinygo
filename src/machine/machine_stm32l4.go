@@ -5,7 +5,7 @@ package machine
 import (
 	"device/stm32"
 	"errors"
-	"internal/binary"
+	"internal/byteorder"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -600,12 +600,12 @@ func writeFlashData(address uintptr, data []byte) (int, error) {
 		stm32.FLASH.SetCR_PG(1)
 
 		// write second word using double-word high order word
-		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(data[j : j+writeBlockSize/2])
+		*(*uint32)(unsafe.Pointer(address)) = byteorder.LEUint32(data[j : j+writeBlockSize/2])
 
 		address += writeBlockSize / 2
 
 		// write first word using double-word low order word
-		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(data[j+writeBlockSize/2 : j+writeBlockSize])
+		*(*uint32)(unsafe.Pointer(address)) = byteorder.LEUint32(data[j+writeBlockSize/2 : j+writeBlockSize])
 
 		waitUntilFlashDone()
 

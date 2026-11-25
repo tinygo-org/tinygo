@@ -50,6 +50,7 @@ tinygo_scanCurrentStack:
     pop r17
     pop r28 // Y
     pop r29 // Y
+    ret
 
 
 .section .text.tinygo_longjmp

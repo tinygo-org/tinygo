@@ -314,7 +314,7 @@ func escapingMultiReturnClosure() func() error {
 }
 
 func escapingMultiReturnPhi(cond bool) error {
-	e := &errT{} // OUT: escapes at line 318
+	e := &errT{} // OUT: escapes at line 322
 	_, err := wrapError(e)
 	if cond {
 		err = nil
@@ -356,4 +356,11 @@ func nonEscapingPointerFreeArray() [2]int {
 	e := &errT{}
 	_, a := wrapPointerFreeArray(e)
 	return a
+}
+
+// The min and max builtins on strings use a select over the string value.
+// runtime.stringLess is only declared in this test, so the call escapes.
+func minStringSelect(s string) byte {
+	b := make([]byte, 4) // OUT: escapes at line 365
+	return min(unsafe.String(&b[0], len(b)), s)[0]
 }

@@ -36,7 +36,7 @@ entry:
   ret i1 %unwind.i
 }
 
-define i1 @checkIndirect(ptr nocapture readonly %fn) local_unnamed_addr {
+define i1 @checkIndirect(ptr readonly captures(none) %fn) local_unnamed_addr {
 entry:
   %unwind.entry = load i1, ptr @runtime.unwindPendingSignal, align 1
   %0 = xor i1 %unwind.entry, true

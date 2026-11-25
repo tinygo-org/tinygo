@@ -17,7 +17,7 @@ func (b *builder) createAlloc(sizeValue, layoutValue llvm.Value, align int, comm
 	// Normally allocate using "runtime.alloc", but use "runtime.alloc_noheap"
 	// if the //go:noheap pragma is used.
 	allocFunc := "alloc"
-	if b.info.noheap {
+	if b.info.isNoHeap() {
 		allocFunc = "alloc_noheap"
 	}
 

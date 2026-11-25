@@ -105,3 +105,11 @@ func invalidreturn_chan_int() chan int
 //
 //go:wasmimport modulename invalidreturn_string
 func invalidreturn_string() string
+
+// ERROR: //go:section .psram cannot be used on variables containing pointers
+//
+//go:section .psram
+var psramSlice []byte
+
+//go:section .psram
+var psramBytes [16]byte

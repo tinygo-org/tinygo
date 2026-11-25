@@ -2,8 +2,8 @@ package descriptor
 
 import (
 	"errors"
-	"internal/binary"
 	"internal/bytealg"
+	"internal/byteorder"
 )
 
 var configurationCDCHID = [configurationTypeLen]byte{
@@ -58,7 +58,7 @@ func (d ClassHIDType) Type(v uint8) {
 }
 
 func (d ClassHIDType) HID(v uint16) {
-	binary.LittleEndian.PutUint16(d.data[2:4], v)
+	byteorder.LEPutUint16(d.data[2:4], v)
 }
 
 func (d ClassHIDType) CountryCode(v uint8) {
@@ -74,7 +74,7 @@ func (d ClassHIDType) ClassType(v uint8) {
 }
 
 func (d ClassHIDType) ClassLength(v uint16) {
-	binary.LittleEndian.PutUint16(d.data[7:9], v)
+	byteorder.LEPutUint16(d.data[7:9], v)
 }
 
 var errNoClassHIDFound = errors.New("no classHID found")

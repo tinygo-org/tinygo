@@ -198,7 +198,8 @@ func handleUSBIRQ(intr interrupt.Interrupt) {
 			if usbRxHandler[i] == nil || usbRxHandler[i](buf) {
 				AckUsbOutTransfer(i)
 			}
-		} else if (epFlags & sam.USB_DEVICE_EPINTFLAG_TRCPT1) > 0 {
+		}
+		if (epFlags & sam.USB_DEVICE_EPINTFLAG_TRCPT1) > 0 {
 			if usbTxHandler[i] != nil {
 				usbTxHandler[i]()
 			}

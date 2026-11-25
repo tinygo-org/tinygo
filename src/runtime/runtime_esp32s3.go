@@ -74,6 +74,9 @@ func main() {
 		clearbss()
 	}
 
+	// Initialize PSRAM if the machine.psram build tag is set.
+	startPSRAM()
+
 	// Initialize main system timer used for time.Now.
 	initTimer()
 
@@ -93,14 +96,7 @@ func main() {
 func init() {
 	// Initialize UART.
 	machine.InitSerial()
-}
-
-func abort() {
-	print("abort called\n")
-	// lock up forever
-	for {
-		device.Asm("waiti 0")
-	}
+	checkPSRAM()
 }
 
 // interruptInit installs the Xtensa vector table by writing its address

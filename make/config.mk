@@ -36,7 +36,8 @@ GO ?= go
 
 # Flags to pass to go test.
 GOTESTFLAGS ?=
-GOTESTPKGS ?= ./builder ./cgo ./compileopts ./compiler ./interp ./loader ./transform .
+# Test every package except src, tests and lib, which go test cannot test.
+GOTESTPKGS ?= $(filter-out $(addprefix github.com/tinygo-org/tinygo/,src/% tests/% lib/%),$(shell $(GO) list -e ./...))
 
 # tinygo binary for tests
 TINYGO ?= $(call detect,tinygo,tinygo $(CURDIR)/build/tinygo)

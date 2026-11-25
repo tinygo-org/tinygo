@@ -1,0 +1,39 @@
+name: Generate device files
+description: Restore the generated device sources, or generate and cache them
+
+inputs:
+  jobs:
+    description: Number of parallel make jobs
+    required: false
+    default: "4"
+
+runs:
+  using: composite
+  steps:
+    - name: Identify generator inputs
+      id: inputs
+      shell: bash
+      run: |
+        echo "go_version=$(go env GOVERSION)" >> "$GITHUB_OUTPUT"
+        echo "submodules=$(git ls-tree HEAD lib/avr lib/cmsis-svd lib/nrfx lib/stm32-svd lib/py32-svd | git hash-object --stdin)" >> "$GITHUB_OUTPUT"
+    - name: Restore device files
+      id: restore
+      uses: actions/cache/restore@v5
+      with:
+        path: src/device
+        key: gen-device-v1-${{ runner.os }}-${{ steps.inputs.outputs.go_version }}-${{ steps.inputs.outputs.submodules }}-${{ hashFiles('make/gen-device.mk', 'tools/gen-device-avr/**', 'tools/gen-device-svd/**') }}
+    - name: Restore tracked device files
+      # The cache also holds the hand-written files that share these directories.
+      if: steps.restore.outputs.cache-hit == 'true'
+      shell: bash
+      run: git checkout -- src/device
+    - name: Generate device files
+      if: steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      run: make gen-device -j${{ inputs.jobs }}
+    - name: Save device files
+      if: steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: src/device
+        key: ${{ steps.restore.outputs.cache-primary-key }}

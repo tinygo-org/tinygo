@@ -26,6 +26,20 @@ func sliceCopy(dst, src []int) int {
 	return copy(dst, src)
 }
 
+// Slicing a slice only emits the bounds checks that can fail.
+
+func sliceFrom(ints []int, low int) {
+	_ = ints[low:]
+}
+
+func sliceRange(ints []int, low, high int) {
+	_ = ints[low:high]
+}
+
+func sliceRangeMax(ints []int, low, high, max int) {
+	_ = ints[low:high:max]
+}
+
 // Test bounds checking in *ssa.MakeSlice instruction.
 
 func makeByteSlice(len int) []byte {
@@ -75,4 +89,15 @@ func SliceUint64(ptr *int, len uint64) []int {
 
 func SliceInt64(ptr *int, len int64) []int {
 	return unsafe.Slice(ptr, len)
+}
+
+func SliceAfterLenGuard(p []byte) []byte {
+	if len(p) >= 4 {
+		return p[:4]
+	}
+	return nil
+}
+
+func SliceWithoutLenUse(p []byte, n int) []byte {
+	return p[:n]
 }

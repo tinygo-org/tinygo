@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build !baremetal && !js && !wasip1 && !wasip2
+//go:build !baremetal && !js && !tinygo.wasi
 
 package os_test
 

@@ -10,12 +10,13 @@ import (
 
 var (
 	validBuildModeOptions     = []string{"default", "c-shared", "wasi-legacy"}
+	validLibcOptions          = []string{"musl", "glibc"}
 	validGCOptions            = []string{"none", "leaking", "conservative", "custom", "precise", "boehm"}
 	validSchedulerOptions     = []string{"none", "tasks", "asyncify", "threads", "cores"}
 	validSerialOptions        = []string{"none", "uart", "usb", "rtt"}
 	validPrintSizeOptions     = []string{"none", "short", "full", "html"}
 	validPanicStrategyOptions = []string{"print", "trap"}
-	validPanicUnwindOptions   = []string{"auto", "explicit"}
+	validPanicUnwindOptions   = []string{"auto", "explicit", "none"}
 	validOptOptions           = []string{"none", "0", "1", "2", "s", "z"}
 	validBuildVCSOptions      = []string{"auto", "true", "false"}
 )
@@ -34,6 +35,7 @@ type Options struct {
 	TrimPath                bool   // -trimpath flag
 	Opt                     string
 	GC                      string
+	Libc                    string // -libc flag
 	PanicStrategy           string
 	PanicUnwind             string
 	Scheduler               string
@@ -47,11 +49,12 @@ type Options struct {
 	VerifyIR                bool
 	SkipDWARF               bool
 	PrintCommands           func(cmd string, args ...string) `json:"-"`
-	Semaphore               chan struct{}                    `json:"-"` // -p flag controls cap
+	Semaphore               chan struct{}                    `json:"-"` // -p controls capacity, which must be positive
 	Debug                   bool
 	Nobounds                bool
 	PrintSizes              string
 	PrintAllocs             *regexp.Regexp // regexp string
+	PrintBounds             *regexp.Regexp // regexp of functions for which remaining bounds checks are printed
 	PrintAllocsCover        bool           // emit allocs in go coverage tool format
 	PrintStacks             bool
 	Tags                    []string
@@ -86,6 +89,15 @@ func (o *Options) Verify() error {
 			return fmt.Errorf(`invalid gc option '%s': valid values are %s`,
 				o.GC,
 				strings.Join(validGCOptions, ", "))
+		}
+	}
+
+	if o.Libc != "" {
+		valid := slices.Contains(validLibcOptions, o.Libc)
+		if !valid {
+			return fmt.Errorf(`invalid libc option '%s': valid values are %s`,
+				o.Libc,
+				strings.Join(validLibcOptions, ", "))
 		}
 	}
 

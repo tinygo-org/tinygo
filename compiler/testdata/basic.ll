@@ -1,7 +1,7 @@
 ; ModuleID = 'basic.go'
 source_filename = "basic.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
-target triple = "wasm32-unknown-wasi"
+target triple = "wasm32-unknown-wasip1"
 
 %main.kv = type { float, i32, i32, i32 }
 %main.kv.0 = type { i8, i32, i32, i32 }
@@ -10,7 +10,7 @@ target triple = "wasm32-unknown-wasi"
 @main.a = hidden global { ptr, i32, i32 } zeroinitializer, align 4
 @main.b = hidden global [2 x ptr] zeroinitializer, align 4
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {

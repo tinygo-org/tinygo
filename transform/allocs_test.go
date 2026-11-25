@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
 )
@@ -21,13 +20,105 @@ func TestAllocs(t *testing.T) {
 	})
 }
 
+func TestAllocsSharedCalls(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("shared-calls")
+	defer mod.Dispose()
+	mod.SetDataLayout("e-p:64:64")
+	builder := ctx.NewBuilder()
+	defer builder.Dispose()
+
+	intType := ctx.Int32Type()
+	ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+	walkType := llvm.FunctionType(intType, []llvm.Type{ptrType}, false)
+	next := llvm.AddFunction(mod, "leaf", walkType)
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(next, "entry"))
+	builder.CreateRet(builder.CreateLoad(intType, next.Param(0), "value"))
+	for i := range 32 {
+		fn := llvm.AddFunction(mod, fmt.Sprintf("walk%d", i), walkType)
+		builder.SetInsertPointAtEnd(ctx.AddBasicBlock(fn, "entry"))
+		first := builder.CreateCall(walkType, next, []llvm.Value{fn.Param(0)}, "first")
+		second := builder.CreateCall(walkType, next, []llvm.Value{fn.Param(0)}, "second")
+		builder.CreateRet(builder.CreateAdd(first, second, "sum"))
+		next = fn
+	}
+
+	allocType := llvm.FunctionType(ptrType, []llvm.Type{intType, ptrType}, false)
+	alloc := llvm.AddFunction(mod, "runtime.alloc", allocType)
+	root := llvm.AddFunction(mod, "root", llvm.FunctionType(intType, nil, false))
+	builder.SetInsertPointAtEnd(ctx.AddBasicBlock(root, "entry"))
+	ptr := builder.CreateCall(allocType, alloc, []llvm.Value{llvm.ConstInt(intType, 4, false), llvm.ConstNull(ptrType)}, "ptr")
+	value := builder.CreateCall(walkType, next, []llvm.Value{ptr}, "value")
+	builder.CreateRet(value)
+
+	transform.OptimizeAllocs(mod, nil, 256, nil)
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	if root.EntryBasicBlock().FirstInstruction().IsAAllocaInst().IsNil() || !alloc.FirstUse().IsNil() {
+		t.Fatalf("shared call paths did not permit stack allocation:\n%s", root.String())
+	}
+}
+
+func TestAllocsCapturesAttribute(t *testing.T) {
+	t.Parallel()
+	if llvm.VersionMajor < 21 {
+		t.Skip("captures attribute needs LLVM 21")
+	}
+	for _, tc := range []struct {
+		captures string
+		value    uint64 // CaptureInfo::toIntValue in llvm/Support/ModRef.h
+		stack    bool
+	}{
+		{"none", 0x00, true},
+		{"address_is_null", 0x11, true},
+		{"ret: address_is_null", 0x01, true},
+		{"address", 0x33, false},
+		{"provenance", 0xcc, false},
+	} {
+		t.Run(tc.captures, func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			mod := ctx.NewModule("captures")
+			defer mod.Dispose()
+			mod.SetDataLayout("e-p:64:64")
+			builder := ctx.NewBuilder()
+			defer builder.Dispose()
+
+			intType := ctx.Int32Type()
+			ptrType := llvm.PointerType(ctx.Int8Type(), 0)
+			checkType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+			check := llvm.AddFunction(mod, "check", checkType)
+			check.AddAttributeAtIndex(1, ctx.CreateEnumAttribute(llvm.AttributeKindID("captures"), tc.value))
+
+			allocType := llvm.FunctionType(ptrType, []llvm.Type{intType, ptrType}, false)
+			alloc := llvm.AddFunction(mod, "runtime.alloc", allocType)
+			root := llvm.AddFunction(mod, "root", llvm.FunctionType(ctx.VoidType(), nil, false))
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(root, "entry"))
+			ptr := builder.CreateCall(allocType, alloc, []llvm.Value{llvm.ConstInt(intType, 4, false), llvm.ConstNull(ptrType)}, "ptr")
+			builder.CreateCall(checkType, check, []llvm.Value{ptr}, "")
+			builder.CreateRetVoid()
+
+			transform.OptimizeAllocs(mod, nil, 256, nil)
+			if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+				t.Fatal(err)
+			}
+			if stack := alloc.FirstUse().IsNil(); stack != tc.stack {
+				t.Errorf("stack allocated = %t, want %t:\n%s", stack, tc.stack, mod.String())
+			}
+		})
+	}
+}
+
 func TestAllocsAggregateEdges(t *testing.T) {
 	t.Parallel()
 
 	const path = "testdata/allocs-aggregate.ll"
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
-	ensureTestCacheFreshness(t, path)
 	buf, err := llvm.NewMemoryBufferFromFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +155,18 @@ func TestAllocsAggregateEdges(t *testing.T) {
 		"gepLoad":             false,
 		"aggregatePhi":        true,
 		"aggregateSelect":     true,
+		"pointerSelectStore":  true,
+		"aggregateSelectLoad": false,
+		"pointerSelectLoad":   false,
 		"recursiveReturn":     true,
+		"recursiveLoad":       false,
+		"mutualRecursiveLoad": false,
+		"recursiveDiscard":    false,
+		"recursiveCapture":    true,
+		"recursiveSwap":       true,
+		"sharedReturnLoad":    false,
+		"sharedReturnEscape":  true,
+		"sharedCapture":       true,
 		"duplicateArguments":  true,
 		"nonEscapingScalar":   false,
 		"nonEscapingLoad":     false,
@@ -111,7 +213,7 @@ func TestAllocsRuntimePhi(t *testing.T) {
 	po := llvm.NewPassBuilderOptions()
 	defer po.Dispose()
 	passes := "globalopt,ipsccp,instcombine,adce,function-attrs"
-	if llvmutil.Version() >= 18 {
+	if llvm.VersionMajor >= 18 {
 		passes = "globalopt,ipsccp,instcombine<no-verify-fixpoint>,adce,function-attrs"
 	}
 	if err := mod.RunPasses(passes, llvm.TargetMachine{}, po); err != nil {
@@ -196,7 +298,7 @@ func TestAllocs2(t *testing.T) {
 		t.Fatal("could not read test input:", err)
 	}
 	var expectedTestOutput strings.Builder
-	for i, line := range strings.Split(strings.ReplaceAll(string(testInput), "\r\n", "\n"), "\n") {
+	for i, line := range strings.Split(string(testInput), "\n") {
 		const prefix = " // OUT: "
 		if idx := strings.Index(line, prefix); idx > 0 {
 			msg := line[idx+len(prefix):]
@@ -223,4 +325,37 @@ func TestAllocs2(t *testing.T) {
 		}
 	}
 	checkGolden(t, goldenFile+".cover", got.String())
+}
+
+func TestAllocsRuntimeCallers(t *testing.T) {
+	t.Parallel()
+
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	buf, err := llvm.NewMemoryBufferFromFile("testdata/allocs-runtime-callers.ll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mod, err := ctx.ParseIR(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mod.Dispose()
+
+	count := func(re string) (n int, reasons string) {
+		transform.OptimizeAllocs(mod, regexp.MustCompile(re), 256, func(_ token.Position, reason string) {
+			n++
+			reasons += reason + "\n"
+		})
+		return
+	}
+	// The allocation is reported once at each of the two calls from main.
+	n, reasons := count(`^main\.`)
+	if n != 2 || !strings.Contains(reasons, "allocated in runtime.grow") {
+		t.Errorf("^main\\.: got %d reports, want 2 mentioning runtime.grow:\n%s", n, reasons)
+	}
+	// Matching the runtime function itself still reports the allocation.
+	if n, reasons = count(`^runtime\.grow$`); n != 1 || strings.Contains(reasons, "allocated in") {
+		t.Errorf("^runtime.grow$: got %d reports, want 1 plain report:\n%s", n, reasons)
+	}
 }

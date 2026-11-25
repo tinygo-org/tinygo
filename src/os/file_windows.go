@@ -38,9 +38,11 @@ type file struct {
 	handle     FileHandle
 	name       string
 	appendMode bool
+	dirinfo    *dirInfo
 }
 
 func (f *file) close() error {
+	f.dirinfo = nil
 	return f.handle.Close()
 }
 

@@ -6,6 +6,7 @@ package interp
 import (
 	"strings"
 
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -15,11 +16,14 @@ import (
 // Functions are in SSA form, just like the LLVM version if it. The first block
 // (blocks[0]) is the entry block.
 type function struct {
-	llvmFn llvm.Value
-	name   string       // precalculated llvmFn.Name()
-	params []llvm.Value // precalculated llvmFn.Params()
-	blocks []*basicBlock
-	locals map[llvm.Value]int
+	llvmFn     llvm.Value
+	name       string       // precalculated llvmFn.Name()
+	params     []llvm.Value // precalculated llvmFn.Params()
+	blocks     []*basicBlock
+	locals     map[llvm.Value]int
+	deferFrame llvm.Value
+	deferStack llvm.Value
+	attributes llvmutil.FunctionUsageAttributes
 }
 
 // basicBlock represents a LLVM basic block and contains a slice of
@@ -36,6 +40,7 @@ type basicBlock struct {
 // interpreter will replace the operand with that local value.
 type instruction struct {
 	opcode     llvm.Opcode
+	branch     bool
 	localIndex int
 	operands   []value
 	llvmInst   llvm.Value
@@ -48,15 +53,21 @@ func (inst *instruction) String() string {
 	for i, op := range inst.operands {
 		operands[i] = op.String()
 	}
+	return opcodeName(inst.llvmInst) + " " + strings.Join(operands, " ")
+}
 
+// opcodeName returns the name of the opcode of inst.
+func opcodeName(inst llvm.Value) string {
 	name := ""
-	if int(inst.opcode) < len(instructionNameMap) {
-		name = instructionNameMap[inst.opcode]
+	if isBranch(inst) {
+		name = "br"
+	} else if opcode := inst.InstructionOpcode(); int(opcode) < len(instructionNameMap) {
+		name = instructionNameMap[opcode]
 	}
 	if name == "" {
 		name = "<unknown op>"
 	}
-	return name + " " + strings.Join(operands, " ")
+	return name
 }
 
 // compileFunction compiles a given LLVM function to an easier to interpret
@@ -64,43 +75,100 @@ func (inst *instruction) String() string {
 // that the interpreter doesn't have to call into LLVM.
 func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 	fn := &function{
-		llvmFn: llvmFn,
-		name:   llvmFn.Name(),
-		params: llvmFn.Params(),
-		locals: make(map[llvm.Value]int),
+		llvmFn:     llvmFn,
+		name:       llvmFn.Name(),
+		params:     llvmFn.Params(),
+		attributes: llvmutil.ReadFunctionUsageAttributes(llvmFn),
 	}
 	if llvmFn.IsDeclaration() {
 		// Nothing to do.
 		return fn
 	}
 
-	for i, param := range fn.params {
-		fn.locals[param] = i
+	for inst := range llvmutil.Instructions(llvmFn.EntryBasicBlock()) {
+		if inst.IsACallInst().IsNil() || inst.CalledValue().Name() != "runtime.setupDeferFrame" {
+			continue
+		}
+		frame := inst.Operand(0)
+		stack := inst.Operand(1)
+		if frame.IsAAllocaInst().IsNil() || stack.IsACallInst().IsNil() || !strings.HasPrefix(stack.CalledValue().Name(), "llvm.stacksave") {
+			continue
+		}
+		onlyUse := true
+		for user := range llvmutil.Uses(stack) {
+			if user != inst {
+				onlyUse = false
+				break
+			}
+		}
+		if onlyUse {
+			fn.deferFrame = frame
+			fn.deferStack = stack
+		}
 	}
 
 	// Make a map of all the blocks, to quickly find the block number for a
 	// given branch instruction.
 	blockIndices := make(map[llvm.Value]int)
-	for llvmBB := llvmFn.FirstBasicBlock(); !llvmBB.IsNil(); llvmBB = llvm.NextBasicBlock(llvmBB) {
+	for llvmBB := range llvmutil.BasicBlocks(llvmFn) {
 		index := len(blockIndices)
 		blockIndices[llvmBB.AsValue()] = index
 	}
 
+	// Every parameter and instruction gets a local.
+	fn.locals = make(map[llvm.Value]int, len(fn.params)+llvmFn.InstructionsCount())
+	for i, param := range fn.params {
+		fn.locals[param] = i
+	}
+	blockIndex := func(bb llvm.BasicBlock) literalValue {
+		// A missing block would otherwise silently become block 0 (the entry
+		// block) and miscompile the interpreted code.
+		index, ok := blockIndices[bb.AsValue()]
+		if !ok {
+			panic("interp: reference to unknown basic block")
+		}
+		return literalValue{uint32(index)}
+	}
+
 	// Compile every block.
-	for llvmBB := llvmFn.FirstBasicBlock(); !llvmBB.IsNil(); llvmBB = llvm.NextBasicBlock(llvmBB) {
+	for llvmBB := range llvmutil.BasicBlocks(llvmFn) {
 		bb := &basicBlock{}
 		fn.blocks = append(fn.blocks, bb)
 
 		// Compile every instruction in the block.
-		for llvmInst := llvmBB.FirstInstruction(); !llvmInst.IsNil(); llvmInst = llvm.NextInstruction(llvmInst) {
+		for llvmInst := range llvmutil.Instructions(llvmBB) {
 			// Create instruction skeleton.
 			opcode := llvmInst.InstructionOpcode()
 			inst := instruction{
 				opcode:     opcode,
+				branch:     isBranch(llvmInst),
 				localIndex: len(fn.locals),
 				llvmInst:   llvmInst,
 			}
 			fn.locals[llvmInst] = len(fn.locals)
+
+			if inst.branch {
+				// Branch instruction. Can be either a conditional branch or an
+				// unconditional branch.
+				switch {
+				case isCondBranch(llvmInst):
+					// Conditional jump to one of two blocks. Comparable to an
+					// if/else in procedural languages.
+					inst.operands = []value{
+						r.getValue(branchCondition(llvmInst)),
+						blockIndex(branchThen(llvmInst)),
+						blockIndex(branchElse(llvmInst)),
+					}
+				case isUncondBranch(llvmInst):
+					// Unconditional jump to a target basic block. Comparable to
+					// a jump in C and Go.
+					inst.operands = []value{
+						blockIndex(branchTarget(llvmInst)),
+					}
+				default:
+					panic("interp: unknown branch instruction form")
+				}
+			}
 
 			// Add operands specific for this instruction.
 			switch opcode {
@@ -112,32 +180,6 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					inst.operands = []value{
 						r.getValue(llvmInst.Operand(0)),
 					}
-				}
-			case llvm.Br:
-				// Branch instruction. Can be either a conditional branch (with
-				// 3 operands) or unconditional branch (with just one basic
-				// block operand).
-				numOperands := llvmInst.OperandsCount()
-				switch numOperands {
-				case 3:
-					// Conditional jump to one of two blocks. Comparable to an
-					// if/else in procedural languages.
-					thenBB := llvmInst.Operand(2)
-					elseBB := llvmInst.Operand(1)
-					inst.operands = []value{
-						r.getValue(llvmInst.Operand(0)),
-						literalValue{uint32(blockIndices[thenBB])},
-						literalValue{uint32(blockIndices[elseBB])},
-					}
-				case 1:
-					// Unconditional jump to a target basic block. Comparable to
-					// a jump in C and Go.
-					jumpBB := llvmInst.Operand(0)
-					inst.operands = []value{
-						literalValue{uint32(blockIndices[jumpBB])},
-					}
-				default:
-					panic("unknown number of operands")
 				}
 			case llvm.Switch:
 				// Compile to an array of (value, label) pairs, of which the
@@ -152,12 +194,12 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				// destination-block operands remain).
 				inst.operands = append(inst.operands,
 					r.getValue(llvmInst.Operand(0)),
-					literalValue{uint32(blockIndices[llvmInst.Successor(0).AsValue()])},
+					blockIndex(llvmInst.Successor(0)),
 				)
 				for i := 1; i < llvmInst.SuccessorsCount(); i++ {
 					inst.operands = append(inst.operands,
 						r.getValue(llvmInst.GetSwitchCaseValue(i)),
-						literalValue{uint32(blockIndices[llvmInst.Successor(i).AsValue()])},
+						blockIndex(llvmInst.Successor(i)),
 					)
 				}
 			case llvm.PHI:
@@ -167,7 +209,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					incomingBB := inst.llvmInst.IncomingBlock(i)
 					incomingValue := inst.llvmInst.IncomingValue(i)
 					inst.operands = append(inst.operands,
-						literalValue{uint32(blockIndices[incomingBB.AsValue()])},
+						blockIndex(incomingBB),
 						r.getValue(incomingValue),
 					)
 				}
@@ -191,7 +233,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				llvmCalledValue := llvmInst.CalledValue()
 				if !llvmCalledValue.IsAFunction().IsNil() {
 					name := llvmCalledValue.Name()
-					if name == "llvm.dbg.value" || strings.HasPrefix(name, "llvm.lifetime.") {
+					if name == "llvm.dbg.value" || name == "llvm.assume" || strings.HasPrefix(name, "llvm.lifetime.") {
 						// These intrinsics should not be interpreted, they are not
 						// relevant to the execution of this function.
 						continue
@@ -220,6 +262,25 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 				inst.operands = []value{
 					r.getValue(llvmInst.Operand(0)),
 					r.getValue(llvmInst.Operand(1)),
+				}
+			case llvm.AtomicRMW:
+				// atomicrmw: [ptr, value, binop]
+				inst.name = llvmInst.Name()
+				inst.operands = []value{
+					r.getValue(llvmInst.Operand(0)),
+					r.getValue(llvmInst.Operand(1)),
+					literalValue{uint8(llvmInst.AtomicRMWBinOp())},
+				}
+			case llvm.AtomicCmpXchg:
+				// cmpxchg: [ptr, cmp, new, resultSize, successOffset]
+				inst.name = llvmInst.Name()
+				resultType := llvmInst.Type()
+				inst.operands = []value{
+					r.getValue(llvmInst.Operand(0)),
+					r.getValue(llvmInst.Operand(1)),
+					r.getValue(llvmInst.Operand(2)),
+					literalValue{r.targetData.TypeAllocSize(resultType)},
+					literalValue{r.targetData.ElementOffset(resultType, 1)},
 				}
 			case llvm.Alloca:
 				// Alloca allocates stack space for local variables.
@@ -256,7 +317,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 						// struct field index for when the GEP must be done at
 						// runtime.
 						inst.operands = append(inst.operands, literalValue{elementOffset}, literalValue{^uint64(index)})
-						elementType = elementType.StructElementTypes()[index]
+						elementType = elementType.StructTypeAtIndex(int(index))
 					case llvm.ArrayTypeKind:
 						elementType = elementType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(elementType)
@@ -284,7 +345,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					switch indexingType.TypeKind() {
 					case llvm.StructTypeKind:
 						offset += r.targetData.ElementOffset(indexingType, int(index))
-						indexingType = indexingType.StructElementTypes()[index]
+						indexingType = indexingType.StructTypeAtIndex(int(index))
 					case llvm.ArrayTypeKind:
 						indexingType = indexingType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(indexingType)
@@ -309,7 +370,7 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 					switch indexingType.TypeKind() {
 					case llvm.StructTypeKind:
 						offset += r.targetData.ElementOffset(indexingType, int(index))
-						indexingType = indexingType.StructElementTypes()[index]
+						indexingType = indexingType.StructTypeAtIndex(int(index))
 					case llvm.ArrayTypeKind:
 						indexingType = indexingType.ElementType()
 						elementSize := r.targetData.TypeAllocSize(indexingType)
@@ -385,7 +446,6 @@ func (r *runner) compileFunction(llvmFn llvm.Value) *function {
 // can be useful for debug logging.
 var instructionNameMap = [...]string{
 	llvm.Ret:         "ret",
-	llvm.Br:          "br",
 	llvm.Switch:      "switch",
 	llvm.IndirectBr:  "indirectbr",
 	llvm.Invoke:      "invoke",
@@ -418,6 +478,8 @@ var instructionNameMap = [...]string{
 	llvm.Load:          "load",
 	llvm.Store:         "store",
 	llvm.GetElementPtr: "getelementptr",
+	llvm.AtomicCmpXchg: "cmpxchg",
+	llvm.AtomicRMW:     "atomicrmw",
 
 	// Cast Operators
 	llvm.Trunc:    "trunc",

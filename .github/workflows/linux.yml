@@ -12,23 +12,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  go-mod-tidy:
-    # Check that go.sum is up to date.
+  lint:
     runs-on: ubuntu-slim
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: true
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+      # go mod tidy needs src/net/http/response.go for golang.org/x/net.
+      # The other submodules do not affect go.mod or go.sum.
+      - name: Checkout net submodule
+        run: git submodule update --init --depth 1 src/net
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.27.1'
+          go-version: stable
           cache: true
-      - name: Run go mod tidy
-        run: go mod tidy
+      - name: Check commit authors
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          commits=$(git log --format='%h %ae %ce %(trailers:key=Co-authored-by,valueonly,separator=%x20)' "origin/$BASE_REF..HEAD")
+          if printf '%s\n' "$commits" | grep -iE 'noreply@anthropic\.com|copilot@users\.noreply\.github\.com'; then
+            echo "::error::Commits must not be authored, committed or co-authored by Claude or Copilot."
+            exit 1
+          fi
       - name: Check go.mod and go.sum are up to date
-        run: git diff --exit-code
+        if: ${{ !cancelled() }}
+        run: |
+          go mod tidy
+          git diff --exit-code
+      - name: Run linter
+        if: ${{ !cancelled() }}
+        run: make lint
+      - name: Run spellcheck
+        if: ${{ !cancelled() }}
+        run: make spell
+      - name: Check Go code formatting
+        if: ${{ !cancelled() }}
+        run: make fmt-check
 
   build-linux:
     # Build Linux binaries, ready for release.
@@ -50,8 +73,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Extract TinyGo version
         id: version
         run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
@@ -118,7 +140,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-alpine-v3-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-alpine-v4-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
@@ -130,10 +152,6 @@ jobs:
           gem install --version 4.0.7 public_suffix
           gem install --version 2.7.6 dotenv
           gem install --no-document fpm
-      - name: Run linter
-        run: make lint
-      - name: Run spellcheck
-        run: make spell
       - name: Build TinyGo release
         run: |
           make release deb -j3 STATIC=1
@@ -158,8 +176,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -181,7 +197,15 @@ jobs:
           tar -C ~/lib -xf tinygo${{ needs.build-linux.outputs.version }}.linux-amd64.tar.gz
           ln -s ~/lib/tinygo/bin/tinygo ~/go/bin/tinygo
       - run: make tinygo-test-wasip1-fast
+      - name: Check for clang 22 or newer
+        id: clang
+        run: |
+          major=$(tinygo version | sed -n 's/.*LLVM version \([0-9]*\)\..*/\1/p')
+          if [ "${major:-0}" -ge 22 ]; then
+            echo "wasip2=true" >> "$GITHUB_OUTPUT"
+          fi
       - run: make tinygo-test-wasip2-fast
+        if: steps.clang.outputs.wasip2 == 'true'
       - run: make tinygo-test-wasm
   smoketest-linux:
     # Build a binary for every supported board, using the binaries built in the
@@ -197,14 +221,12 @@ jobs:
         # shards finish at about the same time.
         group:
           - smoketest-rp2xxx smoketest-selftest smoketest-wasm-sim smoketest-py32
-          - smoketest-esp smoketest-riscv smoketest-flags
+          - smoketest-esp smoketest-riscv smoketest-flags smoketest-renesas
           - smoketest-examples smoketest-nxp smoketest-pwm-usb smoketest-avr
           - smoketest-samd smoketest-stm32 smoketest-nrf smoketest-wasm
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -227,8 +249,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install apt dependencies
         run: |
           echo "Show cpuinfo; sometimes useful when troubleshooting"
@@ -274,16 +295,20 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-asserts-v1-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-asserts-v2-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
-      - run: make gen-device -j4
+      - uses: ./.github/actions/gen-device
       - name: Test TinyGo
         run: make ASSERT=1 test
-      - name: Check Go code formatting
-        run: make fmt-check lint
+      - name: Check for unreachable functions
+        run: make ASSERT=1 deadcode
+      - name: Check golden IR files are up to date
+        run: make ASSERT=1 golden-check
+      - name: Check Go code formatting after device generation
+        run: make fmt-check
 
   assert-build-linux:
     # Build TinyGo with LLVM assertions enabled and publish it for the jobs
@@ -293,8 +318,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
+      - uses: ./.github/actions/submodules
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -312,12 +336,11 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-asserts-v1-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-asserts-v2-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
-      - run: make gen-device -j4
       - name: Build TinyGo release tarball
         run: |
           make release ASSERT=1 -j4
@@ -336,8 +359,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -363,12 +384,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
-      - name: Install apt dependencies
+      - name: Update apt package lists
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends \
+      - name: Resolve apt package versions
+        run: |
+          mkdir -p .apt-cache/archives
+          sudo apt-get --print-uris --yes --no-install-recommends install \
+              libgcrypt20 \
+              libpixman-1-0 \
+              libsdl2-2.0-0 \
+              libslirp0 \
+              qemu-system-arm \
+              qemu-system-riscv32 \
+              qemu-user \
+              simavr | tee apt-package-uris.txt
+      - name: Cache apt packages
+        uses: actions/cache@v5
+        with:
+          path: .apt-cache/archives
+          key: apt-debs-noble-${{ hashFiles('apt-package-uris.txt') }}
+      - name: Install apt dependencies
+        run: |
+          mkdir -p .apt-cache/archives/partial
+          sudo apt-get \
+              -o Dir::Cache::archives="$GITHUB_WORKSPACE/.apt-cache/archives" \
+              install --no-install-recommends \
               libgcrypt20 \
               libpixman-1-0 \
               libsdl2-2.0-0 \
@@ -413,17 +454,20 @@ jobs:
     # in that process to avoid doing lots of duplicate work and to avoid
     # complications around precompiled libraries such as compiler-rt shipped as
     # part of the release tarball.
+    # Both run on arm64 runners. arm64 builds natively. arm still cross compiles
+    # and uses qemu-arm for llvm-config, since these runners can't run AArch32.
     strategy:
       matrix:
         goarch: [ arm, arm64 ]
         include:
           - goarch: arm64
-            toolchain: aarch64-linux-gnu
             libc: arm64
           - goarch: arm
             toolchain: arm-linux-gnueabihf
             libc: armhf
-    runs-on: ubuntu-22.04 # note: use the oldest image available! (see above)
+    # Pull requests skip the arm and arm64 release builds to save runners.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04-arm # note: use the oldest image available! (see above)
     needs: build-linux
     steps:
       - name: Checkout
@@ -434,10 +478,12 @@ jobs:
       - name: Install apt dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends \
-              qemu-user \
-              g++-${{ matrix.toolchain }} \
-              libc6-dev-${{ matrix.libc }}-cross
+          if [ -n "${{ matrix.toolchain }}" ]; then
+            sudo apt-get install --no-install-recommends \
+                qemu-user \
+                g++-${{ matrix.toolchain }} \
+                libc6-dev-${{ matrix.libc }}-cross
+          fi
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -472,7 +518,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: cache-llvm-build
         with:
-          key: llvm-build-22-linux-${{ matrix.goarch }}-v1-${{ hashFiles('llvm-version.txt') }}
+          key: llvm-build-22-linux-${{ matrix.goarch }}-v2-${{ hashFiles('llvm-version.txt') }}
           path: llvm-build
       - name: Build LLVM
         if: steps.cache-llvm-build.outputs.cache-hit != 'true'
@@ -499,7 +545,7 @@ jobs:
         uses: actions/cache@v5
         id: cache-binaryen
         with:
-          key: binaryen-linux-${{ matrix.goarch }}-v5-${{ steps.binaryen-revision.outputs.revision }}
+          key: binaryen-linux-${{ matrix.goarch }}-v7-${{ steps.binaryen-revision.outputs.revision }}
           path: build/wasm-opt
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'

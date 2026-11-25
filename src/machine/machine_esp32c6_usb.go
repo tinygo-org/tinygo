@@ -4,9 +4,6 @@ package machine
 
 import (
 	"device/esp"
-	"errors"
-	"machine/usb"
-	"machine/usb/descriptor"
 	"runtime/interrupt"
 )
 
@@ -18,72 +15,9 @@ import (
 
 const cpuInterruptFromUSB = 10
 
-type USB_DEVICE struct {
-	Bus       *esp.USB_DEVICE_Type
-	Buffer    *RingBuffer
-	txPending bool // unflushed data in the EP1 TX FIFO
-	txStalled bool // set when flushAndWait fails (no host reading); cleared when FIFO becomes writable
-}
-
-var (
-	_USBCDC = &USB_DEVICE{
-		Bus:    esp.USB_DEVICE,
-		Buffer: NewRingBuffer(),
-	}
-
-	USBCDC Serialer = _USBCDC
-)
-
-var (
-	errUSBWrongSize            = errors.New("USB: invalid write size")
-	errUSBCouldNotWriteAllData = errors.New("USB: could not write all data")
-)
-
-type Serialer interface {
-	WriteByte(c byte) error
-	Write(data []byte) (n int, err error)
-	Configure(config UARTConfig) error
-	Buffered() int
-	ReadByte() (byte, error)
-	DTR() bool
-	RTS() bool
-}
-
-var usbConfigured bool
-
-// USBDevice provides a stub USB device for the ESP32-C6 and ESP32-H2. The
-// hardware only supports a fixed-function CDC-ACM serial port, so the
-// programmable USB device features are no-ops.
-type USBDevice struct {
-	initcomplete         bool
-	InitEndpointComplete bool
-}
-
-var USBDev = &USBDevice{}
-
-func (dev *USBDevice) SetStallEPIn(ep uint32)    {}
-func (dev *USBDevice) SetStallEPOut(ep uint32)   {}
-func (dev *USBDevice) ClearStallEPIn(ep uint32)  {}
-func (dev *USBDevice) ClearStallEPOut(ep uint32) {}
-
-// Attach and Detach are no-ops: the USB Serial/JTAG controller has no
-// software-controlled soft-connect, it is always attached to the bus.
-func (dev *USBDevice) Attach() {}
-func (dev *USBDevice) Detach() {}
-
-// initUSB is intentionally empty — the interp phase evaluates init()
-// functions at compile time and cannot access hardware registers.
-// Actual hardware setup is deferred to the first Configure() call.
-func initUSB() {}
-
-// Configure initialises the USB Serial/JTAG controller clock, pads, and
+// configure initialises the USB Serial/JTAG controller clock, pads, and
 // interrupt so that received data is buffered automatically.
-func (usbdev *USB_DEVICE) Configure(config UARTConfig) error {
-	if usbConfigured {
-		return nil
-	}
-	usbConfigured = true
-
+func (usbdev *USB_DEVICE) configure(config UARTConfig) error {
 	// Enable the USB_DEVICE peripheral clock via PCR (C6 and H2 use PCR
 	// instead of SYSTEM.PERIP_CLK_EN0 that C3 used).
 	esp.PCR.SetUSB_DEVICE_CONF_USB_DEVICE_CLK_EN(1)
@@ -108,13 +42,6 @@ func (usbdev *USB_DEVICE) Configure(config UARTConfig) error {
 	}).Enable()
 
 	return nil
-}
-
-// ensureConfigured triggers lazy initialization on first use.
-func (usbdev *USB_DEVICE) ensureConfigured() {
-	if !usbConfigured {
-		usbdev.Configure(UARTConfig{})
-	}
 }
 
 // handleInterrupt drains the hardware RX FIFO into the software ring buffer.
@@ -196,21 +123,14 @@ func (usbdev *USB_DEVICE) Buffered() int {
 	return int(usbdev.Buffer.Used())
 }
 
-// ReadByte returns a byte from the receive ring buffer.
+// ReadByte returns a byte from the receive ring buffer, or an error when it is empty.
 func (usbdev *USB_DEVICE) ReadByte() (byte, error) {
+	usbdev.ensureConfigured()
 	b, ok := usbdev.Buffer.Get()
 	if !ok {
-		return 0, nil
+		return 0, errNoByte
 	}
 	return b, nil
-}
-
-func (usbdev *USB_DEVICE) DTR() bool {
-	return false
-}
-
-func (usbdev *USB_DEVICE) RTS() bool {
-	return false
 }
 
 // flush signals WR_DONE to tell the hardware to send the data that has
@@ -238,18 +158,4 @@ func FlushSerial() {
 		_USBCDC.flush()
 		_USBCDC.txPending = false
 	}
-}
-
-// ConfigureUSBEndpoint is a no-op on ESP32-C6 and ESP32-H2. The hardware does
-// not support programmable USB endpoints.
-func ConfigureUSBEndpoint(desc descriptor.Descriptor, epSettings []usb.EndpointConfig, setup []usb.SetupConfig) {
-}
-
-// SendZlp is a no-op on ESP32-C6 and ESP32-H2.
-func SendZlp() {
-}
-
-// SendUSBInPacket is a no-op on ESP32-C6 and ESP32-H2.
-func SendUSBInPacket(ep uint32, data []byte) bool {
-	return false
 }

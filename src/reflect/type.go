@@ -11,55 +11,86 @@
 // avoid infinite recursion.
 //
 // The layouts specifically look like this:
-// - basic types (Bool..UnsafePointer):
+// - basic types (Bool..UnsafePointer, see basicType):
 //     meta         uint8 // actually: kind + flags
 //     ptrTo        *typeStruct
 // - channels and slices (see elemType):
-//     meta          uint8
-//     nmethods     uint16 (0)
+//     meta         uint8
+//     typeID       uint8       // see below
+//     numMethod    uint16      // 0 for slices, the direction for channels
 //     ptrTo        *typeStruct
-//     elementType  *typeStruct // the type that you get with .Elem()
+//     elem         *typeStruct // the type that you get with .Elem()
 // - pointer types (see ptrType, this doesn't include chan, map, etc):
 //     meta         uint8
-//     nmethods     uint16
-//     elementType  *typeStruct
+//     typeID       uint8
+//     numMethod    uint16
+//     elem         *typeStruct
+//     methods      methodSet   // only if numMethod has the method set flag
 // - array types (see arrayType)
 //     meta         uint8
-//     nmethods     uint16 (0)
+//     typeID       uint8
+//     numMethod    uint16 (0)
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // element type of the array
 //     arrayLen     uintptr     // length of the array (this is part of the type)
 //     slicePtr     *typeStruct // pointer to []T type
-// - map types (this is still missing the key and element types)
+//     layout       unsafe.Pointer // GC layout of the array
+// - map types (see mapType)
 //     meta         uint8
-//     nmethods     uint16 (0)
+//     typeID       uint8
+//     numMethod    uint16 (0)
 //     ptrTo        *typeStruct
 //     elem         *typeStruct
 //     key          *typeStruct
+//     typeInfo     unsafe.Pointer // hashmap type info
 // - struct types (see structType):
 //     meta         uint8
-//     nmethods     uint16
+//     typeID       uint8
+//     numMethod    uint16
 //     ptrTo        *typeStruct
-//     size         uint32
 //     pkgpath      *byte       // package path; null terminated
+//     size         uint32
 //     numField     uint16
+//     layout       unsafe.Pointer // GC layout of the struct
 //     fields       [...]structField // the remaining fields are all of type structField
-// - interface types (this is missing the interface methods):
+//     methods      methodSet   // only if numMethod has the method set flag
+// - interface types (see interfaceType):
 //     meta         uint8
 //     ptrTo        *typeStruct
-// - signature types (this is missing input and output parameters):
+//     methods      methodSet
+// - signature types (see funcType):
 //     meta         uint8
+//     numIn        uint8
+//     numOut       uint16      // high bit indicates a variadic signature
 //     ptrTo        *typeStruct
-// - named types
+//     inOut        [...]typeStruct // input types followed by output types
+// - named types (see namedType):
 //     meta         uint8
-//     nmethods     uint16      // number of methods
+//     typeID       uint8
+//     numMethod    uint16      // number of exported methods
 //     ptrTo        *typeStruct
 //     elem         *typeStruct // underlying type
 //     pkgpath      *byte       // pkgpath; null terminated
+//     methods      methodSet   // only if numMethod has the method set flag
 //     name         [1]byte     // actual name; null terminated
 //
 // The type struct is essentially a union of all the above types. Which it is,
 // can be determined by looking at the meta byte.
+//
+// The method set flag is bit 15 of numMethod (numMethodHasMethodSet). A
+// methodSet holds a length followed by arrays of method signatures, names,
+// types and functions.
+//
+// typeID is 0, or the ID that interface lowering gives to implementers of
+// interfaces with many implementers, so method calls and type asserts can
+// switch on it. It is absent on AVR, where numMethod directly follows meta
+// (see typeIDField in internal/reflectlite).
+//
+// A type pointer with nonzero low 2 bits is a tagged pointer type, not a type
+// struct. Type struct t plus n means n more levels of pointers on top of t (see
+// RawType.ptrtag in internal/reflectlite). The compiler uses this for 2 to 4
+// levels of pointers on top of the 1 level pointer type, and reflect also uses
+// it for pointers to types it makes at runtime.
 
 package reflect
 
@@ -394,9 +425,7 @@ func (t *rawType) CanSeq() bool {
 	case Int8, Int16, Int32, Int64, Int, Uint8, Uint16, Uint32, Uint64, Uint, Uintptr, Array, Slice, Chan, String, Map:
 		return true
 	case Func:
-		// TODO: implement canRangeFunc
-		// return canRangeFunc(t)
-		panic("unimplemented: (reflect.Type).CanSeq() for functions")
+		return canRangeFunc(t, 1)
 	case Pointer:
 		return t.Elem().Kind() == Array
 	}
@@ -408,13 +437,23 @@ func (t *rawType) CanSeq2() bool {
 	case Array, Slice, String, Map:
 		return true
 	case Func:
-		// TODO: implement canRangeFunc2
-		// return canRangeFunc2(t)
-		panic("unimplemented: (reflect.Type).CanSeq2() for functions")
+		return canRangeFunc(t, 2)
 	case Pointer:
 		return t.Elem().Kind() == Array
 	}
 	return false
+}
+
+func canRangeFunc(t Type, seq int) bool {
+	if t.NumIn() != 1 || t.NumOut() != 0 {
+		return false
+	}
+	yield := t.In(0)
+	return yield.Kind() == Func &&
+		yield.NumIn() == seq &&
+		yield.NumOut() == 1 &&
+		yield.Out(0).Kind() == Bool &&
+		yield.Out(0).PkgPath() == ""
 }
 
 func (t *rawType) ConvertibleTo(u Type) bool {
@@ -460,7 +499,7 @@ func (t *rawType) Implements(u Type) bool {
 }
 
 func (t *rawType) In(i int) Type {
-	panic("unimplemented: (reflect.Type).In()")
+	return toType(t.RawType.In(i).(*reflectlite.RawType))
 }
 
 func (t *rawType) Ins() iter.Seq[Type] {
@@ -474,7 +513,7 @@ func (t *rawType) Ins() iter.Seq[Type] {
 }
 
 func (t *rawType) IsVariadic() bool {
-	panic("unimplemented: (reflect.Type).IsVariadic()")
+	return t.RawType.IsVariadic()
 }
 
 func (t *rawType) Key() Type {
@@ -482,11 +521,25 @@ func (t *rawType) Key() Type {
 }
 
 func (t *rawType) Method(i int) Method {
-	panic("unimplemented: (reflect.Type).Method()")
+	return toMethod(t.RawType.Method(i))
 }
 
 func (t *rawType) MethodByName(name string) (Method, bool) {
-	panic("unimplemented: (reflect.Type).MethodByName()")
+	method, ok := t.RawType.MethodByName(name)
+	if !ok {
+		return Method{}, false
+	}
+	return toMethod(method), true
+}
+
+func toMethod(method reflectlite.MethodInfo) Method {
+	return Method{
+		Name:    method.Name,
+		PkgPath: method.PkgPath,
+		Type:    toType(method.Type),
+		Func:    Value{method.Func},
+		Index:   method.Index,
+	}
 }
 
 func (t *rawType) Methods() iter.Seq[Method] {
@@ -500,15 +553,15 @@ func (t *rawType) Methods() iter.Seq[Method] {
 }
 
 func (t *rawType) NumIn() int {
-	panic("unimplemented: (reflect.Type).NumIn()")
+	return t.RawType.NumIn()
 }
 
 func (t *rawType) NumOut() int {
-	panic("unimplemented: (reflect.Type).NumOut()")
+	return t.RawType.NumOut()
 }
 
 func (t *rawType) Out(i int) Type {
-	panic("unimplemented: (reflect.Type).Out()")
+	return toType(t.RawType.Out(i).(*reflectlite.RawType))
 }
 
 func (t *rawType) Outs() iter.Seq[Type] {
@@ -569,8 +622,24 @@ func ArrayOf(n int, t Type) Type {
 	return toType(reflectlite.ArrayOf(n, toRawType(t)))
 }
 
-func StructOf([]StructField) Type {
-	return toType(reflectlite.StructOf([]reflectlite.StructField{}))
+func StructOf(fields []StructField) Type {
+	rawFields := make([]reflectlite.StructField, len(fields))
+	for i, field := range fields {
+		var typ reflectlite.Type
+		if field.Type != nil {
+			typ = toRawType(field.Type)
+		}
+		rawFields[i] = reflectlite.StructField{
+			Name:      field.Name,
+			PkgPath:   field.PkgPath,
+			Type:      typ,
+			Tag:       field.Tag,
+			Offset:    field.Offset,
+			Index:     field.Index,
+			Anonymous: field.Anonymous,
+		}
+	}
+	return toType(reflectlite.StructOf(rawFields))
 }
 
 func MapOf(key, value Type) Type {
@@ -592,5 +661,5 @@ func FuncOf(in, out []Type, variadic bool) Type {
 }
 
 func ChanOf(dir ChanDir, t Type) Type {
-	panic("unimplemented: reflect.ChanOf")
+	return toType(reflectlite.ChanOf(dir, toRawType(t)))
 }

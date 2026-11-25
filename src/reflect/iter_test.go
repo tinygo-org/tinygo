@@ -158,24 +158,24 @@ func TestValueSeq(t *testing.T) {
 		// 		t.Fatalf("should loop three times")
 		// 	}
 		// }},
-		// {"func", ValueOf(func(yield func(int) bool) {
-		// 	for i := range 4 {
-		// 		if !yield(i) {
-		// 			return
-		// 		}
-		// 	}
-		// }), func(t *testing.T, s iter.Seq[Value]) {
-		// 	i := int64(0)
-		// 	for v := range s {
-		// 		if v.Int() != i {
-		// 			t.Fatalf("got %d, want %d", v.Int(), i)
-		// 		}
-		// 		i++
-		// 	}
-		// 	if i != 4 {
-		// 		t.Fatalf("should loop four times")
-		// 	}
-		// }},
+		{"func", ValueOf(func(yield func(int) bool) {
+			for i := range 4 {
+				if !yield(i) {
+					return
+				}
+			}
+		}), func(t *testing.T, s iter.Seq[Value]) {
+			i := int64(0)
+			for v := range s {
+				if v.Int() != i {
+					t.Fatalf("got %d, want %d", v.Int(), i)
+				}
+				i++
+			}
+			if i != 4 {
+				t.Fatalf("should loop four times")
+			}
+		}},
 		// {"method", ValueOf(methodIter{}).MethodByName("Seq"), func(t *testing.T, s iter.Seq[Value]) {
 		// 	i := int64(0)
 		// 	for v := range s {
@@ -207,8 +207,10 @@ func TestValueSeq(t *testing.T) {
 		}},
 	}
 	for _, tc := range tests {
-		seq := tc.val.Seq()
-		tc.check(t, seq)
+		t.Run(tc.name, func(t *testing.T) {
+			seq := tc.val.Seq()
+			tc.check(t, seq)
+		})
 	}
 }
 
@@ -306,25 +308,25 @@ func TestValueSeq2(t *testing.T) {
 				t.Fatalf("should loop four times")
 			}
 		}},
-		// {"func", ValueOf(func(f func(int, int) bool) {
-		// 	for i := range 4 {
-		// 		f(i, i+1)
-		// 	}
-		// }), func(t *testing.T, s iter.Seq2[Value, Value]) {
-		// 	i := int64(0)
-		// 	for v1, v2 := range s {
-		// 		if v1.Int() != i {
-		// 			t.Fatalf("got %d, want %d", v1.Int(), i)
-		// 		}
-		// 		i++
-		// 		if v2.Int() != i {
-		// 			t.Fatalf("got %d, want %d", v2.Int(), i)
-		// 		}
-		// 	}
-		// 	if i != 4 {
-		// 		t.Fatalf("should loop four times")
-		// 	}
-		// }},
+		{"func", ValueOf(func(f func(int, int) bool) {
+			for i := range 4 {
+				f(i, i+1)
+			}
+		}), func(t *testing.T, s iter.Seq2[Value, Value]) {
+			i := int64(0)
+			for v1, v2 := range s {
+				if v1.Int() != i {
+					t.Fatalf("got %d, want %d", v1.Int(), i)
+				}
+				i++
+				if v2.Int() != i {
+					t.Fatalf("got %d, want %d", v2.Int(), i)
+				}
+			}
+			if i != 4 {
+				t.Fatalf("should loop four times")
+			}
+		}},
 		// {"method", ValueOf(methodIter2{}).MethodByName("Seq2"), func(t *testing.T, s iter.Seq2[Value, Value]) {
 		// 	i := int64(0)
 		// 	for v1, v2 := range s {
@@ -378,8 +380,10 @@ func TestValueSeq2(t *testing.T) {
 		}},
 	}
 	for _, tc := range tests {
-		seq := tc.val.Seq2()
-		tc.check(t, seq)
+		t.Run(tc.name, func(t *testing.T) {
+			seq := tc.val.Seq2()
+			tc.check(t, seq)
+		})
 	}
 }
 

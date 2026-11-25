@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if defined(CXX_CONSTANT) || !defined(SHARED_CONSTANT)
+#error incorrect C flags
+#endif
+
 int global = 3;
 bool globalBool = 1;
 bool globalBool2 = 10; // test narrowing

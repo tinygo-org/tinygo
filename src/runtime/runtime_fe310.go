@@ -11,6 +11,7 @@ import (
 
 	"device/riscv"
 	"device/sifive"
+	"runtime/interrupt"
 	"runtime/volatile"
 )
 
@@ -141,15 +142,17 @@ func sleepTicks(d timeUnit) {
 	target := uint64(ticks() + d)
 	sifive.CLINT.MTIMECMPH.Set(uint32(target >> 32))
 	sifive.CLINT.MTIMECMP.Set(uint32(target))
+	// wfi wakes on a pending interrupt even with MSTATUS.MIE clear, so the timer
+	// interrupt cannot run between the check and the wfi and be lost.
+	state := interrupt.Disable()
 	riscv.MIE.SetBits(riscv.MIE_MTIE)
-	for {
-		if timerWakeup.Get() != 0 {
-			timerWakeup.Set(0)
-			// Disable timer.
-			break
-		}
+	for timerWakeup.Get() == 0 {
 		riscv.Asm("wfi")
+		interrupt.Restore(state)
+		interrupt.Disable()
 	}
+	timerWakeup.Set(0)
+	interrupt.Restore(state)
 }
 
 // handleException is called from the interrupt handler for any exception.

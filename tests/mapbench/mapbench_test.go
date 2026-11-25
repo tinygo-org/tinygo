@@ -11,7 +11,7 @@ var intSink int
 
 func BenchmarkMapStringShortGet(b *testing.B) {
 	m := make(map[string]int, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		m[string(rune('A'+i%26))+string(rune('a'+i/26))] = i
 	}
 	b.ResetTimer()
@@ -22,9 +22,9 @@ func BenchmarkMapStringShortGet(b *testing.B) {
 
 func BenchmarkMapStringLongGet(b *testing.B) {
 	m := make(map[string]int, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		s := "this-is-a-longer-key-for-testing-"
-		for j := 0; j < 3; j++ {
+		for j := range 3 {
 			s += string(rune('A' + (i+j)%26))
 		}
 		m[s] = i
@@ -38,7 +38,7 @@ func BenchmarkMapStringLongGet(b *testing.B) {
 
 func BenchmarkMapCompositeGet(b *testing.B) {
 	m := make(map[compositeKey]int, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		m[compositeKey{S: string(rune('A'+i%26)) + string(rune('a'+i/26)), N: int32(i)}] = i
 	}
 	key := compositeKey{S: "Qa", N: 42}
@@ -50,7 +50,7 @@ func BenchmarkMapCompositeGet(b *testing.B) {
 
 func BenchmarkMapIntGet(b *testing.B) {
 	m := make(map[int]int, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		m[i*7] = i
 	}
 	b.ResetTimer()
@@ -71,7 +71,7 @@ type bigKey [256]byte
 
 func BenchmarkMapBigKeyGet(b *testing.B) {
 	m := make(map[bigKey]int, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		var k bigKey
 		k[0] = byte(i)
 		m[k] = i

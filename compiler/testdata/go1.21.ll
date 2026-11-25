@@ -1,11 +1,11 @@
 ; ModuleID = 'go1.21.go'
 source_filename = "go1.21.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
-target triple = "wasm32-unknown-wasi"
+target triple = "wasm32-unknown-wasip1"
 
 %runtime._string = type { ptr, i32 }
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -19,7 +19,7 @@ entry:
   ret i32 %a
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.smin.i32(i32, i32) #2
 
 ; Function Attrs: nounwind
@@ -53,7 +53,7 @@ entry:
   ret i8 %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare i8 @llvm.umin.i8(i8, i8) #2
 
 ; Function Attrs: nounwind
@@ -63,7 +63,7 @@ entry:
   ret i32 %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umin.i32(i32, i32) #2
 
 ; Function Attrs: nounwind
@@ -73,7 +73,7 @@ entry:
   ret float %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare float @llvm.minimum.f32(float, float) #2
 
 ; Function Attrs: nounwind
@@ -83,11 +83,11 @@ entry:
   ret double %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare double @llvm.minimum.f64(double, double) #2
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.minString(ptr readonly %a.data, i32 %a.len, ptr readonly %b.data, i32 %b.len, ptr %context) unnamed_addr #1 {
+define hidden %runtime._string @main.minString(ptr readonly %a.data, i32 range(i32 0, -2147483648) %a.len, ptr readonly %b.data, i32 range(i32 0, -2147483648) %b.len, ptr %context) unnamed_addr #1 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1
@@ -101,7 +101,7 @@ entry:
   ret %runtime._string %5
 }
 
-declare i1 @runtime.stringLess(ptr readonly, i32, ptr readonly, i32, ptr) #0
+declare i1 @runtime.stringLess(ptr readonly, i32 range(i32 0, -2147483648), ptr readonly, i32 range(i32 0, -2147483648), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i32 @main.maxInt(i32 %a, i32 %b, ptr %context) unnamed_addr #1 {
@@ -110,7 +110,7 @@ entry:
   ret i32 %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.smax.i32(i32, i32) #2
 
 ; Function Attrs: nounwind
@@ -120,7 +120,7 @@ entry:
   ret i32 %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare i32 @llvm.umax.i32(i32, i32) #2
 
 ; Function Attrs: nounwind
@@ -130,11 +130,11 @@ entry:
   ret float %0
 }
 
-; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+; Function Attrs: nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none)
 declare float @llvm.maximum.f32(float, float) #2
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.maxString(ptr readonly %a.data, i32 %a.len, ptr readonly %b.data, i32 %b.len, ptr %context) unnamed_addr #1 {
+define hidden %runtime._string @main.maxString(ptr readonly %a.data, i32 range(i32 0, -2147483648) %a.len, ptr readonly %b.data, i32 range(i32 0, -2147483648) %b.len, ptr %context) unnamed_addr #1 {
 entry:
   %0 = insertvalue %runtime._string zeroinitializer, ptr %a.data, 0
   %1 = insertvalue %runtime._string %0, i32 %a.len, 1
@@ -149,18 +149,18 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.clearSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.clearSlice(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
-  %0 = shl i32 %s.len, 2
+  %0 = shl nuw i32 %s.len, 2
   call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
   ret void
 }
 
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
-declare void @llvm.memset.p0.i32(ptr nocapture writeonly, i8, i32, i1 immarg) #3
+declare void @llvm.memset.p0.i32(ptr writeonly captures(none), i8, i32, i1 immarg) #3
 
 ; Function Attrs: nounwind
-define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.clearZeroSizedSlice(ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   ret void
 }
@@ -176,6 +176,6 @@ declare void @runtime.hashmapClear(ptr dereferenceable_or_null(52), ptr) #0
 
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
-attributes #2 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #2 = { nocallback nocreateundeforpoison nofree nosync nounwind speculatable willreturn memory(none) }
 attributes #3 = { nocallback nofree nounwind willreturn memory(argmem: write) }
 attributes #4 = { nounwind }

@@ -5,15 +5,39 @@ target triple = "x86_64--linux"
 @bar.knownAtRuntime = local_unnamed_addr global i64 0
 @baz.someGlobal = external local_unnamed_addr global [3 x { i64, i32 }]
 @baz.someInt = local_unnamed_addr global i32 0
-@x.atomicNum = local_unnamed_addr global i32 0
+@x.atomicNum = local_unnamed_addr global i32 1
 @x.volatileNum = global i32 0
 @y.ready = local_unnamed_addr global i32 0
 @z.bloom = global i64 0
 @z.arr = global [32 x i8] zeroinitializer
+@atomic.value = global i32 11
+@atomic.old = local_unnamed_addr global i32 7
+@atomic.success = local_unnamed_addr global i1 true
+@atomic.failure = local_unnamed_addr global i1 false
+@atomic.seen = local_unnamed_addr global i32 11
+@atomic.runtimeOld = local_unnamed_addr global i32 0
+@atomic.runtimeSuccess = local_unnamed_addr global i1 false
+@atomic.runtimeSeen = local_unnamed_addr global i32 0
+@pause.lock = local_unnamed_addr global i32 0
 
 declare void @externalCall(i64) local_unnamed_addr
 
 declare i64 @ptrHash(ptr nocapture) local_unnamed_addr
+
+declare void @modifyAtomic(ptr) local_unnamed_addr
+
+declare void @"internal/task.PauseLocked"(ptr) local_unnamed_addr
+
+define i32 @"sync/atomic.SwapUint32"(ptr %addr, i32 %new, ptr %context) local_unnamed_addr {
+  %old = atomicrmw xchg ptr %addr, i32 %new syncscope("singlethread") seq_cst, align 4
+  ret i32 %old
+}
+
+define i1 @"sync/atomic.CompareAndSwapUint32"(ptr %addr, i32 %old, i32 %new, ptr %context) local_unnamed_addr {
+  %pair = cmpxchg ptr %addr, i32 %old, i32 %new syncscope("singlethread") seq_cst seq_cst, align 4
+  %swapped = extractvalue { i32, i1 } %pair, 1
+  ret i1 %swapped
+}
 
 define void @runtime.initAll() unnamed_addr {
 entry:
@@ -22,14 +46,20 @@ entry:
   %val = load i64, ptr @foo.knownAtRuntime, align 8
   store i64 %val, ptr @bar.knownAtRuntime, align 8
   call void @externalCall(i64 3)
-  store atomic i32 1, ptr @x.atomicNum seq_cst, align 4
-  %x = load atomic i32, ptr @x.atomicNum seq_cst, align 4
-  store i32 %x, ptr @x.atomicNum, align 4
   %y = load volatile i32, ptr @x.volatileNum, align 4
   store volatile i32 %y, ptr @x.volatileNum, align 4
+  call void @modifyAtomic(ptr @atomic.value)
+  %runtimeOld = call i32 @"sync/atomic.SwapUint32"(ptr @atomic.value, i32 15, ptr undef)
+  store i32 %runtimeOld, ptr @atomic.runtimeOld, align 4
+  %runtimeSuccess = call i1 @"sync/atomic.CompareAndSwapUint32"(ptr @atomic.value, i32 15, i32 17, ptr undef)
+  store i1 %runtimeSuccess, ptr @atomic.runtimeSuccess, align 1
+  %runtimeSeen = load atomic i32, ptr @atomic.value seq_cst, align 4
+  store i32 %runtimeSeen, ptr @atomic.runtimeSeen, align 4
+  store atomic i32 19, ptr @atomic.value seq_cst, align 4
   call fastcc void @y.init(ptr undef)
   call fastcc void @z.set(ptr @z.bloom, ptr @z.bloom)
   call fastcc void @z.setArr(ptr @z.arr, i64 32, ptr @z.bloom)
+  call fastcc void @pause.sleep(ptr undef)
   ret void
 }
 
@@ -78,5 +108,11 @@ define internal fastcc void @z.set(ptr %ptr, ptr %context) unnamed_addr {
   %old = load i64, ptr %context, align 8
   %new = or i64 %old, %bit
   store i64 %new, ptr %context, align 8
+  ret void
+}
+
+define internal fastcc void @pause.sleep(ptr %context) unnamed_addr {
+  store atomic i32 1, ptr @pause.lock seq_cst, align 4
+  call void @"internal/task.PauseLocked"(ptr undef)
   ret void
 }

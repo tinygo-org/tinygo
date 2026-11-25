@@ -27,6 +27,7 @@ permissions:
 
 jobs:
   release:
+    if: github.repository == 'tinygo-org/tinygo'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}

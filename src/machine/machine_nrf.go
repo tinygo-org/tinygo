@@ -6,7 +6,7 @@ import (
 	"device/arm"
 	"device/nrf"
 	"errors"
-	"internal/binary"
+	"internal/byteorder"
 	"runtime/interrupt"
 	"unsafe"
 )
@@ -174,7 +174,7 @@ var (
 )
 
 // Configure the UART.
-func (uart *UART) Configure(config UARTConfig) {
+func (uart *UART) Configure(config UARTConfig) error {
 	// Default baud rate to 115200.
 	if config.BaudRate == 0 {
 		config.BaudRate = 115200
@@ -199,6 +199,17 @@ func (uart *UART) Configure(config UARTConfig) {
 	intr := interrupt.New(nrf.IRQ_UART0, _UART0.handleInterrupt)
 	intr.SetPriority(0xc0) // low priority
 	intr.Enable()
+	return nil
+}
+
+// DTR is not available on the UART.
+func (uart *UART) DTR() bool {
+	return false
+}
+
+// RTS is not configured on the UART.
+func (uart *UART) RTS() bool {
+	return false
 }
 
 // SetBaudRate sets the communication speed for the UART.
@@ -290,8 +301,6 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 
 // SetBaudRate sets the I2C frequency. It has the side effect of also
 // enabling the I2C hardware if disabled beforehand.
-//
-//go:inline
 func (i2c *I2C) SetBaudRate(br uint32) error {
 	switch {
 	case br >= 400*KHz:
@@ -429,7 +438,7 @@ func (f flashBlockDevice) WriteAt(p []byte, off int64) (n int, err error) {
 
 	for j := 0; j < len(padded); j += int(f.WriteBlockSize()) {
 		// write word
-		*(*uint32)(unsafe.Pointer(address)) = binary.LittleEndian.Uint32(padded[j : j+int(f.WriteBlockSize())])
+		*(*uint32)(unsafe.Pointer(address)) = byteorder.LEUint32(padded[j : j+int(f.WriteBlockSize())])
 		address += uintptr(f.WriteBlockSize())
 		waitWhileFlashBusy()
 	}

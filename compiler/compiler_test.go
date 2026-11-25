@@ -2,10 +2,13 @@ package compiler
 
 import (
 	"flag"
+	"go/ast"
+	"go/importer"
+	"go/parser"
 	"go/scanner"
+	"go/token"
 	"go/types"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -13,6 +16,8 @@ import (
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
+	"github.com/tinygo-org/tinygo/internal/ir"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"github.com/tinygo-org/tinygo/loader"
 	"github.com/tinygo-org/tinygo/transform"
 	"tinygo.org/x/go-llvm"
@@ -25,6 +30,150 @@ type testCase struct {
 	file      string
 	target    string
 	scheduler string
+}
+
+func TestChannelLayouts(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	target, err := compileopts.LoadTarget(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := &compileopts.Config{Options: options, Target: target}
+	program, err := loader.Load(config, "./testdata/channel.go", types.Config{
+		Sizes: types.SizesFor("gc", "386"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := program.Parse(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"channelOp", "chanSelectState"} {
+		runtimeType := program.Packages["runtime"].Pkg.Scope().Lookup(name).Type().Underlying().(*types.Struct)
+		reflectType := program.Packages["internal/reflectlite"].Pkg.Scope().Lookup(name).Type().Underlying().(*types.Struct)
+		if runtimeType.NumFields() != reflectType.NumFields() {
+			t.Fatalf("%s field counts differ: runtime=%d, reflectlite=%d", name, runtimeType.NumFields(), reflectType.NumFields())
+		}
+		runtimeFields := make([]*types.Var, runtimeType.NumFields())
+		reflectFields := make([]*types.Var, reflectType.NumFields())
+		for i := range runtimeFields {
+			runtimeFields[i] = runtimeType.Field(i)
+			reflectFields[i] = reflectType.Field(i)
+			if runtimeFields[i].Name() != reflectFields[i].Name() {
+				t.Errorf("%s field %d names differ: runtime=%s, reflectlite=%s", name, i, runtimeFields[i].Name(), reflectFields[i].Name())
+			}
+		}
+		for _, test := range []struct {
+			arch  string
+			sizes types.Sizes
+		}{
+			{"avr", &types.StdSizes{WordSize: 2, MaxAlign: 1}},
+			{"386", types.SizesFor("gc", "386")},
+			{"amd64", types.SizesFor("gc", "amd64")},
+		} {
+			t.Run(name+"/"+test.arch, func(t *testing.T) {
+				sizes := test.sizes
+				if sizes.Sizeof(runtimeType) != sizes.Sizeof(reflectType) || sizes.Alignof(runtimeType) != sizes.Alignof(reflectType) {
+					t.Error("runtime and reflectlite struct sizes or alignments differ")
+				}
+				if !slices.Equal(sizes.Offsetsof(runtimeFields), sizes.Offsetsof(reflectFields)) {
+					t.Error("runtime and reflectlite field offsets differ")
+				}
+				for i := range runtimeFields {
+					if sizes.Sizeof(runtimeFields[i].Type()) != sizes.Sizeof(reflectFields[i].Type()) {
+						t.Errorf("field %s sizes differ", runtimeFields[i].Name())
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestReflectGenericTypeName(t *testing.T) {
+	const source = `package names
+import "unsafe"
+type Box[T any] struct{}
+type Pair[A, B any] struct{}
+type Token int
+type Alias = Token
+type Int = int
+var byteBox Box[byte]
+var runeBox Box[rune]
+var anyBox Box[any]
+var aliasBox Box[Alias]
+var pointerBox Box[*Alias]
+var arrayBox Box[[2]byte]
+var mapBox Box[map[Alias][]rune]
+var channelBox Box[chan (<-chan Alias)]
+var sendBox Box[chan<- Alias]
+var receiveBox Box[<-chan Alias]
+var functionBox Box[func(value Alias, rest ...byte) (result []rune, err error)]
+var emptyStructBox Box[struct{}]
+var blankBox Box[struct { _ int }]
+var structBox Box[struct { X byte; value Alias ` + "`json:\"value\"`" + ` }]
+var embeddedBox Box[struct { Token }]
+var embeddedPointerBox Box[struct { *Token }]
+var embeddedAliasBox Box[struct { Int }]
+var embeddedGenericBox Box[struct { Box[int] }]
+var interfaceBox Box[interface { z(); Exported(value int) bool; a() }]
+var unsafeBox Box[unsafe.Pointer]
+var pairBox Pair[Alias, Box[byte]]
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "names.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := types.Config{Importer: importer.Default()}
+	pkg, err := config.Check("example.com/names", fset, []*ast.File{file}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, want string
+	}{
+		{"byteBox", "Box[uint8]"},
+		{"runeBox", "Box[int32]"},
+		{"anyBox", "Box[interface {}]"},
+		{"aliasBox", "Box[example.com/names.Token]"},
+		{"pointerBox", "Box[*example.com/names.Token]"},
+		{"arrayBox", "Box[[2]uint8]"},
+		{"mapBox", "Box[map[example.com/names.Token][]int32]"},
+		{"channelBox", "Box[chan (<-chan example.com/names.Token)]"},
+		{"sendBox", "Box[chan<- example.com/names.Token]"},
+		{"receiveBox", "Box[<-chan example.com/names.Token]"},
+		{"functionBox", "Box[func(example.com/names.Token, ...uint8) ([]int32, error)]"},
+		{"emptyStructBox", "Box[struct {}]"},
+		{"blankBox", "Box[struct { example.com/names._ int }]"},
+		{"structBox", `Box[struct { X uint8; example.com/names.value example.com/names.Token "json:\"value\"" }]`},
+		{"embeddedBox", "Box[struct { example.com/names.Token }]"},
+		{"embeddedPointerBox", "Box[struct { *example.com/names.Token }]"},
+		{"embeddedAliasBox", "Box[struct { Int = int }]"},
+		{"embeddedGenericBox", "Box[struct { Box = example.com/names.Box[int] }]"},
+		{"interfaceBox", "Box[interface { Exported(int) bool; example.com/names.a(); example.com/names.z() }]"},
+		{"unsafeBox", "Box[unsafe.Pointer]"},
+		{"pairBox", "Pair[example.com/names.Token,example.com/names.Box[uint8]]"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			typ := pkg.Scope().Lookup(test.name).Type().(*types.Named)
+			if got := reflectTypeName(typ); got != test.want {
+				t.Errorf("name = %q, want %q", got, test.want)
+			}
+		})
+	}
+	box := pkg.Scope().Lookup("Box").Type()
+	for _, path := range []string{"example.com/one", "example.com/two"} {
+		fieldPkg := types.NewPackage(path, "same")
+		field := types.NewVar(token.NoPos, fieldPkg, "value", types.Typ[types.Int])
+		arg := types.NewStruct([]*types.Var{field}, nil)
+		instance, err := types.Instantiate(nil, box, []types.Type{arg}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := reflectTypeName(instance.(*types.Named)), "Box[struct { "+path+".value int }]"; got != want {
+			t.Errorf("name = %q, want %q", got, want)
+		}
+	}
 }
 
 // Basic tests for the compiler. Build some Go files and compare the output with
@@ -43,6 +192,8 @@ func TestCompiler(t *testing.T) {
 		{"basic.go", "", ""},
 		{"pointer.go", "", ""},
 		{"slice.go", "", ""},
+		{"rangeloop.go", "", ""},
+		{"clearloop.go", "", ""},
 		{"string.go", "", ""},
 		{"float.go", "", ""},
 		{"interface.go", "", ""},
@@ -56,12 +207,11 @@ func TestCompiler(t *testing.T) {
 		{"zeromap.go", "", ""},
 		{"generics.go", "", ""},
 		{"large.go", "", ""},
-	}
-	if goMinor >= 20 {
-		tests = append(tests, testCase{"go1.20.go", "", ""})
-	}
-	if goMinor >= 21 {
-		tests = append(tests, testCase{"go1.21.go", "", ""})
+		{"go1.20.go", "", ""},
+		{"go1.21.go", "", ""},
+		{"lenrange.go", "", ""},
+		{"lenrange.go", "arduino", ""},
+		{"lenrange-wasmexport.go", "", ""},
 	}
 	if goMinor >= 27 {
 		tests = append(tests, testCase{"go1.27.go", "", ""})
@@ -118,7 +268,7 @@ func TestCompiler(t *testing.T) {
 
 			// Update test if needed. Do not check the result.
 			if *flagUpdate {
-				err := os.WriteFile(outPath, []byte(normalizeIR(mod.String())), 0666)
+				err := ir.WriteGolden(outPath, mod.String())
 				if err != nil {
 					t.Error("failed to write updated output file:", err)
 				}
@@ -130,8 +280,31 @@ func TestCompiler(t *testing.T) {
 				t.Fatal("failed to read golden file:", err)
 			}
 
-			if diff := diffIR(string(expected), mod.String()); diff != "" {
+			if diff := ir.Diff(string(expected), mod.String()); diff != "" {
 				t.Errorf("output does not match expected output (re-run with -update to regenerate):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestWasmExportBasicBlockContext(t *testing.T) {
+	for _, scheduler := range []string{"none", "asyncify"} {
+		t.Run(scheduler, func(t *testing.T) {
+			mod, errs := testCompilePackage(t, &compileopts.Options{
+				Target:    "wasm",
+				Scheduler: scheduler,
+			}, "lenrange-wasmexport.go")
+			if len(errs) != 0 {
+				t.Fatal(errs)
+			}
+			defer mod.Dispose()
+
+			fn := mod.NamedFunction("main.exportString#wasmexport")
+			if fn.IsNil() {
+				t.Fatal("wasm export wrapper not found")
+			}
+			if got := fn.EntryBasicBlock().AsValue().Type().Context(); got != mod.Context() {
+				t.Fatalf("wasm export entry block context = %v, want %v", got, mod.Context())
 			}
 		})
 	}
@@ -154,6 +327,82 @@ func TestCGoGlobalOrder(t *testing.T) {
 			t.Fatalf("CGo globals are not in name order: %v", names)
 		}
 	}
+}
+
+func TestCGoPragmas(t *testing.T) {
+	mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "cgo-pragmas.go")
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	defer mod.Dispose()
+
+	fn := mod.NamedFunction("variadicNoescape")
+	if fn.IsNil() {
+		t.Fatal("missing variadicNoescape declaration")
+	}
+	if !fn.GlobalValueType().IsFunctionVarArg() {
+		t.Error("C function declaration is not variadic")
+	}
+	nocapture := fn.GetEnumAttributeAtIndex(1, llvm.AttributeKindID(llvmutil.NoCaptureAttrName()))
+	if !llvmutil.IsNoCapture(nocapture) {
+		t.Error("C function pointer parameter can escape")
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPragmaSourceBodies(t *testing.T) {
+	t.Run("definitions", func(t *testing.T) {
+		mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "pragma-dependencies.go")
+		defer mod.Dispose()
+		if len(errs) != 0 {
+			t.Fatal(errs)
+		}
+		for _, name := range []string{
+			"github.com/tinygo-org/tinygo/compiler/testdata/pragmadeps.Definition",
+			"(*github.com/tinygo-org/tinygo/compiler/testdata/pragmadeps.Register).Get",
+			"github.com/tinygo-org/tinygo/compiler/testdata/pragmadeps.Section",
+			"github.com/tinygo-org/tinygo/compiler/testdata/pragmadeps.Interrupt",
+			"github.com/tinygo-org/tinygo/compiler/testdata/pragmadeps.WasmExport",
+		} {
+			fn := mod.NamedFunction(name)
+			if fn.IsNil() {
+				t.Fatalf("missing dependency function %s", name)
+			}
+			if fn.BasicBlocksCount() != 0 {
+				t.Errorf("dependency function %s was built", name)
+			}
+		}
+		if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("placements", func(t *testing.T) {
+		data, err := os.ReadFile("testdata/pragmadeps/pragma.go")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var expected []string
+		for line := range strings.SplitSeq(string(data), "\n") {
+			if after, ok := strings.CutPrefix(line, "// ERROR: "); ok {
+				expected = append(expected, after)
+			}
+		}
+
+		mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "pragma-dependency-errors.go")
+		defer mod.Dispose()
+		var actual []string
+		for _, err := range errs {
+			actual = append(actual, err.(types.Error).Msg)
+		}
+		slices.Sort(expected)
+		slices.Sort(actual)
+		if !slices.Equal(expected, actual) {
+			t.Errorf("expected errors %q, got %q", expected, actual)
+		}
+	})
 }
 
 func TestOptimizedLargeAggregateABI(t *testing.T) {
@@ -196,6 +445,61 @@ func TestOptimizedLargeAggregateABI(t *testing.T) {
 	}
 }
 
+func TestLargeAggregateZeroStore(t *testing.T) {
+	mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "aggregate-storage.go")
+	defer mod.Dispose()
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"main.resetStorage", "main.resetArray"} {
+		ir := mod.NamedFunction(name).String()
+		if strings.Contains(ir, "store %main.storageValue") || strings.Contains(ir, "store [4096 x i8]") {
+			t.Errorf("%s stores a full zero aggregate", name)
+		}
+		if !strings.Contains(ir, "@llvm.memset.") {
+			t.Errorf("%s does not zero storage with memset", name)
+		}
+	}
+	if ir := mod.NamedFunction("main.resetStorage").String(); !strings.Contains(ir, "i32 4100, i1 false") {
+		t.Error("struct reset does not zero the full storage")
+	}
+	if ir := mod.NamedFunction("main.resetArray").String(); !strings.Contains(ir, "i32 4096, i1 false") {
+		t.Error("array reset does not zero the full storage")
+	}
+	if ir := mod.NamedFunction("main.resetSmallArray").String(); !strings.Contains(ir, "store [4 x i8] zeroinitializer") {
+		t.Error("small zero aggregate no longer uses a direct store")
+	}
+}
+
+func TestLargeAggregateDebugValue(t *testing.T) {
+	mod, errs := testCompilePackageWithDebug(t, &compileopts.Options{Target: "wasm"}, "aggregate-storage.go", true)
+	defer mod.Dispose()
+	if len(errs) != 0 {
+		t.Fatal(errs)
+	}
+	if err := llvm.VerifyModule(mod, llvm.ReturnStatusAction); err != nil {
+		t.Fatal(err)
+	}
+	ir := mod.NamedFunction("main.copyStorage").String()
+	if strings.Contains(ir, "load %main.storageValue") {
+		t.Error("debug value loads the full aggregate")
+	}
+	if !strings.Contains(ir, "!DIExpression(DW_OP_deref)") {
+		t.Error("indirect debug value has no dereference expression")
+	}
+	if !strings.Contains(ir, "@llvm.memcpy.") {
+		t.Error("aggregate value does not preserve its copy")
+	}
+	for line := range strings.Lines(mod.NamedFunction("main.compareArray").String()) {
+		if strings.Contains(line, "#dbg_value(ptr %src,") && strings.Contains(line, "DW_OP_deref") {
+			t.Errorf("debug value reads through the source pointer, which changes later: %s", strings.TrimSpace(line))
+		}
+	}
+}
+
 func TestLargeSliceElement(t *testing.T) {
 	options := &compileopts.Options{GOOS: "linux", GOARCH: "amd64"}
 	mod, errs := testCompilePackage(t, options, "slice-large-element.go")
@@ -214,6 +518,18 @@ func TestLargeSliceElement(t *testing.T) {
 	if ir := fn.String(); !strings.Contains(ir, "icmp ugt i64 %len, 8388608") {
 		t.Errorf("large element slice does not use the 48-bit allocation limit:\n%s", ir)
 	}
+}
+
+func TestLargeSliceElement32Bit(t *testing.T) {
+	options := &compileopts.Options{Target: "wasm"}
+	mod, errs := testCompilePackage(t, options, "slice-large-element.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	mod.Dispose()
 }
 
 func TestNonBlockingSelectLargeSend(t *testing.T) {
@@ -520,7 +836,7 @@ func TestDarwinCgoImportDynamicErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for line := range strings.SplitSeq(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if after, ok := strings.CutPrefix(line, "// ERROR: "); ok {
 			expected = append(expected, after)
 		}
@@ -541,125 +857,6 @@ func TestDarwinCgoImportDynamicErrors(t *testing.T) {
 	}
 }
 
-// normalizeIR canonicalizes LLVM-version-specific IR spellings for comparison
-// and when regenerating golden files.
-func normalizeIR(s string) string {
-	// Golden files are written using the pre-LLVM21 'nocapture' spelling,
-	// which LLVM printed before any co-occurring attribute such as
-	// 'readonly' (e.g. "ptr nocapture readonly"). LLVM 21+ prints the
-	// equivalent 'captures(none)' instead, and after such attributes (e.g.
-	// "ptr readonly captures(none)"). Normalize both name and position back
-	// to the old spelling.
-	s = normalizeCapturesAttr(s)
-
-	// LLVM 21+ also added an explicit 'nocreateundeforpoison' attribute to
-	// certain intrinsic declarations (e.g. llvm.umin) that were implicitly
-	// assumed not to create undef/poison before. It's unrelated to the
-	// behavior under test, so ignore it for comparison.
-	s = strings.ReplaceAll(s, "nocreateundeforpoison ", "")
-
-	// LLVM 22 dropped the (redundant) i64 size argument from
-	// llvm.lifetime.start/end. Normalize away that argument so golden files
-	// written against the two-argument form still match.
-	s = lifetimeSizeArgRe.ReplaceAllString(s, "$1")
-
-	return s
-}
-
-// diffIR compares two LLVM IR strings, ignoring irrelevant lines (comments,
-// empty lines, etc.) and normalizing LLVM-version-specific spellings via
-// normalizeIR. It returns "" when they are equal. Otherwise it returns a
-// compact diff of only the region that differs: the common prefix and suffix
-// are trimmed, then the differing expected lines (prefixed "-") are shown
-// followed by the differing actual lines (prefixed "+").
-func diffIR(expected, actual string) string {
-	exp := filterIrrelevantIRLines(strings.Split(normalizeIR(expected), "\n"))
-	act := filterIrrelevantIRLines(strings.Split(normalizeIR(actual), "\n"))
-
-	// Trim the common prefix.
-	start := 0
-	for start < len(exp) && start < len(act) && exp[start] == act[start] {
-		start++
-	}
-	// Trim the common suffix.
-	e, a := len(exp), len(act)
-	for e > start && a > start && exp[e-1] == act[a-1] {
-		e--
-		a--
-	}
-	if start == e && start == a {
-		return "" // equal
-	}
-
-	var b strings.Builder
-	b.WriteString("first difference at relevant line ")
-	b.WriteString(strconv.Itoa(start + 1))
-	b.WriteString(":\n")
-	for _, line := range exp[start:e] {
-		b.WriteString("- ")
-		b.WriteString(line)
-		b.WriteByte('\n')
-	}
-	for _, line := range act[start:a] {
-		b.WriteString("+ ")
-		b.WriteString(line)
-		b.WriteByte('\n')
-	}
-	return b.String()
-}
-
-// capturesNoneAttrRe matches a co-occurring attribute directly followed by
-// 'captures(none)', which is how LLVM 21+ orders these two attributes when
-// printing IR (the pre-LLVM21 'nocapture' attribute printed the other way
-// around).
-var capturesNoneAttrRe = regexp.MustCompile(`\b(readonly|readnone|writeonly|nonnull)\s+captures\(none\)`)
-
-// lifetimeSizeArgRe matches the i64 size argument of an
-// llvm.lifetime.start/end call or declaration, which LLVM 22 removed.
-var lifetimeSizeArgRe = regexp.MustCompile(`(@llvm\.lifetime\.(?:start|end)\.p0\()i64(?: immarg| \d+), `)
-
-// normalizeCapturesAttr rewrites LLVM 21+'s 'captures(none)' attribute back
-// to the pre-LLVM21 'nocapture' spelling and position, so golden IR files
-// written against LLVM <21 keep matching.
-func normalizeCapturesAttr(s string) string {
-	s = capturesNoneAttrRe.ReplaceAllString(s, "nocapture $1")
-	s = strings.ReplaceAll(s, "captures(none)", "nocapture")
-	return s
-}
-
-// filterIrrelevantIRLines removes lines from the input slice of strings that
-// are not relevant in comparing IR. For example, empty lines and comments are
-// stripped out.
-func filterIrrelevantIRLines(lines []string) []string {
-	var out []string
-	llvmVersion, err := strconv.Atoi(strings.Split(llvm.Version, ".")[0])
-	if err != nil {
-		// Note: this should never happen and if it does, it will always happen
-		// for a particular build because llvm.Version is a constant.
-		panic(err)
-	}
-	for _, line := range lines {
-		line = strings.Split(line, ";")[0]    // strip out comments/info
-		line = strings.TrimRight(line, "\r ") // drop '\r' on Windows and remove trailing spaces from comments
-		if line == "" {
-			continue
-		}
-		if strings.HasPrefix(line, "source_filename = ") {
-			continue
-		}
-		if strings.HasPrefix(line, "@tinygo.indirect-abi = ") {
-			continue
-		}
-		if llvmVersion < 15 && strings.HasPrefix(line, "target datalayout = ") {
-			// The datalayout string may vary betewen LLVM versions.
-			// Right now test outputs are for LLVM 15 and higher.
-			continue
-		}
-		out = append(out, line)
-	}
-	return out
-}
-
 func TestCompilerErrors(t *testing.T) {
 	t.Parallel()
 
@@ -669,8 +866,7 @@ func TestCompilerErrors(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	errorsFileString := strings.ReplaceAll(string(errorsFile), "\r\n", "\n")
-	for line := range strings.SplitSeq(errorsFileString, "\n") {
+	for line := range strings.SplitSeq(string(errorsFile), "\n") {
 		if after, ok := strings.CutPrefix(line, "// ERROR: "); ok {
 			expectedErrors = append(expectedErrors, after)
 		}
@@ -792,4 +988,78 @@ func testCompilePackageWithDebug(t *testing.T, options *compileopts.Options, fil
 	ssaPkg := program.Package(pkg.Pkg)
 	ssaPkg.Build()
 	return CompilePackage(file, pkg, ssaPkg, machine, compilerConfig, false)
+}
+
+func TestReflectMethodRetentionMarkers(t *testing.T) {
+	mod, errs := testCompilePackage(t, &compileopts.Options{Target: "wasm"}, "reflect-method-dce.go")
+	if len(errs) != 0 {
+		for _, err := range errs {
+			t.Error(err)
+		}
+		return
+	}
+	defer mod.Dispose()
+
+	for _, tc := range []struct {
+		name  string
+		names string
+		all   bool
+	}{
+		{"constantValue", "Keep", false},
+		{"constantType", "Keep", false},
+		{"multipleNames", "Keep Other", false},
+		{"invalidName", "", false},
+		{"unexportedName", "", false},
+		{"dynamicValue", "", true},
+		{"dynamicType", "", true},
+		{"indexedValue", "", true},
+		{"indexedType", "", true},
+		{"invokedMethod", "", true},
+		{"promotedMethodByName", "Keep", false},
+		{"boundValue", "", true},
+		{"escapedValue", "", true},
+		{"escapedType", "", true},
+		{"methodExpression", "", true},
+		{"iterateValue", "", true},
+		{"iterateType", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fn := mod.NamedFunction("main." + tc.name)
+			if fn.IsNil() {
+				t.Fatal("missing lookup function")
+			}
+			all := fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-method")
+			names := fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-method-names")
+			if got := !all.IsNil(); got != tc.all {
+				t.Errorf("all-method marker = %v, want %v", got, tc.all)
+			}
+			if !tc.all && names.IsNil() {
+				t.Fatal("missing constant-name marker")
+			}
+			if fn.GetStringAttributeAtIndex(-1, "tinygo-reflect-makefunc").IsNil() {
+				t.Error("missing bound-method adapter marker")
+			}
+			if !names.IsNil() {
+				if got := names.GetStringValue(); got != tc.names {
+					t.Errorf("method names = %q, want %q", got, tc.names)
+				}
+			}
+		})
+	}
+
+	wrappers := 0
+	for fn := range llvmutil.Functions(mod) {
+		if !strings.HasPrefix(fn.Name(), "(struct{reflect.Value}).") || fn.BasicBlocksCount() == 0 {
+			continue
+		}
+		wrappers++
+		for _, kind := range []string{"tinygo-reflect-method", "tinygo-reflect-method-names", "tinygo-reflect-makefunc"} {
+			if !fn.GetStringAttributeAtIndex(-1, kind).IsNil() {
+				t.Errorf("reflection wrapper %s has %s", fn.Name(), kind)
+			}
+		}
+	}
+	if wrappers == 0 {
+		t.Fatal("no reflection wrappers were compiled")
+	}
 }

@@ -23,9 +23,8 @@ type stackChainObject struct {
 
 // markStack marks all root pointers found on the stack.
 //
-//   - Goroutine stacks are heap allocated and always reachable in some way
-//     (for example through internal/task.currentTask) so they will always be
-//     scanned.
+//   - Goroutine stacks are heap allocated. The GC scans the live part of each
+//     one it reaches, or scans it as a whole object where it cannot.
 //   - The system stack (aka startup stack) is not heap allocated, so even
 //     though it may be referenced it will not be scanned by default.
 //

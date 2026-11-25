@@ -5,18 +5,36 @@ package runtime
 import (
 	"unsafe"
 
-	"internal/wasi/cli/v0.2.0/environment"
-	wasiclirun "internal/wasi/cli/v0.2.0/run"
-	monotonicclock "internal/wasi/clocks/v0.2.0/monotonic-clock"
+	"internal/wasi/cli/v0.2.12/environment"
+	wasiclirun "internal/wasi/cli/v0.2.12/run"
+	monotonicclock "internal/wasi/clocks/v0.2.12/monotonic-clock"
 
 	"internal/cm"
 )
 
 func init() {
+	if gorootEnvEnabled() {
+		if value := startupEnv("GOROOT"); value != "" {
+			goroot = value
+		}
+	}
+	if godebugEnvEnabled() {
+		godebugStartup = startupEnv("GODEBUG")
+	}
+
 	wasiclirun.Exports.Run = func() cm.BoolResult {
 		callMain()
 		return false
 	}
+}
+
+func startupEnv(key string) string {
+	for _, entry := range environment.GetEnvironment().Slice() {
+		if entry[0] == key {
+			return entry[1]
+		}
+	}
+	return ""
 }
 
 var args []string
@@ -31,22 +49,8 @@ func os_runtime_args() []string {
 
 //export cabi_realloc
 func cabi_realloc(ptr, oldsize, align, newsize unsafe.Pointer) unsafe.Pointer {
-	size := uintptr(newsize)
-	if size == 0 {
-		freeManual(ptr)
-		return nil
-	}
-
-	newPtr := allocManual(size)
-	if ptr != nil {
-		copySize := uintptr(oldsize)
-		if copySize > size {
-			copySize = size
-		}
-		memcpy(newPtr, ptr, copySize)
-		freeManual(ptr)
-	}
-	return newPtr
+	// The C code in wasi-libc frees these buffers with free().
+	return libc_realloc(ptr, uintptr(newsize))
 }
 
 func ticksToNanoseconds(ticks timeUnit) int64 {

@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"sort"
 
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -40,7 +41,7 @@ type functionABIKey struct {
 	extraParams       uint64
 }
 
-func (c *compilerContext) getFunctionABI(sig *types.Signature, exported bool) functionABI {
+func (c *context) getFunctionABI(sig *types.Signature, exported bool) functionABI {
 	budgetReceiverPtr := sig.Recv() != nil && !exported
 	extraParams := uint64(0)
 	if budgetReceiverPtr {
@@ -51,13 +52,13 @@ func (c *compilerContext) getFunctionABI(sig *types.Signature, exported bool) fu
 	return c.getFunctionABIWithReceiver(sig, exported, false, budgetReceiverPtr, extraParams)
 }
 
-func (c *compilerContext) getInterfaceFunctionABI(sig *types.Signature) functionABI {
+func (c *context) getInterfaceFunctionABI(sig *types.Signature) functionABI {
 	return c.getFunctionABIWithReceiver(sig, false, true, false, 1)
 }
 
 // getFunctionABIWithReceiver lowers the fewest aggregate parameters necessary
 // to keep the complete scalarized signature within the internal ABI cap.
-func (c *compilerContext) getFunctionABIWithReceiver(sig *types.Signature, exported, interfaceReceiver, budgetReceiverPtr bool, extraParams uint64) functionABI {
+func (c *context) getFunctionABIWithReceiver(sig *types.Signature, exported, interfaceReceiver, budgetReceiverPtr bool, extraParams uint64) functionABI {
 	key := functionABIKey{sig, exported, interfaceReceiver, budgetReceiverPtr, extraParams}
 	if abi, ok := c.functionABIs[key]; ok {
 		return abi
@@ -140,7 +141,7 @@ func (c *compilerContext) getFunctionABIWithReceiver(sig *types.Signature, expor
 // ValidateWasmFunctionParameters checks the final LLVM module before the
 // WebAssembly backend expands aggregate parameters into scalar values.
 func ValidateWasmFunctionParameters(mod llvm.Module) error {
-	for fn := mod.FirstFunction(); !fn.IsNil(); fn = llvm.NextFunction(fn) {
+	for fn := range llvmutil.Functions(mod) {
 		if fn.IsDeclaration() && fn.FirstUse().IsNil() {
 			continue
 		}
@@ -161,10 +162,10 @@ func ValidateWasmFunctionParameters(mod llvm.Module) error {
 	return nil
 }
 
-func (c *compilerContext) getLLVMResultType(sig *types.Signature) llvm.Type {
+func (c *context) getLLVMResultType(sig *types.Signature) llvm.Type {
 	switch sig.Results().Len() {
 	case 0:
-		return c.ctx.VoidType()
+		return c.void
 	case 1:
 		return c.getLLVMType(sig.Results().At(0).Type())
 	default:
@@ -176,12 +177,12 @@ func (c *compilerContext) getLLVMResultType(sig *types.Signature) llvm.Type {
 	}
 }
 
-func (c *compilerContext) hasIndirectResult(sig *types.Signature) (llvm.Type, bool) {
+func (c *context) hasIndirectResult(sig *types.Signature) (llvm.Type, bool) {
 	resultType := c.getLLVMResultType(sig)
 	return resultType, c.isIndirectAggregate(resultType)
 }
 
-func (c *compilerContext) isIndirectAggregate(typ llvm.Type) bool {
+func (c *context) isIndirectAggregate(typ llvm.Type) bool {
 	return aggregateValueCountExceeds(typ, maxDirectAggregateValues)
 }
 
@@ -277,12 +278,12 @@ func (b *builder) decodeFuncValue(funcValue llvm.Value) (funcPtr, context llvm.V
 }
 
 // getFuncType returns the type of a func value given a signature.
-func (c *compilerContext) getFuncType(typ *types.Signature) llvm.Type {
+func (c *context) getFuncType(typ *types.Signature) llvm.Type {
 	return c.ctx.StructType([]llvm.Type{c.dataPtrType, c.funcPtrType}, false)
 }
 
 // getLLVMFunctionType returns a LLVM function type for a given signature.
-func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
+func (c *context) getLLVMFunctionType(typ *types.Signature) llvm.Type {
 	var abi functionABI
 	if typ.Recv() != nil && c.getLLVMType(typ.Recv().Type()).StructName() == "runtime._interface" {
 		abi = c.getFunctionABIWithReceiver(typ, false, true, false, 0)
@@ -299,7 +300,7 @@ func (c *compilerContext) getLLVMFunctionType(typ *types.Signature) llvm.Type {
 		// memory. Returning void avoids that expansion and cannot be demoted
 		// again. Keep the result pointer first so the context remains last.
 		paramTypes = append(paramTypes, c.dataPtrType)
-		returnType = c.ctx.VoidType()
+		returnType = c.void
 	}
 	for _, param := range abi.params {
 		if param.indirect {
@@ -339,5 +340,6 @@ func (b *builder) parseMakeClosure(expr *ssa.MakeClosure) (llvm.Value, error) {
 
 	// Create the closure.
 	_, fn := b.getFunction(f)
+	b.markReflectFunctionValue(f, fn)
 	return b.createFuncValue(fn, context, f.Signature), nil
 }

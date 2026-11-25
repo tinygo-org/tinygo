@@ -1,4 +1,4 @@
-//go:build js || wasip1 || wasip2
+//go:build js || tinygo.wasi
 
 // Note: also including js in here because it also uses wasi-libc.
 
@@ -409,6 +409,19 @@ func Chmod(path string, mode uint32) (err error) {
 	// existing, but we don't honnor the request to modify the file permissions.
 	stat := Stat_t{}
 	return Lstat(path, &stat)
+}
+
+// WASI has no ownership operations. Match Go's syscall/fs_wasip1.go.
+func Chown(path string, uid, gid int) error {
+	return ENOSYS
+}
+
+func Fchown(fd int, uid, gid int) error {
+	return ENOSYS
+}
+
+func Lchown(path string, uid, gid int) error {
+	return ENOSYS
 }
 
 // TODO: should this return runtime.wasmPageSize?

@@ -18,7 +18,7 @@
 //     e. Disable caches
 //     f. Cache_MMU_Init() — reset all MMU entries to invalid
 //     g. Cache_Set_IDROM_MMU_Size() — set IROM/DROM entry split
-//     h. Write MMU entries mapping flash page 0 for IROM and DROM
+//     h. Write MMU entries mapping flash pages for IROM, DROM and machine.Flash
 //     i. Clear bus-shut bits
 //     j. Enable caches + isync
 
@@ -87,15 +87,24 @@
     .long 0x600C4064
 .Ldcache_ctrl1_reg:
     .long 0x600C4004
-// End-of-section symbols for multi-page MMU mapping.
-.Lirom_end:
-    .long _irom_end
-.Ldrom_end:
-    .long _drom_end
-.Lirom_base:
-    .long 0x42000000
-.Ldrom_base:
-    .long 0x3C000000
+// Flash MMU layout from targets/esp32s3.ld. The builder patches the physical
+// IROM and DROM offsets into _irom_flash_addr and _drom_flash_addr.
+.Lirom_flash_addr:
+    .long _irom_flash_addr
+.Lirom_mmu_pages:
+    .long _irom_mmu_pages
+.Ldrom_flash_addr:
+    .long _drom_flash_addr
+.Ldrom_mmu_index:
+    .long _drom_mmu_index
+.Ldrom_mmu_pages:
+    .long _drom_mmu_pages
+.Lflash_data_phys:
+    .long __flash_data_phys
+.Lflash_data_mmu_index:
+    .long _flash_data_mmu_index
+.Lflash_data_mmu_pages:
+    .long _flash_data_mmu_pages
 
 .global call_start_cpu0
 call_start_cpu0:
@@ -264,54 +273,67 @@ call_start_cpu0:
     l32r a4, .LCache_MMU_Init
     callx4 a4
 
-    // 4h. Set IDROM MMU size: even 256/256 split.
-    //     Each entry is 4 bytes, so 256 entries = 0x400 bytes per region.
-    movi a6, 0x400          // irom_mmu_size  (256 entries × 4 bytes)
-    movi a7, 0x400          // drom_mmu_size  (256 entries × 4 bytes)
+    // 4h. IROM and DROM share one table of 512 entries. IROM uses the
+    //     entries before DROM, see mmu_ll_get_entry_id in esp-idf mmu_ll.h.
+    l32r a6, .Ldrom_mmu_index
+    slli a6, a6, 2                     // a6 = IROM table size in bytes
+    movi a7, 0x7FF
+    addi a7, a7, 1
+    sub  a7, a7, a6                    // a7 = DROM table size in bytes
     mov  a5, a1
     l32r a4, .LCache_Set_IDROM_MMU_Size
     callx4 a4
 
-    // 4i. Map flash pages for IROM and DROM using identity mapping.
-    //     MMU table at 0x600C5000: entries 0-255 = ICache, 256-511 = DCache.
-    //     Entry value N = flash page N (SOC_MMU_VALID = 0 on S3).
-    //     Each 64KB page needs one 4-byte entry.
-    //
-    //     IROM: map pages 0..N where N = (_irom_end - 0x42000000) >> 16
-    //     DROM: map pages 0..M where M = (_drom_end - 0x3C000000) >> 16
+    // 4i. Map IROM, DROM and the machine.Flash area. Each loop writes a2
+    //     entries from a10 with physical pages counting up from a9.
+    l32r a8, .Lmmu_table_base
 
-    l32r a8, .Lmmu_table_base          // a8 = 0x600C5000
-
-    // --- IROM pages ---
-    l32r a2, .Lirom_end                // a2 = _irom_end (VMA in 0x42xxxxxx)
-    l32r a3, .Lirom_base               // a3 = 0x42000000
-    sub  a2, a2, a3                    // a2 = byte offset past IROM base
-    srli a2, a2, 16                    // a2 = last page index
-    addi a2, a2, 1                     // a2 = number of pages to map
-    movi a9, 0                         // a9 = page counter (and entry value)
-    mov  a10, a8                       // a10 = current MMU entry pointer
-.Lirom_loop:
+    mov  a10, a8
+    l32r a9, .Lirom_flash_addr
+    l32i a9, a9, 0
+    srli a9, a9, 16
+    l32r a2, .Lirom_mmu_pages
+.Lirom_map_loop:
+    beqz a2, .Lirom_map_done
     s32i a9, a10, 0
     addi a9, a9, 1
     addi a10, a10, 4
-    blt  a9, a2, .Lirom_loop
+    addi a2, a2, -1
+    j    .Lirom_map_loop
+.Lirom_map_done:
 
-    // --- DROM pages ---
-    l32r a2, .Ldrom_end                // a2 = _drom_end (VMA in 0x3Cxxxxxx)
-    l32r a3, .Ldrom_base               // a3 = 0x3C000000
-    sub  a2, a2, a3                    // a2 = byte offset past DROM base
-    srli a2, a2, 16                    // a2 = last page index
-    addi a2, a2, 1                     // a2 = number of pages to map
-    movi a9, 0                         // a9 = page counter (and entry value)
-    addmi a10, a8, 0x400              // a10 = 0x600C5400 (DCache entry 256)
-.Ldrom_loop:
+    l32r a10, .Ldrom_mmu_index
+    addx4 a10, a10, a8
+    l32r a9, .Ldrom_flash_addr
+    l32i a9, a9, 0
+    srli a9, a9, 16
+    l32r a2, .Ldrom_mmu_pages
+.Ldrom_map_loop:
+    beqz a2, .Ldrom_map_done
     s32i a9, a10, 0
     addi a9, a9, 1
     addi a10, a10, 4
-    blt  a9, a2, .Ldrom_loop
+    addi a2, a2, -1
+    j    .Ldrom_map_loop
+.Ldrom_map_done:
+
+    l32r a10, .Lflash_data_mmu_index
+    addx4 a10, a10, a8
+    l32r a9, .Lflash_data_phys
+    srli a9, a9, 16
+    l32r a2, .Lflash_data_mmu_pages
+.Lflash_data_map_loop:
+    beqz a2, .Lflash_data_map_done
+    s32i a9, a10, 0
+    addi a9, a9, 1
+    addi a10, a10, 4
+    addi a2, a2, -1
+    j    .Lflash_data_map_loop
+.Lflash_data_map_done:
     memw
 
     // 4j. Clear bus-shut bits so core 0 can access ICache and DCache buses.
+    //     This also clears the core 1 bits, which call_start_cpu1 relies on.
     l32r a8, .Licache_ctrl1_reg         // 0x600C4064
     movi a9, 0
     s32i a9, a8, 0                      // Clear all ICACHE_CTRL1 shut bits
@@ -349,6 +371,74 @@ call_start_cpu0:
     callx4 a4
 
     // If main returns, loop forever.
+1:  j 1b
+
+// -----------------------------------------------------------------------
+// Core 1 entry point, set with ets_set_appcpu_boot_addr. Placed in IRAM by
+// the linker. Only the per core setup of call_start_cpu0 is done here.
+// -----------------------------------------------------------------------
+.section .text.call_start_cpu1
+    .literal_position
+    .align 4
+.Lstack1_top_addr:
+    .long _stack1_top
+.LrunCore1_addr:
+    .long tinygo_runCore1
+.Lvector_table_addr1:
+    .long _vector_table
+
+.global call_start_cpu1
+call_start_cpu1:
+    // Disable WOE.
+    rsr.ps a2
+    movi a3, 1
+    slli a3, a3, 18         // a3 = PS_WOE (0x40000)
+    and  a3, a2, a3
+    xor  a2, a2, a3
+    wsr.ps a2
+    rsync
+
+    // Set WINDOWSTART to 1 << WINDOWBASE.
+    rsr.windowbase  a2
+    ssl  a2
+    movi a2, 1
+    sll  a2, a2
+    wsr.windowstart a2
+    rsync
+
+    l32r a1, .Lstack1_top_addr
+
+    // Re-enable WOE.
+    rsr.ps a2
+    movi a3, 1
+    slli a3, a3, 18         // a3 = PS_WOE (0x40000)
+    or a2, a2, a3
+    wsr.ps a2
+    rsync
+
+    // Enable FPU (coprocessor 0).
+    movi a2, 1
+    wsr.cpenable a2
+    rsync
+
+    // VECBASE must be set before the first callx4.
+    l32r a8, .Lvector_table_addr1
+    wsr.vecbase a8
+    rsync
+
+    // Clear PS.EXCM and PS.INTLEVEL, set PS.UM.
+    rsr.ps a2
+    movi a3, ~0x1F
+    and a2, a2, a3
+    movi a3, 0x20
+    or a2, a2, a3
+    wsr.ps a2
+    rsync
+
+    mov  a5, a1
+    l32r a4, .LrunCore1_addr
+    callx4 a4
+
 1:  j 1b
 
 // -----------------------------------------------------------------------
@@ -402,4 +492,23 @@ tinygo_scanCurrentStack:
     mov   a6, a2
     call4 .Lscan_spill
 .Lscan_spill_done:
+    retw
+
+// Park this core in IRAM while the other core erases or writes flash.
+// a2 points to the state: set 1, wait for 2, then set 0.
+.section .iram1.tinygo_flashPark, "ax"
+.global tinygo_flashPark
+    .balign 4
+tinygo_flashPark:
+    entry a1, 16
+    movi  a3, 1
+    s32i  a3, a2, 0
+    memw
+.Lflash_park_wait:
+    memw
+    l32i  a3, a2, 0
+    bnei  a3, 2, .Lflash_park_wait
+    movi  a3, 0
+    s32i  a3, a2, 0
+    memw
     retw

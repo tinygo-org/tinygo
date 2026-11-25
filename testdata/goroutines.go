@@ -2,6 +2,7 @@ package main
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,13 +52,13 @@ func main() {
 
 	time.Sleep(2 * time.Millisecond)
 
-	var x int
+	var x atomic.Int32
 	go func() {
 		time.Sleep(2 * time.Millisecond)
-		x = 1
+		x.Store(1)
 	}()
 	time.Sleep(time.Second / 2)
-	println("closure go call result:", x)
+	println("closure go call result:", x.Load())
 
 	time.Sleep(2 * time.Millisecond)
 
@@ -90,6 +91,33 @@ func main() {
 	done := make(chan int)
 	go testPaddedParameters(paddedStruct{x: 5, y: 7}, done)
 	<-done
+
+	testGoInBranches(true)
+	testGoInBranches(false)
+}
+
+var goInBranchesDone = make(chan struct{})
+
+// Regression test for https://github.com/tinygo-org/tinygo/issues/3878.
+//
+//go:noinline
+func testGoInBranches(cond bool) {
+	if cond {
+		go goInBranchA()
+	} else {
+		go goInBranchB()
+	}
+	<-goInBranchesDone
+}
+
+func goInBranchA() {
+	println("go in branch A")
+	goInBranchesDone <- struct{}{}
+}
+
+func goInBranchB() {
+	println("go in branch B")
+	goInBranchesDone <- struct{}{}
 }
 
 func acquire(m *sync.Mutex, wg *sync.WaitGroup) {
@@ -163,7 +191,7 @@ func testGoOnBuiltins() {
 		println("error: expected closed channel to return 0, false")
 	}
 
-	// Test delete builtin.
+	// Test delete builtin. This intentionally races under Go's race detector.
 	m := map[string]int{"foo": 3}
 	go delete(m, "foo")
 	time.Sleep(time.Millisecond)

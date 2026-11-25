@@ -1,6 +1,6 @@
 {
-    "inherits": ["cortex-m33"],
-    "build-tags": ["nucleol552ze", "stm32l552", "stm32l5x2", "stm32l5", "stm32"],
+    "inherits": ["stm32l5"],
+    "build-tags": ["nucleol552ze", "stm32l552", "stm32l5x2"],
     "serial": "uart",
     "linkerscript": "targets/stm32l5x2xe.ld",
     "extra-files": [

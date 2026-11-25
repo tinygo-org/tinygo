@@ -22,8 +22,9 @@ func fastrandn(n uint32) uint32 {
 	return uint32(uint64(fastrand()) * uint64(n) >> 32)
 }
 
+// initRand runs before initHeap, so nothing it calls may allocate.
 func initRand() {
-	r, _ := hardwareRand()
+	r, _ := startupRand()
 	xorshift64State = uint64(r | 1) // protect against 0
 	xorshift32State = uint32(xorshift64State)
 }

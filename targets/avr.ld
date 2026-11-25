@@ -50,7 +50,7 @@ SECTIONS
 }
 
 /* For the memory allocator. */
-_heap_start = _ebss;
+_heap_start = ALIGN(_ebss, 4);
 _heap_end = ORIGIN(RAM) + LENGTH(RAM);
 _globals_start = _sdata;
 _globals_end = _ebss;

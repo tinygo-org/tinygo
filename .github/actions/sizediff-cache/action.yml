@@ -1,0 +1,40 @@
+name: Restore binary size baseline
+description: Restore measurements for a specific compiler and drivers revision
+
+inputs:
+  base-sha:
+    description: Compiler revision used for the baseline
+    required: true
+
+outputs:
+  cache-hit:
+    description: Whether an exact baseline was restored
+    value: ${{ steps.restore.outputs.cache-hit }}
+  cache-key:
+    description: Key used to restore or save the baseline
+    value: ${{ steps.restore.outputs.cache-primary-key }}
+
+runs:
+  using: composite
+  steps:
+    - name: Identify build environment
+      id: environment
+      shell: bash
+      run: |
+        if [ -z "${ImageVersion:-}" ]; then
+          echo "::warning::Runner image version unavailable; not using the size cache"
+          exit 0
+        fi
+        drivers_sha="$(git -C drivers rev-parse HEAD)"
+        go_version="$(go env GOVERSION)"
+        echo "drivers_sha=$drivers_sha" >> "$GITHUB_OUTPUT"
+        echo "go_version=$go_version" >> "$GITHUB_OUTPUT"
+        echo "image_version=$ImageVersion" >> "$GITHUB_OUTPUT"
+        echo "cache_enabled=true" >> "$GITHUB_OUTPUT"
+    - name: Restore baseline
+      id: restore
+      if: steps.environment.outputs.cache_enabled == 'true'
+      uses: actions/cache/restore@v5
+      with:
+        path: drivers/sizes-dev.txt
+        key: sizediff-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.base-sha }}-${{ steps.environment.outputs.drivers_sha }}-${{ steps.environment.outputs.go_version }}-${{ steps.environment.outputs.image_version }}-${{ hashFiles('.github/actions/setup-llvm/action.yml') }}

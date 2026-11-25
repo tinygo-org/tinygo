@@ -9,9 +9,6 @@ type Task struct {
 	// Next is a field which can be used to make a linked list of tasks.
 	Next *Task
 
-	// Ptr is a field which can be used for storing a pointer.
-	Ptr unsafe.Pointer
-
 	// Data is a field which can be used for storing state information.
 	Data uint64
 
@@ -35,6 +32,10 @@ type Task struct {
 
 	// SynctestBlocked is set while this task is durably blocked.
 	SynctestBlocked bool
+
+	// Affinity is the assigned core used by the cores scheduler.
+	// It fits in the padding before DeferFrame, and is empty for other schedulers.
+	Affinity Affinity
 
 	// DeferFrame stores a pointer to the (stack allocated) defer frame of the
 	// goroutine that is used for the recover builtin.

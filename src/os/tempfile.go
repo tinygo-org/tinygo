@@ -7,41 +7,17 @@ package os
 import (
 	"errors"
 	"internal/itoa"
-	"sync"
-	"time"
+	_ "unsafe" // for go:linkname
 )
 
-var minrandPreviousValue uint32
-var minrandMutex sync.Mutex
-
-func init() {
-	// Avoid getting same results on every run
-	now := time.Now()
-	seed := uint32(Getpid()) ^ uint32(now.Nanosecond()) ^ uint32(now.Unix())
-	// initial state must be odd
-	minrandPreviousValue = seed | 1
-}
-
-// minrand() is a simple and rather poor placeholder for fastrand()
-// TODO: provide fastrand in runtime, as go does.  It is hard to implement properly elsewhere.
-func minrand() uint32 {
-	// c++11's minstd_rand
-	// https://en.wikipedia.org/wiki/Linear_congruential_generator
-	// m=2^32, c=0, a=48271
-	minrandMutex.Lock()
-	minrandPreviousValue *= 48271
-	val := minrandPreviousValue
-	minrandMutex.Unlock()
-	return val
-}
+//go:linkname runtime_rand runtime.rand
+func runtime_rand() uint64
 
 // We generate random temporary file names so that there's a good
 // chance the file doesn't exist yet - keeps the number of tries in
 // TempFile to a minimum.
 func nextRandom() string {
-	// Discard lower four bits of minrand.
-	// They're not very random, and we don't need the full range here.
-	return itoa.Uitoa(uint(minrand() >> 4))
+	return itoa.Uitoa(uint(uint32(runtime_rand())))
 }
 
 // CreateTemp creates a new temporary file in the directory dir,

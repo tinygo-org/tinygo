@@ -175,19 +175,28 @@ type SelectCase struct {
 }
 
 func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool) {
-	panic("unimplemented: reflect.Select")
+	rawCases := make([]reflectlite.SelectCase, len(cases))
+	for i, c := range cases {
+		rawCases[i] = reflectlite.SelectCase{
+			Dir:  reflectlite.SelectDir(c.Dir),
+			Chan: c.Chan.Value,
+			Send: c.Send.Value,
+		}
+	}
+	chosen, rawRecv, recvOK := reflectlite.Select(rawCases)
+	return chosen, Value{rawRecv}, recvOK
 }
 
 func (v Value) Send(x Value) {
-	panic("unimplemented: reflect.Value.Send()")
+	v.Value.Send(x.Value)
 }
 
 func (v Value) TrySend(x Value) bool {
-	panic("unimplemented: reflect.Value.TrySend()")
+	return v.Value.TrySend(x.Value)
 }
 
 func (v Value) Close() {
-	panic("unimplemented: reflect.Value.Close()")
+	v.Value.Close()
 }
 
 // MakeMap creates a new map with the specified type.
@@ -207,11 +216,15 @@ func MakeChan(typ Type, buffer int) Value {
 }
 
 func (v Value) Call(in []Value) []Value {
-	panic("unimplemented: (reflect.Value).Call()")
+	rawIn := *(*[]reflectlite.Value)(unsafe.Pointer(&in))
+	out := v.Value.Call(rawIn)
+	return *(*[]Value)(unsafe.Pointer(&out))
 }
 
 func (v Value) CallSlice(in []Value) []Value {
-	panic("unimplemented: (reflect.Value).CallSlice()")
+	rawIn := *(*[]reflectlite.Value)(unsafe.Pointer(&in))
+	out := v.Value.CallSlice(rawIn)
+	return *(*[]Value)(unsafe.Pointer(&out))
 }
 
 func (v Value) Equal(u Value) bool {
@@ -219,23 +232,31 @@ func (v Value) Equal(u Value) bool {
 }
 
 func (v Value) Method(i int) Value {
-	panic("unimplemented: (reflect.Value).Method()")
+	return Value{v.Value.Method(i)}
 }
 
 func (v Value) MethodByName(name string) Value {
-	panic("unimplemented: (reflect.Value).MethodByName()")
+	return Value{v.Value.MethodByName(name)}
 }
 
 func (v Value) Recv() (x Value, ok bool) {
-	panic("unimplemented: (reflect.Value).Recv()")
+	raw, ok := v.Value.Recv()
+	return Value{raw}, ok
 }
 
 func (v Value) TryRecv() (x Value, ok bool) {
-	panic("unimplemented: (reflect.Value).TryRecv()")
+	raw, ok := v.Value.TryRecv()
+	return Value{raw}, ok
 }
 
 func NewAt(typ Type, p unsafe.Pointer) Value {
 	return Value{reflectlite.NewAt(toRawType(typ), p)}
+}
+
+// SliceAt returns a Value representing a slice whose underlying data starts at
+// p, with length and capacity equal to n.
+func SliceAt(typ Type, p unsafe.Pointer, n int) Value {
+	return Value{reflectlite.SliceAt(toRawType(typ), p, n)}
 }
 
 // Deprecated: Use unsafe.Slice or unsafe.SliceData instead.

@@ -25,14 +25,12 @@ tinygo_startTask:
     // Branch to the "goroutine start" function.
     calll *%ebx
 
-    // Rebalance the stack (to undo the above push).
-    addl $4, %esp
-
-    // After return, exit this goroutine. This is a tail call.
+    // After return, exit this goroutine. The argument stays pushed so this
+    // call keeps the stack alignment required by the ABI.
     #ifdef _WIN32
-    jmp _tinygo_task_exit
+    calll _tinygo_task_exit
     #else
-    jmp tinygo_task_exit
+    calll tinygo_task_exit
     #endif
     .cfi_endproc
 

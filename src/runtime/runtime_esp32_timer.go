@@ -11,10 +11,10 @@ import (
 // CPU interrupt number used for the TIMG0 timer alarm.
 const timerAlarmCPUInterrupt = 9
 
-var interruptPending volatile.Register8
+var interruptPending [numCPU]volatile.Register8
 
 func signalInterrupt() {
-	interruptPending.Set(1)
+	interruptPending[currentCPU()].Set(1)
 }
 
 var timerAlarmInterrupt interrupt.Interrupt
@@ -44,10 +44,11 @@ func initTimerInterrupt() {
 // sleepTicks spins until the given number of ticks have elapsed, using the
 // TIMG0 alarm interrupt to avoid busy-waiting for the entire duration.
 func sleepTicks(d timeUnit) {
+	core := currentCPU()
 	target := ticks() + d
 	for ticks() < target {
 		// Set the alarm to fire at the target tick count.
-		interruptPending.Set(0)
+		interruptPending[core].Set(0)
 
 		esp.TIMG0.T0ALARMLO.Set(uint32(target))
 		esp.TIMG0.T0ALARMHI.Set(uint32(target >> 32))
@@ -60,8 +61,8 @@ func sleepTicks(d timeUnit) {
 		esp.TIMG0.INT_ENA_TIMERS.SetBits(1)
 
 		// Wait for any interrupt (timer alarm or other) or timeout.
-		for interruptPending.Get() == 0 {
-			if ticks() >= target {
+		for interruptPending[core].Get() == 0 {
+			if ticks() >= target || sleepWoken(core) {
 				return
 			}
 		}

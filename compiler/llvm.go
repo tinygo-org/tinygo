@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/tinygo-org/tinygo/compileopts"
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -64,10 +64,10 @@ func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value
 	// Allocate memory for the packed data.
 	size := b.targetData.TypeAllocSize(packedType)
 	if size == 0 {
-		return llvm.ConstPointerNull(b.dataPtrType)
+		return b.dataPtrNull
 	} else if len(values) == 1 && values[0].Type().TypeKind() == llvm.PointerTypeKind {
 		return values[0]
-	} else if size <= b.targetData.TypeAllocSize(b.dataPtrType) {
+	} else if size <= uint64(b.ptrBits)/8 {
 		// Packed data fits in a pointer, so store it directly inside the
 		// pointer.
 		if len(values) == 1 && values[0].Type().TypeKind() == llvm.IntegerTypeKind {
@@ -80,18 +80,18 @@ func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value
 		// effectively a bitcast.
 		packedAlloc, _ := b.createTemporaryAlloca(b.dataPtrType, "")
 
-		if size < b.targetData.TypeAllocSize(b.dataPtrType) {
+		if size < uint64(b.ptrBits)/8 {
 			// The alloca is bigger than the value that will be stored in it.
 			// To avoid having some bits undefined, zero the alloca first.
 			// Hopefully this will get optimized away.
-			b.CreateStore(llvm.ConstNull(b.dataPtrType), packedAlloc)
+			b.CreateStore(b.dataPtrNull, packedAlloc)
 		}
 
 		// Store all values in the alloca.
 		for i, value := range values {
 			indices := []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+				llvm.ConstInt(b.i32, 0, false),
+				llvm.ConstInt(b.i32, uint64(i), false),
 			}
 			gep := b.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
 			b.CreateStore(value, gep)
@@ -101,7 +101,7 @@ func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value
 		result := b.CreateLoad(b.dataPtrType, packedAlloc, "")
 
 		// End the lifetime of the alloca, to help the optimizer.
-		packedSize := llvm.ConstInt(b.ctx.Int64Type(), b.targetData.TypeAllocSize(packedAlloc.Type()), false)
+		packedSize := llvm.ConstInt(b.i64, b.targetData.TypeAllocSize(packedAlloc.Type()), false)
 		b.emitLifetimeEnd(packedAlloc, packedSize)
 
 		return result
@@ -138,8 +138,8 @@ func (b *builder) emitPointerPack(values []llvm.Value, pos token.Pos) llvm.Value
 		// Store all values in the heap pointer.
 		for i, value := range values {
 			indices := []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+				llvm.ConstInt(b.i32, 0, false),
+				llvm.ConstInt(b.i32, uint64(i), false),
 			}
 			gep := b.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
 			b.CreateStore(value, gep)
@@ -163,7 +163,7 @@ func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []ll
 	} else if len(valueTypes) == 1 && valueTypes[0].TypeKind() == llvm.PointerTypeKind {
 		// A single pointer is always stored directly.
 		return []llvm.Value{ptr}
-	} else if size <= b.targetData.TypeAllocSize(b.dataPtrType) {
+	} else if size <= uint64(b.ptrBits)/8 {
 		// Packed data stored directly in pointer.
 		if len(valueTypes) == 1 && valueTypes[0].TypeKind() == llvm.IntegerTypeKind {
 			// Keep this cast in SSA form.
@@ -186,33 +186,17 @@ func (b *builder) emitPointerUnpack(ptr llvm.Value, valueTypes []llvm.Type) []ll
 			continue
 		}
 		indices := []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, uint64(i), false),
 		}
 		gep := b.CreateInBoundsGEP(packedType, packedAlloc, indices, "")
 		values[i] = b.CreateLoad(valueType, gep, "")
 	}
 	if needsLifetimeEnd {
-		allocSize := llvm.ConstInt(b.ctx.Int64Type(), b.targetData.TypeAllocSize(b.uintptrType), false)
+		allocSize := llvm.ConstInt(b.i64, uint64(b.ptrBits)/8, false)
 		b.emitLifetimeEnd(packedAlloc, allocSize)
 	}
 	return values
-}
-
-// makeGlobalArray creates a new LLVM global with the given name and integers as
-// contents, and returns the global and initializer type.
-// Note that it is left with the default linkage etc., you should set
-// linkage/constant/etc properties yourself.
-func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType llvm.Type) (llvm.Type, llvm.Value) {
-	globalType := llvm.ArrayType(elementType, len(buf))
-	global := llvm.AddGlobal(c.mod, globalType, name)
-	value := llvm.Undef(globalType)
-	for i := range buf {
-		ch := uint64(buf[i])
-		value = c.builder.CreateInsertValue(value, llvm.ConstInt(elementType, ch, false), i, "")
-	}
-	global.SetInitializer(value)
-	return globalType, global
 }
 
 // createObjectLayout returns a LLVM value (of type i8*) that describes where
@@ -225,7 +209,7 @@ func (c *compilerContext) makeGlobalArray(buf []byte, name string, elementType l
 // object size and can therefore know how this value is repeated in the object.
 //
 // For details on what's in this value, see src/runtime/gc_precise.go.
-func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
+func (c *context) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Value {
 	if !typeHasPointers(t) {
 		// There are no pointers in this type, so we can simplify the layout.
 		layout := (uint64(1) << 1) | 1
@@ -251,9 +235,9 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 
 	// Create the pointer bitmap.
 	objectSizeBytes := c.targetData.TypeAllocSize(t)
-	pointerAlignment := uint64(c.targetData.PrefTypeAlignment(c.dataPtrType))
-	pointerSize := c.targetData.TypeAllocSize(c.dataPtrType)
-	pointerBits := pointerSize * 8
+	pointerAlignment := uint64(c.ptrAlign)
+	pointerBits := uint64(c.ptrBits)
+	pointerSize := pointerBits / 8
 	bitmapLen := objectSizeBytes / pointerAlignment
 	bitmapBytes := (bitmapLen + 7) / 8
 	bitmap := make([]byte, bitmapBytes, max(bitmapBytes, 8))
@@ -303,7 +287,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 
 	// Create the global initializer.
 	bitmapByteValues := make([]llvm.Value, bitmapBytes)
-	i8 := c.ctx.Int8Type()
+	i8 := c.i8
 	for i, b := range bitmap {
 		bitmapByteValues[i] = llvm.ConstInt(i8, uint64(b), false)
 	}
@@ -318,7 +302,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 	global.SetUnnamedAddr(true)
 	global.SetGlobalConstant(true)
 	global.SetLinkage(llvm.LinkOnceODRLinkage)
-	if c.targetData.PrefTypeAlignment(c.uintptrType) < 2 {
+	if c.ptrAlign < 2 {
 		// AVR doesn't have alignment by default.
 		// The lowest bit must be unset to distinguish this from an inline layout.
 		global.SetAlignment(2)
@@ -354,7 +338,7 @@ func (c *compilerContext) createObjectLayout(t llvm.Type, pos token.Pos) llvm.Va
 
 // buildPointerBitmap scans the given LLVM type for pointers and sets bits in a
 // bitmap at the word offset that contains a pointer. This scan is recursive.
-func (c *compilerContext) buildPointerBitmap(
+func (c *context) buildPointerBitmap(
 	dst []byte,
 	ptrAlign uint64,
 	pos token.Pos,
@@ -426,13 +410,13 @@ func (c *compilerContext) buildPointerBitmap(
 // archFamily returns the architecture from the LLVM triple but with some
 // architecture names ("armv6", "thumbv7m", etc) merged into a single
 // architecture name ("arm").
-func (c *compilerContext) archFamily() string {
+func (c *context) archFamily() string {
 	return compileopts.CanonicalArchName(c.Triple)
 }
 
 // isThumb returns whether we're in ARM or in Thumb mode. It panics if the
 // features string is not one for an ARM architecture.
-func (c *compilerContext) isThumb() bool {
+func (c *context) isThumb() bool {
 	var isThumb, isNotThumb bool
 	for feature := range strings.SplitSeq(c.Features, ",") {
 		if feature == "+thumb-mode" {
@@ -452,7 +436,7 @@ func (c *compilerContext) isThumb() bool {
 // pointer as an *i8.
 func (b *builder) readStackPointer() llvm.Value {
 	name := "llvm.stacksave.p0"
-	if llvmutil.Version() < 18 {
+	if llvm.VersionMajor < 18 {
 		name = "llvm.stacksave" // backwards compatibility with LLVM 17 and below
 	}
 	stacksave := b.mod.NamedFunction(name)
@@ -467,12 +451,12 @@ func (b *builder) readStackPointer() llvm.Value {
 // pointer.
 func (b *builder) writeStackPointer(sp llvm.Value) {
 	name := "llvm.stackrestore.p0"
-	if llvmutil.Version() < 18 {
+	if llvm.VersionMajor < 18 {
 		name = "llvm.stackrestore" // backwards compatibility with LLVM 17 and below
 	}
 	stackrestore := b.mod.NamedFunction(name)
 	if stackrestore.IsNil() {
-		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.dataPtrType}, false)
+		fnType := llvm.FunctionType(b.void, []llvm.Type{b.dataPtrType}, false)
 		stackrestore = llvm.AddFunction(b.mod, name, fnType)
 	}
 	b.CreateCall(stackrestore.GlobalValueType(), stackrestore, []llvm.Value{sp}, "")
@@ -489,13 +473,4 @@ func (b *builder) createZExtOrTrunc(value llvm.Value, t llvm.Type) llvm.Value {
 		value = b.CreateZExt(value, t, "")
 	}
 	return value
-}
-
-// Reverse a slice of bytes. From the wiki:
-// https://github.com/golang/go/wiki/SliceTricks#reversing
-func reverseBytes(buf []byte) {
-	for i := len(buf)/2 - 1; i >= 0; i-- {
-		opp := len(buf) - 1 - i
-		buf[i], buf[opp] = buf[opp], buf[i]
-	}
 }

@@ -1,4 +1,4 @@
-//go:build esp32c3 && !m5stamp_c3
+//go:build esp32c3
 
 package machine
 

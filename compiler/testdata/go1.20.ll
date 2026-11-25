@@ -1,11 +1,11 @@
 ; ModuleID = 'go1.20.go'
 source_filename = "go1.20.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
-target triple = "wasm32-unknown-wasi"
+target triple = "wasm32-unknown-wasip1"
 
 %runtime._string = type { ptr, i32 }
 
-declare void @runtime.trackPointer(ptr nocapture readonly, ptr, ptr) #0
+declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
 ; Function Attrs: nounwind
 define hidden void @main.init(ptr %context) unnamed_addr #1 {
@@ -14,7 +14,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 %s.len, i32 %s.cap, ptr %context) unnamed_addr #1 {
+define hidden ptr @main.unsafeSliceData(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #2
@@ -50,7 +50,7 @@ unwind.return:                                    ; preds = %unsafe.String.throw
 declare void @runtime.unsafeSlicePanic(ptr) #0
 
 ; Function Attrs: nounwind
-define hidden ptr @main.unsafeStringData(ptr readonly %s.data, i32 %s.len, ptr %context) unnamed_addr #1 {
+define hidden ptr @main.unsafeStringData(ptr readonly %s.data, i32 range(i32 0, -2147483648) %s.len, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   call void @runtime.trackPointer(ptr %s.data, ptr nonnull %stackalloc, ptr undef) #2

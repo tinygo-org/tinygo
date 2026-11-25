@@ -5,6 +5,9 @@
 // There are a few advantages to modifying the AST directly instead of doing CGo
 // as a preprocessing step, with the main advantage being that debug information
 // is kept intact as much as possible.
+//
+// #cgo lines follow https://pkg.go.dev/cmd/cgo, including build constraints
+// and which flags apply to C and C++.
 package cgo
 
 // This file extracts the `import "C"` statement from the source and modifies
@@ -14,10 +17,12 @@ package cgo
 import (
 	"fmt"
 	"go/ast"
+	"go/build/constraint"
 	"go/parser"
 	"go/scanner"
 	"go/token"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +30,11 @@ import (
 	"github.com/google/shlex"
 	"golang.org/x/tools/go/ast/astutil"
 )
+
+// Flags holds the CGO_CPPFLAGS, CGO_CFLAGS, and CGO_CXXFLAGS environment flags.
+type Flags struct {
+	CPPFlags, CFlags, CXXFlags []string
+}
 
 // cgoPackage holds all CGo-related information of a package.
 type cgoPackage struct {
@@ -36,12 +46,19 @@ type cgoPackage struct {
 	currentDir      string // current working directory
 	packageDir      string // full path to the package to process
 	importPath      string
+	goos            string
+	goarch          string
+	buildTags       []string
 	fset            *token.FileSet
 	tokenFiles      map[string]*token.File
 	definedGlobally map[string]ast.Node
 	noescapingFuncs map[string]*noescapingFunc // #cgo noescape lines
 	anonDecls       map[any]string
+	cppflags        []string // preprocessor flags shared by C and C++
 	cflags          []string // CFlags from #cgo lines
+	cxxflags        []string // C++ flags from #cgo lines
+	packageCFlags   []string // env and #cgo flags for C files
+	packageCXXFlags []string // env and #cgo flags for C++ files
 	ldflags         []string // LDFlags from #cgo lines
 	visitedFiles    map[string][]byte
 	cgoHeaders      []string
@@ -247,14 +264,17 @@ func _Cgo___get_errno() error {
 // with libclang, and modifies the AST to use this information. It returns a
 // newly created *ast.File that should be added to the list of to-be-parsed
 // files, the CGo header snippets that should be compiled (for inline
-// functions), the CFLAGS and LDFLAGS found in #cgo lines, and a map of file
-// hashes of the accessed C header files. If there is one or more error, it
-// returns these in the []error slice but still modifies the AST.
-func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, goos string) ([]*ast.File, []string, []string, []string, map[string][]byte, []error) {
+// functions), the C, C++, and linker flags from env and #cgo lines, and a map
+// of file hashes of the accessed C header files. If there is one or more error,
+// it returns these in the []error slice but still modifies the AST.
+func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cflags []string, env Flags, goos, goarch string, buildTags []string) ([]*ast.File, []string, []string, []string, []string, map[string][]byte, []error) {
 	p := &cgoPackage{
 		packageName:     files[0].Name.Name,
 		currentDir:      dir,
 		importPath:      importPath,
+		goos:            goos,
+		goarch:          goarch,
+		buildTags:       buildTags,
 		fset:            fset,
 		tokenFiles:      map[string]*token.File{},
 		definedGlobally: map[string]ast.Node{},
@@ -271,7 +291,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Find the absolute path for this package.
 	packagePath, err := filepath.Abs(fset.File(files[0].Pos()).Name())
 	if err != nil {
-		return nil, nil, nil, nil, nil, []error{
+		return nil, nil, nil, nil, nil, nil, []error{
 			scanner.Error{
 				Pos: fset.Position(files[0].Pos()),
 				Msg: "cgo: cannot find absolute path: " + err.Error(), // TODO: wrap this error
@@ -368,8 +388,10 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Disable _FORTIFY_SOURCE as it causes problems on macOS.
 	// Note that it is only disabled for memcpy (etc) calls made from Go, which
 	// have better alternatives anyway.
-	cflagsForCGo := append([]string{"-D_FORTIFY_SOURCE=0"}, cflags...)
-	cflagsForCGo = append(cflagsForCGo, p.cflags...)
+	// Flag order matches CFlags in cmd/go/internal/work/exec.go.
+	p.packageCFlags = slices.Concat(env.CPPFlags, p.cppflags, env.CFlags, p.cflags)
+	p.packageCXXFlags = slices.Concat(env.CPPFlags, p.cppflags, env.CXXFlags, p.cxxflags)
+	cflagsForCGo := slices.Concat([]string{"-D_FORTIFY_SOURCE=0"}, cflags, p.packageCFlags)
 
 	// Retrieve types such as C.int, C.longlong, etc from C.
 	p.newCGoFile(nil, -1).readNames(builtinAliasTypedefs, cflagsForCGo, "", func(names map[string]clangCursor) {
@@ -426,7 +448,7 @@ func Process(files []*ast.File, dir, importPath string, fset *token.FileSet, cfl
 	// Print the newly generated in-memory AST, for debugging.
 	//ast.Print(fset, p.generated)
 
-	return p.cgoFiles, p.cgoHeaders, p.cflags, p.ldflags, p.visitedFiles, p.errors
+	return p.cgoFiles, p.cgoHeaders, p.packageCFlags, p.packageCXXFlags, p.ldflags, p.visitedFiles, p.errors
 }
 
 func (p *cgoPackage) newCGoFile(file *ast.File, index int) *cgoFile {
@@ -530,15 +552,13 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
 			continue
 		}
 
-		if len(fields) > 1 {
-			p.addErrorAfter(pos, text[:lineStart+5], "not implemented: build constraints in #cgo line")
+		name := fields[len(fields)-1]
+		if len(fields) > 1 && !p.matchCGoBuildConstraints(fields[:len(fields)-1]) {
 			continue
 		}
-
-		name := fields[len(fields)-1]
 		value := line[colon+1:]
 		switch name {
-		case "CFLAGS":
+		case "CFLAGS", "CPPFLAGS", "CXXFLAGS":
 			flags, err := shlex.Split(value)
 			if err != nil {
 				// TODO: find the exact location where the error happened.
@@ -550,7 +570,14 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
 				continue
 			}
 			p.makePathsAbsolute(flags)
-			p.cflags = append(p.cflags, flags...)
+			switch name {
+			case "CFLAGS":
+				p.cflags = append(p.cflags, flags...)
+			case "CPPFLAGS":
+				p.cppflags = append(p.cppflags, flags...)
+			case "CXXFLAGS":
+				p.cxxflags = append(p.cxxflags, flags...)
+			}
 		case "LDFLAGS":
 			flags, err := shlex.Split(value)
 			if err != nil {
@@ -571,6 +598,48 @@ func (p *cgoPackage) parseCGoPreprocessorLines(text string, pos token.Pos) strin
 		}
 	}
 	return text
+}
+
+func (p *cgoPackage) matchCGoBuildConstraints(conditions []string) bool {
+	matchTag := func(tag string) bool {
+		if tag == p.goos || tag == p.goarch || tag == "gc" || tag == "cgo" {
+			return true
+		}
+		switch {
+		case p.goos == "android" && tag == "linux":
+			return true
+		case p.goos == "illumos" && tag == "solaris":
+			return true
+		case p.goos == "ios" && tag == "darwin":
+			return true
+		case tag == "unix" && isUnixGOOS(p.goos):
+			return true
+		case tag == "boringcrypto":
+			tag = "goexperiment.boringcrypto"
+		}
+		return slices.Contains(p.buildTags, tag)
+	}
+
+	for _, condition := range conditions {
+		prefix := "// +build "
+		if strings.ContainsAny(condition, "&|()") {
+			prefix = "//go:build "
+		}
+		expr, err := constraint.Parse(prefix + condition)
+		if err == nil && expr.Eval(matchTag) {
+			return true
+		}
+	}
+	return false
+}
+
+func isUnixGOOS(goos string) bool {
+	switch goos {
+	case "aix", "android", "darwin", "dragonfly", "freebsd", "hurd", "illumos", "ios", "linux", "netbsd", "openbsd", "solaris":
+		return true
+	default:
+		return false
+	}
 }
 
 // makeUnionField creates a new struct from an existing *elaboratedTypeInfo,
@@ -1428,7 +1497,9 @@ func (f *cgoFile) walker(cursor *astutil.Cursor, names map[string]clangCursor) b
 		}
 		if x.Name == "C" {
 			name := "_Cgo_" + node.Sel.Name
-			if found, ok := names[node.Sel.Name]; ok {
+			if node.Sel.Name == "unsigned" {
+				name = "_Cgo_uint"
+			} else if found, ok := names[node.Sel.Name]; ok {
 				name = f.getASTDeclName(node.Sel.Name, found, false)
 			}
 			cursor.Replace(&ast.Ident{

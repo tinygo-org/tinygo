@@ -1,9 +1,9 @@
-//go:build !llvm22
+//go:build !llvm22 && !llvm23
 
 package compileopts
 
-// ClangTriple returns the target triple to pass to Clang's --target flag.
-// For pre-LLVM 22, the triple is used as-is.
-func ClangTriple(triple string) string {
+// LLVMTriple returns the target triple for Clang and for LLVM modules.
+// Before LLVM 22, the triple is used as is.
+func LLVMTriple(triple string) string {
 	return triple
 }

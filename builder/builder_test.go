@@ -12,6 +12,153 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+func TestBuildRejectsUnsupportedFirmwareExtension(t *testing.T) {
+	for _, targetName := range []string{"pico", "pico2"} {
+		t.Run(targetName, func(t *testing.T) {
+			options := &compileopts.Options{Target: targetName, Semaphore: sema}
+			target, err := compileopts.LoadTarget(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config := &compileopts.Config{
+				Options: options,
+				Target:  target,
+			}
+			_, err = Build("does/not/exist", "firmware.bin", t.TempDir(), config)
+			want := "target " + targetName + " does not support firmware output extension .bin; use .elf, .hex, or .uf2"
+			if err == nil || err.Error() != want {
+				t.Fatalf("Build() error = %v, want %q", err, want)
+			}
+		})
+	}
+}
+
+func TestBuildErrorReturnsNil(t *testing.T) {
+	config := &compileopts.Config{
+		Options: &compileopts.Options{Semaphore: sema},
+		Target:  &compileopts.TargetSpec{Libc: "unknown"},
+	}
+	result, err := Build("", "", t.TempDir(), config)
+	if err == nil || err.Error() != "unknown libc: unknown" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result on error, got %+v", result)
+	}
+}
+
+func TestNewConfigAcceptsSemaphore(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		semaphore chan struct{}
+		capacity  int
+	}{
+		{name: "minimum", semaphore: make(chan struct{}, 1), capacity: 1},
+		{name: "provided", semaphore: make(chan struct{}, 2), capacity: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			options := &compileopts.Options{Target: "pico", Semaphore: tc.semaphore}
+			config, err := NewConfig(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			semaphore := config.Options.Semaphore
+			if cap(semaphore) != tc.capacity {
+				t.Fatalf("semaphore capacity = %d, want %d", cap(semaphore), tc.capacity)
+			}
+			if semaphore != tc.semaphore {
+				t.Fatal("NewConfig replaced the provided semaphore")
+			}
+			other, err := NewConfig(options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if other.Options.Semaphore != semaphore {
+				t.Fatal("NewConfig replaced the semaphore when reusing options")
+			}
+		})
+	}
+}
+
+func TestNewConfigRejectsZeroCapacitySemaphore(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		semaphore chan struct{}
+	}{
+		{name: "nil"},
+		{name: "unbuffered", semaphore: make(chan struct{})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			options := &compileopts.Options{Target: "pico", Semaphore: tc.semaphore}
+			config, err := NewConfig(options)
+			if err == nil || err.Error() != "cannot run 0 jobs at a time" {
+				t.Fatalf("NewConfig() error = %v, want cannot run 0 jobs at a time", err)
+			}
+			if config != nil {
+				t.Fatalf("expected nil config on error, got %+v", config)
+			}
+			if options.Semaphore != tc.semaphore {
+				t.Fatal("NewConfig changed the provided semaphore")
+			}
+		})
+	}
+}
+
+func TestBuildRejectsZeroCapacitySemaphore(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		semaphore chan struct{}
+	}{
+		{name: "nil"},
+		{name: "unbuffered", semaphore: make(chan struct{})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &compileopts.Config{
+				Options: &compileopts.Options{Semaphore: tc.semaphore},
+				Target:  &compileopts.TargetSpec{Libc: "unknown"},
+			}
+			result, err := Build("", "", t.TempDir(), config)
+			if err == nil || err.Error() != "cannot run 0 jobs at a time" {
+				t.Fatalf("Build() error = %v, want cannot run 0 jobs at a time", err)
+			}
+			if result != nil {
+				t.Fatalf("expected nil result on error, got %+v", result)
+			}
+			if config.Options.Semaphore != tc.semaphore {
+				t.Fatal("Build changed the semaphore")
+			}
+		})
+	}
+}
+
+func TestBuildSharesSemaphore(t *testing.T) {
+	config, err := NewConfig(&compileopts.Options{Target: "pico", Semaphore: make(chan struct{}, 2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	semaphore := config.Options.Semaphore
+	tmpdir := t.TempDir()
+	start := make(chan struct{})
+	results := make(chan error, 16)
+	for range 16 {
+		go func() {
+			<-start
+			_, err := Build("does/not/exist", "firmware.bin", tmpdir, config)
+			results <- err
+		}()
+	}
+	close(start)
+	for range 16 {
+		err := <-results
+		if err == nil || !strings.Contains(err.Error(), "does not support firmware output extension") {
+			t.Fatalf("Build() error = %v, want unsupported extension error", err)
+		}
+	}
+	if config.Options.Semaphore != semaphore {
+		t.Fatal("Build changed the semaphore")
+	}
+}
+
 // Test whether the Clang generated "target-cpu" and "target-features"
 // attributes match the CPU and Features property in TinyGo target files.
 func TestClangAttributes(t *testing.T) {
@@ -131,8 +278,7 @@ func testClangAttributes(t *testing.T, options *compileopts.Options) {
 	defer mod.Dispose()
 
 	// Check whether the LLVM target matches.
-	// Use ClangTriple since LLVM 22 normalizes wasm32-unknown-wasi to wasip1.
-	expectedTriple := compileopts.ClangTriple(config.Triple())
+	expectedTriple := compileopts.LLVMTriple(config.Triple())
 	if mod.Target() != expectedTriple {
 		t.Errorf("target has LLVM triple %#v but Clang makes it LLVM triple %#v", expectedTriple, mod.Target())
 	}
@@ -177,7 +323,7 @@ func checkFeatureFlags(t *testing.T, targetFeatures, clangFeatures string) {
 
 	// Build a set of Clang's features for fast lookup.
 	clangSet := make(map[string]bool) // feature name -> enabled
-	for _, f := range strings.Split(clangFeatures, ",") {
+	for f := range strings.SplitSeq(clangFeatures, ",") {
 		f = strings.TrimSpace(f)
 		if len(f) < 2 {
 			continue
@@ -189,7 +335,7 @@ func checkFeatureFlags(t *testing.T, targetFeatures, clangFeatures string) {
 
 	// Check each feature that TinyGo specifies.
 	var missing, conflicts []string
-	for _, f := range strings.Split(targetFeatures, ",") {
+	for f := range strings.SplitSeq(targetFeatures, ",") {
 		f = strings.TrimSpace(f)
 		if len(f) < 2 {
 			continue
@@ -214,6 +360,62 @@ func checkFeatureFlags(t *testing.T, targetFeatures, clangFeatures string) {
 	if len(conflicts) > 0 {
 		t.Errorf("target disables features that Clang enables: %s",
 			strings.Join(conflicts, "; "))
+	}
+}
+
+func TestLinkReflectAttributes(t *testing.T) {
+	kinds := []string{
+		"tinygo-reflect-method",
+		"tinygo-reflect-method-names",
+		"tinygo-reflect-makefunc",
+		"tinygo-reflect-structof",
+	}
+	for _, declarationFirst := range []bool{true, false} {
+		t.Run(fmt.Sprintf("declaration-first=%v", declarationFirst), func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			mod := ctx.NewModule("destination")
+			defer mod.Dispose()
+			pkgMod := ctx.NewModule("source")
+			builder := ctx.NewBuilder()
+			defer builder.Dispose()
+			typ := llvm.FunctionType(ctx.VoidType(), nil, false)
+			dst := llvm.AddFunction(mod, "lookup", typ)
+			src := llvm.AddFunction(pkgMod, "lookup", typ)
+			declaration, definition := dst, src
+			if !declarationFirst {
+				declaration, definition = src, dst
+			}
+			builder.SetInsertPointAtEnd(ctx.AddBasicBlock(definition, "entry"))
+			builder.CreateRetVoid()
+			for _, kind := range kinds {
+				value := ""
+				if kind == "tinygo-reflect-method-names" {
+					value = "Keep"
+					definition.AddFunctionAttr(ctx.CreateStringAttribute(kind, "Other Keep"))
+				}
+				declaration.AddFunctionAttr(ctx.CreateStringAttribute(kind, value))
+			}
+			linker := llvm.NewLinker(mod)
+			defer linker.Dispose()
+			if err := linkPackageModule(linker, mod, pkgMod); err != nil {
+				t.Fatal(err)
+			}
+			for _, kind := range kinds {
+				attr := mod.NamedFunction("lookup").GetStringAttributeAtIndex(-1, kind)
+				if attr.IsNil() {
+					t.Errorf("lost %s", kind)
+					continue
+				}
+				want := ""
+				if kind == "tinygo-reflect-method-names" {
+					want = "Keep Other"
+				}
+				if got := attr.GetStringValue(); got != want {
+					t.Errorf("%s = %q, want %q", kind, got, want)
+				}
+			}
+		})
 	}
 }
 

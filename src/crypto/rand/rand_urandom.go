@@ -1,9 +1,7 @@
-//go:build linux && !baremetal && !wasip1 && !wasip2
+//go:build wasm_unknown || nintendoswitch
 
 // This implementation of crypto/rand uses the /dev/urandom pseudo-file to
-// generate random numbers.
-// TODO: convert to the getentropy or getrandom libc function on Linux once it
-// is more widely supported.
+// generate random numbers, on targets whose libc has no getrandom function.
 
 package rand
 

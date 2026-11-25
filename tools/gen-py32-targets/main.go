@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -195,9 +196,7 @@ func generate(out string, devices []device) error {
 		return err
 	}
 	families := make(map[string]string, len(orphanFamilies))
-	for name, core := range orphanFamilies {
-		families[name] = core
-	}
+	maps.Copy(families, orphanFamilies)
 	for _, device := range devices {
 		if core, ok := families[device.Family]; ok && core != device.Core {
 			return fmt.Errorf("family %q mixes %s and %s cores", device.Family, core, device.Core)

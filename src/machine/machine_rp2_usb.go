@@ -3,6 +3,7 @@
 package machine
 
 import (
+	"internal/byteorder"
 	"machine/usb"
 	"runtime/volatile"
 	"unsafe"
@@ -262,16 +263,10 @@ var (
 func (d *usbDPSRAM) setupBytes() []byte {
 
 	data := d.EPxControl[usb.CONTROL_ENDPOINT].In.Get()
-	setupBytes[0] = byte(data)
-	setupBytes[1] = byte(data >> 8)
-	setupBytes[2] = byte(data >> 16)
-	setupBytes[3] = byte(data >> 24)
+	byteorder.LEPutUint32(setupBytes[0:], data)
 
 	data = d.EPxControl[usb.CONTROL_ENDPOINT].Out.Get()
-	setupBytes[4] = byte(data)
-	setupBytes[5] = byte(data >> 8)
-	setupBytes[6] = byte(data >> 16)
-	setupBytes[7] = byte(data >> 24)
+	byteorder.LEPutUint32(setupBytes[4:], data)
 
 	return setupBytes[:]
 }

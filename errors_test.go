@@ -39,7 +39,10 @@ func TestErrors(t *testing.T) {
 		{name: "loader-invalidpackage"},
 		{name: "loader-nopackage"},
 		{name: "noheap", target: "cortex-m-qemu"},
+		{name: "noruntime"},
+		{name: "noruntime-use"},
 		{name: "optimizer"},
+		{name: "pragma"},
 		{name: "syntax"},
 		{name: "types"},
 	} {
@@ -138,7 +141,7 @@ func readErrorMessages(t *testing.T, file string) string {
 	var errors []string
 	for line := range strings.SplitSeq(string(data), "\n") {
 		if strings.HasPrefix(line, "// ERROR: ") {
-			errors = append(errors, strings.TrimRight(line[len("// ERROR: "):], "\r\n"))
+			errors = append(errors, line[len("// ERROR: "):])
 		}
 	}
 	return strings.Join(errors, "\n")

@@ -50,12 +50,3 @@ tinygo_longjmp:
     LREG sp, 0(a0)       // jumpSP
     LREG a1, REGSIZE(a0) // jumpPC
     jr a1
-
-.section .text.tinygo_checkpointJump
-.global tinygo_checkpointJump
-tinygo_checkpointJump:
-    // Note: the code we jump to assumes a0 is non-zero, which is already the
-    // case because that's the stack pointer.
-    mv sp, a0          // jumpSP
-    csrw mepc, a1      // update MEPC value, so we resume there after the mret
-    mret               // jump to jumpPC

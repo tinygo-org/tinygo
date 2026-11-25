@@ -1,16 +1,16 @@
 ; ModuleID = 'channel.go'
 source_filename = "channel.go"
 target datalayout = "e-m:e-p:32:32-p10:8:8-p20:8:8-i64:64-i128:128-n32:64-S128-ni:1:10:20"
-target triple = "wasm32-unknown-wasi"
+target triple = "wasm32-unknown-wasip1"
 
 %runtime._string = type { ptr, i32 }
 %runtime.channelOp = type { ptr, ptr, i32, ptr }
-%runtime.chanSelectState = type { ptr, ptr }
+%runtime.chanSelectState = type { ptr, ptr, ptr }
 
 @"main$string" = internal unnamed_addr constant [31 x i8] c"blocking select matched no case", align 1
 @"main$pack" = internal unnamed_addr constant { %runtime._string } { %runtime._string { ptr @"main$string", i32 31 } }
 @"reflect/types.type:basic:string" = linkonce_odr constant { i8, ptr } { i8 81, ptr @"reflect/types.type:pointer:basic:string" }, align 4
-@"reflect/types.type:pointer:basic:string" = linkonce_odr constant { i8, i16, ptr } { i8 -43, i16 0, ptr @"reflect/types.type:basic:string" }, align 4
+@"reflect/types.type:pointer:basic:string" = linkonce_odr constant { i8, i8, i16, ptr } { i8 -43, i8 0, i16 0, ptr @"reflect/types.type:basic:string" }, align 4
 
 declare void @runtime.trackPointer(ptr readonly captures(none), ptr, ptr) #0
 
@@ -21,7 +21,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.chanIntSend(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.chanIntSend(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   %chan.value = alloca i32, align 4
@@ -35,15 +35,15 @@ entry:
 }
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.start.p0(ptr nocapture) #2
+declare void @llvm.lifetime.start.p0(ptr captures(none)) #2
 
-declare void @runtime.chanSend(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
+declare void @runtime.chanSend(ptr dereferenceable_or_null(44), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nocallback nofree nosync nounwind willreturn memory(argmem: readwrite)
-declare void @llvm.lifetime.end.p0(ptr nocapture) #2
+declare void @llvm.lifetime.end.p0(ptr captures(none)) #2
 
 ; Function Attrs: nounwind
-define hidden void @main.chanIntRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.chanIntRecv(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   %chan.value = alloca i32, align 4
@@ -55,10 +55,10 @@ entry:
   ret void
 }
 
-declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(40), ptr, ptr dereferenceable_or_null(16), ptr) #0
+declare i1 @runtime.chanRecv(ptr dereferenceable_or_null(44), ptr, ptr dereferenceable_or_null(16), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.chanZeroSend(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.chanZeroSend(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
@@ -68,7 +68,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.chanZeroRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden void @main.chanZeroRecv(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %chan.op = alloca %runtime.channelOp, align 8
   call void @llvm.lifetime.start.p0(ptr nonnull %chan.op)
@@ -78,7 +78,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.selectZeroRecv(ptr dereferenceable_or_null(40) %ch1, ptr dereferenceable_or_null(40) %ch2, ptr %context) unnamed_addr #1 {
+define hidden void @main.selectZeroRecv(ptr dereferenceable_or_null(44) %ch1, ptr dereferenceable_or_null(44) %ch2, ptr %context) unnamed_addr #1 {
 entry:
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
   %select.send.value = alloca i32, align 4
@@ -87,10 +87,14 @@ entry:
   store ptr %ch1, ptr %select.states.alloca, align 4
   %select.states.alloca.repack1 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 4
   store ptr %select.send.value, ptr %select.states.alloca.repack1, align 4
-  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  %select.states.alloca.repack3 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  store ptr null, ptr %select.states.alloca.repack3, align 4
+  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
   store ptr %ch2, ptr %0, align 4
-  %.repack3 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
-  store ptr null, ptr %.repack3, align 4
+  %.repack5 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 16
+  store ptr null, ptr %.repack5, align 4
+  %.repack7 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 20
+  store ptr null, ptr %.repack7, align 4
   %select.result = call { i32, i1 } @runtime.chanSelect(ptr undef, ptr nonnull %select.states.alloca, i32 2, i32 2, ptr null, i32 0, i32 0, ptr undef) #3
   call void @llvm.lifetime.end.p0(ptr nonnull %select.states.alloca)
   %1 = extractvalue { i32, i1 } %select.result, 0
@@ -108,10 +112,10 @@ select.body:                                      ; preds = %select.next
   br label %select.done
 }
 
-declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32, i32, ptr, i32, i32, ptr) #0
+declare { i32, i1 } @runtime.chanSelect(ptr, ptr, i32 range(i32 0, 357913942), i32 range(i32 0, 357913942), ptr, i32 range(i32 0, 268435456), i32 range(i32 0, 268435456), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i1 @main.selectNonBlockingSend(ptr dereferenceable_or_null(40) %ch, i32 %value, ptr %context) unnamed_addr #1 {
+define hidden i1 @main.selectNonBlockingSend(ptr dereferenceable_or_null(44) %ch, i32 %value, ptr %context) unnamed_addr #1 {
 entry:
   %select.send.value = alloca i32, align 4
   store i32 %value, ptr %select.send.value, align 4
@@ -125,10 +129,10 @@ select.next:                                      ; preds = %entry
   ret i1 false
 }
 
-declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(40), ptr, ptr) #0
+declare i1 @runtime.chanTrySend(ptr dereferenceable_or_null(44), ptr captures(none), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden { i32, i1, i1 } @main.selectNonBlockingRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden { i32, i1, i1 } @main.selectNonBlockingRecv(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %select.recvbuf = alloca i32, align 4
   %stackalloc = alloca i8, align 1
@@ -150,10 +154,10 @@ select.next:                                      ; preds = %entry
   ret { i32, i1, i1 } zeroinitializer
 }
 
-declare { i1, i1 } @runtime.chanTryRecv(ptr dereferenceable_or_null(40), ptr, ptr) #0
+declare { i1, i1 } @runtime.chanTryRecv(ptr dereferenceable_or_null(44), ptr captures(none), ptr) #0
 
 ; Function Attrs: nounwind
-define hidden i1 @main.selectNonBlockingZeroSend(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden i1 @main.selectNonBlockingZeroSend(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %select.sent = call i1 @runtime.chanTrySend(ptr %ch, ptr null, ptr undef) #3
   br i1 %select.sent, label %select.body, label %select.next
@@ -166,7 +170,7 @@ select.next:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define hidden { i1, i1 } @main.selectNonBlockingZeroRecv(ptr dereferenceable_or_null(40) %ch, ptr %context) unnamed_addr #1 {
+define hidden { i1, i1 } @main.selectNonBlockingZeroRecv(ptr dereferenceable_or_null(44) %ch, ptr %context) unnamed_addr #1 {
 entry:
   %select.recv = call { i1, i1 } @runtime.chanTryRecv(ptr %ch, ptr null, ptr undef) #3
   %select.received = extractvalue { i1, i1 } %select.recv, 0
@@ -183,7 +187,7 @@ select.next:                                      ; preds = %entry
 }
 
 ; Function Attrs: nounwind
-define hidden { i32, i1 } @main.selectBlocking(ptr dereferenceable_or_null(40) %ch1, ptr dereferenceable_or_null(40) %ch2, ptr %context) unnamed_addr #1 {
+define hidden { i32, i1 } @main.selectBlocking(ptr dereferenceable_or_null(44) %ch1, ptr dereferenceable_or_null(44) %ch2, ptr %context) unnamed_addr #1 {
 entry:
   %select.block.alloca = alloca [2 x %runtime.channelOp], align 8
   %select.states.alloca = alloca [2 x %runtime.chanSelectState], align 8
@@ -194,10 +198,14 @@ entry:
   store ptr %ch1, ptr %select.states.alloca, align 4
   %select.states.alloca.repack4 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 4
   store ptr null, ptr %select.states.alloca.repack4, align 4
-  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  %select.states.alloca.repack6 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 8
+  store ptr null, ptr %select.states.alloca.repack6, align 4
+  %0 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
   store ptr %ch2, ptr %0, align 4
-  %.repack6 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 12
-  store ptr null, ptr %.repack6, align 4
+  %.repack8 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 16
+  store ptr null, ptr %.repack8, align 4
+  %.repack10 = getelementptr inbounds nuw i8, ptr %select.states.alloca, i32 20
+  store ptr null, ptr %.repack10, align 4
   call void @llvm.lifetime.start.p0(ptr nonnull %select.block.alloca)
   %select.result = call { i32, i1 } @runtime.chanSelect(ptr nonnull %select.recvbuf.alloca, ptr nonnull %select.states.alloca, i32 2, i32 2, ptr nonnull %select.block.alloca, i32 2, i32 2, ptr undef) #3
   call void @llvm.lifetime.end.p0(ptr nonnull %select.block.alloca)
@@ -231,7 +239,7 @@ select.next2:                                     ; preds = %select.next
   call void @runtime._panic(ptr nonnull @"reflect/types.type:basic:string", ptr nonnull @"main$pack", ptr undef) #3
   br label %unwind.return
 
-unwind.return:
+unwind.return:                                    ; preds = %select.next2
   ret { i32, i1 } undef
 }
 

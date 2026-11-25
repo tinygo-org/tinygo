@@ -4,8 +4,6 @@ import "internal/task"
 
 const schedulerDebug = false
 
-var timerQueue *timerNode
-
 // Simple logging, for debugging.
 func scheduleLog(msg string) {
 	if schedulerDebug {
@@ -27,29 +25,157 @@ func scheduleLogChan(msg string, ch *channel, t *task.Task) {
 	}
 }
 
-func timerQueueAdd(tn *timerNode) {
-	q := &timerQueue
-	for ; *q != nil; q = &(*q).next {
-		if tn.whenTicks() < (*q).whenTicks() {
-			// this will finish earlier than the next - insert here
+// timerHeap is a binary min-heap of timer nodes, ordered by timer.when and then
+// by seq so that timers with the same deadline keep their insertion order.
+type timerHeap struct {
+	nodes []*timerNode
+	seq   int64
+}
+
+func (h *timerHeap) peek() *timerNode {
+	if len(h.nodes) == 0 {
+		return nil
+	}
+	return h.nodes[0]
+}
+
+// push adds tn to the heap. A front node goes before all nodes with the same
+// deadline instead of after them.
+func (h *timerHeap) push(tn *timerNode, front bool) {
+	h.seq++
+	tn.seq = h.seq
+	if front {
+		tn.seq = -h.seq
+	}
+	tn.timer.node = tn
+	h.nodes = append(h.nodes, tn)
+	h.fix(len(h.nodes)-1, tn)
+}
+
+func (h *timerHeap) pop() *timerNode {
+	return h.removeAt(0)
+}
+
+// remove removes the queued node of t from the heap, if there is one.
+func (h *timerHeap) remove(t *timer) *timerNode {
+	tn := t.node
+	if tn == nil || tn.index >= len(h.nodes) || h.nodes[tn.index] != tn {
+		return nil
+	}
+	return h.removeAt(tn.index)
+}
+
+func (h *timerHeap) removeAt(i int) *timerNode {
+	tn := h.nodes[i]
+	last := len(h.nodes) - 1
+	moved := h.nodes[last]
+	h.nodes[last] = nil
+	h.nodes = h.nodes[:last]
+	if i != last {
+		h.fix(i, moved)
+	}
+	if tn.timer.node == tn {
+		tn.timer.node = nil
+	}
+	return tn
+}
+
+// before reports whether tn goes before other in the heap.
+func (tn *timerNode) before(other *timerNode) bool {
+	return tn.timer.when < other.timer.when || tn.timer.when == other.timer.when && tn.seq < other.seq
+}
+
+// fix places tn, which is not in the slice yet, at the hole at index i.
+// It moves up towards the root first and then down.
+func (h *timerHeap) fix(i int, tn *timerNode) {
+	nodes := h.nodes
+	for i > 0 {
+		p := nodes[(i-1)/2]
+		if p.before(tn) {
 			break
 		}
+		nodes[i] = p
+		p.index = i
+		i = (i - 1) / 2
 	}
-	tn.next = *q
-	*q = tn
+	for c := 2*i + 1; c < len(nodes); c = 2*i + 1 {
+		if c+1 < len(nodes) && nodes[c+1].before(nodes[c]) {
+			c++
+		}
+		if tn.before(nodes[c]) {
+			break
+		}
+		nodes[i] = nodes[c]
+		nodes[i].index = i
+		i = c
+	}
+	nodes[i] = tn
+	tn.index = i
+}
+
+// timerQueue is allocated by the first timerQueueAdd, so that programs
+// without timers can drop all timer code from the scheduler.
+var timerQueue *timerHeap
+
+func timerQueuePeek() *timerNode {
+	if timerQueue == nil {
+		return nil
+	}
+	return timerQueue.peek()
+}
+
+// timerQueueRoom returns the capacity needed to add one more node while
+// leaving room for extra nodes that are currently not in the queue.
+func timerQueueRoom(extra int) int {
+	if timerQueue == nil {
+		return 1 + extra
+	}
+	return len(timerQueue.nodes) + 1 + extra
+}
+
+// timerQueueFull reports whether the queue has less capacity than need.
+func timerQueueFull(need int) bool {
+	return timerQueue == nil || cap(timerQueue.nodes) < need
+}
+
+// timerQueueGrow installs h, an empty heap with spare capacity allocated by the
+// caller. It does not allocate, so it can run while holding a scheduler lock.
+func timerQueueGrow(h *timerHeap) {
+	if timerQueue == nil {
+		timerQueue = h
+		return
+	}
+	if cap(h.nodes) <= cap(timerQueue.nodes) {
+		// Another core already grew the queue.
+		return
+	}
+	h.nodes = append(h.nodes, timerQueue.nodes...)
+	h.seq = timerQueue.seq
+	timerQueue = h
+}
+
+func timerQueueAdd(tn *timerNode) {
+	if timerQueue == nil {
+		timerQueue = new(timerHeap)
+	}
+	timerQueue.push(tn, false)
+}
+
+func timerQueuePop() *timerNode {
+	return timerQueue.pop()
 }
 
 func timerQueueRemove(t *timer) *timerNode {
-	for q := &timerQueue; *q != nil; q = &(*q).next {
-		if (*q).timer == t {
-			scheduleLog("removed timer")
-			n := *q
-			*q = (*q).next
-			return n
-		}
+	if timerQueue == nil {
+		return nil
 	}
-	scheduleLog("did not remove timer")
-	return nil
+	n := timerQueue.remove(t)
+	if n != nil {
+		scheduleLog("removed timer")
+	} else {
+		scheduleLog("did not remove timer")
+	}
+	return n
 }
 
 // firingTimers is a list of timer nodes whose callback is currently running.
@@ -80,12 +206,20 @@ func firingTimersRemove(tn *timerNode) {
 }
 
 // firingTimerStop marks a currently-firing timer as stopped, so that its
-// callback will not re-add it to the queue. It returns whether the timer is
-// currently firing. The caller must hold the scheduler's timer lock.
+// callback will not re-add it to the queue. It returns whether the timer was
+// firing and not already stopped. The caller must hold the scheduler's timer lock.
 func firingTimerStop(tim *timer) bool {
 	for tn := firingTimers; tn != nil; tn = tn.firingNext {
 		if tn.timer == tim {
+			if tn.stopped {
+				// Already stopped by an earlier call and still waiting
+				// for its callback to finish: it is no longer active.
+				return false
+			}
 			tn.stopped = true
+			if tim.isChan {
+				tim.suppressedCallback = true
+			}
 			return true
 		}
 	}

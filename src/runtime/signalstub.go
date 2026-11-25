@@ -1,9 +1,8 @@
-//go:build tinygo.wasm || baremetal
+//go:build tinygo.wasm || baremetal || windows
 
 package runtime
 
-// Some platforms don't support Unix signals (and never will), so we need to
-// stub the signal functions.
+// Stub signal delivery on targets where TinyGo has no signal handler.
 
 //go:linkname signal_disable os/signal.signal_disable
 func signal_disable(uint32) {}
@@ -13,6 +12,9 @@ func signal_enable(uint32) {}
 
 //go:linkname signal_ignore os/signal.signal_ignore
 func signal_ignore(uint32) {}
+
+//go:linkname signal_ignored os/signal.signal_ignored
+func signal_ignored(uint32) bool { return false }
 
 //go:linkname signal_waitUntilIdle os/signal.signalWaitUntilIdle
 func signal_waitUntilIdle() {}

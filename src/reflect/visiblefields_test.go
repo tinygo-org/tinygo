@@ -20,6 +20,9 @@ var fieldsTests = []struct {
 	val      any
 	expect   []structField
 }{{
+	testName: "EmptyStruct",
+	val:      struct{}{},
+}, {
 	testName: "SimpleStruct",
 	val: struct {
 		A int
@@ -35,6 +38,15 @@ var fieldsTests = []struct {
 	}, {
 		name:  "C",
 		index: []int{2},
+	}},
+}, {
+	testName: "TaggedStruct",
+	val: struct {
+		A string `json:"a"`
+	}{},
+	expect: []structField{{
+		name:  "A",
+		index: []int{0},
 	}},
 }, {
 	testName: "NonEmbeddedStructMember",
@@ -296,6 +308,9 @@ func TestFields(t *testing.T) {
 		t.Run(test.testName, func(t *testing.T) {
 			typ := TypeOf(test.val)
 			fields := VisibleFields(typ)
+			if fields == nil {
+				t.Fatal("VisibleFields returned nil")
+			}
 			if got, want := len(fields), len(test.expect); got != want {
 				t.Fatalf("unexpected field count; got %d want %d", got, want)
 			}
@@ -303,17 +318,13 @@ func TestFields(t *testing.T) {
 			for j, field := range fields {
 				expect := test.expect[j]
 				t.Logf("field %d: %s", j, expect.name)
-				gotField := typ.FieldByIndex(field.Index)
-				// Unfortunately, FieldByIndex does not return
-				// a field with the same index that we passed in,
-				// so we set it to the expected value so that
-				// it can be compared later with the result of FieldByName.
-				gotField.Index = field.Index
 				expectField := typ.FieldByIndex(expect.index)
-				// ditto.
 				expectField.Index = expect.index
-				if !DeepEqual(gotField, expectField) {
-					t.Fatalf("unexpected field result\ngot %#v\nwant %#v", gotField, expectField)
+				if got, want := field.Type, expectField.Type; got != want {
+					t.Fatalf("unexpected type for field %q: got %T want %T", expect.name, got, want)
+				}
+				if !DeepEqual(field, expectField) {
+					t.Fatalf("unexpected field result\ngot %#v\nwant %#v", field, expectField)
 				}
 
 				// Sanity check that we can actually access the field by the
@@ -327,6 +338,22 @@ func TestFields(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestVisibleFieldsType(t *testing.T) {
+	typ := TypeFor[struct {
+		A string `json:"a"`
+	}]()
+	fields := VisibleFields(typ)
+	if got, want := len(fields), 1; got != want {
+		t.Fatalf("unexpected field count: got %d want %d", got, want)
+	}
+	if got, want := fields[0].Type, typ.Field(0).Type; got != want {
+		t.Fatalf("unexpected field type: got %T want %T", got, want)
+	}
+	if got, want := fields[0].Type.Kind().String(), "string"; got != want {
+		t.Fatalf("unexpected field kind: got %q want %q", got, want)
 	}
 }
 

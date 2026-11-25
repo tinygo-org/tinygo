@@ -118,3 +118,41 @@ func selectLargeChannel(ch chan largeValue, value largeValue) byte {
 		return result[len(result)-1]
 	}
 }
+
+func sendZeroLargeValue(ch chan largeValue) {
+	ch <- largeValue{}
+}
+
+func selectZeroLargeValue(ch chan largeValue) bool {
+	select {
+	case ch <- largeValue{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func storeZeroLargeMap(values map[largeValue]largeValue) {
+	values[largeValue{}] = largeValue{}
+}
+
+func lookupZeroLargeMap(values map[largeValue]largeValue) byte {
+	result := values[largeValue{}]
+	return result[0]
+}
+
+func zeroLargeInterface() any {
+	return largeValue{}
+}
+
+func isZeroLargeValue(value largeValue) bool {
+	return value == largeValue{}
+}
+
+func indexZeroLargeValue(i int) byte {
+	return largeValue{}[i]
+}
+
+func zeroLargeReceiver() byte {
+	return largeReceiver(largeValue{}).readLargeValue(largeValue{})
+}

@@ -6,7 +6,10 @@
 	"features": "+32bit,+a,+c,+m,+zaamo,+zalrsc,+zmmul,-relax",
 	"build-tags": [
 		"esp32c6",
-		"esp"
+		"esp",
+		"machine.uart",
+		"machine.i2c",
+		"espradio"
 	],
 	"serial": "usb",
 	"rtlib": "compiler-rt",

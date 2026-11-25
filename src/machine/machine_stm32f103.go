@@ -163,9 +163,9 @@ func (p Pin) Configure(config PinConfig) {
 	pin := uint8(p) % 16
 	pos := (pin % 8) * 4
 	if pin < 8 {
-		port.CRL.ReplaceBits(uint32(config.Mode), 0xf, pos)
+		port.CRL.ReplaceBits(uint32(config.Mode)&0xf, 0xf, pos)
 	} else {
-		port.CRH.ReplaceBits(uint32(config.Mode), 0xf, pos)
+		port.CRH.ReplaceBits(uint32(config.Mode)&0xf, 0xf, pos)
 	}
 
 	// If configured for input pull-up or pull-down, set ODR

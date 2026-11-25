@@ -3,6 +3,7 @@
 		"riscv32"
 	],
 	"features": "+32bit,+a,+c,+m,+zaamo,+zalrsc,+zihintpause,+zmmul,-relax",
+	"arch": "rv32imaczihintpause",
 	"build-tags": [
 		"virt",
 		"qemu"
@@ -10,7 +11,6 @@
 	"scheduler": "cores",
 	"default-stack-size": 16384,
 	"cflags": [
-		"-march=rv32imaczihintpause",
 		"-DTINYGO_CORES=4"
 	],
 	"ldflags": [

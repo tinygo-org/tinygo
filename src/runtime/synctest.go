@@ -10,13 +10,13 @@ const synctestBaseTime = 946684800000000000
 var synctestEnabled task.Uint32
 
 func synctestIsEnabled() bool {
-	return synctestEnabled.Load() != 0
+	return synctestSupported && synctestEnabled.Load() != 0
 }
 
 type synctestBubble struct {
 	lock synctestLock
 
-	timers       *timerNode
+	timers       timerHeap
 	firingTimers *timerNode
 
 	root   *task.Task
@@ -53,7 +53,7 @@ func (bubble *synctestBubble) wakeLocked() *task.Task {
 		return nil
 	}
 	bubble.active++
-	if bubble.timers != nil && bubble.timers.timer.when <= bubble.now {
+	if bubble.timerDueLocked() {
 		if bubble.rootSleeping {
 			bubble.rootSleeping = false
 			return bubble.root
@@ -93,7 +93,13 @@ func (bubble *synctestBubble) removeFiringTimerLocked(tn *timerNode) {
 func (bubble *synctestBubble) stopFiringTimerLocked(tim *timer) {
 	for tn := bubble.firingTimers; tn != nil; tn = tn.firingNext {
 		if tn.timer == tim {
+			if tn.stopped {
+				return
+			}
 			tn.stopped = true
+			if tim.isChan {
+				tim.suppressedCallback = true
+			}
 			return
 		}
 	}
@@ -127,7 +133,7 @@ func (bubble *synctestBubble) queueTimer(tn *timerNode) bool {
 func (bubble *synctestBubble) finishTimer(tn *timerNode) {
 	bubble.lock.Lock()
 	bubble.removeFiringTimerLocked(tn)
-	if tn.stopped {
+	if tn.stopped || tn.timer.stopped {
 		bubble.lock.Unlock()
 		return
 	}
@@ -140,6 +146,11 @@ func (bubble *synctestBubble) finishTimer(tn *timerNode) {
 		next = 1<<63 - 1
 	}
 	tn.timer.when = next
+	if tn.timer.isChan && tn.timer.blocked == 0 {
+		tn.timer.pausedNode = tn
+		bubble.lock.Unlock()
+		return
+	}
 	bubble.addTimerLocked(tn)
 	bubble.lock.Unlock()
 }
@@ -147,32 +158,24 @@ func (bubble *synctestBubble) finishTimer(tn *timerNode) {
 func (bubble *synctestBubble) addTimerLocked(tn *timerNode) {
 	bubble.timerSeq++
 	insertBeforeEqual := (bubble.timerSeq/2)&1 != 0
-	queue := &bubble.timers
-	for *queue != nil {
-		if (*queue).timer.when > tn.timer.when {
-			break
-		}
-		if insertBeforeEqual && (*queue).timer.when == tn.timer.when {
-			break
-		}
-		queue = &(*queue).next
-	}
-	tn.next = *queue
-	*queue = tn
+	bubble.timers.push(tn, insertBeforeEqual)
 }
 
-func (bubble *synctestBubble) removeTimer(tim *timer) *timerNode {
+func (bubble *synctestBubble) timerDueLocked() bool {
+	next := bubble.timers.peek()
+	return next != nil && next.timer.when <= bubble.now
+}
+
+func (bubble *synctestBubble) removeTimer(tim *timer, stopFiring bool) *timerNode {
 	bubble.lock.Lock()
-	defer bubble.lock.Unlock()
-	for queue := &bubble.timers; *queue != nil; queue = &(*queue).next {
-		if (*queue).timer == tim {
-			node := *queue
-			*queue = node.next
-			node.next = nil
-			return node
-		}
+	if node := bubble.timers.remove(tim); node != nil {
+		bubble.lock.Unlock()
+		return node
 	}
-	bubble.stopFiringTimerLocked(tim)
+	if stopFiring {
+		bubble.stopFiringTimerLocked(tim)
+	}
+	bubble.lock.Unlock()
 	return nil
 }
 
@@ -398,6 +401,9 @@ func synctestBlock(t *task.Task) {
 
 //go:linkname synctest_run internal/synctest.Run
 func synctest_run(f func()) {
+	if !synctestSupported {
+		panic("synctest is not supported on bare metal")
+	}
 	synctestEnabled.Store(1)
 	root := task.Current()
 	if root.SynctestBubble != nil {
@@ -430,11 +436,9 @@ func synctest_run(f func()) {
 			return
 		}
 		if bubble.running == 0 && bubble.active == 0 {
-			dueTimer := bubble.timers != nil && bubble.timers.timer.when <= bubble.now
-			if bubble.timers != nil && !bubble.done && (dueTimer || bubble.waiter == nil) {
-				timer := bubble.timers
-				bubble.timers = timer.next
-				timer.next = nil
+			dueTimer := bubble.timerDueLocked()
+			if bubble.timers.peek() != nil && !bubble.done && (dueTimer || bubble.waiter == nil) {
+				timer := bubble.timers.pop()
 				bubble.addFiringTimerLocked(timer)
 				bubble.active++
 				if timer.timer.when > bubble.now {
@@ -499,7 +503,7 @@ func synctest_wait() {
 	bubble.waiting = true
 	current.SynctestBlocked = true
 	bubble.running--
-	dueTimer := bubble.timers != nil && bubble.timers.timer.when <= bubble.now
+	dueTimer := bubble.timerDueLocked()
 	if bubble.running == 0 && bubble.active == 0 && !dueTimer {
 		current.SynctestBlocked = false
 		bubble.running++

@@ -66,11 +66,11 @@ func addTimer(tim *timerNode) {
 	runtimePanic(errTimersUnsupported)
 }
 
-func reAddTimer(tn *timerNode) {
+func reAddTimer(tn *timerNode, delta int64) {
 	runtimePanic(errTimersUnsupported)
 }
 
-func removeTimer(tim *timer) *timerNode {
+func removeTimer(tim *timer, stopFiring bool) *timerNode {
 	runtimePanic(errTimersUnsupported)
 	return nil
 }
@@ -93,6 +93,14 @@ func lockAtomics() interrupt.State {
 }
 
 func unlockAtomics(mask interrupt.State) {
+	interrupt.Restore(mask)
+}
+
+func lockTimers() interrupt.State {
+	return interrupt.Disable()
+}
+
+func unlockTimers(mask interrupt.State) {
 	interrupt.Restore(mask)
 }
 

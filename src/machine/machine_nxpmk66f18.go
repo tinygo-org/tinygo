@@ -202,7 +202,7 @@ func (p Pin) reg() (*nxp.GPIO_Type, *volatile.Register32, uint8) {
 		gpio, pcr = nxp.GPIOC, nxp.PORTC
 	case 3:
 		gpio, pcr = nxp.GPIOD, nxp.PORTD
-	case 5:
+	case 4:
 		gpio, pcr = nxp.GPIOE, nxp.PORTE
 	default:
 		panic("invalid pin number")

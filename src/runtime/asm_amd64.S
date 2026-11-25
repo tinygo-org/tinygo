@@ -40,6 +40,7 @@ _tinygo_longjmp:
     // Note: the code we jump to assumes rax is set to a non-zero value if we
     // jump from here, so we use rax as the temporary value for jumpPC.
     movq 0(%rdi), %rsp // jumpSP
+    movq 16(%rdi), %rbp // frame pointer
     movq 8(%rdi), %rax // jumpPC
     jmpq *%rax
 

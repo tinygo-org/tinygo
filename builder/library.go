@@ -136,17 +136,21 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	// Note: -fdebug-prefix-map is necessary to make the output archive
 	// reproducible. Otherwise the temporary directory is stored in the archive
 	// itself, which varies each run.
-	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+compileopts.ClangTriple(target), "-fdebug-prefix-map="+dir+"="+remapDir)
+	debugPrefixMap := "-fdebug-prefix-map=" + dir + "=" + remapDir
+	if config.TrimPath() {
+		debugPrefixMap = compileopts.DebugPrefixMap(dir, remapDir)
+	}
+	args := append(l.cflags(target, headerPath), "-c", "-Oz", "-gdwarf-4", "-ffunction-sections", "-fdata-sections", "-Wno-macro-redefined", "--target="+compileopts.LLVMTriple(target), debugPrefixMap)
 	resourceDir := goenv.ClangResourceDir(config.TrimPath())
 	if config.TrimPath() {
 		args = append(args,
-			"-ffile-prefix-map="+goenv.Get("TINYGOROOT")+"="+config.CSourcePath("github.com/tinygo-org/tinygo"),
-			"-ffile-prefix-map="+goenv.Get("GOCACHE")+"="+config.CSourcePath("tinygo-cache"),
+			compileopts.FilePrefixMap(goenv.Get("TINYGOROOT"), config.CSourcePath("github.com/tinygo-org/tinygo")),
+			compileopts.FilePrefixMap(goenv.Get("GOCACHE"), config.CSourcePath("tinygo-cache")),
 			"-fdebug-compilation-dir=.",
 			"-gno-record-command-line",
 		)
 		if resourceDir != "" {
-			args = append(args, "-ffile-prefix-map="+resourceDir+"="+config.CSourcePath("clang"))
+			args = append(args, compileopts.FilePrefixMap(resourceDir, config.CSourcePath("clang")))
 		}
 	}
 	if resourceDir != "" {
@@ -167,6 +171,9 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	if config.ABI() != "" {
 		args = append(args, "-mabi="+config.ABI())
 	}
+	if config.Target.Arch != "" {
+		args = append(args, "-march="+config.Target.Arch)
+	}
 	switch compileopts.CanonicalArchName(target) {
 	case "arm":
 		if strings.Split(target, "-")[2] == "linux" {
@@ -181,9 +188,7 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 		// double.
 		args = append(args, "-mdouble=64")
 	case "riscv32":
-		args = append(args, "-march="+riscvMarch(config, "rv32imac"), "-fforce-enable-int128")
-	case "riscv64":
-		args = append(args, "-march="+riscvMarch(config, "rv64gc"))
+		args = append(args, "-fforce-enable-int128")
 	case "mips":
 		args = append(args, "-fno-pic")
 	}
@@ -310,18 +315,4 @@ func (l *Library) load(config *compileopts.Config, tmpdir string) (job *compileJ
 	return job, func() {
 		once.Do(unlock)
 	}, nil
-}
-
-// riscvMarch returns the -march value for RISC-V library compilation.
-// It extracts the value from the target's cflags if present, otherwise
-// falls back to the provided default. This ensures libraries are compiled
-// with the correct ISA extensions for each target (e.g. rv32imc for
-// ESP32-C3 which lacks the atomic extension).
-func riscvMarch(config *compileopts.Config, defaultMarch string) string {
-	for _, flag := range config.Target.CFlags {
-		if strings.HasPrefix(flag, "-march=") {
-			return flag[len("-march="):]
-		}
-	}
-	return defaultMarch
 }

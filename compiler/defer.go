@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
@@ -69,8 +69,8 @@ func (b *builder) deferInitFunc() {
 		// The field index must match the DeferPtr field in runtime.deferFrame,
 		// defined in src/runtime/panic.go.
 		b.deferPtr = b.CreateInBoundsGEP(deferFrameType, b.deferFrame, []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), 6, false), // DeferPtr field
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, 6, false), // DeferPtr field
 		}, "deferPtr")
 		stackPointer := b.readStackPointer()
 		b.createRuntimeCall("setupDeferFrame", []llvm.Value{b.deferFrame, stackPointer}, "")
@@ -81,7 +81,7 @@ func (b *builder) deferInitFunc() {
 	} else {
 		// Create defer list pointer.
 		b.deferPtr = b.CreateAlloca(b.dataPtrType, "deferPtr")
-		b.CreateStore(llvm.ConstPointerNull(b.dataPtrType), b.deferPtr)
+		b.CreateStore(b.dataPtrNull, b.deferPtr)
 	}
 }
 
@@ -113,7 +113,7 @@ func (b *builder) createLandingPad() {
 // continuing normally instead of resuming after a longjmp.
 func (b *builder) createCheckpoint(ptr llvm.Value) llvm.Value {
 	if b.archFamily() == "xtensa" {
-		fnType := llvm.FunctionType(b.ctx.Int32Type(), []llvm.Type{b.dataPtrType}, false)
+		fnType := llvm.FunctionType(b.i32, []llvm.Type{b.dataPtrType}, false)
 		fn := b.mod.NamedFunction("setjmp")
 		if fn.IsNil() {
 			fn = llvm.AddFunction(b.mod, "setjmp", fnType)
@@ -121,7 +121,7 @@ func (b *builder) createCheckpoint(ptr llvm.Value) llvm.Value {
 		}
 		result := b.CreateCall(fnType, fn, []llvm.Value{ptr}, "setjmp")
 		result.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("returns_twice"), 0))
-		return b.CreateICmp(llvm.IntEQ, result, llvm.ConstInt(b.ctx.Int32Type(), 0, false), "setjmp.result")
+		return b.CreateICmp(llvm.IntEQ, result, llvm.ConstInt(b.i32, 0, false), "setjmp.result")
 	}
 
 	// Construct inline assembly equivalents of setjmp.
@@ -152,9 +152,12 @@ movl %ebp, 20(%ebx)
 		asmString = `
 leaq 1f(%rip), %rax
 movq %rax, 8(%rbx)
+movq %rbp, 16(%rbx)
 xorq %rax, %rax
 1:`
-		constraints = "={rax},{rbx},~{rbx},~{rcx},~{rdx},~{rsi},~{rdi},~{rbp},~{r8},~{r9},~{r10},~{r11},~{r12},~{r13},~{r14},~{r15},~{xmm0},~{xmm1},~{xmm2},~{xmm3},~{xmm4},~{xmm5},~{xmm6},~{xmm7},~{xmm8},~{xmm9},~{xmm10},~{xmm11},~{xmm12},~{xmm13},~{xmm14},~{xmm15},~{xmm16},~{xmm17},~{xmm18},~{xmm19},~{xmm20},~{xmm21},~{xmm22},~{xmm23},~{xmm24},~{xmm25},~{xmm26},~{xmm27},~{xmm28},~{xmm29},~{xmm30},~{xmm31},~{fpsr},~{fpcr},~{flags},~{dirflag},~{memory}"
+		// rbp is saved and restored by tinygo_longjmp rather than clobbered,
+		// because it is reserved when the function keeps a frame pointer.
+		constraints = "={rax},{rbx},~{rbx},~{rcx},~{rdx},~{rsi},~{rdi},~{r8},~{r9},~{r10},~{r11},~{r12},~{r13},~{r14},~{r15},~{xmm0},~{xmm1},~{xmm2},~{xmm3},~{xmm4},~{xmm5},~{xmm6},~{xmm7},~{xmm8},~{xmm9},~{xmm10},~{xmm11},~{xmm12},~{xmm13},~{xmm14},~{xmm15},~{xmm16},~{xmm17},~{xmm18},~{xmm19},~{xmm20},~{xmm21},~{xmm22},~{xmm23},~{xmm24},~{xmm25},~{xmm26},~{xmm27},~{xmm28},~{xmm29},~{xmm30},~{xmm31},~{fpsr},~{fpcr},~{flags},~{dirflag},~{memory}"
 		// This list doesn't include AVX/AVX512 registers because TinyGo
 		// doesn't currently enable support for AVX instructions.
 	case "arm":
@@ -179,26 +182,24 @@ movs r0, #0`
 		asmString = `
 adr x2, 1f
 str x2, [x1, #8]
+str x29, [x1, #16]
 mov x0, #0
 1:
 `
 		constraints = "={x0},{x1},~{x1},~{x2},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{lr},~{q0},~{q1},~{q2},~{q3},~{q4},~{q5},~{q6},~{q7},~{q8},~{q9},~{q10},~{q11},~{q12},~{q13},~{q14},~{q15},~{q16},~{q17},~{q18},~{q19},~{q20},~{q21},~{q22},~{q23},~{q24},~{q25},~{q26},~{q27},~{q28},~{q29},~{q30},~{nzcv},~{ffr},~{memory}"
+		// The frame pointer is saved and restored by tinygo_longjmp, as it is
+		// reserved wherever frame pointers are kept.
 		if b.GOOS != "darwin" && b.GOOS != "windows" {
-			// These registers cause the following warning when compiling for
-			// MacOS and Windows:
-			//     warning: inline asm clobber list contains reserved registers:
-			//     X18, FP
-			//     Reserved registers on the clobber list may not be preserved
-			//     across the asm statement, and clobbering them may lead to
-			//     undefined behaviour.
-			constraints += ",~{x18},~{fp}"
+			// x18 is reserved on MacOS and Windows, and clobbering it there
+			// warns that it may not be preserved across the asm statement.
+			constraints += ",~{x18}"
 		}
 		// TODO: SVE registers, which we don't use in TinyGo at the moment.
 	case "avr":
 		// Note: the Y register (R28:R29) is a fixed register and therefore
 		// needs to be saved manually. TODO: do this only once per function with
 		// a defer frame, not for every call.
-		resultType = b.ctx.Int8Type()
+		resultType = b.i8
 		asmString = `
 ldi r24, pm_lo8(1f)
 ldi r25, pm_hi8(1f)
@@ -397,20 +398,14 @@ func (l *llvmValueList) append(values ...llvm.Value) {
 	}
 }
 
-func (l *llvmValueList) appendSSAValues(values []ssa.Value, lower func(ssa.Value) llvm.Value) {
-	for _, value := range values {
-		l.append(lower(value))
-	}
-}
-
 func (b *builder) loadDeferredCallParams(structType llvm.Type, ptr llvm.Value) []llvm.Value {
 	fieldTypes := structType.StructElementTypes()
 	values := make([]llvm.Value, 0, len(fieldTypes)-2)
-	zero := llvm.ConstInt(b.ctx.Int32Type(), 0, false)
+	zero := llvm.ConstInt(b.i32, 0, false)
 	for i := 2; i < len(fieldTypes); i++ {
 		fieldPtr := b.CreateInBoundsGEP(structType, ptr, []llvm.Value{
 			zero,
-			llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+			llvm.ConstInt(b.i32, uint64(i), false),
 		}, "gep")
 		values = append(values, b.CreateLoad(fieldTypes[i], fieldPtr, "param"))
 	}
@@ -420,6 +415,8 @@ func (b *builder) loadDeferredCallParams(structType llvm.Type, ptr llvm.Value) [
 // createDefer emits a single defer instruction, to be run when this function
 // returns.
 func (b *builder) createDefer(instr *ssa.Defer) {
+	b.markRuntimeFeatureUse(&instr.Call)
+
 	// The pointer to the previous defer struct, which we will replace to
 	// make a linked list.
 	next := b.CreateLoad(b.dataPtrType, b.deferPtr, "defer.next")
@@ -456,7 +453,7 @@ func (b *builder) createDefer(instr *ssa.Defer) {
 		// Collect all values to be put in the struct (starting with
 		// runtime._defer fields).
 		values = newLLVMValueList(callback, next)
-		exported := b.getFunctionInfo(callee).exported
+		exported := b.getFunctionInfo(callee).isExported()
 		abi := b.getFunctionABI(callee.Signature, exported)
 		values.append(b.getCallArguments(instr.Call.Args, abi.params)...)
 
@@ -592,7 +589,7 @@ func (b *builder) createRunDefers() {
 	//     for stack != nil {
 	b.SetInsertPointAtEnd(loophead)
 	deferData := b.CreateLoad(b.dataPtrType, b.deferPtr, "")
-	stackIsNil := b.CreateICmp(llvm.IntEQ, deferData, llvm.ConstPointerNull(deferData.Type()), "stackIsNil")
+	stackIsNil := b.CreateICmp(llvm.IntEQ, deferData, b.dataPtrNull, "stackIsNil")
 	b.CreateCondBr(stackIsNil, end, loop)
 
 	// Create loop body:
@@ -601,14 +598,14 @@ func (b *builder) createRunDefers() {
 	//     switch stack.callback {
 	b.SetInsertPointAtEnd(loop)
 	nextStackGEP := b.CreateInBoundsGEP(deferType, deferData, []llvm.Value{
-		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(b.ctx.Int32Type(), 1, false), // .next field
+		llvm.ConstInt(b.i32, 0, false),
+		llvm.ConstInt(b.i32, 1, false), // .next field
 	}, "stack.next.gep")
 	nextStack := b.CreateLoad(b.dataPtrType, nextStackGEP, "stack.next")
 	b.CreateStore(nextStack, b.deferPtr)
 	gep := b.CreateInBoundsGEP(deferType, deferData, []llvm.Value{
-		llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-		llvm.ConstInt(b.ctx.Int32Type(), 0, false), // .callback field
+		llvm.ConstInt(b.i32, 0, false),
+		llvm.ConstInt(b.i32, 0, false), // .callback field
 	}, "callback.gep")
 	callback := b.CreateLoad(b.uintptrType, gep, "callback")
 	sw := b.CreateSwitch(callback, unreachable, len(b.allDeferFuncs))
@@ -672,7 +669,7 @@ func (b *builder) createRunDefers() {
 				// Add the context parameter. An interface call cannot also be a
 				// closure but we have to supply the parameter anyway for platforms
 				// with a strict calling convention.
-				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
+				forwardParams = append(forwardParams, b.dataPtrUndef)
 			}
 			forwardParams = b.prependIndirectResult(callback.Signature(), false, forwardParams, "defer.result")
 
@@ -683,7 +680,7 @@ func (b *builder) createRunDefers() {
 
 			// Get the real defer struct type and cast to it.
 			valueTypes := []llvm.Type{b.uintptrType, b.dataPtrType}
-			exported := b.getFunctionInfo(callback).exported
+			exported := b.getFunctionInfo(callback).isExported()
 			abi := b.getFunctionABI(callback.Signature, exported)
 			valueTypes = b.appendStoredParamTypes(valueTypes, abi.params)
 			deferredCallType := b.ctx.StructType(valueTypes, false)
@@ -696,7 +693,7 @@ func (b *builder) createRunDefers() {
 			if !exported {
 				// Add the context parameter. We know it is ignored by the receiving
 				// function, but we have to pass one anyway.
-				forwardParams = append(forwardParams, llvm.Undef(b.dataPtrType))
+				forwardParams = append(forwardParams, b.dataPtrUndef)
 			}
 			forwardParams = b.prependIndirectResult(callback.Signature, exported, forwardParams, "defer.result")
 

@@ -5,7 +5,7 @@
 clean: ## Remove build directory
 	@rm -rf build
 
-FMT_PATHS = ./*.go builder cgo/*.go compiler interp loader src transform
+FMT_PATHS = ./*.go builder cgo/*.go compiler fix interp loader src transform
 fmt: ## Reformat source
 	@gofmt -l -w $(FMT_PATHS)
 fmt-check: ## Warn if any source needs reformatting
@@ -17,7 +17,7 @@ WASM_TOOLS_MODULE=go.bytecodealliance.org
 .PHONY: wasi-syscall
 wasi-syscall: wasi-cm
 	rm -rf ./src/internal/wasi/*
-	go run $(WASM_TOOLS_MODULE)/cmd/wit-bindgen-go generate --versioned -o ./src/internal -p internal --cm internal/cm ./lib/wasi-cli/wit
+	go tool $(WASM_TOOLS_MODULE)/cmd/wit-bindgen-go generate --versioned -o ./src/internal -p internal --cm internal/cm -w wasi:cli/command@0.2.12 ./lib/wasi-libc/wasi/p2/wit
 
 # Copy package cm into src/internal/cm
 .PHONY: wasi-cm
@@ -34,7 +34,7 @@ check-nodejs-version:
 	@if ! command -v node 2>&1 >/dev/null; then echo "Install NodeJS version ${MIN_NODEJS_VERSION}+ to run tests."; exit 1; fi
 
 	@# Check whether the version is high enough.
-	@if [ "`node -v | sed 's/v\([0-9]\+\).*/\\1/g'`" -lt $(MIN_NODEJS_VERSION) ]; then echo "Install NodeJS version $(MIN_NODEJS_VERSION)+ to run tests."; exit 1; fi
+	@if [ "$$(node -p 'process.versions.node.split(".")[0]')" -lt $(MIN_NODEJS_VERSION) ]; then echo "Install NodeJS version $(MIN_NODEJS_VERSION)+ to run tests."; exit 1; fi
 
 tinygo: ## Build the TinyGo compiler
 	@if [ ! -f "$(LLVM_BUILDDIR)/bin/llvm-config" ]; then echo "Fetch and build LLVM first by running:"; echo "  $(MAKE) llvm-source"; echo "  $(MAKE) $(LLVM_BUILDDIR)"; exit 1; fi

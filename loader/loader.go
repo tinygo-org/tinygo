@@ -9,21 +9,24 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/parser"
+	"go/printer"
 	"go/scanner"
 	"go/token"
 	"go/types"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
-	"github.com/google/shlex"
 	"github.com/tinygo-org/tinygo/cgo"
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
@@ -31,10 +34,15 @@ import (
 
 // Program holds all packages and some metadata about the program as a whole.
 type Program struct {
-	config      *compileopts.Config
-	typeChecker types.Config
-	goroot      string // synthetic GOROOT
-	workingDir  string
+	config               *compileopts.Config
+	typeChecker          types.Config
+	goroot               string // synthetic GOROOT
+	workingDir           string
+	analysis             bool
+	overlay              map[string][]byte
+	sources              map[string][]byte
+	rewritten            map[string]bool
+	typecheckConcurrency chan struct{}
 
 	Packages map[string]*Package
 	sorted   []*Package
@@ -49,12 +57,15 @@ type Program struct {
 
 // PackageJSON is a subset of the JSON struct returned from `go list`.
 type PackageJSON struct {
-	Dir        string
-	ImportPath string
-	Name       string
-	ForTest    string
-	Root       string
-	Module     struct {
+	Dir            string
+	ImportPath     string
+	Name           string
+	ForTest        string
+	Root           string
+	Standard       bool
+	DepOnly        bool
+	DefaultGODEBUG string
+	Module         struct {
 		Path      string
 		Main      bool
 		Dir       string
@@ -67,6 +78,7 @@ type PackageJSON struct {
 	GoFiles  []string
 	CgoFiles []string
 	CFiles   []string
+	CXXFiles []string
 
 	// Embedded files
 	EmbedFiles []string
@@ -83,6 +95,17 @@ type PackageJSON struct {
 	}
 }
 
+// PackageJSONFlag returns a go list -json flag naming only the fields of
+// PackageJSON. Plain -json makes go1.28 run cgo to compute Stale (#6357).
+func PackageJSONFlag() string {
+	t := reflect.TypeFor[PackageJSON]()
+	names := make([]string, t.NumField())
+	for i := range names {
+		names[i] = t.Field(i).Name
+	}
+	return "-json=" + strings.Join(names, ",")
+}
+
 // Package holds a loaded package, its imports, and its parsed files.
 type Package struct {
 	PackageJSON
@@ -91,6 +114,7 @@ type Package struct {
 	Files        []*ast.File
 	FileHashes   map[string][]byte
 	CFlags       []string // CFlags used during CGo preprocessing (only set if CGo is used)
+	CXXFlags     []string // flags used to compile C++ files
 	CGoHeaders   []string // text above 'import "C"' lines
 	EmbedGlobals map[string][]*EmbedFile
 	Pkg          *types.Package
@@ -109,6 +133,10 @@ type EmbedFile struct {
 // package). Call .Parse() afterwards to parse all Go files (including CGo
 // processing, if necessary).
 func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config) (*Program, error) {
+	return load(config, []string{inputPkg}, typeChecker, false, nil)
+}
+
+func load(config *compileopts.Config, inputs []string, typeChecker types.Config, analysis bool, overlay map[string][]byte) (*Program, error) {
 	goroot, err := GetCachedGoroot(config)
 	if err != nil {
 		return nil, err
@@ -122,30 +150,51 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 			return nil, err
 		}
 	}
+	if config.TestConfig.StandardPackage {
+		wd = filepath.Join(goroot, "src")
+	}
 	p := &Program{
-		config:      config,
-		typeChecker: typeChecker,
-		goroot:      goroot,
-		workingDir:  wd,
-		Packages:    make(map[string]*Package),
-		fset:        token.NewFileSet(),
+		config:               config,
+		typeChecker:          typeChecker,
+		goroot:               goroot,
+		workingDir:           wd,
+		Packages:             make(map[string]*Package),
+		fset:                 token.NewFileSet(),
+		analysis:             analysis,
+		overlay:              overlay,
+		sources:              make(map[string][]byte),
+		rewritten:            make(map[string]bool),
+		typecheckConcurrency: config.Options.Semaphore,
+	}
+	if p.typecheckConcurrency == nil {
+		p.typecheckConcurrency = make(chan struct{}, runtime.GOMAXPROCS(0))
 	}
 
 	// List the dependencies of this package, in raw JSON format.
-	extraArgs := []string{"-json", "-deps", "-e"}
+	extraArgs := []string{PackageJSONFlag(), "-deps", "-e"}
 	if config.TestConfig.CompileTestBinary {
 		extraArgs = append(extraArgs, "-test")
 	}
-	cmd, err := List(config, extraArgs, []string{inputPkg})
+	cleanup, overlayFlag, err := analysisOverlay(goroot, overlay)
 	if err != nil {
 		return nil, err
+	}
+	defer cleanup()
+	extraArgs = append(extraArgs, overlayFlag...)
+	cmd, err := List(config, extraArgs, inputs)
+	if err != nil {
+		return nil, err
+	}
+	if config.TestConfig.StandardPackage {
+		cmd.Dir = wd
+		cmd.Env = append(cmd.Env, "GOWORK=off")
 	}
 	buf := &bytes.Buffer{}
 	cmd.Stdout = buf
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		if exitErr, ok := err.(*exec.ExitError); ok && !analysis {
 			os.Exit(exitErr.ExitCode())
 		}
 		return nil, fmt.Errorf("failed to run `go list`: %s", err)
@@ -206,7 +255,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 				Msg: pkg.Error.Err,
 			}
 			if len(pkg.Error.ImportStack) != 0 {
-				pkgErrors = append(pkgErrors, Error{
+				pkgErrors = append(pkgErrors, &Error{
 					ImportStack: pkg.Error.ImportStack,
 					Err:         err,
 				})
@@ -214,7 +263,7 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 			}
 			return nil, err
 		}
-		if config.TestConfig.CompileTestBinary {
+		if config.TestConfig.CompileTestBinary && !analysis {
 			// When creating a test binary, `go list` will list two or three
 			// packages used for testing the package. The first is the original
 			// package as if it were built normally, the second is the same
@@ -254,16 +303,9 @@ func Load(config *compileopts.Config, inputPkg string, typeChecker types.Config)
 	}
 
 	if len(pkgErrors) != 0 {
-		// TODO: use errors.Join in Go 1.20.
-		return nil, Errors{
+		return nil, &Errors{
 			Errs: pkgErrors,
 		}
-	}
-
-	if config.TestConfig.CompileTestBinary && !strings.HasSuffix(p.sorted[len(p.sorted)-1].ImportPath, ".test") {
-		// Trying to compile a test binary but there are no test files in this
-		// package.
-		return p, NoTestFilesError{p.sorted[len(p.sorted)-1].ImportPath}
 	}
 
 	p.initRecordedPaths()
@@ -284,7 +326,7 @@ func (p *Program) getOriginalPath(path string) string {
 			originalPath = realgorootPath
 		}
 		maybeInTinyGoRoot := false
-		for prefix := range pathsToOverride(p.config.GoMinorVersion, needsSyscallPackage(p.config.BuildTags())) {
+		for prefix := range pathsToOverride(p.config) {
 			if runtime.GOOS == "windows" {
 				prefix = strings.ReplaceAll(prefix, "/", "\\")
 			}
@@ -341,11 +383,14 @@ func (p *Program) MainPkg() *Package {
 // Parse parses all packages and typechecks them.
 //
 // The returned error may be an Errors error, which contains a list of errors.
+// Independent packages are checked concurrently, but errors are returned in
+// Sorted order.
 //
 // Idempotent.
 func (p *Program) Parse() error {
 	// Parse all packages.
-	// TODO: do this in parallel.
+	// Keep this sequential because parsing CGo packages appends linker flags
+	// to Program.LDFlags in dependency order.
 	for _, pkg := range p.sorted {
 		err := pkg.Parse()
 		if err != nil {
@@ -353,15 +398,108 @@ func (p *Program) Parse() error {
 		}
 	}
 
-	// Typecheck all packages.
-	for _, pkg := range p.sorted {
-		err := pkg.Check()
-		if err != nil {
-			return err
+	return p.check()
+}
+
+func (p *Program) check() error {
+	if cap(p.typecheckConcurrency) == 0 {
+		return errors.New("cannot run 0 jobs at a time")
+	}
+	if cap(p.typecheckConcurrency) == 1 || len(p.sorted) < 2 {
+		for _, pkg := range p.sorted {
+			p.typecheckConcurrency <- struct{}{}
+			err := pkg.Check()
+			<-p.typecheckConcurrency
+			if err != nil {
+				return err
+			}
 		}
+		return nil
+	}
+	checker := p.typeChecker
+	if checker.Sizes != nil {
+		checker.Sizes = &lockedSizes{Sizes: checker.Sizes}
 	}
 
-	return nil
+	type checkJob struct {
+		pkg    *Package
+		index  int
+		deps   []*checkJob
+		done   chan struct{}
+		err    error
+		failed bool
+	}
+	jobs := make(map[*Package]*checkJob, len(p.sorted))
+	for i, pkg := range p.sorted {
+		jobs[pkg] = &checkJob{pkg: pkg, index: i, done: make(chan struct{})}
+	}
+	for _, pkg := range p.sorted {
+		job := jobs[pkg]
+		for _, file := range pkg.Files {
+			for _, spec := range file.Imports {
+				importPath, err := strconv.Unquote(spec.Path.Value)
+				if err != nil || importPath == "unsafe" {
+					continue
+				}
+				dep := jobs[p.Packages[pkg.resolveImportPath(importPath)]]
+				if dep != nil && !slices.Contains(job.deps, dep) {
+					if dep.index >= job.index {
+						return fmt.Errorf("package dependency order changed (%s imports %s), retry the build", pkg.ImportPath, dep.pkg.ImportPath)
+					}
+					job.deps = append(job.deps, dep)
+				}
+			}
+		}
+	}
+	for _, pkg := range p.sorted {
+		job := jobs[pkg]
+		go func() {
+			defer close(job.done)
+			for _, dep := range job.deps {
+				<-dep.done
+				if dep.failed {
+					job.failed = true
+					return
+				}
+			}
+			p.typecheckConcurrency <- struct{}{}
+			job.err = job.pkg.check(checker)
+			job.failed = job.err != nil
+			<-p.typecheckConcurrency
+		}()
+	}
+	var firstError error
+	for _, pkg := range p.sorted {
+		job := jobs[pkg]
+		<-job.done
+		if firstError == nil && job.err != nil {
+			firstError = job.err
+		}
+	}
+	return firstError
+}
+
+type lockedSizes struct {
+	types.Sizes
+	mu sync.Mutex
+}
+
+func (s *lockedSizes) Alignof(typ types.Type) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Sizes.Alignof(typ)
+}
+
+func (s *lockedSizes) Offsetsof(fields []*types.Var) []int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.Sizes.Offsetsof(fields))
+}
+
+func (s *lockedSizes) Sizeof(typ types.Type) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Sizes.Sizeof(typ)
 }
 
 // OriginalDir returns the real directory name. It is the same as p.Dir except
@@ -388,7 +526,7 @@ func (p *Package) OriginalModuleDir() string {
 		if rel == "." || rel != importPath {
 			dir := p.OriginalDir()
 			if rel != "." {
-				for range strings.Split(rel, "/") {
+				for range strings.SplitSeq(rel, "/") {
 					dir = filepath.Dir(dir)
 				}
 			}
@@ -477,10 +615,8 @@ func (p *Package) RecordedPath(filename string) string {
 		return path.Join(p.RecordedDir(), "!cgo.go")
 	}
 	if p.program.config.TestConfig.CompileTestBinary {
-		for _, generated := range p.program.MainPkg().GoFiles {
-			if filename == generated {
-				return "_testmain.go"
-			}
+		if slices.Contains(p.program.MainPkg().GoFiles, filename) {
+			return "_testmain.go"
 		}
 	}
 	for _, root := range []string{
@@ -541,7 +677,8 @@ func (p *Package) RecordedPath(filename string) string {
 // DebugPrefixMap returns the Clang flag that maps this package to its recorded
 // source directory.
 func (p *Package) DebugPrefixMap() string {
-	return "-ffile-prefix-map=" + p.OriginalModuleDir() + "=" + p.program.config.CSourcePath(p.RecordedModuleDir())
+	dir := strings.TrimSuffix(p.OriginalModuleDir(), string(filepath.Separator)) + string(filepath.Separator)
+	return "-ffile-prefix-map=" + dir + "=" + p.program.config.CSourcePath(p.RecordedModuleDir()) + "/"
 }
 
 // RecordedCFlags returns C flags with path options rewritten to use recorded
@@ -573,9 +710,25 @@ func (p *Package) recordedCFlagPath(filename string) string {
 // parseFile is a wrapper around parser.ParseFile.
 func (p *Package) parseFile(path string, mode parser.Mode) (*ast.File, error) {
 	originalPath := p.program.getOriginalPath(path)
+	if p.program.analysis {
+		resolved, err := analysisPath(path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve analysis source %q: %w", path, err)
+		}
+		originalPath = resolved
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+	if replacement, ok := p.program.overlay[originalPath]; ok {
+		data = replacement
+	}
+	if p.program.analysis {
+		if previous, exists := p.program.sources[originalPath]; exists && !bytes.Equal(previous, data) {
+			return nil, fmt.Errorf("%s changed during package loading", originalPath)
+		}
+		p.program.sources[originalPath] = data
 	}
 	sum := sha512.Sum512_224(data)
 	p.FileHashes[originalPath] = sum[:]
@@ -612,13 +765,16 @@ func (p *Package) Parse() error {
 //
 // Idempotent.
 func (p *Package) Check() error {
+	return p.check(p.program.typeChecker)
+}
+
+func (p *Package) check(checker types.Config) error {
 	if p.Pkg != nil {
 		return nil // already typechecked
 	}
 
 	// Prepare some state used during type checking.
 	var typeErrors []error
-	checker := p.program.typeChecker // make a copy, because it will be modified
 	checker.Error = func(err error) {
 		typeErrors = append(typeErrors, err)
 	}
@@ -644,9 +800,11 @@ func (p *Package) Check() error {
 
 	// Do typechecking of the package.
 	packageName := p.ImportPath
-	if p == p.program.MainPkg() {
+	if p.program.analysis {
+		packageName = analysisImportPath(packageName)
+	} else if p == p.program.MainPkg() && (!p.program.config.TestConfig.CompileTestBinary || strings.HasSuffix(p.ImportPath, ".test")) {
 		if p.Name != "main" {
-			return Errors{p, []error{
+			return &Errors{p, []error{
 				scanner.Error{
 					Pos: p.program.fset.Position(p.Files[0].Name.Pos()),
 					Msg: fmt.Sprintf("expected main package to have name \"main\", not %#v", p.Name),
@@ -657,24 +815,18 @@ func (p *Package) Check() error {
 	}
 	typesPkg, err := checker.Check(packageName, p.program.fset, p.Files, &p.info)
 	if err != nil {
-		if err, ok := err.(Errors); ok {
-			return err
-		}
 		if len(typeErrors) != 0 {
 			// Got type errors, so return them.
-			return Errors{p, typeErrors}
+			return &Errors{p, typeErrors}
 		}
-		// This can happen in some weird cases.
-		// The only case I know is when compiling a Go 1.23 program, with a
-		// TinyGo version that supports Go 1.23 but is compiled using Go 1.22.
-		// So this should be pretty rare.
-		return Errors{p, []error{err}}
+		// Rare, for example a TinyGo built with an older Go than the program needs.
+		return &Errors{p, []error{err}}
 	}
 	p.Pkg = typesPkg
 
 	p.extractEmbedLines(checker.Error)
 	if len(typeErrors) != 0 {
-		return Errors{p, typeErrors}
+		return &Errors{p, typeErrors}
 	}
 
 	return nil
@@ -710,29 +862,67 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 	// and there is a syntax error in a CGo file, len(files) may be 0. Don't try
 	// to call cgo.Process in that case as it will only cause issues.
 	if len(p.CgoFiles) != 0 && len(files) != 0 {
+		originals := make(map[*ast.File]string)
+		if p.program.analysis {
+			for _, file := range files {
+				var text bytes.Buffer
+				if err := printer.Fprint(&text, p.program.fset, file); err != nil {
+					return nil, err
+				}
+				originals[file] = text.String()
+			}
+		}
 		var initialCFlags []string
 		initialCFlags = append(initialCFlags, p.program.config.CFlags(true)...)
 		initialCFlags = append(initialCFlags, "-I"+p.Dir)
-		cgoCFlags, err := shlex.Split(goenv.Get("CGO_CFLAGS"))
-		if err != nil {
-			return nil, fmt.Errorf("failed to split CGO_CFLAGS: %w", err)
-		}
-		initialCFlags = append(initialCFlags, cgoCFlags...)
 		if p.program.config.TrimPath() {
 			initialCFlags = append(initialCFlags,
 				p.DebugPrefixMap(),
-				"-ffile-prefix-map="+filepath.Join(p.program.goroot, "src")+"="+p.program.config.CSourcePath("."),
+				compileopts.FilePrefixMap(filepath.Join(p.program.goroot, "src"), p.program.config.CSourcePath(".")),
 			)
+		}
+		var env cgo.Flags
+		for _, v := range []struct {
+			name  string
+			flags *[]string
+		}{
+			{"CGO_CPPFLAGS", &env.CPPFlags},
+			{"CGO_CFLAGS", &env.CFlags},
+			{"CGO_CXXFLAGS", &env.CXXFlags},
+		} {
+			flags, err := goenv.SplitFlags(goenv.Get(v.name))
+			if err != nil {
+				return nil, fmt.Errorf("failed to split %s: %w", v.name, err)
+			}
+			*v.flags = flags
 		}
 		// LLVM 15's driver changes the process cwd. Set only FileManager's cwd.
 		// See clang/lib/Driver/Driver.cpp and clang/lib/Basic/FileManager.cpp.
 		parseFlags := append(append([]string(nil), initialCFlags...), "-Xclang", "-working-directory", "-Xclang", p.Dir)
-		generated, headerCode, cflags, ldflags, accessedFiles, errs := cgo.Process(files, p.program.workingDir, p.ImportPath, p.program.fset, parseFlags, p.program.config.GOOS())
-		p.CFlags = append(initialCFlags, cflags...)
-		p.CGoHeaders = headerCode
-		for path, hash := range accessedFiles {
-			p.FileHashes[path] = hash
+		generated, headerCode, cflags, cxxflags, ldflags, accessedFiles, errs := cgo.Process(
+			files,
+			p.program.workingDir,
+			p.ImportPath,
+			p.program.fset,
+			parseFlags,
+			env,
+			p.program.config.GOOS(),
+			p.program.config.GOARCH(),
+			p.program.config.BuildTags(),
+		)
+		for file, original := range originals {
+			var text bytes.Buffer
+			if err := printer.Fprint(&text, p.program.fset, file); err != nil {
+				return nil, err
+			}
+			if original != text.String() {
+				p.program.rewritten[p.program.fset.File(file.FileStart).Name()] = true
+			}
 		}
+		p.CFlags = slices.Concat(initialCFlags, cflags)
+		p.CXXFlags = slices.Concat(initialCFlags, cxxflags)
+		p.CGoHeaders = headerCode
+		maps.Copy(p.FileHashes, accessedFiles)
 		if errs != nil {
 			fileErrs = append(fileErrs, errs...)
 		}
@@ -743,7 +933,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 	// Only return an error after CGo processing, so that errors in parsing and
 	// CGo can be reported together.
 	if len(fileErrs) != 0 {
-		return nil, Errors{p, fileErrs}
+		return nil, &Errors{p, fileErrs}
 	}
 
 	return files, nil
@@ -1012,12 +1202,17 @@ func (p *Package) Import(to string) (*types.Package, error) {
 	if to == "unsafe" {
 		return types.Unsafe, nil
 	}
-	if newTo, ok := p.ImportMap[to]; ok && !strings.HasSuffix(newTo, ".test]") {
-		to = newTo
-	}
+	to = p.resolveImportPath(to)
 	if imported, ok := p.program.Packages[to]; ok {
 		return imported.Pkg, nil
 	} else {
 		return nil, errors.New("package not imported: " + to)
 	}
+}
+
+func (p *Package) resolveImportPath(to string) string {
+	if newTo, ok := p.ImportMap[to]; ok && (p.program.analysis || !strings.HasSuffix(newTo, ".test]")) {
+		return newTo
+	}
+	return to
 }

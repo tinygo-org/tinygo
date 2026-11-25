@@ -20,6 +20,7 @@ package runtime
 
 import (
 	"internal/gclayout"
+	"internal/reflectlite"
 	"internal/task"
 	"unsafe"
 )
@@ -35,6 +36,22 @@ const (
 var (
 	gcLock    task.PMutex
 	gcMallocs uint64
+)
+
+type boehmFinalizer struct {
+	next   *boehmFinalizer
+	offset uintptr
+	fn     interface{}
+	ptr    unsafe.Pointer // keeps the object alive after Boehm dequeues its callback
+}
+
+var (
+	finalizerPending       *boehmFinalizer
+	numFinalizers          uintptr
+	finalizersSinceGC      uintptr
+	finalizerQueued        bool
+	finalizerDraining      bool
+	finalizerRunnerStarted bool
 )
 
 func initHeap() {
@@ -69,6 +86,10 @@ func markCurrentGoroutineStack(sp uintptr) {
 	stackBottom := base + libgc_size(base)
 	libgc_push_all_stack(sp, stackBottom)
 }
+
+// markLiveStack is not needed because markCurrentGoroutineStack already pushes
+// the live part of the stack.
+func markLiveStack(sp uintptr) {}
 
 //go:noinline
 func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
@@ -123,8 +144,12 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			)
 		}
 	}
+	queued := boehmInvokeFinalizers()
 	gcResumeWorld()
 	gcLock.Unlock()
+	if queued {
+		wakeFinalizer()
+	}
 	if ptr == nil {
 		runtimeFatal("gc: out of memory")
 		return nil
@@ -150,8 +175,12 @@ func allocManual(size uintptr) unsafe.Pointer {
 
 	gcLock.Lock()
 	ptr := libgc_malloc_atomic_uncollectable(size)
+	queued := boehmInvokeFinalizers()
 	gcResumeWorld()
 	gcLock.Unlock()
+	if queued {
+		wakeFinalizer()
+	}
 	if ptr == nil {
 		runtimeFatal("gc: out of memory")
 		return nil
@@ -163,8 +192,12 @@ func allocManual(size uintptr) unsafe.Pointer {
 func free(ptr unsafe.Pointer) {
 	gcLock.Lock()
 	libgc_free(ptr)
+	queued := boehmInvokeFinalizers()
 	gcResumeWorld()
 	gcLock.Unlock()
+	if queued {
+		wakeFinalizer()
+	}
 }
 
 //go:noinline
@@ -175,8 +208,13 @@ func freeTaskStack(ptr uintptr) {
 func GC() {
 	gcLock.Lock()
 	libgc_gcollect()
+	finalizersSinceGC = 0
+	queued := boehmInvokeFinalizers()
 	gcResumeWorld()
 	gcLock.Unlock()
+	if queued {
+		wakeFinalizer()
+	}
 }
 
 // This should be stack-allocated, but we don't currently have a good way of
@@ -190,14 +228,14 @@ func ReadMemStats(m *MemStats) {
 
 	// Fill in MemStats as well as we can, given the information that bdwgc
 	// provides to us.
-	m.HeapIdle = uint64(gcMemStats.free_bytes_full - gcMemStats.unmapped_bytes)
-	m.HeapInuse = uint64(gcMemStats.heapsize_full - gcMemStats.unmapped_bytes)
+	m.HeapIdle = uint64(gcMemStats.free_bytes_full)
+	m.HeapInuse = uint64(gcMemStats.heapsize_full - gcMemStats.free_bytes_full)
 	m.HeapReleased = uint64(gcMemStats.unmapped_bytes)
-	m.HeapSys = uint64(m.HeapInuse + m.HeapIdle)
+	m.HeapSys = uint64(gcMemStats.heapsize_full)
 	m.GCSys = 0 // not provided by bdwgc
 	m.TotalAlloc = uint64(gcMemStats.allocd_bytes_before_gc + gcMemStats.bytes_allocd_since_gc)
-	m.Mallocs = 0 // not provided by bdwgc
-	m.Frees = 0   // not provided by bdwgc
+	m.Mallocs = gcMallocs
+	m.Frees = 0 // not provided by bdwgc
 	m.Sys = uint64(gcMemStats.obtained_from_os_bytes)
 	m.NumGC = uint32(gcMemStats.gc_no)
 
@@ -216,10 +254,179 @@ func setHeapEnd(newHeapEnd uintptr) {
 }
 
 func SetFinalizer(obj interface{}, finalizer interface{}) {
-	// Unimplemented.
-	// The GC *does* support finalization, so this could be added relatively
-	// easily I think.
+	value := reflectlite.ValueOf(obj)
+	if value.Kind() != reflectlite.Pointer {
+		runtimeFatal("runtime.SetFinalizer: first argument is not a pointer")
+	}
+	if finalizer != nil && reflectlite.ValueOf(finalizer).Kind() != reflectlite.Func {
+		runtimeFatal("runtime.SetFinalizer: second argument is not a function")
+	}
+	objPtr := (*_interface)(unsafe.Pointer(&obj)).value
+	if objPtr == nil {
+		return
+	}
+
+	var entry *boehmFinalizer
+	if finalizer != nil {
+		entry = &boehmFinalizer{fn: finalizer}
+	}
+	gcLock.Lock()
+	base := libgc_base(uintptr(objPtr))
+	if base == 0 {
+		gcLock.Unlock()
+		return
+	}
+	if base != uintptr(objPtr) && !reflectlite.FinalizerAllowsInterior(value.RawType()) {
+		runtimeFatal("runtime.SetFinalizer: pointer not at beginning of allocated block")
+	}
+	offset := uintptr(objPtr) - base
+	old := libgc_register_finalizer(base, uintptr(unsafe.Pointer(entry)))
+	if old == ^uintptr(0) {
+		runtimeFatal("gc: cannot register finalizer")
+	}
+	head := (*boehmFinalizer)(unsafe.Pointer(old))
+	replaced := false
+	var prev *boehmFinalizer
+	for n := head; n != nil; n = n.next {
+		if n.offset == offset {
+			if prev == nil {
+				head = n.next
+			} else {
+				prev.next = n.next
+			}
+			*n = boehmFinalizer{}
+			replaced = true
+			if entry == nil {
+				numFinalizers--
+				if finalizersSinceGC != 0 {
+					finalizersSinceGC--
+				}
+			}
+			break
+		}
+		prev = n
+	}
+	if entry != nil {
+		entry.offset = offset
+		entry.next = head
+		if !replaced {
+			numFinalizers++
+			finalizersSinceGC++
+		}
+	} else if head != nil {
+		if libgc_register_finalizer(base, uintptr(unsafe.Pointer(head))) == ^uintptr(0) {
+			runtimeFatal("gc: cannot register finalizer")
+		}
+		KeepAlive(head)
+	}
+	if entry != nil {
+		initFinalizerScheduler()
+	}
+	gcResumeWorld()
+	gcLock.Unlock()
+	KeepAlive(obj)
 }
+
+//export tinygo_runtime_bdwgc_finalizer
+func boehmQueueFinalizer(obj unsafe.Pointer, data unsafe.Pointer) {
+	for n := (*boehmFinalizer)(data); n != nil; {
+		next := n.next
+		numFinalizers--
+		n.ptr = unsafe.Add(obj, n.offset)
+		n.next = finalizerPending
+		finalizerPending = n
+		finalizerQueued = true
+		n = next
+	}
+}
+
+// Call with gcLock held. Callbacks only enqueue Go work; they never run user code.
+func boehmInvokeFinalizers() bool {
+	if numFinalizers != 0 && libgc_should_invoke_finalizers() != 0 {
+		libgc_invoke_finalizers()
+	}
+	queued := finalizerQueued
+	finalizerQueued = false
+	return queued
+}
+
+func finalizerPressureGC() bool {
+	gcLock.Lock()
+	trigger := finalizerGCTrigger(numFinalizers)
+	if trigger == 0 || finalizersSinceGC < trigger {
+		gcLock.Unlock()
+		return false
+	}
+	libgc_gcollect()
+	finalizersSinceGC = 0
+	queued := boehmInvokeFinalizers()
+	gcResumeWorld()
+	gcLock.Unlock()
+	if queued {
+		wakeFinalizer()
+	}
+	return true
+}
+
+func wakeFinalizer() {
+	if hasScheduler || hasParallelism {
+		gcLock.Lock()
+		spawn := finalizerPending != nil && !finalizerRunnerStarted
+		if spawn {
+			finalizerRunnerStarted = true
+		}
+		gcLock.Unlock()
+		if spawn {
+			spawnFinalizerRunner()
+		}
+	} else {
+		drainFinalizers()
+	}
+}
+
+func drainFinalizers() {
+	if finalizerDraining {
+		return
+	}
+	finalizerDraining = true
+	for {
+		gcLock.Lock()
+		n := finalizerPending
+		if n != nil {
+			finalizerPending = n.next
+		}
+		gcLock.Unlock()
+		if n == nil {
+			break
+		}
+		ptr, fn := n.ptr, n.fn
+		*n = boehmFinalizer{}
+		callFinalizer(ptr, fn)
+	}
+	finalizerDraining = false
+}
+
+func finalizerRunner() {
+	for {
+		drainFinalizers()
+		gcLock.Lock()
+		if finalizerPending == nil {
+			finalizerRunnerStarted = false
+			gcLock.Unlock()
+			return
+		}
+		gcLock.Unlock()
+	}
+}
+
+//export tinygo_runtime_bdwgc_register_finalizer
+func libgc_register_finalizer(uintptr, uintptr) uintptr
+
+//export GC_should_invoke_finalizers
+func libgc_should_invoke_finalizers() int32
+
+//export GC_invoke_finalizers
+func libgc_invoke_finalizers() int32
 
 //export GC_init
 func libgc_init()

@@ -23,7 +23,7 @@ import (
 // The provided assembly must be a constant.
 func (b *builder) createInlineAsm(args []ssa.Value) (llvm.Value, error) {
 	// Magic function: insert inline assembly instead of calling it.
-	fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{}, false)
+	fnType := llvm.FunctionType(b.void, []llvm.Type{}, false)
 	asm := constant.StringVal(args[0].(*ssa.Const).Value)
 	target := llvm.InlineAsm(fnType, asm, "", true, false, 0, false)
 	return b.CreateCall(fnType, target, nil, ""), nil
@@ -99,8 +99,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 			case llvm.IntegerTypeKind:
 				constraints = append(constraints, "r")
 			case llvm.PointerTypeKind:
-				// Memory references require a type starting with LLVM 14,
-				// probably as a preparation for opaque pointers.
+				// Memory references require a type starting with LLVM 14.
 				err = b.makeError(instr.Pos(), "support for pointer operands was dropped in TinyGo 0.23")
 				return s
 			default:
@@ -117,7 +116,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 	if hasOutput {
 		outputType = b.uintptrType
 	} else {
-		outputType = b.ctx.VoidType()
+		outputType = b.void
 	}
 	fnType := llvm.FunctionType(outputType, argTypes, false)
 	target := llvm.InlineAsm(fnType, asmString, strings.Join(constraints, ","), true, false, 0, false)
@@ -126,7 +125,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 		return result, nil
 	} else {
 		// Make sure we return something valid.
-		return llvm.ConstInt(b.uintptrType, 0, false), nil
+		return b.uintptrZero, nil
 	}
 }
 
@@ -231,7 +230,7 @@ func (b *builder) emitCSROperation(call *ssa.CallCommon) (llvm.Value, error) {
 		target := llvm.InlineAsm(fnType, asm, "=r", true, false, 0, false)
 		return b.CreateCall(fnType, target, nil, ""), nil
 	case "Set":
-		fnType := llvm.FunctionType(b.ctx.VoidType(), []llvm.Type{b.uintptrType}, false)
+		fnType := llvm.FunctionType(b.void, []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrw %d, $0", csr)
 		target := llvm.InlineAsm(fnType, asm, "r", true, false, 0, false)
 		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1], getPos(call))}, ""), nil
@@ -250,16 +249,4 @@ func (b *builder) emitCSROperation(call *ssa.CallCommon) (llvm.Value, error) {
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown CSR operation: "+name)
 	}
-}
-
-// Implement runtime/interrupt.Checkpoint.Save. It needs to be implemented
-// directly at the call site. If it isn't implemented directly at the call site
-// (but instead through a function call), it might result in an overwritten
-// stack in the non-jump return case.
-func (b *builder) createInterruptCheckpoint(ptr ssa.Value) llvm.Value {
-	addr := b.getValue(ptr, ptr.Pos())
-	b.createNilCheck(ptr, addr, "deref")
-	stackPointer := b.readStackPointer()
-	b.CreateStore(stackPointer, addr)
-	return b.createCheckpoint(addr)
 }

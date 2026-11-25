@@ -8,3 +8,4 @@ package os
 
 var ErrWriteAtInAppendMode = errWriteAtInAppendMode
 var ErrPatternHasSeparator = errPatternHasSeparator
+var NextRandom = nextRandom

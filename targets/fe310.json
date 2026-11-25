@@ -6,6 +6,9 @@
 	"features": "+32bit,+a,+c,+m,+zaamo,+zalrsc,+zmmul,-relax",
 	"build-tags": [
 		"fe310",
-		"sifive"
+		"sifive",
+		"machine.uart",
+		"machine.spi",
+		"machine.i2c"
 	]
 }

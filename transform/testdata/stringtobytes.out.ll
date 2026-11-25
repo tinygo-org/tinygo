@@ -7,9 +7,9 @@ declare { ptr, i64, i64 } @runtime.stringToBytes(ptr, i64)
 
 declare void @printByte(i8)
 
-declare void @printSlice(ptr nocapture readonly, i64, i64)
+declare void @printSlice(ptr readonly captures(none), i64, i64)
 
-declare void @writeToSlice(ptr nocapture, i64, i64)
+declare void @writeToSlice(ptr captures(none), i64, i64)
 
 define void @testReadOnly() {
 entry:

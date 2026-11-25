@@ -26,6 +26,7 @@ concurrency:
 jobs:
   llvm:
     name: build-push-llvm
+    if: github.repository == 'tinygo-org/tinygo'
     runs-on: ubuntu-latest
     permissions:
       packages: write

@@ -13,7 +13,12 @@ func TestUnwindAssumptions(t *testing.T) {
 		transform.AddUnwindAssumptions(mod)
 		po := llvm.NewPassBuilderOptions()
 		defer po.Dispose()
-		if err := mod.RunPasses("thinlto-pre-link<Oz>", llvm.TargetMachine{}, po); err != nil {
+		// LLVM 23 removed the Oz pipeline level. See transform/optimizer.go.
+		level := "Oz"
+		if llvm.VersionMajor >= 23 {
+			level = "O2"
+		}
+		if err := mod.RunPasses("thinlto-pre-link<"+level+">", llvm.TargetMachine{}, po); err != nil {
 			t.Fatal(err)
 		}
 	})

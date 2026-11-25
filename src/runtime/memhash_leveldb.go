@@ -13,6 +13,7 @@
 package runtime
 
 import (
+	"internal/byteorder"
 	"unsafe"
 )
 
@@ -29,7 +30,7 @@ func hash32(ptr unsafe.Pointer, n, seed uintptr) uint32 {
 	h := uint32(lseed^seed) ^ uint32(uint(len(b))*uint(m))
 
 	for ; len(b) >= 4; b = b[4:] {
-		h += uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
+		h += byteorder.LEUint32(b)
 		h *= m
 		h ^= h >> 16
 	}

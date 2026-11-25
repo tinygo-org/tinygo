@@ -13,11 +13,11 @@ var tmpl = template.Must(template.New("go").Funcs(template.FuncMap{
 	"mul": func(x, y int) int {
 		return x * y
 	},
-	"tuple": func(v ...interface{}) []interface{} {
+	"tuple": func(v ...any) []any {
 		return v
 	},
 	"title": strings.Title,
-}).Parse(`//go:build baremetal && !tinygo.wasm
+}).Parse(`//go:build (baremetal || mips || mipsle) && !tinygo.wasm
 
 // Automatically generated file. DO NOT EDIT.
 // This file implements standins for non-native atomics using critical sections.
@@ -55,7 +55,6 @@ func __atomic_store_{{.}}(ptr *uint{{$bits}}, val uint{{$bits}}, ordering uintpt
 }
 {{end}}
 {{- define "cas"}}{{$bits := mul . 8 -}}
-//go:inline
 func doAtomicCAS{{$bits}}(ptr *uint{{$bits}}, expected, desired uint{{$bits}}) uint{{$bits}} {
 	mask := lockAtomics()
 	old := *ptr
@@ -79,7 +78,6 @@ func __atomic_compare_exchange_{{.}}(ptr, expected *uint{{$bits}}, desired uint{
 }
 {{end}}
 {{- define "swap"}}{{$bits := mul . 8 -}}
-//go:inline
 func doAtomicSwap{{$bits}}(ptr *uint{{$bits}}, new uint{{$bits}}) uint{{$bits}} {
 	mask := lockAtomics()
 	old := *ptr
@@ -108,7 +106,6 @@ func __atomic_exchange_{{.}}(ptr *uint{{$bits}}, new uint{{$bits}}, ordering uin
 {{- if not $signed}}{{$type = printf "u%s" $type}}{{end -}}
 {{- $opfn := printf "doAtomic%s%d" (title $opname) $bits}}
 
-//go:inline
 func {{$opfn}}(ptr *{{$type}}, value {{$type}}) (old, new {{$type}}) {
 	mask := lockAtomics()
 	old = *ptr
@@ -145,6 +142,7 @@ func __atomic_{{$opname}}_fetch_{{$bytes}}(ptr *{{$type}}, value {{$type}}, orde
 {{template "cas" .}}
 {{template "swap" .}}
 {{template "rmw" (tuple "add" . false "new = old + value")}}
+{{template "rmw" (tuple "sub" . false "new = old - value")}}
 {{template "rmw" (tuple "and" . false "new = old & value")}}
 {{template "rmw" (tuple "or" . false "new = old | value")}}
 

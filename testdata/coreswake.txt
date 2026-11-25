@@ -1,0 +1,2 @@
+idle cores woken: true
+short sleep not delayed: true

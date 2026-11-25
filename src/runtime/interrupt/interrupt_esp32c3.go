@@ -24,11 +24,10 @@ var tinygo_saved_ra uintptr
 //	    ...
 //	}).Enable()
 func (i Interrupt) Enable() error {
-	if i.num < 1 && i.num > 31 {
+	if i.num < 1 || i.num > 31 {
 		return errors.New("interrupt for ESP32-C3 must be in range of 1 through 31")
 	}
 	mask := riscv.DisableInterrupts()
-	defer riscv.EnableInterrupts(mask)
 
 	// enable CPU interrupt number i.num
 	esp.INTERRUPT_CORE0.CPU_INT_ENABLE.SetBits(1 << i.num)
@@ -46,6 +45,7 @@ func (i Interrupt) Enable() error {
 
 	// we must wait for any pending write operations to complete
 	riscv.Asm("fence")
+	riscv.EnableInterrupts(mask)
 	return nil
 }
 

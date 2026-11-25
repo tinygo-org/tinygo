@@ -7,13 +7,15 @@ import (
 	"go/token"
 	"go/types"
 
-	"github.com/tinygo-org/tinygo/compiler/llvmutil"
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
 
 // createGo emits code to start a new goroutine.
 func (b *builder) createGo(instr *ssa.Go) {
+	b.markRuntimeFeatureUse(&instr.Call)
+
 	if builtin, ok := instr.Call.Value.(*ssa.Builtin); ok {
 		// We cheat. None of the builtins do any long or blocking operation, so
 		// we might as well run these builtins right away without the program
@@ -72,7 +74,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 			hasContext = true
 		}
 		funcType, funcPtr = b.getFunction(callee)
-		exported = b.getFunctionInfo(callee).exported
+		exported = b.getFunctionInfo(callee).isExported()
 	} else if instr.Call.IsInvoke() {
 		// This is a method call on an interface value.
 		itf := b.getValue(instr.Call.Value, getPos(instr))
@@ -120,7 +122,10 @@ func (b *builder) createGo(instr *ssa.Go) {
 		// section that contains the stack size (and is modified after
 		// linking).
 		stackSizeFnType, stackSizeFn := b.getFunction(b.program.ImportedPackage("internal/task").Members["getGoroutineStackSize"].(*ssa.Function))
-		stackSize = b.createCall(stackSizeFnType, stackSizeFn, []llvm.Value{callee, llvm.Undef(b.dataPtrType)}, "stacksize")
+		stackSize = b.createCall(stackSizeFnType, stackSizeFn, []llvm.Value{callee, b.dataPtrUndef}, "stacksize")
+		// CreateStackSizeLoads needs a constant callee, so stop SimplifyCFG
+		// from merging calls into one that takes a select or phi.
+		stackSize.AddCallSiteAttribute(-1, b.ctx.CreateEnumAttribute(llvm.AttributeKindID("nomerge"), 0))
 	} else {
 		// The stack size is fixed at compile time. By emitting it here as a
 		// constant, it can be optimized.
@@ -130,7 +135,7 @@ func (b *builder) createGo(instr *ssa.Go) {
 		stackSize = llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
 	}
 	fnType, start := b.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
-	b.createCall(fnType, start, []llvm.Value{callee, paramBundle, stackSize, llvm.Undef(b.dataPtrType)}, "")
+	b.createCall(fnType, start, []llvm.Value{callee, paramBundle, stackSize, b.dataPtrUndef}, "")
 }
 
 func (b *builder) getGoroutineCallArgument(value ssa.Value, indirect bool) []llvm.Value {
@@ -147,7 +152,7 @@ func (b *builder) getGoroutineCallArgument(value ssa.Value, indirect bool) []llv
 // it needs to start a new goroutine each time the exported function is called.
 func (b *builder) createWasmExport() {
 	pos := b.info.wasmExportPos
-	if b.info.exported {
+	if b.info.isExported() {
 		// //export really shouldn't be used anymore when //go:wasmexport is
 		// available, because //go:wasmexport is much better defined.
 		b.addError(pos, "cannot use //export and //go:wasmexport at the same time")
@@ -165,8 +170,12 @@ func (b *builder) createWasmExport() {
 	exportedFn.AddFunctionAttr(b.ctx.CreateStringAttribute("wasm-export-name", b.info.wasmExport))
 
 	// Create a builder for this wrapper function.
-	builder := newBuilder(b.compilerContext, b.ctx.NewBuilder(), b.fn)
+	builder := newBuilder(b.context, b.ctx.NewBuilder(), b.fn)
 	defer builder.Dispose()
+
+	// Create a single basic block inside of it.
+	bb := b.ctx.AddBasicBlock(exportedFn, "entry")
+	builder.SetInsertPointAtEnd(bb)
 
 	// Define this function as a separate function in DWARF
 	if b.Debug {
@@ -178,10 +187,6 @@ func (b *builder) createWasmExport() {
 		builder.setDebugLocation(pos)
 	}
 
-	// Create a single basic block inside of it.
-	bb := llvm.AddBasicBlock(exportedFn, "entry")
-	builder.SetInsertPointAtEnd(bb)
-
 	// Insert an assertion to make sure this //go:wasmexport function is not
 	// called at a time when it is not allowed (for example, before the runtime
 	// is initialized).
@@ -191,7 +196,7 @@ func (b *builder) createWasmExport() {
 		// When the scheduler has been disabled, this is really trivial: just
 		// call the function.
 		params := exportedFn.Params()
-		params = append(params, llvm.ConstNull(b.dataPtrType)) // context parameter
+		params = append(params, b.dataPtrNull) // context parameter
 		retval := builder.CreateCall(b.llvmFnType, b.llvmFn, params, "")
 		if b.fn.Signature.Results() == nil {
 			builder.CreateRetVoid()
@@ -234,7 +239,7 @@ func (b *builder) createWasmExport() {
 		// space for a return value if needed.
 		stateFields := exportedFnType.ParamTypes()
 		numParams := len(stateFields)
-		stateFields = append(stateFields, b.ctx.Int1Type()) // 'done' field
+		stateFields = append(stateFields, b.i1) // 'done' field
 		if hasReturn {
 			stateFields = append(stateFields, b.llvmFnType.ReturnType())
 		}
@@ -245,16 +250,16 @@ func (b *builder) createWasmExport() {
 
 		// Initialize the 'done' field.
 		doneGEP := builder.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-			llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-			llvm.ConstInt(b.ctx.Int32Type(), uint64(numParams), false),
+			llvm.ConstInt(b.i32, 0, false),
+			llvm.ConstInt(b.i32, uint64(numParams), false),
 		}, "done.gep")
-		builder.CreateStore(llvm.ConstNull(b.ctx.Int1Type()), doneGEP)
+		builder.CreateStore(b.i1False, doneGEP)
 
 		// Store all parameters in the state object.
 		for i, param := range exportedFn.Params() {
 			gep := builder.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+				llvm.ConstInt(b.i32, 0, false),
+				llvm.ConstInt(b.i32, uint64(i), false),
 			}, "")
 			builder.CreateStore(param, gep)
 		}
@@ -263,7 +268,7 @@ func (b *builder) createWasmExport() {
 		wrapper := b.createGoroutineStartWrapper(b.llvmFnType, b.llvmFn, "", false, true, pos)
 		stackSize := llvm.ConstInt(b.uintptrType, b.DefaultStackSize, false)
 		taskStartFnType, taskStartFn := builder.getFunction(b.program.ImportedPackage("internal/task").Members["start"].(*ssa.Function))
-		builder.createCall(taskStartFnType, taskStartFn, []llvm.Value{wrapper, statePtr, stackSize, llvm.Undef(b.dataPtrType)}, "")
+		builder.createCall(taskStartFnType, taskStartFn, []llvm.Value{wrapper, statePtr, stackSize, b.dataPtrUndef}, "")
 
 		// Run the scheduler.
 		builder.createRuntimeCall("wasmExportRun", []llvm.Value{doneGEP}, "")
@@ -272,8 +277,8 @@ func (b *builder) createWasmExport() {
 		// //go:wasmexport function.
 		if hasReturn {
 			gep := builder.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-				llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(b.ctx.Int32Type(), uint64(numParams)+1, false),
+				llvm.ConstInt(b.i32, 0, false),
+				llvm.ConstInt(b.i32, uint64(numParams)+1, false),
 			}, "")
 			retval := builder.CreateLoad(b.llvmFnType.ReturnType(), gep, "retval")
 			builder.CreateRet(retval)
@@ -306,12 +311,12 @@ func (b *builder) createWasmExport() {
 // to last parameter of the function) is used for this wrapper. If hasContext is
 // false, the parameter bundle is assumed to have no context parameter and undef
 // is passed instead.
-func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, prefix string, hasContext, isWasmExport bool, pos token.Pos) llvm.Value {
+func (c *context) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.Value, prefix string, hasContext, isWasmExport bool, pos token.Pos) llvm.Value {
 	var wrapper llvm.Value
 
 	b := &builder{
-		compilerContext: c,
-		Builder:         c.ctx.NewBuilder(),
+		context: c,
+		Builder: c.ctx.NewBuilder(),
 	}
 	defer b.Dispose()
 
@@ -334,7 +339,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 		}
 
 		// Create the wrapper.
-		wrapperType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.dataPtrType}, false)
+		wrapperType := llvm.FunctionType(c.void, []llvm.Type{c.dataPtrType}, false)
 		wrapper = llvm.AddFunction(c.mod, wrapperName, wrapperType)
 		c.addStandardAttributes(wrapper)
 		wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
@@ -376,7 +381,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 
 			params := b.emitPointerUnpack(wrapper.Param(0), paramTypes)
 			if !hasContext {
-				params = append(params, llvm.Undef(c.dataPtrType)) // add dummy context parameter
+				params = append(params, c.dataPtrUndef) // add dummy context parameter
 			}
 
 			// Create the call.
@@ -384,7 +389,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 
 			if c.Scheduler == "asyncify" {
 				b.CreateCall(exitGoroutineType, exitGoroutine, []llvm.Value{
-					llvm.Undef(c.dataPtrType),
+					c.dataPtrUndef,
 				}, "")
 			}
 		} else {
@@ -418,14 +423,14 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 			//   }
 
 			returnType := fnType.ReturnType()
-			hasReturn := returnType != b.ctx.VoidType()
+			hasReturn := returnType != b.void
 			statePtr := wrapper.Param(0)
 
 			// Create the state struct (it must match the type in createWasmExport).
 			stateFields := fnType.ParamTypes()
 			numParams := len(stateFields) - 1
-			stateFields = stateFields[:numParams:numParams]     // strip 'context' parameter
-			stateFields = append(stateFields, c.ctx.Int1Type()) // 'done' bool
+			stateFields = stateFields[:numParams:numParams] // strip 'context' parameter
+			stateFields = append(stateFields, c.i1)         // 'done' bool
 			if hasReturn {
 				stateFields = append(stateFields, returnType)
 			}
@@ -436,13 +441,13 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 			var callParams []llvm.Value
 			for i := range numParams {
 				gep := b.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-					llvm.ConstInt(b.ctx.Int32Type(), 0, false),
-					llvm.ConstInt(b.ctx.Int32Type(), uint64(i), false),
+					llvm.ConstInt(b.i32, 0, false),
+					llvm.ConstInt(b.i32, uint64(i), false),
 				}, "")
 				param := b.CreateLoad(stateFields[i], gep, "")
 				callParams = append(callParams, param)
 			}
-			callParams = append(callParams, llvm.ConstNull(c.dataPtrType)) // add 'context' parameter
+			callParams = append(callParams, c.dataPtrNull) // add 'context' parameter
 			result := b.CreateCall(fnType, fn, callParams, "")
 
 			// Store the return value back into the shared state.
@@ -450,8 +455,8 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 			// goroutines can return a value.
 			if hasReturn {
 				gep := b.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-					llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-					llvm.ConstInt(c.ctx.Int32Type(), uint64(numParams)+1, false),
+					llvm.ConstInt(c.i32, 0, false),
+					llvm.ConstInt(c.i32, uint64(numParams)+1, false),
 				}, "result.ptr")
 				b.CreateStore(result, gep)
 			}
@@ -460,10 +465,10 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 			// This is important so the runtime knows the exported function
 			// didn't block.
 			doneGEP := b.CreateInBoundsGEP(stateStruct, statePtr, []llvm.Value{
-				llvm.ConstInt(c.ctx.Int32Type(), 0, false),
-				llvm.ConstInt(c.ctx.Int32Type(), uint64(numParams), false),
+				llvm.ConstInt(c.i32, 0, false),
+				llvm.ConstInt(c.i32, uint64(numParams), false),
 			}, "done.gep")
-			b.CreateStore(llvm.ConstInt(b.ctx.Int1Type(), 1, false), doneGEP)
+			b.CreateStore(b.i1True, doneGEP)
 
 			// Call back into the runtime. This will exit the goroutine, switch
 			// back to the scheduler, which will in turn return from the
@@ -490,7 +495,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 		// merged into one.
 
 		// Create the wrapper.
-		wrapperType := llvm.FunctionType(c.ctx.VoidType(), []llvm.Type{c.dataPtrType}, false)
+		wrapperType := llvm.FunctionType(c.void, []llvm.Type{c.dataPtrType}, false)
 		wrapper = llvm.AddFunction(c.mod, prefix+".gowrapper", wrapperType)
 		c.addStandardAttributes(wrapper)
 		wrapper.SetLinkage(llvm.LinkOnceODRLinkage)
@@ -535,7 +540,7 @@ func (c *compilerContext) createGoroutineStartWrapper(fnType llvm.Type, fn llvm.
 
 		if c.Scheduler == "asyncify" {
 			b.CreateCall(exitGoroutineType, exitGoroutine, []llvm.Value{
-				llvm.Undef(c.dataPtrType),
+				c.dataPtrUndef,
 			}, "")
 		}
 	}

@@ -86,6 +86,7 @@ func findMount(path string) (Filesystem, string) {
 // Mount mounts the given filesystem in the filesystem abstraction layer of the
 // os package. It is not possible to unmount filesystems. Filesystems added
 // later will override earlier filesystems.
+// Non-hosted targets provide /dev/null when no mount matches its path.
 //
 // The provided prefix must start and end with a forward slash. This is true for
 // the root directory ("/") for example.

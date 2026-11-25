@@ -5,11 +5,11 @@ package runtime
 import (
 	"internal/cm"
 
-	exit "internal/wasi/cli/v0.2.0/exit"
-	stdout "internal/wasi/cli/v0.2.0/stdout"
-	monotonicclock "internal/wasi/clocks/v0.2.0/monotonic-clock"
-	wallclock "internal/wasi/clocks/v0.2.0/wall-clock"
-	random "internal/wasi/random/v0.2.0/random"
+	exit "internal/wasi/cli/v0.2.12/exit"
+	stdout "internal/wasi/cli/v0.2.12/stdout"
+	monotonicclock "internal/wasi/clocks/v0.2.12/monotonic-clock"
+	wallclock "internal/wasi/clocks/v0.2.12/wall-clock"
+	random "internal/wasi/random/v0.2.12/random"
 )
 
 const putcharBufferSize = 120
@@ -59,6 +59,9 @@ func abort() {
 func syscall_Exit(code int) {
 	exit.Exit(code != 0)
 }
+
+// WASIp2 does not use wasi-libc's stdio.
+func flushStdio() {}
 
 func mainReturnExit() {
 	// WASIp2 does not use _start, instead it uses _initialize and a custom

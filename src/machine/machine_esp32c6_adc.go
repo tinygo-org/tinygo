@@ -21,27 +21,41 @@ const (
 	atten11dB = 3
 )
 
-// InitADC initialises the APB_SARADC peripheral on ESP32-C6.
+// InitADC initialises the APB_SARADC and Modem/ADC peripheral on ESP32-C6.
 // On C6 the clock/reset gating moved to PCR (not SYSTEM as on C3), and the
 // SARADC CLKM divider configuration also lives in PCR.
 func InitADC() {
-	// Reset and enable the SARADC bus clock via PCR.
-	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(1)
 	esp.PCR.SetSARADC_CONF_SARADC_CLK_EN(1)
-	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(0)
 
-	// Select clock source 2 (PLL_F80M), divider = 1, no fractional.
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(2)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_NUM(1)
-	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_B(0)
+	// Reset and enable the SARADC bus clock via PCR.
+	esp.PCR.SetSARADC_CONF_SARADC_REG_CLK_EN(1)
+	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(1)
+	esp.PCR.SetSARADC_CONF_SARADC_RST_EN(0)
+	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(1)
+	esp.PCR.SetSARADC_CONF_SARADC_REG_RST_EN(0)
+
+	modemClockModuleEnableForADC()
+
+	// Enable REG_I2C: Enter regi2c reset mode
+	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(0)
+	// Enable REGI2C for SAR_ADC and TSENS
+	esp.PMU.SetRF_PWC_XPD_PERIF_I2C(1)
+	// Release regi2c reset mode, enter work mode
+	esp.PMU.SetRF_PWC_PERIF_I2C_RSTB(1)
+
+	// Select clock source 1 (PLL_F80M)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_SEL(1)
+	// At boot we have the CLKM values (4, 0, 0) but in ADC one-shot mode
+	// the CLKM values are changed to (15, 1, 0) (source: esp-idf hal/adc_oneshot_hal.c)
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_NUM(15) // see ADC_LL_CLKM_DIV_NUM_DEFAULT hal/esp32c6/include/hal/adc_ll.h
+	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_B(1)
 	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_DIV_A(0)
 	esp.PCR.SetSARADC_CLKM_CONF_SARADC_CLKM_EN(1)
 
-	// Power up the SAR ADC and configure FSM timing (same register layout as C3).
-	esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(1)
-	esp.APB_SARADC.SetFSM_WAIT_SARADC_XPD_WAIT(8)
-	esp.APB_SARADC.SetFSM_WAIT_SARADC_RSTB_WAIT(8)
-	esp.APB_SARADC.SetFSM_WAIT_SARADC_STANDBY_WAIT(100)
+	// Power up the SAR ADC in software  mode (3), no FSM config needed, FSM_REG defaults to 0x00FF0808
+	esp.APB_SARADC.SetCTRL_SARADC_XPD_SAR_FORCE(3)
+	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_GATED(1)
+	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_DIV(1)
 
 	adcSelfCalibrate()
 }
@@ -62,84 +76,35 @@ func (a ADC) Get() uint16 {
 	if a.Pin > 6 {
 		return 0
 	}
-	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_ATTEN(atten11dB)
+
+	// Clear stale DONE
 	esp.APB_SARADC.SetINT_CLR_APB_SARADC1_DONE_INT_CLR(1)
-	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
+
+	// Disable oneshot conversion trigger for ADC unit
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(0)
+
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_CHANNEL(uint32(a.Pin))
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_ATTEN(atten11dB)
+
+	// Select ADC1 one-time mode
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(1)
+
+	// Trigger one-time conversion
+	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
+	// No delay needed here because adc_ctrl_clk is fast (>= APB_CLK_FREQ/8).
+	// ESP-IDF evaluates this condition and calls esp_rom_delay_us(0).
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(1)
+
 	for esp.APB_SARADC.GetINT_RAW_APB_SARADC1_DONE_INT_RAW() == 0 {
 	}
 	raw := esp.APB_SARADC.GetSAR1DATA_STATUS_APB_SARADC1_DATA()
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC_ONETIME_START(0)
 	esp.APB_SARADC.SetONETIME_SAMPLE_SARADC1_ONETIME_SAMPLE(0)
+
 	return uint16(raw&0xfff) << 4
 }
 
-// ── regI2C: internal I2C-bus (LP_I2C_ANA_MST) for SAR ADC calibration ───────
-//
-// On ESP32-C6 the "REGI2C" master moved from the embedded SENS/APB_SARADC
-// controller (0x6000_E000) used on C3/S3 to the dedicated LP_I2C_ANA_MST
-// peripheral at 0x600b_2400. The SAR ADC block address and register layout
-// (DREF, ENCAL_GND, INIT_CODE) remain identical to C3.
-//
-// LP_I2C_ANA_MST.I2C0_CTRL bit layout (25-bit command field):
-//   [7:0]  = slave block address (0x69 for I2C_SAR_ADC)
-//   [15:8] = register address within the block
-//   [23:16]= write data (8 bits)
-//   [24]   = WR_CNTL: 0=read, 1=write
-//   [25]   = BUSY (read-only, set by hardware while processing)
-//
-// Source: components/esp_rom/patches/esp_rom_regi2c_esp32c6.c in esp-idf
-
-// regI2C wraps the internal I2C bus used for SAR ADC calibration registers.
-// Fields hold chip-specific parameters.
-type regI2C struct {
-	// hostID is the I2C_SAR_ADC_HOSTID (0 for ESP32-C6, matching regi2c_saradc.h).
-	hostID uint8
-	// drefInit is the DREF reference value written during calibrationInit (1 for C6).
-	drefInit uint8
-}
-
-// SAR ADC I2C register layout — identical to ESP32-C3 / ESP32-S3.
-// Source: soc/esp32c6/include/soc/regi2c_saradc.h
-const (
-	i2cSarADC = uint8(0x69)
-
-	adc1DrefAddr = uint8(0x2)
-	adc1DrefMSB  = uint8(6)
-	adc1DrefLSB  = uint8(4)
-	adc2DrefAddr = uint8(0x5)
-	adc2DrefMSB  = uint8(6)
-	adc2DrefLSB  = uint8(4)
-
-	adc1EncalGndAddr = uint8(0x7)
-	adc1EncalGndMSB  = uint8(5)
-	adc1EncalGndLSB  = uint8(5)
-	adc2EncalGndAddr = uint8(0x7)
-	adc2EncalGndMSB  = uint8(7)
-	adc2EncalGndLSB  = uint8(7)
-
-	adc1InitCodeHighAddr = uint8(0x1)
-	adc1InitCodeHighMSB  = uint8(3)
-	adc1InitCodeHighLSB  = uint8(0)
-	adc1InitCodeLowAddr  = uint8(0x0)
-	adc1InitCodeLowMSB   = uint8(7)
-	adc1InitCodeLowLSB   = uint8(0)
-	adc2InitCodeHighAddr = uint8(0x4)
-	adc2InitCodeHighMSB  = uint8(3)
-	adc2InitCodeHighLSB  = uint8(0)
-	adc2InitCodeLowAddr  = uint8(0x3)
-	adc2InitCodeLowMSB   = uint8(7)
-	adc2InitCodeLowLSB   = uint8(0)
-
-	// adcCalOffsetRange is the binary search upper bound (12-bit full scale).
-	adcCalOffsetRange = uint32(4096)
-	// adcCalMaxIterations caps binary search iterations.
-	adcCalMaxIterations = 16
-)
-
-// LP_I2C_ANA_MST I2C0_CTRL bit-field shifts (see file header comment).
+// LP_I2C_ANA_MST I2C0_CTRL bit-field shifts.
 const (
 	c6SlaveIDShift = 0  // bits [7:0]
 	c6AddrShift    = 8  // bits [15:8]
@@ -206,101 +171,6 @@ func (r regI2C) writeMask(regAddr, msb, lsb, data uint8) {
 	volatile.StoreUint32(&ctrl.Reg, writeCmd)
 	for volatile.LoadUint32(&ctrl.Reg)&c6BusyBit != 0 {
 	}
-}
-
-// calibrationInit sets the DREF reference for the selected ADC unit.
-func (r regI2C) calibrationInit(adcN uint8) {
-	if adcN == 0 {
-		r.writeMask(adc1DrefAddr, adc1DrefMSB, adc1DrefLSB, r.drefInit)
-	} else {
-		r.writeMask(adc2DrefAddr, adc2DrefMSB, adc2DrefLSB, r.drefInit)
-	}
-}
-
-// calibrationPrepare enables ENCAL_GND so the ADC input is shorted to ground.
-func (r regI2C) calibrationPrepare(adcN uint8) {
-	if adcN == 0 {
-		r.writeMask(adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 1)
-	} else {
-		r.writeMask(adc2EncalGndAddr, adc2EncalGndMSB, adc2EncalGndLSB, 1)
-	}
-}
-
-// calibrationFinish clears ENCAL_GND to reconnect the ADC input to the pad.
-func (r regI2C) calibrationFinish(adcN uint8) {
-	if adcN == 0 {
-		r.writeMask(adc1EncalGndAddr, adc1EncalGndMSB, adc1EncalGndLSB, 0)
-	} else {
-		r.writeMask(adc2EncalGndAddr, adc2EncalGndMSB, adc2EncalGndLSB, 0)
-	}
-}
-
-// setCalibrationParam writes the INIT_CODE (offset trim) for the selected ADC unit.
-func (r regI2C) setCalibrationParam(adcN uint8, param uint32) {
-	msb := uint8(param >> 8)
-	lsb := uint8(param & 0xFF)
-	if adcN == 0 {
-		r.writeMask(adc1InitCodeHighAddr, adc1InitCodeHighMSB, adc1InitCodeHighLSB, msb)
-		r.writeMask(adc1InitCodeLowAddr, adc1InitCodeLowMSB, adc1InitCodeLowLSB, lsb)
-	} else {
-		r.writeMask(adc2InitCodeHighAddr, adc2InitCodeHighMSB, adc2InitCodeHighLSB, msb)
-		r.writeMask(adc2InitCodeLowAddr, adc2InitCodeLowMSB, adc2InitCodeLowLSB, lsb)
-	}
-}
-
-// calibrateBinarySearch runs the ADC self-calibration binary search loop.
-// It performs 'iterations' rounds, drops the min/max outliers, and returns
-// the rounded mean of the remaining values. Matches adc_hal_self_calibration().
-func (r regI2C) calibrateBinarySearch(adcN uint8, iterations int, readADC func() uint32) uint32 {
-	if iterations > adcCalMaxIterations {
-		iterations = adcCalMaxIterations
-	}
-	var codeList [adcCalMaxIterations]uint32
-	var codeSum uint32
-
-	for rpt := 0; rpt < iterations; rpt++ {
-		codeH := adcCalOffsetRange
-		codeL := uint32(0)
-		chkCode := (codeH + codeL) / 2
-		r.setCalibrationParam(adcN, chkCode)
-		selfCal := readADC()
-
-		for codeH-codeL > 1 {
-			if selfCal == 0 {
-				codeH = chkCode
-			} else {
-				codeL = chkCode
-			}
-			chkCode = (codeH + codeL) / 2
-			r.setCalibrationParam(adcN, chkCode)
-			selfCal = readADC()
-			if codeH-codeL == 1 {
-				chkCode++
-				r.setCalibrationParam(adcN, chkCode)
-				selfCal = readADC()
-			}
-		}
-		codeList[rpt] = chkCode
-		codeSum += chkCode
-	}
-
-	codeMin := codeList[0]
-	codeMax := codeList[0]
-	for i := 0; i < iterations; i++ {
-		if codeList[i] < codeMin {
-			codeMin = codeList[i]
-		}
-		if codeList[i] > codeMax {
-			codeMax = codeList[i]
-		}
-	}
-	remaining := codeSum - codeMax - codeMin
-	divisor := uint32(iterations - 2)
-	finalCode := remaining / divisor
-	if remaining%divisor >= 4 {
-		finalCode++
-	}
-	return finalCode
 }
 
 // ── Self-calibration ──────────────────────────────────────────────────────────
@@ -389,4 +259,106 @@ func c6ApplyADC1Code(reg regI2C, code uint32) {
 	reg.calibrationPrepare(0)
 	reg.setCalibrationParam(0, code)
 	reg.calibrationFinish(0)
+}
+
+// Enables the modem FE clock for the ADC.
+// Ported from s_sar_power_acquire() in esp_hw_support/port/esp32c6/sar_periph_ctrl.c.
+func modemClockModuleEnableForADC() {
+	initModemClocks()
+
+	// Enable Modem Clk - ADC ( => see modem_clock_device_enable(ctx, 1))
+	esp.MODEM_SYSCON.SetCLK_CONF1_CLK_FE_APB_EN(1)
+	esp.MODEM_SYSCON.SetCLK_CONF1_CLK_FE_80M_EN(1)
+}
+
+type c6ModemClockDomain int
+
+const (
+	modemClockDomainModemAPB c6ModemClockDomain = iota // see hal/include/hal/modem_clock_types.h
+	modemClockDomainModemPeriph
+	modemClockDomainWiFi
+	modemClockDomainBT
+	modemClockDomainModemFE
+	modemClockDomainIEEE802154
+	modemClockDomainLPAPB
+	modemClockDomainI2CMaster
+	modemClockDomainCoex
+	modemClockDomainWiFiPwr
+	modemClockDomainMax
+)
+
+const (
+	pmuHpIcgModemCodeSleep  = 0 // see esp_hw_support/include/esp_private/esp_pmu.h
+	pmuHpIcgModemCodeModem  = 1
+	pmuHpIcgModemCodeActive = 2
+)
+
+// The ICG code's bit 0, 1 and 2 indicates the ICG state
+// of pmu SLEEP, MODEM and ACTIVE mode respectively
+const (
+	icgNogatingActive = 1 << pmuHpIcgModemCodeActive // see esp_hw_support/modem_clock.c
+	icgNogatingSleep  = 1 << pmuHpIcgModemCodeSleep
+	icgNogatingModem  = 1 << pmuHpIcgModemCodeModem
+)
+
+// Sets the default modem ICG bitmaps.
+// Ported from modem_clock_module_icg_map_init_all() in esp_hw_support/modem_clock.c.
+func initModemClocks() {
+	for domain := modemClockDomainModemAPB; domain < modemClockDomainMax; domain++ {
+		bitmap := getInitialGatingMode(domain)
+		modemClockSetClockDomainICGBitmap(domain, bitmap)
+	}
+}
+
+// Ported from initial_gating_mode in esp_hw_support/modem_clock.c.
+func getInitialGatingMode(domain c6ModemClockDomain) uint32 {
+	switch domain {
+	case modemClockDomainModemAPB:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_MODEM_APB_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainModemPeriph:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_MODEM_PERI_ST_MAP() | icgNogatingActive
+	case modemClockDomainWiFi:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_WIFI_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainBT:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_BT_ST_MAP() | icgNogatingActive
+	case modemClockDomainModemFE:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_FE_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainIEEE802154:
+		return esp.MODEM_SYSCON.GetCLK_CONF_POWER_ST_CLK_ZB_ST_MAP() | icgNogatingActive
+	case modemClockDomainLPAPB:
+		return esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_LP_APB_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainI2CMaster:
+		return esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_I2C_MST_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainCoex:
+		return esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_COEX_ST_MAP() | icgNogatingActive | icgNogatingModem
+	case modemClockDomainWiFiPwr:
+		return esp.MODEM_LPCON.GetCLK_CONF_POWER_ST_CLK_WIFIPWR_ST_MAP() | icgNogatingActive | icgNogatingModem
+	}
+	return 0
+}
+
+// Ported from hal/esp32c6/modem_clock_hal.c.
+func modemClockSetClockDomainICGBitmap(domain c6ModemClockDomain, bitmap uint32) {
+	switch domain {
+	case modemClockDomainModemAPB:
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_MODEM_APB_ST_MAP(bitmap)
+	case modemClockDomainModemPeriph:
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_MODEM_PERI_ST_MAP(bitmap)
+	case modemClockDomainWiFi:
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_WIFI_ST_MAP(bitmap)
+	case modemClockDomainBT:
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_BT_ST_MAP(bitmap)
+	case modemClockDomainModemFE:
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_FE_ST_MAP(bitmap)
+	case modemClockDomainIEEE802154:
+		esp.MODEM_SYSCON.SetCLK_CONF_POWER_ST_CLK_ZB_ST_MAP(bitmap)
+	case modemClockDomainLPAPB:
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_LP_APB_ST_MAP(bitmap)
+	case modemClockDomainI2CMaster:
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_I2C_MST_ST_MAP(bitmap)
+	case modemClockDomainCoex:
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_COEX_ST_MAP(bitmap)
+	case modemClockDomainWiFiPwr:
+		esp.MODEM_LPCON.SetCLK_CONF_POWER_ST_CLK_WIFIPWR_ST_MAP(bitmap)
+	}
 }

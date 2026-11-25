@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -36,15 +37,14 @@ func LowerInterrupts(mod llvm.Module) []error {
 	handleMap := map[int64][]llvm.Value{}
 	handleType := mod.GetTypeByName("runtime/interrupt.handle")
 	if !handleType.IsNil() {
-		for global := mod.FirstGlobal(); !global.IsNil(); global = llvm.NextGlobal(global) {
+		for global := range llvmutil.Globals(mod) {
 			if global.GlobalValueType() != handleType {
 				continue
 			}
 
 			// Get the interrupt number from the initializer
 			initializer := global.Initializer()
-			interrupt := builder.CreateExtractValue(initializer, 2, "")
-			num := builder.CreateExtractValue(interrupt, 0, "").SExtValue()
+			num := initializer.AggregateElement(2).AggregateElement(0).SExtValue()
 			pkg := packageFromInterruptHandle(global)
 
 			handles, exists := handleMap[num]
@@ -89,8 +89,8 @@ func LowerInterrupts(mod llvm.Module) []error {
 			builder.SetInsertPointBefore(call)
 			for _, handler := range handlers {
 				initializer := handler.Initializer()
-				context := builder.CreateExtractValue(initializer, 0, "")
-				funcPtr := builder.CreateExtractValue(initializer, 1, "").Operand(0)
+				context := initializer.AggregateElement(0)
+				funcPtr := initializer.AggregateElement(1).Operand(0)
 				builder.CreateCall(funcPtr.GlobalValueType(), funcPtr, []llvm.Value{
 					num,
 					context,

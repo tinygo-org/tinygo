@@ -11,32 +11,38 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+type recoverableError struct {
+	reason string
+}
+
+func (e *recoverableError) Error() string {
+	return e.reason
+}
+
 // These errors are expected during normal execution and can be recovered from
 // by running the affected function at runtime instead of compile time.
 var (
-	errIntegerAsPointer       = errors.New("interp: trying to use an integer as a pointer (memory-mapped I/O?)")
-	errUnsupportedInst        = errors.New("interp: unsupported instruction")
-	errUnsupportedRuntimeInst = errors.New("interp: unsupported instruction (to be emitted at runtime)")
-	errMapAlreadyCreated      = errors.New("interp: map already created")
-	errLoopUnrolled           = errors.New("interp: loop unrolled")
-	errLoopTooLong            = errors.New("interp: loop ran too many iterations")
+	errIntegerAsPointer = &recoverableError{reason: "interp: trying to use an integer as a pointer (memory-mapped I/O?)"}
+	errUnsupportedInst  = &recoverableError{reason: "interp: unsupported instruction"}
+
+	// This is one of the errors that can be returned from toLLVMValue when the
+	// passed type does not fit the data to serialize. It is recoverable by
+	// serializing without a type (using rawValue.rawLLVMValue).
+	errInvalidPtrToIntSize = &recoverableError{reason: "interp: ptrtoint integer size does not equal pointer size"}
 )
 
-// This is one of the errors that can be returned from toLLVMValue when the
-// passed type does not fit the data to serialize. It is recoverable by
-// serializing without a type (using rawValue.rawLLVMValue).
-var errInvalidPtrToIntSize = errors.New("interp: ptrtoint integer size does not equal pointer size")
-
 func isRecoverableError(err error) bool {
-	return err == errIntegerAsPointer || err == errUnsupportedInst ||
-		err == errUnsupportedRuntimeInst || err == errMapAlreadyCreated ||
-		err == errLoopUnrolled || err == errLoopTooLong || err == errInvalidPtrToIntSize
+	_, ok := errors.AsType[*recoverableError](err)
+	return ok
 }
 
 // ErrorLine is one line in a traceback. The position may be missing.
 type ErrorLine struct {
 	Pos  token.Position
 	Inst string
+
+	// inst is printed into Inst by Error.materialize.
+	inst llvm.Value
 }
 
 // Error encapsulates compile-time interpretation errors with an associated
@@ -47,11 +53,20 @@ type Error struct {
 	Pos        token.Position
 	Err        error
 	Traceback  []ErrorLine
+
+	// inst is printed into Inst by materialize. Printing walks the whole
+	// module, so errors that are recovered from are never printed.
+	inst llvm.Value
 }
 
-// Error returns the string of the first error in the list of errors.
+// Error returns the string of the first error in the list of errors. A
+// recoverable error also names the function it happened in.
 func (e *Error) Error() string {
-	return e.Pos.String() + ": " + e.Err.Error()
+	s := e.Pos.String() + ": " + e.Err.Error()
+	if isRecoverableError(e.Err) && !e.inst.IsNil() {
+		s += " (in " + e.inst.InstructionParent().Parent().Name() + ")"
+	}
+	return s
 }
 
 // errorAt returns an error value for the currently interpreted package at the
@@ -61,11 +76,32 @@ func (r *runner) errorAt(inst instruction, err error) *Error {
 	pos := getPosition(inst.llvmInst)
 	return &Error{
 		ImportPath: r.pkgName,
-		Inst:       inst.llvmInst.String(),
 		Pos:        pos,
 		Err:        err,
-		Traceback:  []ErrorLine{{pos, inst.llvmInst.String()}},
+		Traceback:  []ErrorLine{{Pos: pos, inst: inst.llvmInst}},
+		inst:       inst.llvmInst,
 	}
+}
+
+// rollbackAt returns a recoverable error at the location of the instruction,
+// which makes interp run the function at runtime instead.
+func (r *runner) rollbackAt(inst instruction, reason string) *Error {
+	return r.errorAt(inst, &recoverableError{reason: "interp: " + reason})
+}
+
+// materialize fills in the printed instructions of e and its traceback. It
+// must be called before the error is returned out of the interp package.
+func (e *Error) materialize() *Error {
+	if e.Inst == "" && !e.inst.IsNil() {
+		e.Inst = e.inst.String()
+	}
+	for i := range e.Traceback {
+		line := &e.Traceback[i]
+		if line.Inst == "" && !line.inst.IsNil() {
+			line.Inst = line.inst.String()
+		}
+	}
+	return e
 }
 
 // errorAt returns an error value at the location of the instruction.

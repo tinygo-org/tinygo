@@ -1,6 +1,9 @@
 package transform
 
-import "tinygo.org/x/go-llvm"
+import (
+	"github.com/tinygo-org/tinygo/internal/llvmutil"
+	"tinygo.org/x/go-llvm"
+)
 
 // AddUnwindAssumptions records that normal Go calls only begin while the
 // transient Asyncify unwind signal is clear. Asyncify panic unwinding is
@@ -16,14 +19,11 @@ func AddUnwindAssumptions(mod llvm.Module) bool {
 		return false
 	}
 	unwind := mod.NamedFunction("runtime.unwindPending")
-	if unwind.IsNil() {
-		return false
-	}
 
 	functions := make(map[llvm.Value]struct{})
 	// Suspension-safe catchers call unwindPending indirectly and are
 	// intentionally absent from this set.
-	for _, call := range getUses(unwind) {
+	for call := range llvmutil.Uses(unwind) {
 		if call.IsACallInst().IsNil() || call.CalledValue() != unwind {
 			continue
 		}

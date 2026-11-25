@@ -133,8 +133,6 @@ func (p Pin) configure(config PinConfig, signal uint32) {
 	}
 }
 
-func initI2CExt1Clock() {}
-
 // outFunc returns the FUNCx_OUT_SEL_CFG register used for configuring the
 // output function selection.
 func (p Pin) outFunc() *volatile.Register32 {
@@ -142,7 +140,7 @@ func (p Pin) outFunc() *volatile.Register32 {
 }
 
 func (p Pin) pinReg() *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Pointer((uintptr(unsafe.Pointer(&esp.GPIO.PIN0)) + uintptr(p)*4)))
+	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.GPIO.PIN0), uintptr(p)*4))
 }
 
 // inFunc returns the FUNCy_IN_SEL_CFG register used for configuring the input
@@ -271,6 +269,11 @@ func setupPinInterrupt() error {
 	}).Enable()
 }
 
+func init() {
+	UART0.interrupt = interrupt.New(cpuInterruptFromUART0, _UART0.serveInterrupt)
+	UART1.interrupt = interrupt.New(cpuInterruptFromUART1, _UART1.serveInterrupt)
+}
+
 var (
 	DefaultUART = UART0
 
@@ -279,69 +282,48 @@ var (
 	UART1  = &_UART1
 	_UART1 = UART{Bus: esp.UART1, Buffer: NewRingBuffer()}
 
-	onceUart            = sync.Once{}
 	errSamePins         = errors.New("UART: invalid pin combination")
 	errWrongUART        = errors.New("UART: unsupported UARTn")
 	errWrongBitSize     = errors.New("UART: invalid data size")
 	errWrongStopBitSize = errors.New("UART: invalid bit size")
 )
 
-type UART struct {
-	Bus                  *esp.UART_Type
-	Buffer               *RingBuffer
-	ParityErrorDetected  bool // set when parity error detected
-	DataErrorDetected    bool // set when data corruption detected
-	DataOverflowDetected bool // set when data overflow detected in UART FIFO buffer or RingBuffer
-}
-
-const (
-	defaultDataBits = 8
-	defaultStopBit  = 1
-	defaultParity   = ParityNone
-
-	uartInterrupts = esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA |
-		esp.UART_INT_ENA_PARITY_ERR_INT_ENA |
-		esp.UART_INT_ENA_FRM_ERR_INT_ENA |
-		esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA |
-		esp.UART_INT_ENA_GLITCH_DET_INT_ENA
-
-	pplClockFreq = 80e6
-)
+const uartClockFreq = 80_000_000 // APB_CLK, SCLK_SEL 1. See ESP-IDF hal/esp32c3/include/hal/uart_ll.h uart_ll_set_sclk.
 
 type registerSet struct {
+	cpuInterrupt     uint32
 	interruptMapReg  *volatile.Register32
 	uartClockBitMask uint32
 	gpioMatrixSignal uint32
 }
 
-func (uart *UART) Configure(config UARTConfig) error {
-	if config.BaudRate == 0 {
-		config.BaudRate = 115200
-	}
-	if config.TX == config.RX {
-		return errSamePins
-	}
-	switch {
-	case uart.Bus == esp.UART0:
-		return uart.configure(config, registerSet{
+const (
+	cpuInterruptFromUART0 = 7
+	cpuInterruptFromUART1 = 8
+)
+
+func busFor(bus *esp.UART_Type) registerSet {
+	switch bus {
+	case esp.UART0:
+		return registerSet{
+			cpuInterrupt:     cpuInterruptFromUART0,
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART_INTR_MAP,
 			uartClockBitMask: esp.SYSTEM_PERIP_CLK_EN0_UART_CLK_EN,
 			gpioMatrixSignal: 6,
-		})
-	case uart.Bus == esp.UART1:
-		return uart.configure(config, registerSet{
+		}
+	case esp.UART1:
+		return registerSet{
+			cpuInterrupt:     cpuInterruptFromUART1,
 			interruptMapReg:  &esp.INTERRUPT_CORE0.UART1_INTR_MAP,
 			uartClockBitMask: esp.SYSTEM_PERIP_CLK_EN0_UART1_CLK_EN,
 			gpioMatrixSignal: 9,
-		})
+		}
+	default:
+		return registerSet{}
 	}
-	return errWrongUART
 }
 
 func (uart *UART) configure(config UARTConfig, regs registerSet) error {
-
-	initUARTClock(uart.Bus, regs)
-
 	// - disable TX/RX clock to make sure the UART transmitter or receiver is not at work during configuration
 	uart.Bus.SetCLK_CONF_TX_SCLK_EN(0)
 	uart.Bus.SetCLK_CONF_RX_SCLK_EN(0)
@@ -358,7 +340,7 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 	// - the baud rate
 	uart.SetBaudRate(config.BaudRate)
 	// - the data format
-	uart.SetFormat(defaultDataBits, defaultStopBit, defaultParity)
+	uart.setFormat(defaultDataBits, defaultStopBit, defaultParity)
 	// - set UART mode
 	uart.Bus.SetRS485_CONF_RS485_EN(0)
 	uart.Bus.SetRS485_CONF_RS485TX_RX_EN(0)
@@ -372,7 +354,7 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 	uart.Bus.SetID_REG_UPDATE(1)
 
 	uart.setupPins(config, regs)
-	uart.configureInterrupt(regs.interruptMapReg)
+	uart.configureInterrupt(regs)
 	uart.enableTransmitter()
 	uart.enableReceiver()
 
@@ -382,13 +364,11 @@ func (uart *UART) configure(config UARTConfig, regs registerSet) error {
 	return nil
 }
 
-func (uart *UART) SetFormat(dataBits, stopBits int, parity UARTParity) error {
-	if dataBits < 5 {
-		return errWrongBitSize
-	}
-	if stopBits > 1 {
-		return errWrongStopBitSize
-	}
+// uartSync does nothing. The C3 configuration registers do not need a sync.
+// See ESP-IDF hal/esp32c3/include/hal/uart_ll.h uart_ll_set_data_bit_num.
+func uartSync(bus *esp.UART_Type) {}
+
+func (uart *UART) setFormat(dataBits, stopBits int, parity UARTParity) {
 	// - data length
 	uart.Bus.SetCONF0_BIT_NUM(uint32(dataBits - 5))
 	// - stop bit
@@ -404,7 +384,6 @@ func (uart *UART) SetFormat(dataBits, stopBits int, parity UARTParity) error {
 		uart.Bus.SetCONF0_PARITY_EN(1)
 		uart.Bus.SetCONF0_PARITY(1)
 	}
-	return nil
 }
 
 func initUARTClock(bus *esp.UART_Type, regs registerSet) {
@@ -433,119 +412,21 @@ func initUARTClock(bus *esp.UART_Type, regs registerSet) {
 }
 
 func (uart *UART) SetBaudRate(baudRate uint32) {
-	// based on esp-idf
-	max_div := uint32((1 << 12) - 1)
-	sclk_div := (pplClockFreq + (max_div * baudRate) - 1) / (max_div * baudRate)
-	clk_div := (pplClockFreq << 4) / (baudRate * sclk_div)
+	clk_div, sclk_div := uartDividers(baudRate)
 	uart.Bus.SetCLKDIV(clk_div >> 4)
 	uart.Bus.SetCLKDIV_FRAG(clk_div & 0xf)
 	uart.Bus.SetCLK_CONF_SCLK_DIV_NUM(sclk_div - 1)
 }
 
-func (uart *UART) setupPins(config UARTConfig, regs registerSet) {
-	config.RX.Configure(PinConfig{Mode: PinInputPullup})
-	config.TX.Configure(PinConfig{Mode: PinInputPullup})
+func uartEnableTX(pin Pin) {}
 
-	// link TX with GPIO signal X (technical reference manual 5.10) (this is not interrupt signal!)
-	if config.InvertTX {
-		config.TX.outFunc().Set(regs.gpioMatrixSignal | esp.GPIO_FUNC_OUT_SEL_CFG_INV_SEL)
-	} else {
-		config.TX.outFunc().Set(regs.gpioMatrixSignal)
-	}
-	// link RX with GPIO signal X and route signals via GPIO matrix (GPIO_SIGn_IN_SEL 0x40)
-	if config.InvertRX {
-		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX) | esp.GPIO_FUNC_IN_SEL_CFG_IN_INV_SEL)
-	} else {
-		inFunc(regs.gpioMatrixSignal).Set(esp.GPIO_FUNC_IN_SEL_CFG_SEL | uint32(config.RX))
-	}
+func uartSetTXFIFORST(bus *esp.UART_Type, value uint32) {
+	bus.SetCONF0_TXFIFO_RST(value)
 }
 
-func (uart *UART) configureInterrupt(intrMapReg *volatile.Register32) { // Disable all UART interrupts
-	// Disable all UART interrupts
-	uart.Bus.INT_ENA.ClearBits(0x0ffff)
-
-	intrMapReg.Set(7)
-	onceUart.Do(func() {
-		_ = interrupt.New(7, func(i interrupt.Interrupt) {
-			UART0.serveInterrupt(0)
-			UART1.serveInterrupt(1)
-		}).Enable()
-	})
+func uartSetRXFIFORST(bus *esp.UART_Type, value uint32) {
+	bus.SetCONF0_RXFIFO_RST(value)
 }
-
-func (uart *UART) serveInterrupt(num int) {
-	// get interrupt status
-	interrutFlag := uart.Bus.INT_ST.Get()
-	if (interrutFlag & uartInterrupts) == 0 {
-		return
-	}
-
-	// block UART interrupts while processing
-	uart.Bus.INT_ENA.ClearBits(uartInterrupts)
-
-	if interrutFlag&esp.UART_INT_ENA_RXFIFO_FULL_INT_ENA > 0 {
-		for uart.Bus.GetSTATUS_RXFIFO_CNT() > 0 {
-			b := uart.Bus.GetFIFO_RXFIFO_RD_BYTE()
-			if !uart.Buffer.Put(byte(b & 0xff)) {
-				uart.DataOverflowDetected = true
-			}
-		}
-	}
-	if interrutFlag&esp.UART_INT_ENA_PARITY_ERR_INT_ENA > 0 {
-		uart.ParityErrorDetected = true
-	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_FRM_ERR_INT_ENA {
-		uart.DataErrorDetected = true
-	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_RXFIFO_OVF_INT_ENA {
-		uart.DataOverflowDetected = true
-	}
-	if 0 != interrutFlag&esp.UART_INT_ENA_GLITCH_DET_INT_ENA {
-		uart.DataErrorDetected = true
-	}
-
-	// Clear the UART interrupt status
-	uart.Bus.INT_CLR.SetBits(interrutFlag)
-	uart.Bus.INT_CLR.ClearBits(interrutFlag)
-	// Enable interrupts
-	uart.Bus.INT_ENA.Set(uartInterrupts)
-}
-
-const uart_empty_thresh_default = 10
-
-func (uart *UART) enableTransmitter() {
-	uart.Bus.SetCONF0_TXFIFO_RST(1)
-	uart.Bus.SetCONF0_TXFIFO_RST(0)
-	// TXINFO empty threshold is when txfifo_empty_int interrupt produced after the amount of data in Tx-FIFO is less than this register value.
-	uart.Bus.SetCONF1_TXFIFO_EMPTY_THRHD(uart_empty_thresh_default)
-	// we are not using interrupt on TX since write we are waiting for FIFO to have space.
-	// uart.Bus.INT_ENA.SetBits(esp.UART_INT_ENA_TXFIFO_EMPTY_INT_ENA)
-}
-
-func (uart *UART) enableReceiver() {
-	uart.Bus.SetCONF0_RXFIFO_RST(1)
-	uart.Bus.SetCONF0_RXFIFO_RST(0)
-	// using value 1 so that we can start populate ring buffer with data as we get it
-	uart.Bus.SetCONF1_RXFIFO_FULL_THRHD(1)
-	// enable interrupts for:
-	uart.Bus.SetINT_ENA_RXFIFO_FULL_INT_ENA(1)
-	uart.Bus.SetINT_ENA_FRM_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_PARITY_ERR_INT_ENA(1)
-	uart.Bus.SetINT_ENA_GLITCH_DET_INT_ENA(1)
-	uart.Bus.SetINT_ENA_RXFIFO_OVF_INT_ENA(1)
-}
-
-func (uart *UART) writeByte(b byte) error {
-	for (uart.Bus.STATUS.Get()&esp.UART_STATUS_TXFIFO_CNT_Msk)>>esp.UART_STATUS_TXFIFO_CNT_Pos >= 128 {
-		// Read UART_TXFIFO_CNT from the status register, which indicates how
-		// many bytes there are in the transmit buffer. Wait until there are
-		// less than 128 bytes in this buffer (the default buffer size).
-	}
-	uart.Bus.FIFO.Set(uint32(b))
-	return nil
-}
-
-func (uart *UART) flush() {}
 
 // GetRNG returns 32-bit random numbers using the ESP32-C3 true random number generator,
 // Random numbers are generated based on the thermal noise in the system and the

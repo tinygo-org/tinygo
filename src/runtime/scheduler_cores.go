@@ -58,7 +58,7 @@ func scheduleTaskNoWake(t *task.Task) {
 		runqueue.Push(t)
 		// ...and wake up a sleeping core, if there is one.
 		// (If all cores are already busy, this is a no-op).
-		schedulerWake()
+		schedulerWakeTask(t)
 	case task.RunStateRunning:
 		// Not yet paused (probably going to pause very soon), so let the
 		// Pause() function know it can resume immediately.
@@ -110,8 +110,65 @@ func NumCPU() int {
 	return numCPU
 }
 
+// Wake a core that may run the given task.
+// Must be called with the scheduler lock held.
+func schedulerWakeTask(t *task.Task) {
+	if t.Affinity.Core != 0 {
+		schedulerWakeCore(uint32(t.Affinity.Core - 1))
+	} else {
+		schedulerWake()
+	}
+}
+
+//go:linkname assignCore machine.assignCore
+func assignCore(core int) {
+	if core < 0 || core >= numCPU {
+		panic("machine: core out of range")
+	}
+	t := task.Current()
+	if t.Affinity.Core != 0 {
+		panic("machine: AssignCore called twice")
+	}
+	if core != int(currentCPU()) && secondaryCoresReady.Load() == 0 {
+		panic("machine: AssignCore called before all cores have started")
+	}
+	t.Affinity.Core = uint8(core) + 1
+	if core == int(currentCPU()) {
+		return
+	}
+
+	// Move to the target core.
+	schedulerLock.Lock()
+	runqueue.Push(t)
+	schedulerWakeCore(uint32(core))
+	task.PauseLocked()
+}
+
+// reserveTimerRoom makes sure the timer queue can take one more node, plus one
+// re-added node for each core running a timer callback, without allocating.
+// Allocating with the lock held can start a GC that waits for a core spinning on
+// the lock with interrupts off. The lock is released while allocating. Call with
+// the scheduler lock held.
+func reserveTimerRoom() {
+	for {
+		need := timerQueueRoom(numCPU)
+		if !timerQueueFull(need) {
+			return
+		}
+		n := 2*need + 1
+		if timerQueue != nil && 2*cap(timerQueue.nodes)+1 > n {
+			n = 2*cap(timerQueue.nodes) + 1
+		}
+		schedulerLock.Unlock()
+		h := &timerHeap{nodes: make([]*timerNode, 0, n)}
+		schedulerLock.Lock()
+		timerQueueGrow(h)
+	}
+}
+
 func addTimer(tn *timerNode) {
 	schedulerLock.Lock()
+	reserveTimerRoom()
 	timerQueueAdd(tn)
 	interruptSleepTicksMulticore(tn.whenTicks())
 	schedulerLock.Unlock()
@@ -119,7 +176,7 @@ func addTimer(tn *timerNode) {
 
 // reAddTimer finishes firing a timer. It re-adds periodic timers unless they
 // were stopped or reset while the callback was running.
-func reAddTimer(tn *timerNode) {
+func reAddTimer(tn *timerNode, delta int64) {
 	schedulerLock.Lock()
 
 	// Remove the timer from the firing list before re-adding it to the queue,
@@ -127,27 +184,34 @@ func reAddTimer(tn *timerNode) {
 	// firing list a second time (which would corrupt the list).
 	firingTimersRemove(tn)
 
-	if tn.stopped {
+	if tn.stopped || tn.timer.stopped {
 		// The timer was stopped or reset while its callback was running. Don't
 		// re-add it: a stopped ticker must stay stopped, and a reset ticker has
 		// already been re-added by resetTimer.
+		freeTimerNode(tn)
 		schedulerLock.Unlock()
 		return
 	}
 	if tn.timer.period == 0 {
+		freeTimerNode(tn)
 		schedulerLock.Unlock()
 		return
 	}
-	tn.timer.when += tn.timer.period
+	tn.timer.when = tn.timer.nextWhen(delta)
+	if tn.timer.isChan && tn.timer.blocked == 0 {
+		tn.timer.pausedNode = tn
+		schedulerLock.Unlock()
+		return
+	}
 	timerQueueAdd(tn)
 	interruptSleepTicksMulticore(tn.whenTicks())
 	schedulerLock.Unlock()
 }
 
-func removeTimer(t *timer) *timerNode {
+func removeTimer(t *timer, stopFiring bool) *timerNode {
 	schedulerLock.Lock()
 	n := timerQueueRemove(t)
-	if n == nil {
+	if n == nil && stopFiring {
 		// The timer wasn't in the queue. It might be running its callback right
 		// now; if so, mark it stopped so it won't be re-added.
 		firingTimerStop(t)
@@ -213,7 +277,7 @@ func run() {
 func scheduler(_ bool) {
 	for mainExited.Load() == 0 {
 		var now timeUnit
-		if sleepQueue != nil || timerQueue != nil {
+		if sleepQueue != nil || timerQueuePeek() != nil {
 			now = ticks()
 
 			// Check whether the first task in the sleep queue is ready to run.
@@ -222,7 +286,15 @@ func scheduler(_ bool) {
 				sleepQueue = sleepQueue.Next
 				sleepingTask.Next = nil
 
+				if !sleepingTask.CanRunOn(currentCPU()) {
+					// Assigned to another core, so hand it over.
+					runqueue.Push(sleepingTask)
+					schedulerWakeTask(sleepingTask)
+					continue
+				}
+
 				// Run it now.
+				schedulerHandOffClock()
 				setCurrentTask(sleepingTask)
 				sleepingTask.RunState = task.RunStateRunning
 				schedulerLock.Unlock() // unlock before resuming, Pause() will lock again
@@ -232,12 +304,10 @@ func scheduler(_ bool) {
 			}
 
 			// Check whether a timer has expired that needs to be run.
-			if timerQueue != nil && now >= timerQueue.whenTicks() {
-				delay := ticksToNanoseconds(now - timerQueue.whenTicks())
+			if next := timerQueuePeek(); next != nil && now >= next.whenTicks() {
+				delay := ticksToNanoseconds(now - next.whenTicks())
 				// Pop timer from queue.
-				tn := timerQueue
-				timerQueue = tn.next
-				tn.next = nil
+				tn := timerQueuePop()
 
 				// Mark the timer as firing, so that a concurrent Stop or Reset
 				// (via removeTimer) can prevent a periodic timer from re-adding
@@ -245,6 +315,7 @@ func scheduler(_ bool) {
 				firingTimersAdd(tn)
 
 				// Run the callback stored in this timer node.
+				schedulerHandOffClock()
 				schedulerLock.Unlock()
 				tn.callback(tn, delay)
 				schedulerLock.Lock()
@@ -253,8 +324,9 @@ func scheduler(_ bool) {
 		}
 
 		// Check for ready-to-run tasks.
-		if runnable := runqueue.Pop(); runnable != nil {
+		if runnable := runqueue.PopCore(currentCPU()); runnable != nil {
 			// Resume it now.
+			schedulerHandOffClock()
 			setCurrentTask(runnable)
 			runnable.RunState = task.RunStateRunning
 			schedulerLock.Unlock() // unlock before resuming, Pause() will lock again
@@ -280,12 +352,12 @@ func scheduler(_ bool) {
 			// positive.
 			timeLeft = timeUnit(sleepingTask.Data) - now
 		}
-		if timerQueue != nil {
+		if next := timerQueuePeek(); next != nil {
 			// If the timer queue needs to run earlier, reduce the time we are
 			// going to sleep.
 			// Like with sleepQueue, we already know there is no timer ready to
 			// run since we already checked above.
-			timeLeftForTimer := timerQueue.whenTicks() - now
+			timeLeftForTimer := next.whenTicks() - now
 			if sleepQueue == nil || timeLeftForTimer < timeLeft {
 				timeLeft = timeLeftForTimer
 			}
@@ -301,6 +373,14 @@ func scheduler(_ bool) {
 		// do.
 		// Wait until something happens (like an interrupt).
 		schedulerUnlockAndWait()
+	}
+}
+
+// This core stops watching the clock while it runs a task, so wake a waiting core
+// to watch it if tasks sleep or timers wait. Call with the scheduler lock held.
+func schedulerHandOffClock() {
+	if (sleepQueue != nil || timerQueue != nil) && !hasSleepingCore() {
+		schedulerWake()
 	}
 }
 
@@ -342,6 +422,17 @@ func lockAtomics() interrupt.State {
 func unlockAtomics(mask interrupt.State) {
 	atomicsLock.Unlock()
 	interrupt.Restore(mask)
+}
+
+// lockTimers takes the scheduler lock, which guards the timer queue and the
+// timer node free list.
+func lockTimers() interrupt.State {
+	schedulerLock.Lock()
+	return 0
+}
+
+func unlockTimers(mask interrupt.State) {
+	schedulerLock.Unlock()
 }
 
 var systemStack [numCPU]uintptr
