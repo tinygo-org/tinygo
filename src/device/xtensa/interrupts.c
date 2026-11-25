@@ -22,3 +22,60 @@ uintptr_t DisableInterrupts() {
     );
 	return mask;
 }
+
+uint32_t ReadINTENABLE() {
+    uint32_t val;
+    asm volatile(
+        "rsr %0, INTENABLE"
+        : "=r"(val)
+    );
+    return val;
+}
+
+void WriteINTENABLE(uint32_t val) {
+    // Wait for the INTENABLE write to complete, as xt_ints_on and xt_ints_off do.
+    // https://github.com/espressif/esp-idf/blob/master/components/xtensa/xtensa_intr_asm.S
+    asm volatile(
+        "wsr %0, INTENABLE\n\t"
+        "rsync"
+        :
+        : "r"(val)
+        : "memory"
+    );
+}
+
+uint32_t ReadINTERRUPT() {
+    uint32_t val;
+    asm volatile(
+        "rsr %0, INTERRUPT"
+        : "=r"(val)
+    );
+    return val;
+}
+
+void WriteINTCLEAR(uint32_t val) {
+    asm volatile(
+        "wsr %0, INTCLEAR"
+        :
+        : "r"(val)
+        : "memory"
+    );
+}
+
+void WriteVECBASE(uintptr_t val) {
+    asm volatile(
+        "wsr %0, VECBASE"
+        :
+        : "r"(val)
+        : "memory"
+    );
+}
+
+uintptr_t ReadPS() {
+    uintptr_t val;
+    asm volatile(
+        "rsr %0, PS"
+        : "=r"(val)
+    );
+    return val;
+}

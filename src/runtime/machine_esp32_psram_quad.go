@@ -6,8 +6,8 @@ package runtime
 // components/esp_psram/esp32/esp_psram_impl_quad.c, mode PSRAM_CACHE_F80M_S80M.
 
 import (
-	"device"
 	"device/esp"
+	"device/xtensa"
 	"runtime/volatile"
 	"unsafe"
 )
@@ -88,10 +88,9 @@ var romExtraWait [2]uint8
 // initPSRAM maps the PSRAM at psramAddr. It runs from IRAM with interrupts off,
 // because it changes SPI0, which also reads the flash.
 func initPSRAM() string {
-	state := device.AsmFull("rsil {}, 15", nil)
+	state := xtensa.DisableInterrupts()
 	reason := psramStart()
-	device.AsmFull("wsr {state}, PS", map[string]interface{}{"state": state})
-	device.Asm("rsync")
+	xtensa.EnableInterrupts(state)
 	if reason != psramOK {
 		return psramReasonText(reason)
 	}

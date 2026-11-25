@@ -3,7 +3,7 @@
 package interrupt
 
 import (
-	"device"
+	"device/xtensa"
 	"errors"
 )
 
@@ -180,20 +180,18 @@ func enableOnCore0(num uint32)
 
 // readINTENABLE reads the INTENABLE special register (SR 228).
 func readINTENABLE() uint32 {
-	return uint32(device.AsmFull("rsr {}, INTENABLE", nil))
+	return xtensa.ReadINTENABLE()
 }
 
 // writeINTENABLE writes the INTENABLE special register (SR 228).
 func writeINTENABLE(val uint32) {
-	device.AsmFull("wsr {val}, INTENABLE", map[string]interface{}{
-		"val": val,
-	})
+	xtensa.WriteINTENABLE(val)
 }
 
 // readINTERRUPT reads the INTERRUPT special register (SR 226), which
 // reflects the currently pending CPU interrupts.
 func readINTERRUPT() uint32 {
-	return uint32(device.AsmFull("rsr {}, INTERRUPT", nil))
+	return xtensa.ReadINTERRUPT()
 }
 
 // writeINTCLEAR writes the INTCLEAR special register (SR 227).
@@ -201,7 +199,5 @@ func readINTERRUPT() uint32 {
 // software-triggered.  Bits corresponding to level-triggered interrupts
 // are ignored by hardware.
 func writeINTCLEAR(val uint32) {
-	device.AsmFull("wsr {val}, INTCLEAR", map[string]interface{}{
-		"val": val,
-	})
+	xtensa.WriteINTCLEAR(val)
 }
