@@ -99,7 +99,6 @@ const (
 // DMA channels usable on the RP2040.
 var dmaChannels = (*[12 + 4*rp2350ExtraReg]dmaChannel)(unsafe.Pointer(rp.DMA))
 
-//go:inline
 func boolToBit(a bool) uint32 {
 	if a {
 		return 1
@@ -107,7 +106,6 @@ func boolToBit(a bool) uint32 {
 	return 0
 }
 
-//go:inline
 func isReservedI2CAddr(addr uint8) bool {
 	return (addr&0x78) == 0 || (addr&0x78) == 0x78
 }

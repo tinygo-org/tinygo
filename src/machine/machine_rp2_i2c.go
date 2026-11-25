@@ -526,15 +526,11 @@ func (i2c *I2C) Reply(buf []byte) error {
 }
 
 // writeAvailable determines non-blocking write space available
-//
-//go:inline
 func (i2c *I2C) writeAvailable() uint32 {
 	return rp.I2C0_IC_COMP_PARAM_1_TX_BUFFER_DEPTH_Pos - i2c.Bus.IC_TXFLR.Get()
 }
 
 // readAvailable determines number of bytes received
-//
-//go:inline
 func (i2c *I2C) readAvailable() uint32 {
 	return i2c.Bus.IC_RXFLR.Get()
 }
@@ -555,8 +551,6 @@ func (i2c *I2C) getAbortReason() i2cAbortError {
 // returns true if RAW_INTR_STAT bits in mask are all set. performs:
 //
 //	RAW_INTR_STAT & mask == mask
-//
-//go:inline
 func (i2c *I2C) interrupted(mask uint32) bool {
 	reg := i2c.Bus.IC_RAW_INTR_STAT.Get()
 	return reg&mask == mask

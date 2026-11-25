@@ -1459,7 +1459,6 @@ var (
 	TCC2 = (*TCC)(sam.TCC2)
 )
 
-//go:inline
 func (tcc *TCC) timer() *sam.TCC_Type {
 	return (*sam.TCC_Type)(tcc)
 }
