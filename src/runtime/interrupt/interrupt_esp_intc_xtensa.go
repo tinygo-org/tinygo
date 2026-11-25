@@ -39,7 +39,7 @@ func enableLine(num int) {
 
 // enableLocal sets the given bits in INTENABLE of the calling core.
 func enableLocal(mask uint32) {
-	writeINTENABLE(readINTENABLE() | mask)
+	xtensa.SetINTENABLEBits(mask)
 }
 
 // In returns whether the CPU is currently inside an interrupt handler.
@@ -85,11 +85,6 @@ func handleInterrupt() {
 // readINTENABLE reads the INTENABLE special register (SR 228).
 func readINTENABLE() uint32 {
 	return xtensa.ReadINTENABLE()
-}
-
-// writeINTENABLE writes the INTENABLE special register (SR 228).
-func writeINTENABLE(val uint32) {
-	xtensa.WriteINTENABLE(val)
 }
 
 // readINTERRUPT reads the INTERRUPT special register (SR 226), which

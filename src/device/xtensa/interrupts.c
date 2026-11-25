@@ -44,6 +44,25 @@ void WriteINTENABLE(uint32_t val) {
     );
 }
 
+uint32_t SetINTENABLEBits(uint32_t mask) {
+    // INTENABLE is 0 between xsr and wsr, so no interrupt can change it, as in xt_ints_on.
+    // https://github.com/espressif/esp-idf/blob/master/components/xtensa/xtensa_intr_asm.S
+    uint32_t old;
+    uint32_t val;
+    asm volatile(
+        "movi %0, 0\n\t"
+        "xsr %0, INTENABLE\n\t"
+        "rsync\n\t"
+        "or %1, %0, %2\n\t"
+        "wsr %1, INTENABLE\n\t"
+        "rsync"
+        : "=&r"(old), "=&r"(val)
+        : "r"(mask)
+        : "memory"
+    );
+    return old;
+}
+
 uint32_t ReadINTERRUPT() {
     uint32_t val;
     asm volatile(

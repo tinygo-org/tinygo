@@ -24,6 +24,12 @@ func ReadINTENABLE() uint32
 //export WriteINTENABLE
 func WriteINTENABLE(val uint32)
 
+// SetINTENABLEBits sets the given bits in INTENABLE and returns the old value.
+// Interrupts cannot change INTENABLE while it runs.
+//
+//export SetINTENABLEBits
+func SetINTENABLEBits(mask uint32) uint32
+
 // ReadINTERRUPT reads the INTERRUPT special register, which holds the pending
 // CPU interrupts.
 //
