@@ -8,7 +8,6 @@ const registerBase = 0x40000000
 const registerEnd = 0x40100000
 const bitbandBase = 0x42000000
 
-//go:inline
 func bitbandAddress(reg uintptr, bit uint8) uintptr {
 	if uintptr(bit) > 32 {
 		panic("invalid bit position")
