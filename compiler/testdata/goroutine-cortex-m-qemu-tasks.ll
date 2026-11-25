@@ -24,8 +24,8 @@ declare void @main.regularFunction(i32, ptr) #1
 ; Function Attrs: nounwind
 define linkonce_odr void @"main.regularFunction$gowrapper"(ptr %0) unnamed_addr #2 {
 entry:
-  %unpack.int = ptrtoint ptr %0 to i32
-  call void @main.regularFunction(i32 %unpack.int, ptr undef) #12
+  %unpack.addr = ptrtoaddr ptr %0 to i32
+  call void @main.regularFunction(i32 %unpack.addr, ptr undef) #12
   ret void
 }
 
@@ -50,8 +50,8 @@ entry:
 ; Function Attrs: nounwind
 define linkonce_odr void @"main.inlineFunctionGoroutine$1$gowrapper"(ptr %0) unnamed_addr #3 {
 entry:
-  %unpack.int = ptrtoint ptr %0 to i32
-  call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.int, ptr undef)
+  %unpack.addr = ptrtoaddr ptr %0 to i32
+  call void @"main.inlineFunctionGoroutine$1"(i32 %unpack.addr, ptr undef)
   ret void
 }
 

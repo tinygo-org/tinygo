@@ -46,8 +46,8 @@ func main() {
 	s8 := []int{3, 5, 8} // OUT: escapes at line 47
 	callVariadic(s8...)
 
-	n4 := 3 // OUT: escapes at line 51
-	n5 := 7 // OUT: escapes at line 51
+	n4 := 3 // OUT: escapes at line 53
+	n5 := 7
 	func() {
 		n4 = n5
 	}()
@@ -308,9 +308,9 @@ func escapingMultiReturnCall() {
 }
 
 func escapingMultiReturnClosure() func() error {
-	e := &errT{}           // OUT: escapes at line 312
-	_, err := wrapError(e) // OUT: escapes at line 313
-	return func() error { return err }
+	e := &errT{} // OUT: escapes at line 313
+	_, err := wrapError(e)
+	return func() error { return err } // OUT: escapes at line 313
 }
 
 func escapingMultiReturnPhi(cond bool) error {
