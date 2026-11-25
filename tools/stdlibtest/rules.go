@@ -94,8 +94,6 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipPackage("internal/runtime/cgobench")
 	// The Wasm interop test uses integer constants too large for TinyGo's int.
 	r.skipPackage("syscall/js")
-	// The strconv tests pull in crypto/ecdsa, which fails to import cryptobyte.
-	r.skipPackage("internal/strconv")
 	if !linux {
 		r.skipPackage("internal/trace")
 		r.skipPackage("internal/trace/testtrace")
