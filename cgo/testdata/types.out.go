@@ -70,6 +70,7 @@ type _Cgo_struct_type1 struct {
 	___type _Cgo_int
 }
 type _Cgo_struct_type2 struct{ _type _Cgo_int }
+type _Cgo_struct_endarray struct{ len _Cgo_int }
 type _Cgo_union_union1_t struct{ i _Cgo_int }
 type _Cgo_union1_t = _Cgo_union_union1_t
 type _Cgo_union_union3_t struct{ $union uint64 }

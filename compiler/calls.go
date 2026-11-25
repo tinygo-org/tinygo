@@ -698,7 +698,7 @@ func (c *context) flattenAggregateType(t llvm.Type, name string, goType types.Ty
 	case llvm.StructTypeKind:
 		var paramInfos []paramInfo
 		for i, subfield := range t.StructElementTypes() {
-			if c.targetData.TypeAllocSize(subfield) == 0 {
+			if c.skipFlattened(subfield) {
 				continue
 			}
 			suffix := strconv.Itoa(i)
@@ -716,11 +716,7 @@ func (c *context) flattenAggregateType(t llvm.Type, name string, goType types.Ty
 						maxLen = c.maxSliceSize(c.getLLVMType(goType.Elem()))
 					}
 				case *types.Struct:
-					if i < goType.NumFields() {
-						suffix = goType.Field(i).Name()
-					} else {
-						suffix = "pad" // the padding after a zero-sized final field
-					}
+					suffix = goType.Field(i).Name()
 				case *types.Basic:
 					switch goType.Kind() {
 					case types.Complex64, types.Complex128:
@@ -749,6 +745,11 @@ func (c *context) flattenAggregateType(t llvm.Type, name string, goType types.Ty
 	default:
 		return []paramInfo{c.getParamInfo(t, name, goType)}
 	}
+}
+
+// skipFlattened reports whether a struct member is left out when flattening.
+func (c *context) skipFlattened(t llvm.Type) bool {
+	return c.targetData.TypeAllocSize(t) == 0 || c.isEndPad(t)
 }
 
 // getParamInfo collects information about a parameter. For example, if this
@@ -785,9 +786,6 @@ func extractSubfield(t types.Type, field int) types.Type {
 	}
 	switch t := t.Underlying().(type) {
 	case *types.Struct:
-		if field >= t.NumFields() {
-			return nil // the padding after a zero-sized final field
-		}
 		return t.Field(field).Type()
 	case *types.Interface, *types.Slice, *types.Basic, *types.Signature:
 		// These Go types are (sometimes) implemented as LLVM structs but can't
@@ -811,7 +809,7 @@ func (c *context) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
 	case llvm.StructTypeKind:
 		var fields []uint64
 		for fieldIndex, field := range t.StructElementTypes() {
-			if c.targetData.TypeAllocSize(field) == 0 {
+			if c.skipFlattened(field) {
 				continue
 			}
 			suboffsets := c.flattenAggregateTypeOffsets(field)
@@ -834,7 +832,7 @@ func (b *builder) flattenAggregate(v llvm.Value) []llvm.Value {
 	case llvm.StructTypeKind:
 		var fields []llvm.Value
 		for i, field := range v.Type().StructElementTypes() {
-			if b.targetData.TypeAllocSize(field) == 0 {
+			if b.skipFlattened(field) {
 				continue
 			}
 			subfield := b.CreateExtractValue(v, i, "")
@@ -867,7 +865,7 @@ func (b *builder) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value) 
 		if len(flattened) <= maxFieldsPerParam {
 			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
-				if b.targetData.TypeAllocSize(subtyp) == 0 {
+				if b.skipFlattened(subtyp) {
 					continue
 				}
 				structField, remaining := b.collapseFormalParamInternal(subtyp, fields)

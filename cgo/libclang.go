@@ -941,6 +941,7 @@ func (f *cgoFile) makeASTRecordType(cursor C.GoCXCursor, pos token.Pos) *elabora
 		Closing: pos,
 	}
 	var bitfieldList []bitfieldInfo
+	var fieldSizes []int64
 	inBitfield := false
 	bitfieldNum := 0
 	ref := storedRefs.Put(struct {
@@ -949,12 +950,20 @@ func (f *cgoFile) makeASTRecordType(cursor C.GoCXCursor, pos token.Pos) *elabora
 		inBitfield   *bool
 		bitfieldNum  *int
 		bitfieldList *[]bitfieldInfo
-	}{fieldList, f, &inBitfield, &bitfieldNum, &bitfieldList})
+		fieldSizes   *[]int64
+	}{fieldList, f, &inBitfield, &bitfieldNum, &bitfieldList, &fieldSizes})
 	defer storedRefs.Remove(ref)
 	C.tinygo_clang_visitChildren(cursor, C.CXCursorVisitor(C.tinygo_clang_struct_visitor), C.CXClientData(ref))
 	renameFieldKeywords(fieldList)
 	switch C.tinygo_clang_getCursorKind(cursor) {
 	case C.CXCursor_StructDecl:
+		// Go pads a zero-sized final field, so drop it to keep the C size, as gc's cgo does.
+		// See https://go.dev/issue/9401.
+		if C.clang_Type_getSizeOf(C.tinygo_clang_getCursorType(cursor)) > 0 {
+			for n := len(fieldList.List); n > 0 && fieldSizes[n-1] == 0; n-- {
+				fieldList.List = fieldList.List[:n-1]
+			}
+		}
 		return &elaboratedTypeInfo{
 			typeExpr: &ast.StructType{
 				Struct: pos,
@@ -1010,12 +1019,14 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 		inBitfield   *bool
 		bitfieldNum  *int
 		bitfieldList *[]bitfieldInfo
+		fieldSizes   *[]int64
 	})
 	fieldList := passed.fieldList
 	f := passed.file
 	inBitfield := passed.inBitfield
 	bitfieldNum := passed.bitfieldNum
 	bitfieldList := passed.bitfieldList
+	fieldSizes := passed.fieldSizes
 	pos := f.getCursorPosition(c)
 	switch cursorKind := C.tinygo_clang_getCursorKind(c); cursorKind {
 	case C.CXCursor_FieldDecl:
@@ -1081,6 +1092,7 @@ func tinygo_clang_struct_visitor(c, parent C.GoCXCursor, client_data C.CXClientD
 		},
 	}
 	fieldList.List = append(fieldList.List, field)
+	*fieldSizes = append(*fieldSizes, int64(C.clang_Type_getSizeOf(typ)))
 	return C.CXChildVisit_Continue
 }
 

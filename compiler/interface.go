@@ -2007,11 +2007,8 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 	return wrapper
 }
 
-// getTypeCodeLLVMType returns the LLVM type of a type code global, whose layout
-// getTypeCode describes as a Go struct. It is getLLVMType without the padding
-// after a zero-sized final field: a type code ends in an array whose length can
-// be zero (the fields of struct{}, an empty method set), nothing can take the
-// address of that array, and the padding would add a byte to such type codes.
+// getTypeCodeLLVMType is getLLVMType without the pad after a zero-sized final
+// field, as type codes are read past their final zero-length arrays.
 func (c *context) getTypeCodeLLVMType(t types.Type) llvm.Type {
 	st, ok := t.(*types.Struct)
 	if !ok {

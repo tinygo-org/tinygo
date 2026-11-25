@@ -1,10 +1,11 @@
 package main
 
-// A struct with a nonzero size that ends in a zero-sized field is padded by a
-// byte, as gc pads it, so that a pointer to that field does not point past the
-// end of the object (https://go.dev/issue/9401).
+// Structs that end in a zero-sized field are padded as gc does (https://go.dev/issue/9401).
 
-import "unsafe"
+import (
+	"reflect"
+	"unsafe"
+)
 
 type endsEmpty struct {
 	data [4096]byte
@@ -31,6 +32,23 @@ type emptyFirst struct {
 	data [3]byte
 }
 
+type threeInts struct {
+	a, b, c int32
+	_       struct{}
+}
+
+//go:noinline
+func bumpZeroArray(v endsZeroArray) endsZeroArray {
+	v.b++
+	return v
+}
+
+//go:noinline
+func sumInts(v threeInts) threeInts {
+	v.a += v.b + v.c
+	return v
+}
+
 func main() {
 	println("endsEmpty:", int(unsafe.Sizeof(endsEmpty{})))
 	println("endsZeroArray:", int(unsafe.Sizeof(endsZeroArray{})))
@@ -44,4 +62,20 @@ func main() {
 	start := uintptr(unsafe.Pointer(p))
 	end := uintptr(unsafe.Pointer(&p.end))
 	println("end field inside object:", end-start < unsafe.Sizeof(*p))
+
+	// Pass and return by value.
+	println("by value:", bumpZeroArray(endsZeroArray{b: 41}).b, sumInts(threeInts{a: 1, b: 2, c: 3}).a)
+
+	// reflect agrees with the compiler.
+	println("reflect sizes:",
+		reflect.TypeOf(endsEmpty{}).Size() == unsafe.Sizeof(endsEmpty{}),
+		reflect.TypeOf(endsZeroArray{}).Size() == unsafe.Sizeof(endsZeroArray{}),
+		reflect.TypeOf(onlyEmpty{}).Size() == unsafe.Sizeof(onlyEmpty{}),
+		reflect.TypeOf(nested{}).Size() == unsafe.Sizeof(nested{}),
+		reflect.TypeOf(threeInts{}).Size() == unsafe.Sizeof(threeInts{}))
+	built := reflect.StructOf([]reflect.StructField{
+		{Name: "B", Type: reflect.TypeOf(byte(0))},
+		{Name: "End", Type: reflect.TypeOf([0]byte{})},
+	})
+	println("StructOf size:", built.Size() == unsafe.Sizeof(endsZeroArray{}))
 }

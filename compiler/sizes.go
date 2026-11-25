@@ -151,9 +151,7 @@ func (s *stdSizes) Sizeof(T types.Type) int64 {
 		lastSize := s.Sizeof(fields[n-1].Type())
 		size := offsets[n-1] + lastSize
 		if size > 0 && lastSize == 0 {
-			// A pointer to a zero-sized final field would point just past
-			// the end of the object, so pad it by a byte as gc does.
-			// See https://go.dev/issue/9401.
+			// Pad a zero-sized final field as gc does (https://go.dev/issue/9401).
 			size++
 		}
 		return align(size, maxAlign)

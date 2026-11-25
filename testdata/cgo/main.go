@@ -92,6 +92,7 @@ func main() {
 	var _ [3]C.short = C.globalArray
 	println("array:", C.globalArray[0], C.globalArray[1], C.globalArray[2])
 	println("union:", C.int(unsafe.Sizeof(C.globalUnion)) == C.globalUnionSize)
+	println("end array:", C.int(unsafe.Sizeof(C.struct_endarray{})) == C.endArraySize)
 	C.unionSetShort(22)
 	println("union s:", *C.globalUnion.unionfield_s())
 	C.unionSetFloat(C.float(6.28))

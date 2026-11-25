@@ -24,6 +24,7 @@ int globalStructSize = sizeof(globalStruct);
 short globalArray[3] = {5, 6, 7};
 joined_t globalUnion;
 int globalUnionSize = sizeof(globalUnion);
+int endArraySize = sizeof(struct endarray);
 option_t globalOption = optionG;
 bitfield_t globalBitfield = {244, 15, 1, 2, 47, 5};
 

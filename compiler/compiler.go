@@ -79,6 +79,7 @@ type context struct {
 	difiles                     map[string]llvm.Metadata
 	ditypes                     map[types.Type]llvm.Metadata
 	llvmTypes                   typeutil.Map
+	endPadType                  llvm.Type
 	interfaceTypes              typeutil.Map
 	machine                     llvm.TargetMachine
 	targetData                  llvm.TargetData
@@ -524,9 +525,8 @@ func (c *context) makeLLVMType(goType types.Type) llvm.Type {
 		}
 		if n := len(members); n > 0 && c.targetData.TypeAllocSize(members[n-1]) == 0 &&
 			c.targetData.TypeAllocSize(c.ctx.StructType(members, false)) > 0 {
-			// Pad a zero-sized final field by a byte, as in Sizeof. The
-			// padding member comes last, so field indices are unchanged.
-			members = append(members, llvm.ArrayType(c.ctx.Int8Type(), 1))
+			// Pad a zero-sized final field by a byte, as in Sizeof.
+			members = append(members, c.getEndPadType())
 		}
 		return c.ctx.StructType(members, false)
 	case *types.TypeParam:
@@ -4272,4 +4272,19 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 	default:
 		return llvm.Value{}, b.makeError(unop.Pos(), "todo: unknown unop")
 	}
+}
+
+// getEndPadType returns the type of the byte added after a zero-sized final
+// field. It is a named type so that parameter flattening can skip it.
+func (c *context) getEndPadType() llvm.Type {
+	if c.endPadType.IsNil() {
+		c.endPadType = c.ctx.StructCreateNamed("tinygo.endpad")
+		c.endPadType.StructSetBody([]llvm.Type{c.i8}, false)
+	}
+	return c.endPadType
+}
+
+// isEndPad reports whether t is the type returned by getEndPadType.
+func (c *context) isEndPad(t llvm.Type) bool {
+	return !c.endPadType.IsNil() && t == c.endPadType
 }
