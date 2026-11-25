@@ -104,7 +104,6 @@ const (
 	disableThreshold = 0
 )
 
-//go:inline
 func callHandler(n int) {
 	switch n {
 	case IRQNUM_1:

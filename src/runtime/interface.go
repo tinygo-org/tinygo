@@ -15,12 +15,10 @@ type _interface struct {
 	value    unsafe.Pointer
 }
 
-//go:inline
 func composeInterface(typecode, value unsafe.Pointer) _interface {
 	return _interface{typecode, value}
 }
 
-//go:inline
 func decomposeInterface(i _interface) (unsafe.Pointer, unsafe.Pointer) {
 	return i.typecode, i.value
 }

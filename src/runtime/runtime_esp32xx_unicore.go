@@ -4,11 +4,9 @@ package runtime
 
 import "runtime/interrupt"
 
-//go:inline
 func lockTicks() interrupt.State {
 	return 0
 }
 
-//go:inline
 func unlockTicks(interrupt.State) {
 }

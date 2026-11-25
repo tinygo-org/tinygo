@@ -1691,7 +1691,6 @@ const (
 // once.
 type TCC sam.TCC_Type
 
-//go:inline
 func (tcc *TCC) timer() *sam.TCC_Type {
 	return (*sam.TCC_Type)(tcc)
 }

@@ -232,15 +232,11 @@ func (spi *SPI) deinit() (resetVal uint32) {
 }
 
 // isWritable returns false if no space is available to write. True if a write is possible
-//
-//go:inline
 func (spi *SPI) isWritable() bool {
 	return spi.Bus.SSPSR.HasBits(rp.SPI0_SSPSR_TNF)
 }
 
 // isReadable returns true if a read is possible i.e. data is present
-//
-//go:inline
 func (spi *SPI) isReadable() bool {
 	return spi.Bus.SSPSR.HasBits(rp.SPI0_SSPSR_RNE)
 }
@@ -261,7 +257,6 @@ func (spi *SPI) PrintRegs() {
 	println("RIS:", ris)
 }
 
-//go:inline
 func (spi *SPI) isBusy() bool {
 	return spi.Bus.SSPSR.HasBits(rp.SPI0_SSPSR_BSY)
 }

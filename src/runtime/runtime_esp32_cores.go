@@ -16,7 +16,6 @@ func signalCore(core, value uint32) {
 	}
 }
 
-//go:inline
 func crossCoreChipHandler(core uint32) {
 }
 
