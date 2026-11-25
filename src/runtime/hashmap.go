@@ -33,7 +33,6 @@ type hashmapTypeInfo struct {
 	bucketLayout unsafe.Pointer
 }
 
-//go:inline
 func hashmapType(m *hashmap) *hashmapTypeInfo {
 	return m.typeInfo
 }
@@ -65,23 +64,17 @@ const hashmapBucketHeaderSize = (unsafe.Sizeof(hashmapBucket{}) + 7) &^ 7
 
 // hashmapKeySlotSize returns the size of a key slot in the bucket. For indirect
 // keys, this is the pointer size; otherwise the actual key size.
-//
-//go:inline
 func hashmapKeySlotSize(m *hashmap) uintptr {
 	return m.keySlotSize
 }
 
 // hashmapValueSlotSize returns the size of a value slot in the bucket.
-//
-//go:inline
 func hashmapValueSlotSize(m *hashmap) uintptr {
 	return m.valueSlotSize
 }
 
 // hashmapSlotKeyData returns a pointer to the actual key data for a given slot.
 // For indirect keys, the slot contains a pointer that must be dereferenced.
-//
-//go:inline
 func hashmapSlotKeyData(m *hashmap, slotKey unsafe.Pointer) unsafe.Pointer {
 	if m.flags&hashmapFlagIndirectKey != 0 {
 		return *(*unsafe.Pointer)(slotKey)
@@ -90,8 +83,6 @@ func hashmapSlotKeyData(m *hashmap, slotKey unsafe.Pointer) unsafe.Pointer {
 }
 
 // hashmapSlotValueData returns a pointer to the actual value data for a given slot.
-//
-//go:inline
 func hashmapSlotValueData(m *hashmap, slotValue unsafe.Pointer) unsafe.Pointer {
 	if m.flags&hashmapFlagIndirectValue != 0 {
 		return *(*unsafe.Pointer)(slotValue)
@@ -246,8 +237,6 @@ func hashmapOverLoadFactor(n uintptr, bucketBits uint8) bool {
 
 // Return the number of entries in this hashmap, called from the len builtin.
 // A nil hashmap is defined as having length 0.
-//
-//go:inline
 func hashmapLen(m *hashmap) int {
 	if m == nil {
 		return 0
@@ -255,32 +244,27 @@ func hashmapLen(m *hashmap) int {
 	return int(m.count)
 }
 
-//go:inline
 func hashmapBucketSize(m *hashmap) uintptr {
 	return hashmapBucketHeaderSize + hashmapKeySlotSize(m)*8 + hashmapValueSlotSize(m)*8
 }
 
-//go:inline
 func hashmapBucketAddr(m *hashmap, buckets unsafe.Pointer, n uintptr) *hashmapBucket {
 	bucketSize := hashmapBucketSize(m)
 	bucket := (*hashmapBucket)(unsafe.Add(buckets, bucketSize*n))
 	return bucket
 }
 
-//go:inline
 func hashmapBucketAddrForHash(m *hashmap, hash uint32) *hashmapBucket {
 	numBuckets := uintptr(1) << m.bucketBits
 	bucketNumber := (uintptr(hash) & (numBuckets - 1))
 	return hashmapBucketAddr(m, m.buckets, bucketNumber)
 }
 
-//go:inline
 func hashmapSlotKey(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Pointer {
 	slotKeyOffset := hashmapBucketHeaderSize + hashmapKeySlotSize(m)*uintptr(slot)
 	return unsafe.Add(unsafe.Pointer(bucket), slotKeyOffset)
 }
 
-//go:inline
 func hashmapSlotValue(m *hashmap, bucket *hashmapBucket, slot uint8) unsafe.Pointer {
 	slotValueOffset := hashmapBucketHeaderSize + hashmapKeySlotSize(m)*8 + hashmapValueSlotSize(m)*uintptr(slot)
 	return unsafe.Add(unsafe.Pointer(bucket), slotValueOffset)
@@ -342,8 +326,6 @@ func hashmapSet(m *hashmap, key unsafe.Pointer, value unsafe.Pointer, hash uint3
 // hashmapStoreKey stores a key into a bucket slot, allocating backing storage
 // if the key is indirect (first insert) or copying into it (shouldn't happen
 // for keys, but handles it correctly).
-//
-//go:inline
 func hashmapStoreKey(m *hashmap, slotKey, key unsafe.Pointer) {
 	if m.flags&hashmapFlagIndirectKey != 0 {
 		p := alloc(m.keySize, hashmapType(m).keyLayout)
@@ -357,8 +339,6 @@ func hashmapStoreKey(m *hashmap, slotKey, key unsafe.Pointer) {
 // hashmapStoreValue stores a value into a bucket slot. For indirect values,
 // it allocates backing storage on first insert or copies into the existing
 // backing on overwrite.
-//
-//go:inline
 func hashmapStoreValue(m *hashmap, slotValue, value unsafe.Pointer) {
 	if m.flags&hashmapFlagIndirectValue != 0 {
 		p := *(*unsafe.Pointer)(slotValue)
