@@ -25,7 +25,7 @@ func (b *builder) createInlineAsm(args []ssa.Value) (llvm.Value, error) {
 	// Magic function: insert inline assembly instead of calling it.
 	fnType := llvm.FunctionType(b.void, []llvm.Type{}, false)
 	asm := constant.StringVal(args[0].(*ssa.Const).Value)
-	target := llvm.InlineAsm(fnType, asm, "", true, false, 0, false)
+	target := llvm.InlineAsm(fnType, asm, "~{memory}", true, false, 0, false)
 	return b.CreateCall(fnType, target, nil, ""), nil
 }
 
@@ -119,6 +119,7 @@ func (b *builder) createInlineAsmFull(instr *ssa.CallCommon) (llvm.Value, error)
 		outputType = b.void
 	}
 	fnType := llvm.FunctionType(outputType, argTypes, false)
+	constraints = append(constraints, "~{memory}")
 	target := llvm.InlineAsm(fnType, asmString, strings.Join(constraints, ","), true, false, 0, false)
 	result := b.CreateCall(fnType, target, args, "")
 	if hasOutput {
@@ -232,19 +233,19 @@ func (b *builder) emitCSROperation(call *ssa.CallCommon) (llvm.Value, error) {
 	case "Set":
 		fnType := llvm.FunctionType(b.void, []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrw %d, $0", csr)
-		target := llvm.InlineAsm(fnType, asm, "r", true, false, 0, false)
+		target := llvm.InlineAsm(fnType, asm, "r,~{memory}", true, false, 0, false)
 		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1], getPos(call))}, ""), nil
 	case "SetBits":
 		// Note: it may be possible to optimize this to csrrsi in many cases.
 		fnType := llvm.FunctionType(b.uintptrType, []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrrs $0, %d, $1", csr)
-		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0, false)
+		target := llvm.InlineAsm(fnType, asm, "=r,r,~{memory}", true, false, 0, false)
 		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1], getPos(call))}, ""), nil
 	case "ClearBits":
 		// Note: it may be possible to optimize this to csrrci in many cases.
 		fnType := llvm.FunctionType(b.uintptrType, []llvm.Type{b.uintptrType}, false)
 		asm := fmt.Sprintf("csrrc $0, %d, $1", csr)
-		target := llvm.InlineAsm(fnType, asm, "=r,r", true, false, 0, false)
+		target := llvm.InlineAsm(fnType, asm, "=r,r,~{memory}", true, false, 0, false)
 		return b.CreateCall(fnType, target, []llvm.Value{b.getValue(call.Args[1], getPos(call))}, ""), nil
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown CSR operation: "+name)
