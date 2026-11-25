@@ -21,6 +21,10 @@ define void @printInterfaces() {
   ret void
 }
 
+define ptr @taggedType() {
+  ret ptr getelementptr (i8, ptr @"reflect/types.type:named:Number", i32 1)
+}
+
 define void @printInterface(ptr %typecode, ptr %value) {
   %typeassert.ok = icmp eq ptr @"reflect/types.type:basic:uint8", %typecode
   br i1 %typeassert.ok, label %typeswitch.byte, label %typeswitch.notByte

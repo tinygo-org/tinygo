@@ -25,6 +25,10 @@ define void @printInterfaces() {
   ret void
 }
 
+define ptr @taggedType() {
+  ret ptr getelementptr inbounds (i8, ptr @"reflect/types.type:named:Number", i32 5)
+}
+
 define void @printInterface(ptr %typecode, ptr %value) {
   %isByte = call i1 @runtime.typeAssert(ptr %typecode, ptr nonnull @"reflect/types.typeid:basic:uint8")
   br i1 %isByte, label %typeswitch.byte, label %typeswitch.notByte
