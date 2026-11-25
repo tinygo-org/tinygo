@@ -11,11 +11,11 @@ import (
 	"unsafe"
 )
 
-// TIMG0 runs from APB (80MHz): divider 2 gives 40MHz ticks, 25ns each.
-// T0CONFIG.USE_XTAL is left clear, so the source is APB, not XTAL.
+// TIMG0 runs from the 40MHz XTAL, set in esp32p4.S: divider 2 gives 20MHz ticks, 50ns each.
+// The divider must be 2 or more. See ESP-IDF hal/esp32p4/include/hal/timer_ll.h timer_ll_set_clock_prescale.
 const (
 	timerDivider = 2
-	nsPerTick    = 25
+	nsPerTick    = 50
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is
