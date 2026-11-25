@@ -8,7 +8,6 @@ import (
 	"internal/task"
 	"runtime/interrupt"
 	"sync/atomic"
-	"unsafe"
 )
 
 const numCPU = 2
@@ -16,34 +15,11 @@ const numCPU = 2
 // CPU interrupt line for the FROM_CPU software interrupts, on both cores.
 const crossCoreCPUInterrupt = 11
 
-var ticksLock spinLock
-
-func spinLoopWait() {
-	riscv.Asm("nop")
-}
-
 func currentCPU() uint32 {
 	return uint32(riscv.MHARTID.Get())
 }
 
-func lockTicks() interrupt.State {
-	mask := interrupt.Disable()
-	ticksLock.Lock()
-	return mask
-}
-
-func unlockTicks(mask interrupt.State) {
-	ticksLock.Unlock()
-	interrupt.Restore(mask)
-}
-
 var crossCoreInterrupt interrupt.Interrupt
-
-var (
-	core1Started   atomic.Uint32
-	gcPauseRequest [numCPU]atomic.Uint32
-	gcSignalWait   [numCPU]atomic.Uint32
-)
 
 // Set (1) or clear (0) the FROM_CPU interrupt of the given core.
 func signalCore(core, value uint32) {
@@ -138,21 +114,12 @@ func runCore1() {
 	exit(0)
 }
 
-// The FROM_CPU interrupt can wake a waiting core.
-const hasExternalWakeups = true
-
 // wfi wakes on a pending interrupt even with MSTATUS.MIE clear, so a wake sent
 // after the unlock is not lost. MIE goes on briefly so a GC pause request can run.
 func coreWait() {
 	riscv.Asm("wfi")
 	riscv.MSTATUS.SetBits(riscv.MSTATUS_MIE)
 	riscv.MSTATUS.ClearBits(riscv.MSTATUS_MIE)
-}
-
-// End schedulerUnlockAndWait on the given core.
-func schedulerEndWait(core uint32) {
-	schedulerWakePending[core].Store(1)
-	signalCore(core, 1)
 }
 
 // The GC interrupted this core for the stop-the-world phase.
@@ -180,39 +147,4 @@ func gcInterruptHandler(core uint32) {
 
 	// Signal we received the signal and are going to exit the interrupt.
 	gcScanState.Add(1)
-}
-
-func gcWaitForSignal(core uint32) {
-	for gcSignalWait[core].Swap(0) == 0 {
-		spinLoopWait()
-	}
-}
-
-// Pause the given core by sending it an interrupt.
-func gcPauseCore(core uint32) {
-	gcPauseRequest[core].Store(1)
-	signalCore(core, 1)
-}
-
-// Signal the given core that it can resume one step.
-// The paused core polls this flag, so no interrupt is needed.
-func gcSignalCore(core uint32) {
-	gcSignalWait[core].Store(1)
-}
-
-//go:extern _stack1_top
-var stack1TopSymbol [0]byte
-
-// Returns the stack top (highest address) of the system stack of the given
-// core.
-func coreStackTop(core uint32) uintptr {
-	switch core {
-	case 0:
-		return uintptr(unsafe.Pointer(&stackTopSymbol))
-	case 1:
-		return uintptr(unsafe.Pointer(&stack1TopSymbol))
-	default:
-		runtimeFatal("unexpected core")
-		return 0
-	}
 }

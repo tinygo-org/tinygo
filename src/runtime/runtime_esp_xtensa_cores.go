@@ -17,36 +17,13 @@ const numCPU = 2
 // XCHAL_INT3_LEVEL in esp-idf components/xtensa/<chip>/include/xtensa/config/core-isa.h.
 const crossCoreCPUInterrupt = 3
 
-var ticksLock spinLock
-
-func spinLoopWait() {
-	device.Asm("nop")
-}
-
 // Return the current core number: 0 or 1. PRID bit 13 is the core ID, see
 // xt_utils_get_raw_core_id in esp-idf components/xtensa/include/xt_utils.h.
 func currentCPU() uint32 {
 	return uint32(device.AsmFull("rsr {}, PRID", nil)>>13) & 1
 }
 
-func lockTicks() interrupt.State {
-	mask := interrupt.Disable()
-	ticksLock.Lock()
-	return mask
-}
-
-func unlockTicks(mask interrupt.State) {
-	ticksLock.Unlock()
-	interrupt.Restore(mask)
-}
-
 var crossCoreInterrupt interrupt.Interrupt
-
-var (
-	core1Started   atomic.Uint32
-	gcPauseRequest [numCPU]atomic.Uint32
-	gcSignalWait   [numCPU]atomic.Uint32
-)
 
 func crossCoreHandler(interrupt.Interrupt) {
 	core := currentCPU()
@@ -125,20 +102,11 @@ func runCore1() {
 	exit(0)
 }
 
-// The FROM_CPU interrupt can wake a waiting core.
-const hasExternalWakeups = true
-
 // waiti lowers PS.INTLEVEL and waits in one step, so a wake sent after the
 // unlock is not lost. See the Xtensa ISA Reference Manual, WAITI.
 func coreWait() {
 	device.Asm("waiti 0")
 	interrupt.Disable()
-}
-
-// End schedulerUnlockAndWait on the given core.
-func schedulerEndWait(core uint32) {
-	schedulerWakePending[core].Store(1)
-	signalCore(core, 1)
 }
 
 // The GC interrupted this core for the stop-the-world phase.
@@ -170,39 +138,4 @@ func gcInterruptHandler(core uint32) {
 
 	// Signal we received the signal and are going to exit the interrupt.
 	gcScanState.Add(1)
-}
-
-func gcWaitForSignal(core uint32) {
-	for gcSignalWait[core].Swap(0) == 0 {
-		spinLoopWait()
-	}
-}
-
-// Pause the given core by sending it an interrupt.
-func gcPauseCore(core uint32) {
-	gcPauseRequest[core].Store(1)
-	signalCore(core, 1)
-}
-
-// Signal the given core that it can resume one step.
-// The paused core polls this flag, so no interrupt is needed.
-func gcSignalCore(core uint32) {
-	gcSignalWait[core].Store(1)
-}
-
-//go:extern _stack1_top
-var stack1TopSymbol [0]byte
-
-// Returns the stack top (highest address) of the system stack of the given
-// core.
-func coreStackTop(core uint32) uintptr {
-	switch core {
-	case 0:
-		return uintptr(unsafe.Pointer(&stackTopSymbol))
-	case 1:
-		return uintptr(unsafe.Pointer(&stack1TopSymbol))
-	default:
-		runtimeFatal("unexpected core")
-		return 0
-	}
 }
