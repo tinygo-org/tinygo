@@ -1211,8 +1211,14 @@ func (p *Package) Import(to string) (*types.Package, error) {
 }
 
 func (p *Package) resolveImportPath(to string) string {
-	if newTo, ok := p.ImportMap[to]; ok && (p.program.analysis || !strings.HasSuffix(newTo, ".test]")) {
-		return newTo
+	newTo, ok := p.ImportMap[to]
+	if !ok {
+		return to
 	}
-	return to
+	if !p.program.analysis && strings.HasSuffix(newTo, ".test]") {
+		if base, _, ok := strings.Cut(newTo, " ["); ok {
+			return base
+		}
+	}
+	return newTo
 }

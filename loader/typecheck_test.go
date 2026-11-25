@@ -166,6 +166,21 @@ func TestParallelTypecheckImportMap(t *testing.T) {
 			}
 		})
 	}
+	t.Run("vendored", func(t *testing.T) {
+		p := typecheckProgram(t,
+			`package dep; const X = 1`,
+			`package main; import dep "example.com/dep"; const X = dep.X`,
+		)
+		p.analysis = false
+		dep := p.sorted[0]
+		delete(p.Packages, dep.ImportPath)
+		dep.ImportPath = "vendor/example.com/dep"
+		p.Packages[dep.ImportPath] = dep
+		p.sorted[1].ImportMap = map[string]string{"example.com/dep": "vendor/example.com/dep [pkg.test]"}
+		if err := p.Parse(); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 func TestParallelTypecheckSemaphore(t *testing.T) {
