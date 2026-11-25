@@ -1,5 +1,7 @@
 package avr
 
+import "C"
+
 // Run the given assembly code. The code will be marked as having side effects,
 // as it doesn't produce output and thus would normally be eliminated by the
 // optimizer.
@@ -19,3 +21,13 @@ func Asm(asm string)
 // You can use {} in the asm string (which expands to a register) to set the
 // return value.
 func AsmFull(asm string, regs map[string]interface{}) uintptr
+
+// DisableInterrupts disables all interrupts, and returns the old SREG.
+//
+//export DisableInterrupts
+func DisableInterrupts() uint8
+
+// EnableInterrupts restores SREG to the value returned by DisableInterrupts.
+//
+//export EnableInterrupts
+func EnableInterrupts(sreg uint8)
