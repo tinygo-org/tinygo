@@ -65,8 +65,6 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	// The CPU and GC scan tests need Go's x86 CPU assembly.
 	r.skipPackage("internal/cpu")
 	r.skipPackage("internal/runtime/gc/scan")
-	// The sorting tests use runtime.Pinner.
-	r.skipPackage("internal/fmtsort")
 	// The metrics and bisect subprocess checks fail on Linux.
 	r.skipPackage("internal/godebug")
 	// The polling tests reach an unimplemented semacquire path.
