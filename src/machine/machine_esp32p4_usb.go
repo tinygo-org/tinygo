@@ -12,11 +12,11 @@ import (
 const cpuInterruptFromUSB = 10
 
 const (
-	usbEP1WrDone      = esp.USB_DEVICE_EP1_CONF_USB_SERIAL_JTAG_WR_DONE
-	usbEP1InDataFree  = esp.USB_DEVICE_EP1_CONF_USB_SERIAL_JTAG_SERIAL_IN_EP_DATA_FREE
-	usbEP1OutDataAvai = esp.USB_DEVICE_EP1_CONF_USB_SERIAL_JTAG_SERIAL_OUT_EP_DATA_AVAIL
-	usbRecvPktIntEna  = esp.USB_DEVICE_INT_ENA_USB_SERIAL_JTAG_SERIAL_OUT_RECV_PKT_INT_ENA
-	usbRecvPktIntClr  = esp.USB_DEVICE_INT_CLR_USB_SERIAL_JTAG_SERIAL_OUT_RECV_PKT_INT_CLR
+	usbEP1WrDone       = esp.USB_DEVICE_EP1_CONF_USB_SERIAL_JTAG_WR_DONE
+	usbEP1InDataFree   = esp.USB_DEVICE_EP1_CONF_USB_SERIAL_JTAG_SERIAL_IN_EP_DATA_FREE
+	usbEP1OutDataAvail = esp.USB_DEVICE_EP1_CONF_USB_SERIAL_JTAG_SERIAL_OUT_EP_DATA_AVAIL
+	usbRecvPktIntEna   = esp.USB_DEVICE_INT_ENA_USB_SERIAL_JTAG_SERIAL_OUT_RECV_PKT_INT_ENA
+	usbRecvPktIntClr   = esp.USB_DEVICE_INT_CLR_USB_SERIAL_JTAG_SERIAL_OUT_RECV_PKT_INT_CLR
 )
 
 // configure enables the receive interrupt. It runs on first use, because
@@ -31,16 +31,6 @@ func (usbdev *USB_DEVICE) configure(config UARTConfig) error {
 		_USBCDC.handleInterrupt()
 	}).Enable()
 	return nil
-}
-
-// handleInterrupt moves received bytes from the FIFO into the ring buffer.
-func (usbdev *USB_DEVICE) handleInterrupt() {
-	for usbdev.Bus.EP1_CONF.HasBits(usbEP1OutDataAvai) {
-		if !usbdev.Buffer.Put(byte(usbdev.Bus.EP1.Get())) {
-			break
-		}
-	}
-	usbdev.Bus.INT_CLR.Set(usbRecvPktIntClr)
 }
 
 func (usbdev *USB_DEVICE) WriteByte(c byte) error {
@@ -86,15 +76,6 @@ func (usbdev *USB_DEVICE) waitWritable() bool {
 	}
 	usbdev.txStalled = true
 	return false
-}
-
-// Buffered returns the number of received bytes in the ring buffer.
-func (usbdev *USB_DEVICE) Buffered() int {
-	usbdev.ensureConfigured()
-	if usbdev.txPending {
-		usbdev.flush()
-	}
-	return int(usbdev.Buffer.Used())
 }
 
 // flush sends the data in the EP1 FIFO to the host.

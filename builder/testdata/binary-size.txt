@@ -6,8 +6,8 @@ pico                     examples/serial                          z       7673  
 pico                     examples/serial                          2      15865      799      108     5596
 pico2                    examples/serial                          z       6466     1158      112     5608
 pico2                    examples/serial                          2      15632      904      108     5580
-esp32c3-generic          examples/serial                          z       4864      532        0     8648
-esp32c3-generic          examples/serial                          2       7790      322        0     8648
+esp32c3-generic          examples/serial                          z       4876      532        0     8648
+esp32c3-generic          examples/serial                          2       7786      322        0     8648
 cortex-m-qemu            ./testdata/size-slice                    z       3214      794        4     4176
 cortex-m-qemu            ./testdata/size-slice                    2       7454      346        4     4180
 cortex-m-qemu            ./testdata/size-defer                    z       3902      890        4     4184

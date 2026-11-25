@@ -15,6 +15,13 @@ import (
 
 const cpuInterruptFromUSB = 10
 
+// Masks for the RX interrupt and the EP1 OUT FIFO status.
+const (
+	usbEP1OutDataAvail = esp.USB_DEVICE_EP1_CONF_SERIAL_OUT_EP_DATA_AVAIL
+	usbRecvPktIntEna   = esp.USB_DEVICE_INT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA
+	usbRecvPktIntClr   = esp.USB_DEVICE_INT_CLR_SERIAL_OUT_RECV_PKT_INT_CLR
+)
+
 // configure initialises the USB Serial/JTAG controller clock, pads, and
 // interrupt so that received data is buffered automatically.
 func (usbdev *USB_DEVICE) configure(config UARTConfig) error {
@@ -42,25 +49,6 @@ func (usbdev *USB_DEVICE) configure(config UARTConfig) error {
 	}).Enable()
 
 	return nil
-}
-
-// handleInterrupt drains the hardware RX FIFO into the software ring buffer.
-func (usbdev *USB_DEVICE) handleInterrupt() {
-	intStatus := usbdev.Bus.INT_ST.Get()
-
-	// Disable the RX interrupt to prevent re-triggering while we drain.
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(0)
-
-	if intStatus&esp.USB_DEVICE_INT_ST_SERIAL_OUT_RECV_PKT_INT_ST != 0 {
-		for usbdev.Bus.GetEP1_CONF_SERIAL_OUT_EP_DATA_AVAIL() != 0 {
-			b := byte(usbdev.Bus.EP1.Get())
-			usbdev.Buffer.Put(b)
-		}
-		usbdev.Bus.SetINT_CLR_SERIAL_OUT_RECV_PKT_INT_CLR(1)
-	}
-
-	// Re-enable the RX interrupt.
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(1)
 }
 
 func (usbdev *USB_DEVICE) WriteByte(c byte) error {
@@ -111,16 +99,6 @@ func (usbdev *USB_DEVICE) Write(data []byte) (n int, err error) {
 	usbdev.flush()
 	usbdev.txPending = false
 	return len(data), nil
-}
-
-// Buffered returns the number of bytes waiting in the receive ring buffer.
-func (usbdev *USB_DEVICE) Buffered() int {
-	usbdev.ensureConfigured()
-	if usbdev.txPending {
-		usbdev.flush()
-		usbdev.txPending = false
-	}
-	return int(usbdev.Buffer.Used())
 }
 
 // flush signals WR_DONE to tell the hardware to send the data that has
