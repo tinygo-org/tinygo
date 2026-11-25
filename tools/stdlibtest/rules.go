@@ -8,6 +8,8 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	baremetal := hasTag("baremetal")
 	wasm := hasTag("tinygo.wasm")
 	wasi := hasTag("tinygo.wasi")
+	browser := wasm && !wasi
+	qemu := baremetal && hasTag("virt") && hasTag("qemu")
 	wasip1 := target.GOOS == "wasip1"
 	wasip2 := hasTag("wasip2")
 	hosted := !wasm && !baremetal
@@ -17,7 +19,9 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 
 	// Package exclusions
 	// Requires Unix sockets or socket-to-file conversion.
-	r.skipPackage("bufio")
+	if !windows && !wasip1 && !browser {
+		r.skipPackage("bufio")
+	}
 	r.skipPackage("os/exec")
 	r.skipPackage("syscall")
 	// Syslog needs net.OpError.Temporary. SMTP tests need TLS APIs.
@@ -26,7 +30,6 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	// Local listener tests fail or stall.
 	r.skipPackage("net/rpc")
 	// Tests assume runtime.Compiler is gc or gccgo, or pass it to the go command.
-	r.skipPackage("crypto")
 	r.skipPackage("go/build")
 	// Go's map implementation needs internal/abi.MapType.
 	r.skipPackage("go/importer")
@@ -85,124 +88,209 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	// TestAlloc exceeds the decompressor's allocation budget.
 	r.skipPackage("internal/zstd")
 
+	if !linux {
+		r.skipPackage("net/rpc/jsonrpc")
+	}
+
 	// Inherited exclusions without a confirmed failure.
-	r.skipPackage("net/rpc/jsonrpc")
-	r.skipPackage("crypto/internal/cryptotest")
-	r.skipPackage("crypto/internal/fips140/...")
+	r.skipPackage("crypto/internal/fips140/edwards25519")
 	r.skipPackage("crypto/internal/fips140cache")
 	r.skipPackage("crypto/internal/fips140test")
-	r.skipPackage("crypto/internal/fips140deps")
-	r.skipPackage("crypto/internal/fips140only")
-	r.skipPackage("crypto/internal/sysrand")
+	if !hosted {
+		r.skipPackage("crypto/internal/fips140deps")
+		r.skipPackage("os/exec/internal/fdtest")
+	}
+	if !hosted && !wasip1 {
+		r.skipPackage("crypto/internal/sysrand")
+	} else if darwin || windows {
+		r.skipTest("crypto/internal/sysrand", `^TestReadError$`)
+	}
+	if !hosted && !wasi {
+		r.skipPackage("crypto/internal/fips140/bigmod")
+		r.skipPackage("crypto/internal/fips140/rsa")
+		r.skipPackage("math/big/internal/asmgen")
+	}
+	if baremetal {
+		r.skipPackage("crypto/internal/cryptotest")
+		r.skipPackage("crypto/internal/fips140/edwards25519/field")
+		r.skipPackage("crypto/internal/fips140/mldsa")
+		r.skipPackage("crypto/internal/fips140only")
+	}
 	r.skipPackage("encoding/json/internal/jsonflags")
 	r.skipPackage("encoding/json/internal/jsonopts")
 	r.skipPackage("encoding/json/internal/jsonwire")
 	r.skipPackage("internal/buildcfg")
 	r.skipPackage("internal/chacha8rand")
-	r.skipPackage("internal/copyright")
 	r.skipPackage("internal/dag")
 	r.skipPackage("internal/diff")
-	r.skipPackage("internal/gate")
 	r.skipPackage("internal/godebugs")
 	r.skipPackage("internal/gover")
-	r.skipPackage("internal/nettest")
+	if baremetal {
+		r.skipPackage("internal/nettest")
+	}
 	r.skipPackage("internal/pkgbits")
 	r.skipPackage("internal/platform")
 	r.skipPackage("internal/runtime/math")
-	r.skipPackage("internal/runtime/sys")
 	r.skipPackage("internal/saferio")
 	r.skipPackage("internal/singleflight")
-	r.skipPackage("internal/syscall/unix")
-	r.skipPackage("internal/sysinfo")
-	r.skipPackage("internal/testenv")
+	if !linux && !darwin {
+		r.skipPackage("internal/syscall/unix")
+	}
+	if !hosted {
+		r.skipPackage("internal/testenv")
+	}
+	if !linux && !darwin && !wasi {
+		r.skipPackage("internal/xcoff")
+	}
+	if (!hosted && !wasi) || (hostOS == "windows" && wasi) {
+		r.skipPackage("internal/copyright")
+	}
 	r.skipPackage("internal/unsafeheader")
 	r.skipPackage("internal/runtime/wasitest")
 	r.skipPackage("internal/routebsd")
 	r.skipPackage("internal/syscall/windows")
 	r.skipPackage("internal/syscall/windows/registry")
-	r.skipPackage("internal/xcoff")
-	r.skipPackage("log/slog/internal/benchmarks")
-	r.skipPackage("log/slog/internal/buffer")
-	r.skipPackage("math/big/internal/asmgen")
-	r.skipPackage("net/http/internal")
+	if baremetal {
+		r.skipPackage("net/http/internal")
+	}
 	r.skipPackage("net/internal/cgotest")
-	r.skipPackage("net/internal/socktest")
-	r.skipPackage("os/exec/internal/fdtest")
-	if !linux {
-		r.skipTest("errors", `TestAsValidation`)
+	if !linux && !darwin {
+		r.skipPackage("net/internal/socktest")
 	}
 	if baremetal || (wasm && !wasi) {
 		r.skipPackage("embed/internal/embedtest")
+	}
+	if baremetal && !qemu {
 		r.skipPackage("expvar")
 	}
 
 	// Linux and macOS coverage
 	if !linux && !darwin {
-		r.skipPackage("archive/tar")
-		r.skipPackage("compress/gzip")
+		if !windows {
+			r.skipPackage("crypto/subtle")
+			r.skipPackage("encoding/json/jsontext")
+			r.skipPackage("encoding/json/v2")
+			r.skipPackage("encoding/xml")
+		}
+		if !windows && !wasip1 {
+			r.skipPackage("bytes")
+			if !browser {
+				r.skipPackage("crypto/cipher")
+				r.skipPackage("crypto/sha3")
+			}
+		}
+		if !windows && !wasip2 {
+			r.skipPackage("crypto/ecdh")
+			r.skipPackage("math/big")
+		}
+		if !windows && !wasi {
+			r.skipPackage("archive/tar")
+			r.skipPackage("compress/gzip")
+			r.skipPackage("crypto/ed25519")
+			r.skipPackage("crypto/hpke")
+			r.skipPackage("crypto/rsa")
+			r.skipPackage("debug/buildinfo")
+			r.skipPackage("debug/pe")
+			r.skipPackage("encoding/gob")
+			r.skipPackage("go/printer")
+			r.skipPackage("uuid")
+			if !browser {
+				r.skipPackage("crypto/aes")
+				r.skipPackage("crypto/fips140")
+				r.skipPackage("crypto/hkdf")
+				r.skipPackage("crypto/mlkem")
+				r.skipPackage("crypto/pbkdf2")
+				r.skipPackage("crypto/rc4")
+				r.skipPackage("database/sql")
+				r.skipPackage("math/rand")
+				r.skipPackage("math/rand/v2")
+				r.skipPackage("testing/cryptotest")
+			}
+			if !browser && !qemu {
+				r.skipPackage("go/build/constraint")
+				r.skipPackage("testing/quick")
+			}
+		}
+		if !wasi && !browser && !qemu {
+			r.skipPackage("os/user")
+		}
+		if !browser {
+			r.skipPackage("image/gif")
+			r.skipPackage("image/jpeg")
+			r.skipPackage("image/png")
+			r.skipPackage("regexp")
+		}
+		if !browser && !qemu {
+			r.skipPackage("flag")
+			r.skipPackage("fmt")
+		}
+		if !browser && !qemu {
+			r.skipPackage("slices")
+			r.skipPackage("strings")
+		}
 		r.skipPackage("context")
-		r.skipPackage("crypto/aes")
-		r.skipPackage("crypto/cipher")
-		r.skipPackage("crypto/ecdh")
-		r.skipPackage("crypto/ed25519")
-		r.skipPackage("crypto/fips140")
-		r.skipPackage("crypto/hkdf")
-		r.skipPackage("crypto/hpke")
 		r.skipPackage("crypto/mldsa")
-		r.skipPackage("crypto/mlkem")
-		r.skipPackage("crypto/pbkdf2")
-		r.skipPackage("crypto/rc4")
-		r.skipPackage("crypto/rsa")
-		r.skipPackage("crypto/sha3")
-		r.skipPackage("database/sql")
-		r.skipPackage("debug/buildinfo")
-		r.skipPackage("debug/dwarf")
-		r.skipPackage("debug/elf")
+		if !wasi {
+			r.skipPackage("debug/dwarf")
+		}
+		if !windows {
+			r.skipPackage("debug/elf")
+		}
+		if windows {
+			r.skipPackage("debug/pe")
+		}
 		r.skipPackage("debug/gosym")
-		r.skipPackage("debug/pe")
-		r.skipPackage("encoding/gob")
-		r.skipPackage("encoding/json/jsontext")
-		r.skipPackage("encoding/json/v2")
-		r.skipPackage("flag")
-		r.skipPackage("fmt")
-		r.skipPackage("go/build/constraint")
 		r.skipPackage("go/constant")
 		r.skipPackage("go/doc")
 		r.skipPackage("go/doc/comment")
 		r.skipPackage("go/parser")
-		r.skipPackage("go/printer")
 		r.skipPackage("image/color")
 		r.skipPackage("image/draw")
-		r.skipPackage("image/gif")
-		r.skipPackage("image/jpeg")
-		r.skipPackage("image/png")
 		r.skipPackage("iter")
-		r.skipPackage("math/big")
 		r.skipPackage("math/bits")
-		r.skipPackage("math/rand")
-		r.skipPackage("math/rand/v2")
 		r.skipPackage("mime/quotedprintable")
 		r.skipPackage("net")
-		r.skipPackage("net/netip")
-		r.skipPackage("net/textproto")
-		r.skipPackage("os/user")
+		if !wasm {
+			r.skipPackage("net/netip")
+			r.skipPackage("net/textproto")
+		}
 		r.skipPackage("path/filepath")
-		r.skipPackage("regexp")
-		r.skipPackage("slices")
 		r.skipPackage("sort")
-		r.skipPackage("strings")
-		r.skipPackage("testing/cryptotest")
-		r.skipPackage("testing/quick")
-		r.skipPackage("uuid")
 
 		// Windows File.ReadAt is a stub.
 		r.skipPackage("archive/zip")
-		r.skipPackage("debug/plan9obj")
-		r.skipPackage("bytes")          // Boundary tests need mmap.
-		r.skipPackage("crypto/subtle")  // WASIp1 lacks setDITDisabled.
-		r.skipPackage("encoding/xml")   // Traps on WASIp1.
-		r.skipPackage("mime/multipart") // TempDir cleanup fails on WASIp1.
-		r.skipPackage("time")           // Takes more than 25 minutes on Windows.
+		if !wasi {
+			r.skipPackage("debug/plan9obj")
+		}
+		r.skipPackage("time") // Takes more than 25 minutes on Windows.
+	}
+
+	if windows {
+		r.skipPackage("debug/elf")
+		r.skipPackage("mime/multipart") // File.ReadAt is a stub.
+	}
+	if !hosted {
+		r.skipPackage("mime/multipart")
+	}
+
+	if wasip2 {
+		r.skipTest("archive/tar", `^TestFileInfoHeaderSymlink$`)
+		// TempDir cleanup fails even when the linker tests skip themselves.
+		r.skipTest("crypto/ecdh", `^TestLinker$`)
+		r.skipTest("math/big", `^TestLinkerGC$`)
+	}
+	if windows || wasip2 {
+		r.skipTest("math/rand", `^TestDefaultRace$`)
+	}
+	if wasi {
+		r.skipTest("testing/quick", `^TestMutuallyRecursive$`)
+	}
+	if browser {
+		// The Node runner does not provide the filesystem fixtures.
+		r.skipTest("image/gif", `^(TestWriter|TestSubImage|TestEncodeAllGo1Dot4|TestEncodeAllGo1Dot5|TestEncodeAllGo1Dot5GlobalColorModel|TestEncodeWrappedImage)$`)
+		r.skipTest("image/jpeg", `^(TestDecodeProgressive|TestDecodeEOF|TestTruncatedSOSDataDoesntPanic|TestIssue56724|TestBadRestartMarker|TestDecodeFlexSubsampling|TestWriter)$`)
+		r.skipTest("image/png", `^(TestReader|TestReaderError|TestPalettedDecodeConfig|TestInterlaced|TestPaletted8OutOfRangePixel|TestWriter|TestDimensionOverflow)$`)
+		r.skipTest("regexp", `^(TestRE2Exhaustive|TestRE2Search)$`)
 	}
 
 	// Hosted coverage
@@ -222,7 +310,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("crypto/subtle")
 	}
 	// The atomic suite exits without a diagnostic on macOS.
-	if !linux {
+	if !linux && !windows {
 		r.skipPackage("sync/atomic")
 	}
 
@@ -329,6 +417,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	}
 
 	// TinyGo exceeds the upstream allocation budgets for these operations.
+	r.skipTest("bufio", `^TestReadStringAllocs$`)
 	r.skipTest("bytes", `^TestNewBufferShallow$`)
 	r.skipTest("crypto/ed25519", `^TestAllocations$`)
 	r.skipTest("crypto/rsa", `^TestAllocations$`)
@@ -338,21 +427,18 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipTest("database/sql", `^TestGrabConnAllocs$`)
 	r.skipTest("encoding/gob", `^TestCountDecodeMallocs$`)
 	r.skipTest("encoding/json/jsontext", `^TestTokenStringAllocations$`)
-	r.skipTest("fmt", `^TestCountMallocs$`)
 	r.skipTest("math/big", `^TestNewIntAllocs$`)
 	r.skipTest("mime", `^TestLookupMallocs$`)
-	if opts.mode == modeFull {
-		r.skipTest("net/netip", `^TestAddrStringAllocs$|^TestNoAllocs$/^(Addr.IsGlobalUnicast|Addr.IsInterfaceLocalMulticast|Addr.IsLinkLocalMulticast|Addr.IsLinkLocalUnicast|Addr.IsPrivate)$`)
+	if opts.mode == modeFull || wasm {
+		r.skipTest("net/netip", `^TestAddrStringAllocs$|^TestNoAllocs$/^(Addr.IsGlobalUnicast|Addr.IsInterfaceLocalMulticast|Addr.IsLinkLocalMulticast|Addr.IsLinkLocalUnicast|Addr.IsPrivate)$|^TestNoAllocs$/^Addr\.Zone$/^6zone$`)
 	}
 	if !baremetal {
 		r.skipTest("reflect", `^TestMapIterSet$`)
 	}
-	r.skipTest("slices", `^(TestGrow|TestInsert|TestConcat)$`)
 	r.skipTest("sort", `^TestSearchWrappersDontAlloc$`)
 	if !baremetal {
 		r.skipTest("strconv", `^(TestCountMallocs|TestAllocationsFromBytes)$`)
 	}
-	r.skipTest("strings", `^(TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace)$`)
 	if !baremetal {
 		r.skipTest("unicode/utf16", `^TestAllocationsDecode$`)
 	}
@@ -363,7 +449,25 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipTest("strconv", `TestCountMallocs|TestAllocationsFromBytes`)
 		r.skipTest("unicode/utf16", `TestAllocationsDecode`)
 	}
+	if qemu {
+		r.skipTest("fmt", `TestCountMallocs`)
+		r.skipTest("slices", `TestGrow|TestInsert|TestConcat`)
+		r.skipTest("strings", `TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace`)
+	} else {
+		r.skipTest("fmt", `^TestCountMallocs$`)
+		r.skipTest("slices", `^(TestGrow|TestInsert|TestConcat)$`)
+		r.skipTest("strings", `^(TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace)$`)
+	}
 
+	// TestPureGoTag calls go/build, which rejects runtime.Compiler == "tinygo".
+	// TestDisallowedAssemblyInstructions walks GOROOT/src/crypto on disk.
+	if baremetal {
+		r.skipTest("crypto", `TestPureGoTag|TestDisallowedAssemblyInstructions`)
+	} else if browser || (hostOS == "windows" && wasi) {
+		r.skipTest("crypto", `^(TestPureGoTag|TestDisallowedAssemblyInstructions)$`)
+	} else {
+		r.skipTest("crypto", `^TestPureGoTag$`)
+	}
 	// The ML-DSA allocation check times out.
 	r.skipTest("crypto/mldsa", `^TestAllocations$`)
 	// The ASN.1 nesting tests can exhaust fixed stacks. Linux uses a 20 MB stack.
@@ -375,7 +479,11 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipTest("encoding/json", `^TestHTTPDecoding$`)
 	}
 	// The warning for late flag definitions needs the caller's file and line.
-	r.skipTest("flag", `^TestDefineAfterSet$`)
+	if qemu {
+		r.skipTest("flag", `TestExitCode|TestDefineAfterSet`)
+	} else {
+		r.skipTest("flag", `^TestDefineAfterSet$`)
+	}
 	// Boehm does not reclaim unreachable timers and tickers in this test.
 	r.skipTest("time", `^TestTimerGC$`)
 
