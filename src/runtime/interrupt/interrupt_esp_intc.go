@@ -1,4 +1,4 @@
-//go:build esp32 || esp32s3 || esp32c3
+//go:build esp32 || esp32s3 || esp32c3 || esp8266
 
 package interrupt
 
