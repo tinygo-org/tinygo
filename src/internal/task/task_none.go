@@ -55,3 +55,8 @@ func GoroutineStack() uintptr {
 	// No separate goroutine stack without a scheduler.
 	return 0
 }
+
+// StackTop is not called with this scheduler, which runs on the system stack.
+func StackTop() uintptr {
+	return 0
+}

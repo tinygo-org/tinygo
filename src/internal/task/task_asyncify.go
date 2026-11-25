@@ -253,3 +253,9 @@ func OnSystemStack() bool {
 	// If there is not an active goroutine, then this must be running on the system stack.
 	return Current() == nil
 }
+
+// StackTop returns the end of the current goroutine's stack. Call it only when
+// not on the system stack.
+func StackTop() uintptr {
+	return currentTask.state.stackEnd
+}
