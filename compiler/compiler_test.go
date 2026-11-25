@@ -192,6 +192,7 @@ func TestCompiler(t *testing.T) {
 		{"basic.go", "", ""},
 		{"pointer.go", "", ""},
 		{"slice.go", "", ""},
+		{"sliceend.go", "", ""},
 		{"rangeloop.go", "", ""},
 		{"clearloop.go", "", ""},
 		{"string.go", "", ""},
