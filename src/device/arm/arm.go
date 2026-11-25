@@ -29,6 +29,33 @@
 //	POSSIBILITY OF SUCH DAMAGE.
 package arm
 
+/*
+#include <stdint.h>
+
+// Keep these functions in the CGo preamble so that they
+// can be inlined into Go code even at -opt=0.
+
+__attribute__((always_inline)) void EnableInterrupts(uintptr_t mask) {
+    asm volatile(
+        "msr PRIMASK, %0"
+        :
+        : "r"(mask)
+        : "memory"
+    );
+}
+
+__attribute__((always_inline)) uintptr_t DisableInterrupts() {
+    uintptr_t mask;
+    asm volatile(
+        "mrs %0, PRIMASK\n\t"
+        "cpsid i"
+        : "=r"(mask)
+        :
+        : "memory"
+    );
+    return mask;
+}
+*/
 import "C"
 import (
 	"errors"
