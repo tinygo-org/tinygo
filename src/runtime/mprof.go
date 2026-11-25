@@ -1,7 +1,7 @@
 package runtime
 
 // MemProfileRate is the average number of bytes allocated per sample in the
-// memory profile. Only -gc=precise and -gc=conservative support it.
+// memory profile. Needs -tags=tinygo.memprofile and -gc=precise or conservative.
 var MemProfileRate int = 512 * 1024
 
 // A MemProfileRecord describes the live objects allocated by a particular

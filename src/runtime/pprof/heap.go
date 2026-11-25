@@ -1,3 +1,5 @@
+//go:build tinygo.memprofile
+
 package pprof
 
 import (

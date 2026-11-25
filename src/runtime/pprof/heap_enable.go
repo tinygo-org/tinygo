@@ -1,4 +1,4 @@
-//go:build !baremetal
+//go:build tinygo.memprofile && !baremetal
 
 package pprof
 

@@ -158,7 +158,8 @@ func (c *Config) BuildTags() []string {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
 	if c.ShadowStack() {
-		tags = append(tags, "tinygo.shadowstack")
+		// Stacks are only useful with heap profiling, so turn it on too.
+		tags = append(tags, "tinygo.shadowstack", "tinygo.memprofile")
 	}
 	tags = append(tags, c.Options.Tags...)
 	return tags
