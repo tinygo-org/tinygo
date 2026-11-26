@@ -49,3 +49,6 @@ func uartReceived() bool {
 	}
 	return ns16550LineStatus.Get()&1 != 0
 }
+
+func initStdio() {
+}

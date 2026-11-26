@@ -6,7 +6,6 @@
 package runtime
 
 import (
-	"machine"
 	"unsafe"
 
 	"device/riscv"
@@ -100,7 +99,7 @@ func initPeripherals() {
 	sifive.RTC.RTCCFG.Set(sifive.RTC_RTCCFG_ENALWAYS)
 
 	// Configure the UART.
-	machine.InitSerial()
+	initStdio()
 }
 
 var timerWakeup volatile.Register8

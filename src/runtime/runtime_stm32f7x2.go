@@ -24,7 +24,7 @@ const HSE_STARTUP_TIMEOUT = 0x0500
 func init() {
 	initCLK()
 
-	machine.InitSerial()
+	initStdio()
 
 	initTickTimer(&machine.TIM3)
 }

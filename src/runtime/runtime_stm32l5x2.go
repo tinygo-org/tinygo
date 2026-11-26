@@ -30,7 +30,7 @@ const (
 func init() {
 	initCLK()
 
-	machine.InitSerial()
+	initStdio()
 
 	initTickTimer(&machine.TIM16)
 }

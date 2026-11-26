@@ -5,7 +5,6 @@ package runtime
 import (
 	"device/arm"
 	"device/sam"
-	"machine"
 	_ "machine/usb/cdc"
 	"runtime/interrupt"
 	"runtime/volatile"
@@ -26,7 +25,7 @@ func init() {
 	initUSBClock()
 	initADCClock()
 
-	machine.InitSerial()
+	initStdio()
 }
 
 func initClocks() {

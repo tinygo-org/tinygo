@@ -54,7 +54,7 @@ func preinit() {
 }
 
 func initHardware() {
-	initUART()
+	initStdio()
 	initMonotonicTimer()
 	nextTimerRecalibrate = ticks() + timerRecalibrateInterval
 

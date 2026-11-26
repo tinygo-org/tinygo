@@ -8,7 +8,6 @@ package runtime
 import (
 	"device/kendryte"
 	"device/riscv"
-	"machine"
 	"runtime/interrupt"
 	"runtime/volatile"
 	"unsafe"
@@ -112,7 +111,7 @@ func initPeripherals() {
 	// Enable FPIOA peripheral.
 	kendryte.SYSCTL.CLK_EN_PERI.SetBits(kendryte.SYSCTL_CLK_EN_PERI_FPIOA_CLK_EN)
 
-	machine.InitSerial()
+	initStdio()
 }
 
 var timerWakeup volatile.Register8

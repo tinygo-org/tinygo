@@ -5,7 +5,6 @@ package runtime
 import (
 	"device/esp"
 	"device/xtensa"
-	"machine"
 	"unsafe"
 )
 
@@ -72,7 +71,7 @@ func main() {
 
 	// Initialize UART. This enables the UART RX interrupt, which must happen
 	// after interruptInit so the INTENABLE bit is not cleared again.
-	machine.InitSerial()
+	initStdio()
 	checkPSRAM()
 
 	// Initialize the heap, call main.main, etc.

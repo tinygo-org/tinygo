@@ -106,7 +106,7 @@ func main() {
 
 func init() {
 	// Initialize UART.
-	machine.InitSerial()
+	initStdio()
 	checkPSRAM()
 }
 

@@ -5,7 +5,6 @@ package runtime
 import (
 	"device/arm"
 	"device/renesas"
-	"machine"
 )
 
 // [initClocks] selects the high-speed on-chip oscillator and sets ICLK to 48 MHz.
@@ -77,7 +76,7 @@ func init() {
 	initClocks()
 	initSysTick()
 	arm.EnableInterrupts(0)
-	machine.InitSerial()
+	initStdio()
 }
 
 //export Reset_Handler

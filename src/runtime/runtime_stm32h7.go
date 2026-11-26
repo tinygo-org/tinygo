@@ -12,7 +12,7 @@ func init() {
 	initCLK()
 	initMPU()
 
-	machine.InitSerial()
+	initStdio()
 
 	initTickTimer(&machine.TIM3)
 }

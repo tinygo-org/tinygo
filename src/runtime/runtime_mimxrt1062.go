@@ -5,7 +5,6 @@ package runtime
 import (
 	"device/arm"
 	"device/nxp"
-	"machine"
 
 	_ "machine/usb/cdc"
 	"math/bits"
@@ -113,7 +112,7 @@ func initPeripherals() {
 func init() {
 	// InitSerial must run from a package init function, after the heap is
 	// initialized. With -serial usb it allocates for the USB stack.
-	machine.InitSerial()
+	initStdio()
 }
 
 func initPins() {

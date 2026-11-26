@@ -5,6 +5,6 @@ package runtime
 import "machine"
 
 func init() {
-	machine.InitSerial()
+	initStdio()
 	initTickTimer(&machine.TIM16)
 }

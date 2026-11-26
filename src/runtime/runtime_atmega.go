@@ -4,12 +4,7 @@ package runtime
 
 import (
 	"device/avr"
-	"machine"
 )
-
-func initUART() {
-	machine.InitSerial()
-}
 
 // Sleep for a given period. The period is defined by the WDT peripheral, and is
 // on most chips (at least) 3 bits wide, in powers of two from 16ms to 2s

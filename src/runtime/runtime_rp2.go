@@ -6,7 +6,6 @@ import (
 	"device/arm"
 	"device/rp"
 	"internal/task"
-	"machine"
 	_ "machine/usb/cdc"
 	"runtime/volatile"
 	"unsafe"
@@ -285,7 +284,7 @@ func init() {
 	machineInit()
 	startPSRAM()
 
-	machine.InitSerial()
+	initStdio()
 	checkPSRAM()
 }
 

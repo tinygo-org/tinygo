@@ -24,7 +24,7 @@ func initPeripherals() {
 	// given an 18 MHz processor, a millisecond is about 18,000 cycles.
 	tkey.TIMER.PRESCALER.Set(18 * machine.MHz / 100000)
 
-	machine.InitSerial()
+	initStdio()
 }
 
 var timestamp volatile.Register32

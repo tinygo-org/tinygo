@@ -20,3 +20,6 @@ func getchar() byte {
 func buffered() int {
 	return 0
 }
+
+func initStdio() {
+}

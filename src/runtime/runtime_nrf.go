@@ -25,7 +25,7 @@ func main() {
 }
 
 func init() {
-	machine.InitSerial()
+	initStdio()
 	initLFCLK()
 	initRTC()
 }

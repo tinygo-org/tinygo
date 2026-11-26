@@ -21,3 +21,7 @@ func getchar() byte {
 func buffered() int {
 	return machine.Serial.Buffered()
 }
+
+func initStdio() {
+	machine.InitSerial()
+}

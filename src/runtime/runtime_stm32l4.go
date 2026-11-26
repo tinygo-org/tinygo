@@ -37,7 +37,7 @@ type arrtype = uint32
 func init() {
 	initCLK()
 
-	machine.InitSerial()
+	initStdio()
 
 	initTickTimer(&machine.TIM15)
 }
