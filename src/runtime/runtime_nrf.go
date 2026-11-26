@@ -59,22 +59,6 @@ func initRTC() {
 	intr.Enable()
 }
 
-func putchar(c byte) {
-	machine.Serial.WriteByte(c)
-}
-
-func getchar() byte {
-	for machine.Serial.Buffered() == 0 {
-		Gosched()
-	}
-	v, _ := machine.Serial.ReadByte()
-	return v
-}
-
-func buffered() int {
-	return machine.Serial.Buffered()
-}
-
 func sleepTicks(d timeUnit) {
 	for d != 0 {
 		ticks := uint32(d) & 0x7fffff // 23 bits (to be on the safe side)

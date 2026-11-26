@@ -20,15 +20,3 @@ func main() {
 func sysTickFrequency() uint32 {
 	return machine.CPUFrequency()
 }
-
-func putchar(c byte) {
-	machine.Serial.WriteByte(c)
-}
-
-func getchar() byte {
-	for machine.Serial.Buffered() == 0 {
-		Gosched()
-	}
-	v, _ := machine.Serial.ReadByte()
-	return v
-}

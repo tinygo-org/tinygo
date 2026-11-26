@@ -4,28 +4,11 @@ package runtime
 
 import (
 	"device/stm32"
-	"machine"
 )
 
 const (
 	RCC_SYSCLK_DIV1 = 0 // Needs SVD update (should be stm32.RCC_SYSCLK_DIV1)
 )
-
-func putchar(c byte) {
-	machine.Serial.WriteByte(c)
-}
-
-func getchar() byte {
-	for machine.Serial.Buffered() == 0 {
-		Gosched()
-	}
-	v, _ := machine.Serial.ReadByte()
-	return v
-}
-
-func buffered() int {
-	return machine.Serial.Buffered()
-}
 
 func initCLK() {
 	// Set Power Regulator to enable max performance (1.8V)

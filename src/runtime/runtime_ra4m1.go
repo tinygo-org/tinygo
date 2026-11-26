@@ -37,22 +37,6 @@ const (
 		(renesas.SYSTEM_SCKDIVCR_PCKB_001 << renesas.SYSTEM_SCKDIVCR_PCKB_Pos)
 )
 
-func putchar(c byte) {
-	machine.Serial.WriteByte(c)
-}
-
-func getchar() byte {
-	for machine.Serial.Buffered() == 0 {
-		Gosched()
-	}
-	v, _ := machine.Serial.ReadByte()
-	return v
-}
-
-func buffered() int {
-	return machine.Serial.Buffered()
-}
-
 func initClocks() {
 	// Renesas FSP bsp/mcu/all/bsp_register_protection.c uses 0xA500 for PRCR.
 	const protectKey = 0xA5 << renesas.SYSTEM_PRCR_PRKEY_Pos
