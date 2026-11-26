@@ -4,8 +4,14 @@ package runtime
 
 import (
 	"device/arm"
+	"device/rp"
 	"runtime/volatile"
 )
+
+// Return the current core number: 0 or 1.
+func currentCPU() uint32 {
+	return rp.SIO.CPUID.Get()
+}
 
 // Set to 1 by schedulerEndWait to end a wait in schedulerUnlockAndWait.
 var schedulerWakePending [2]uint32
