@@ -9,6 +9,20 @@ import (
 	"unsafe"
 )
 
+// State represents the previous global interrupt state.
+type State uintptr
+
+// Disable disables all interrupts and returns the previous interrupt state.
+func Disable() (state State) {
+	return State(riscv.DisableInterrupts())
+}
+
+// Restore restores interrupts to what they were before. Give the previous state
+// returned by Disable as a parameter.
+func Restore(state State) {
+	riscv.EnableInterrupts(uintptr(state))
+}
+
 //go:extern tinygo_saved_ra
 var tinygo_saved_ra uintptr
 
