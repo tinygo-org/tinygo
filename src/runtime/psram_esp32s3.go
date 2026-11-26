@@ -5,8 +5,7 @@
 // lines and a DTR (double transfer rate / DDR) protocol, unlike 4-line
 // single-rate Quad PSRAM; the two are not interchangeable and use different
 // GPIOs (Octal adds D4-D7+DQS on GPIO33-37, on top of the CS1/D0-D3 pins
-// shared with flash). Shared linker symbols, MMU/ROM-call helpers, and the
-// address map are documented in machine_esp32xx_psram.go.
+// shared with flash).
 //
 // Unlike its own Quad PSRAM driver, ESP-IDF does not hand-roll the Octal
 // DTR command sequence in C -- it delegates entirely to a mask-ROM
@@ -29,6 +28,35 @@
 // pin setup follows the flash boot mode (DIO on modules with a plain Quad
 // flash chip, which only needs D0/D1), and a tinygo image has no
 // 2nd-stage bootloader to do it either.
+//
+// Address map (esp-idf soc/ext_mem_defs.h; verified on hardware while
+// bringing up the Octal driver):
+//
+//	0x600C5000  MMU table, 512 x 32-bit entries, one per 64KB page.
+//	            A SINGLE table shared by IBUS (0x42000000 window) and DBUS
+//	            (0x3C000000 window), indexed by linear address:
+//	            entry = (vaddr & SOC_MMU_LINEAR_ADDR_MASK 0x1FFFFFF) >> 16.
+//	            There is no ICache/DCache half-split: 0x3C800000 and
+//	            0x42800000 both decode to entry 128.
+//	            Entry format: bits[13:0] physical page number, bit 14 =
+//	            invalid (SOC_MMU_INVALID), bit 15 = target type, 0 = flash,
+//	            1 = PSRAM (SOC_MMU_ACCESS_SPIRAM).
+//
+//	Flash XIP takes the low entries: IROM starts at entry 0, DROM follows
+//	after it, and machine.Flash follows DROM (esp32s3.S, targets/esp32s3.ld).
+//	PSRAM lives in the upper half of the DBUS window (0x3D000000, entries
+//	256-511; targets/esp32s3.ld), disjoint from all flash entries.
+//
+//	The IROM/DROM boundary is variable, since it follows the size of
+//	.text. The PSRAM window sits above it either way: the boundary can
+//	only move down, never above 0x3D000000, so the vaddr this driver passes
+//	to romCacheDbusMMUSet always stays inside whatever DROM range
+//	Cache_Set_IDROM_MMU_Size left behind.
+//
+//	DCache (data cache) is the L1/L2 cache in front of the DBUS window.
+//	It is disabled (ROM Cache_Disable_DCache, which also invalidates all
+//	tag memory) while MMU entries are modified and re-enabled after, so
+//	that no stale cache lines survive the remap.
 package runtime
 
 import (
@@ -47,6 +75,22 @@ func romSpiSetDtrSwapMode(spiNum int32, wrSwap bool, rdSwap bool)
 
 //export esp_rom_opiflash_pin_config
 func romOpiflashPinConfig()
+
+// Cache ROM functions, see esp32s3/rom/cache.h.
+
+//export Cache_Dbus_MMU_Set
+func romCacheDbusMMUSet(extRam uint32, vaddr uint32, paddr uint32, psize uint32, num uint32, fixed uint32) int32
+
+// Cache_Disable_DCache / Cache_Enable_DCache: the documented-safe pairing
+// around an MMU change (Cache_Disable_DCache also invalidates all DCache
+// tag memory). Cache_Suspend_DCache/Resume, the alternative pairing, is
+// explicitly documented as unsafe to use while changing the MMU.
+
+//export Cache_Disable_DCache
+func romCacheDisableDCache() uint32
+
+//export Cache_Enable_DCache
+func romCacheEnableDCache(autoload uint32)
 
 // g_rom_spiflash_dummy_len_plus[1]: per-spi_num extra dummy cycle count that
 // esp_rom_opiflash_exec_cmd() adds on top of the caller-supplied dummyBits.
@@ -205,8 +249,7 @@ func initPSRAM() string {
 	calibratePSRAMTiming()
 
 	// Disable DCache before touching the SPI0 cache-facing registers and
-	// the MMU table below (see the Cache_Disable_DCache doc comment in
-	// machine_esp32xx_psram.go).
+	// the MMU table below (see the Cache_Disable_DCache doc comment).
 	romCacheDisableDCache()
 
 	// Enable SPI0's CS1 output for its cache-triggered SRAM (PSRAM)
@@ -462,4 +505,15 @@ func checkPSRAMConnected() bool {
 	romOpiflashExecCmd(opiSpiNum, opiDtrMode, opiSyncRead, opiCmdBitLen, 0, opiAddrBitLen, opiRdDummy, nil, 0, (*byte)(unsafe.Pointer(&got)), 32, opiCS1Mask, false)
 
 	return got == refData
+}
+
+const mmuAccessSpiram = 0x8000 // SOC_MMU_TYPE / SOC_MMU_ACCESS_SPIRAM: routes entry to PSRAM instead of flash.
+
+// psramWindow returns the PSRAM vaddr window that the target declares with
+// __psram_size (targets/esp32s3.ld) and its size in 64KB MMU pages.
+func psramWindow() (start, end uintptr, pageCap int) {
+	start = uintptr(unsafe.Pointer(&_psram_start))
+	end = uintptr(unsafe.Pointer(&_psram_end))
+	pageCap = int((end - start) / 65536)
+	return
 }
