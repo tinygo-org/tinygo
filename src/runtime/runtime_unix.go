@@ -326,7 +326,7 @@ func procPin() {
 func procUnpin() {
 }
 
-var heapSize uintptr = 128 * 1024 // small amount to start
+var heapSize uintptr = 1024 * 1024 // small amount to start
 var heapMaxSize uintptr
 
 var heapStart, heapEnd uintptr

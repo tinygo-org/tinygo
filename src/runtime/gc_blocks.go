@@ -456,10 +456,9 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			freeBytes := runGC()
 			ranGC = true
 			heapSize := uintptr(metadataStart) - heapStart
-			if freeBytes < heapSize/3 {
-				// Ensure there is at least 33% headroom.
-				// This percentage was arbitrarily chosen, and may need to
-				// be tuned in the future.
+			if freeBytes < heapSize/2 {
+				// Keep at least half the heap free, so a program can allocate
+				// about as much as its live data between collections.
 				if growHeap() && (gcStats || gcDebug) {
 					print("gc: grew heap=", uint(heapEnd-heapStart), "\n")
 				}
