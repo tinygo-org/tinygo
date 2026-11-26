@@ -38,6 +38,7 @@ var (
 	flagShuffle    string
 	flagCount      int
 	flagParallel   int
+	flagTimeout    time.Duration
 )
 
 var initRan bool
@@ -57,6 +58,7 @@ func Init() {
 
 	flag.IntVar(&flagCount, "test.count", 1, "run each test or benchmark `count` times")
 	flag.IntVar(&flagParallel, "test.parallel", runtime.NumCPU(), "run at most `n` tests in parallel")
+	flag.DurationVar(&flagTimeout, "test.timeout", 0, "panic test binary after duration `d` (default 0, timeout disabled)")
 
 	initBenchmarkFlags()
 }
@@ -864,9 +866,10 @@ type testContext struct {
 	parallelSem chan struct{}
 }
 
-func newTestContext(m *matcher) *testContext {
+func newTestContext(m *matcher, deadline time.Time) *testContext {
 	return &testContext{
 		match:       m,
+		deadline:    deadline,
 		parallelSem: make(chan struct{}, flagParallel),
 	}
 }
@@ -885,11 +888,29 @@ type M struct {
 	Tests      []InternalTest
 	Benchmarks []InternalBenchmark
 
-	deps testDeps
+	deps  testDeps
+	timer *time.Timer
 
 	// value to pass to os.Exit, the outer test func main
 	// harness calls os.Exit with this code. See #34129.
 	exitCode int
+}
+
+func (m *M) startAlarm() time.Time {
+	if flagTimeout <= 0 {
+		return time.Time{}
+	}
+	deadline := time.Now().Add(flagTimeout)
+	m.timer = time.AfterFunc(flagTimeout, func() {
+		panic(fmt.Sprintf("test timed out after %v", flagTimeout))
+	})
+	return deadline
+}
+
+func (m *M) stopAlarm() {
+	if m.timer != nil {
+		m.timer.Stop()
+	}
 }
 
 type testDeps interface {
@@ -939,7 +960,10 @@ func (m *M) Run() (code int) {
 		}
 	}
 
-	testRan, testOk := runTests(m.deps.MatchString, m.Tests)
+	deadline := m.startAlarm()
+	defer m.stopAlarm()
+
+	testRan, testOk := runTests(m.deps.MatchString, m.Tests, deadline)
 	if !testRan && *matchBenchmarks == "" {
 		fmt.Fprintln(os.Stderr, "testing: warning: no tests to run")
 	}
@@ -953,11 +977,11 @@ func (m *M) Run() (code int) {
 	return
 }
 
-func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest) (ran, ok bool) {
+func runTests(matchString func(pat, str string) (bool, error), tests []InternalTest, deadline time.Time) (ran, ok bool) {
 	ok = true
 
 	for i := 0; i < flagCount; i++ {
-		ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", flagSkipRegexp))
+		ctx := newTestContext(newMatcher(matchString, flagRunRegexp, "-test.run", flagSkipRegexp), deadline)
 		runCtx, cancelCtx := context.WithCancel(context.Background())
 		t := &T{
 			common: common{
