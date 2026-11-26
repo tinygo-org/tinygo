@@ -1,5 +1,7 @@
 package runtime
 
+const GOOS = "js"
+
 var handleEvent func()
 
 //go:linkname setEventHandler syscall/js.setEventHandler

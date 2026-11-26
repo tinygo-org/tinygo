@@ -6,6 +6,8 @@ import (
 	"unsafe"
 )
 
+const GOOS = "wasip1"
+
 // libc constructors
 //
 //export __wasm_call_ctors
