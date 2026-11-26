@@ -302,7 +302,9 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("io/ioutil")
 		r.skipPackage("testing/fstest")
 		r.skipPackage("testing/synctest")
-		r.skipPackage("mime") // MIME type lookup panics on WASIp1.
+	}
+	if !hosted && !wasi {
+		r.skipPackage("mime")
 	}
 
 	// ARM64 DIT tests need Go assembly for internal/runtime/sys.DITEnabled.

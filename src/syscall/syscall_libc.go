@@ -35,6 +35,9 @@ func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
 }
 
 func Open(path string, flag int, mode uint32) (fd int, err error) {
+	if path == "" {
+		return -1, ENOENT
+	}
 	data := cstring(path)
 	fd = int(libc_open(&data[0], int32(flag), mode))
 	if fd < 0 {
