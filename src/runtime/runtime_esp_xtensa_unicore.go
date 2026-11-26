@@ -4,8 +4,6 @@ package runtime
 
 import "runtime/interrupt"
 
-const numCPU = 1
-
 func lockTicks() interrupt.State {
 	return 0
 }

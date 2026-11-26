@@ -9,6 +9,8 @@ import (
 	"unsafe"
 )
 
+const numCPU = 2
+
 // TIMG0 counts at 40MHz. The 80MHz timer clock is divided by 2.
 const (
 	timerDivider = 2

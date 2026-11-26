@@ -11,6 +11,8 @@ import (
 	"unsafe"
 )
 
+const numCPU = 2
+
 // TIMG0 runs from the 40MHz XTAL, set in esp32p4.S: divider 2 gives 20MHz ticks, 50ns each.
 // The divider must be 2 or more. See ESP-IDF hal/esp32p4/include/hal/timer_ll.h timer_ll_set_clock_prescale.
 const (
