@@ -487,3 +487,9 @@ type libgc_prof_stats struct {
 	expl_freed_bytes_since_gc uintptr
 	obtained_from_os_bytes    uintptr
 }
+
+//export GC_get_gc_no
+func libgc_get_gc_no() uintptr
+
+// poolGCCount is the number of collections so far, for sync.Pool.
+func poolGCCount() uint32 { return uint32(libgc_get_gc_no()) }

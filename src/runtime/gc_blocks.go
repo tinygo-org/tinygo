@@ -1038,3 +1038,6 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 
 	registerFinalizer(uintptr(objPtr), finalizer)
 }
+
+// poolGCCount is the number of collections so far, for sync.Pool.
+func poolGCCount() uint32 { return gcNumGC }
