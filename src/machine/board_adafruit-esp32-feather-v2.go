@@ -80,12 +80,12 @@ const (
 
 // I2C pins
 const (
-	I2C_SCL_PIN = IO20
-	I2C_SDA_PIN = IO22
+	SCL_PIN = IO20
+	SDA_PIN = IO22
 
 	// Silk labels
-	SCL = I2C_SCL_PIN
-	SDA = I2C_SDA_PIN
+	SCL = SCL_PIN
+	SDA = SDA_PIN
 )
 
 // ADC pins
