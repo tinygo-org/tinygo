@@ -1146,8 +1146,34 @@ func (d *sdmmc) transfer(buf []byte, block int64, write bool) error {
 	d.dmaStop()
 	d.desc.SetOwned(false)
 
-	if !write {
+	if write {
+		if err := d.waitWriteDone(); err != nil {
+			return err
+		}
+	} else {
 		copy(buf, bounce)
+	}
+	return nil
+}
+
+// waitWriteDone waits for the card to release DAT0 and reports the
+// post-write R1 status. Without this, an immediate read can race the
+// card's internal write completion.
+func (d *sdmmc) waitWriteDone() error {
+	deadline := sdmmcDeadlineUS(sdmmcDataTimeout)
+	for d.hw.STATUS.Get()&sdmmcStatusDataBusy != 0 {
+		if sdmmcTicks() > deadline {
+			d.captureTransferState()
+			return ErrSDMMCTimeout
+		}
+		sdmmcDelayUS(10)
+	}
+	if _, err := d.command(esp32p4sdmmc.CommandOptions{
+		Index:    esp32p4sdmmc.CmdSendStatus,
+		Response: esp32p4sdmmc.RespR1,
+		CheckCRC: true,
+	}, uint32(d.rca)<<16); err != nil {
+		return err
 	}
 	return nil
 }
