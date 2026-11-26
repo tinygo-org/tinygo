@@ -8,6 +8,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"math"
 	"math/bits"
 	"path"
 	"path/filepath"
@@ -91,6 +92,7 @@ type context struct {
 	funcPtrAddrSpace            int
 	uintptrType                 llvm.Type
 	uintptrZero                 llvm.Value
+	maxLen                      uint64
 	nocapture                   llvm.Attribute // captures(none)
 	standardDeclaredAttrs       []llvm.Attribute
 	ptrBits                     int
@@ -109,6 +111,8 @@ type context struct {
 	astComments                 map[string]astGlobalInfo
 	cgoImportDynamic            map[string]string // //go:cgo_import_dynamic local name -> remote symbol
 	embedGlobals                map[string][]*loader.EmbedFile
+	memCmpByType                typeutil.Map
+	memCmpStructs               map[string]*memCmpStruct
 	pkg                         *types.Package
 	loaderPkg                   *loader.Package // current package being compiled (for AST access)
 	packageDir                  string          // directory for this package
@@ -137,6 +141,7 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 		functionABIs:     map[functionABIKey]functionABI{},
 		astComments:      map[string]astGlobalInfo{},
 		cgoImportDynamic: map[string]string{},
+		memCmpStructs:    map[string]*memCmpStruct{},
 	}
 
 	c.ctx = llvm.NewContext()
@@ -167,10 +172,15 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 	c.uintptrZero = llvm.ConstNull(c.uintptrType)
 
 	switch c.ptrBits {
-	case 8, 16, 32:
+	case 8, 16:
 		c.intType = c.i32
+		c.maxLen = 1<<c.ptrBits - 1
+	case 32:
+		c.intType = c.i32
+		c.maxLen = math.MaxInt32
 	case 64:
 		c.intType = c.i64
+		c.maxLen = math.MaxInt64
 	default:
 		panic("unknown pointer size")
 	}
@@ -1472,7 +1482,7 @@ func (b *builder) createFunction() {
 				expr := b.dibuilder.CreateExpression(nil)
 				var value llvm.Value
 				ptr, indirect := b.indirectValues[instr.X]
-				if unop, ok := instr.X.(*ssa.UnOp); indirect && ok && canUseDereferencePointer(unop) {
+				if unop, ok := instr.X.(*ssa.UnOp); indirect && ok && b.canUseDereferencePointer(unop) {
 					// ptr is the source of the dereference, which can change later.
 					indirect = false
 				}
@@ -1876,13 +1886,37 @@ func (b *builder) getValuePointer(value ssa.Value) llvm.Value {
 	return ptr
 }
 
-func isMemequalArrayComparison(expr *ssa.BinOp) bool {
-	typ, ok := expr.X.Type().Underlying().(*types.Array)
-	return ok &&
-		typ.Len() > hashArrayUnrollLimit &&
-		isBinaryComparable(typ.Elem()) &&
-		(expr.Op == token.EQL || expr.Op == token.NEQ)
+func (c *context) isMemComparison(expr *ssa.BinOp) bool {
+	return (expr.Op == token.EQL || expr.Op == token.NEQ) && directEqualCost(expr.X.Type()) > maxDirectEqualCost
 }
+
+func directEqualCost(t types.Type) uint64 {
+	switch t := t.(type) {
+	case *types.Basic:
+		switch t.Kind() {
+		case types.Complex64, types.Complex128:
+			return 2
+		}
+	case *types.Array:
+		return directEqualCost(t.Elem()) * uint64(t.Len())
+	case *types.Struct:
+		var cost uint64
+		for field := range t.Fields() {
+			if field.Name() == "_" {
+				// Blank ident fields are excluded from comparisons.
+				continue
+			}
+			cost += directEqualCost(field.Type())
+		}
+		return cost
+	case *types.Alias, *types.Named:
+		return directEqualCost(t.Underlying())
+	}
+	return 1
+}
+
+// TODO: This is entirely arbitrary.
+const maxDirectEqualCost = 4
 
 // isRangeLoopCompare returns whether expr is the (index + 1) < len(slice) test
 // of rangeIndexed in golang.org/x/tools/go/ssa. Neither side is ever negative.
@@ -1908,12 +1942,12 @@ func isRangeLoopCompare(expr *ssa.BinOp) bool {
 	return ok && one.Int64() == 1
 }
 
-func canUseDereferencePointer(unop *ssa.UnOp) bool {
+func (c *context) canUseDereferencePointer(unop *ssa.UnOp) bool {
 	if !isDereference(unop) {
 		return false
 	}
 	comparison := adjacentComparison(unop, isDereference)
-	return comparison != nil && isMemequalArrayComparison(comparison)
+	return comparison != nil && c.isMemComparison(comparison)
 }
 
 func isDereference(value ssa.Value) bool {
@@ -2690,24 +2724,7 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 // maxSliceSize determines the maximum size a slice of the given element type
 // can be.
 func (c *context) maxSliceSize(elementType llvm.Type) uint64 {
-	// Calculate ^uintptr(0), which is the max value that fits in uintptr.
-	maxPointerValue := llvm.ConstAllOnes(c.uintptrType).ZExtValue()
-	// Calculate (^uint(0))/2, which is the max value that fits in an int.
-	maxIntegerValue := llvm.ConstAllOnes(c.intType).ZExtValue() / 2
-
-	// Determine the maximum allowed size for a slice. The biggest possible
-	// pointer (starting from 0) would be maxPointerValue*sizeof(elementType) so
-	// divide by the element type to get the real maximum size.
-	elementSize := c.targetData.TypeAllocSize(elementType)
-	if elementSize == 0 {
-		elementSize = 1
-	}
-	maxSize := min(
-		// len(slice) is an int. Make sure the length remains small enough to fit in
-		// an int.
-		maxPointerValue/elementSize, maxIntegerValue)
-
-	return maxSize
+	return c.maxLen / max(c.targetData.TypeAllocSize(elementType), 1)
 }
 
 // goHeapAddressBits matches heapAddrBits for Go's common 64-bit targets.
@@ -2845,12 +2862,16 @@ func (b *builder) createExpr(expr ssa.Value) (llvm.Value, error) {
 			return buf, nil
 		}
 	case *ssa.BinOp:
-		if isMemequalArrayComparison(expr) {
-			typ := expr.X.Type().Underlying().(*types.Array)
+		if b.isMemComparison(expr) {
+			innerType := expr.X.Type()
+			pattern := b.memCmpPattern(innerType)
 			x := b.getValuePointer(expr.X)
 			y := b.getValuePointer(expr.Y)
-			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(b.getLLVMType(typ)), false)
-			result := b.createRuntimeCall("memequal", []llvm.Value{x, y, size}, "arraycmp")
+			align := b.targetData.ABITypeAlignment(b.getLLVMType(innerType))
+			if b.hasDeferFrame() && memCmpHasInterface(pattern) {
+				b.createInvokeCheckpoint()
+			}
+			result := b.memCmpWithPattern(b.Builder, pattern, x, y, uint64(align), "")
 			if expr.Op == token.NEQ {
 				result = b.CreateNot(result, "")
 			}
@@ -3764,27 +3785,15 @@ func (b *builder) createBinOp(op token.Token, typ, ytyp types.Type, x, y llvm.Va
 		//     Array values are comparable if values of the array element type
 		//     are comparable. Two array values are equal if their corresponding
 		//     elements are equal.
-		var result llvm.Value
-		if typ.Len() > hashArrayUnrollLimit && isBinaryComparable(typ.Elem()) {
-			xPtr, xSize := b.createTemporaryAlloca(x.Type(), "arraycmp.x")
-			yPtr, ySize := b.createTemporaryAlloca(y.Type(), "arraycmp.y")
-			b.CreateStore(x, xPtr)
-			b.CreateStore(y, yPtr)
-			size := llvm.ConstInt(b.uintptrType, b.targetData.TypeAllocSize(x.Type()), false)
-			result = b.createRuntimeCall("memequal", []llvm.Value{xPtr, yPtr, size}, "arraycmp")
-			b.emitLifetimeEnd(xPtr, xSize)
-			b.emitLifetimeEnd(yPtr, ySize)
-		} else {
-			result = b.i1True
-			for i := 0; i < int(typ.Len()); i++ {
-				xField := b.CreateExtractValue(x, i, "")
-				yField := b.CreateExtractValue(y, i, "")
-				fieldEqual, err := b.createBinOp(token.EQL, typ.Elem(), typ.Elem(), xField, yField, pos)
-				if err != nil {
-					return llvm.Value{}, err
-				}
-				result = b.CreateAnd(result, fieldEqual, "")
+		result := llvm.ConstInt(b.ctx.Int1Type(), 1, true)
+		for i := 0; i < int(typ.Len()); i++ {
+			xField := b.CreateExtractValue(x, i, "")
+			yField := b.CreateExtractValue(y, i, "")
+			fieldEqual, err := b.createBinOp(token.EQL, typ.Elem(), typ.Elem(), xField, yField, pos)
+			if err != nil {
+				return llvm.Value{}, err
 			}
+			result = b.CreateAnd(result, fieldEqual, "")
 		}
 		switch op {
 		case token.EQL: // ==
@@ -4254,7 +4263,7 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			return llvm.ConstNull(valueType), nil
 		} else {
 			b.createNilCheck(unop.X, x, "deref")
-			if canUseDereferencePointer(unop) {
+			if b.canUseDereferencePointer(unop) {
 				return x, nil
 			}
 			return b.loadFromStorage(x, unop.Type(), ""), nil

@@ -17,10 +17,10 @@ pico2                    ./testdata/size-os                       z       6226  
 pico2                    ./testdata/size-os                       2      15119      961      108     5592
 pico2                    ./testdata/size-timer                    z      10078     1842      112     5688
 pico2                    ./testdata/size-timer                    2      20357     1611      108     5688
-cortex-m-qemu            ./testdata/size-corpus                   z       8818     1254       80     4196
-cortex-m-qemu            ./testdata/size-corpus                   2      17107      821       72     4200
+cortex-m-qemu            ./testdata/size-corpus                   z       8832     1256       80     4196
+cortex-m-qemu            ./testdata/size-corpus                   2      17075      821       72     4200
 riscv-qemu               ./testdata/size-corpus                   z      15672      856       72    16628
-riscv-qemu               ./testdata/size-corpus                   2      22461      763       64    16636
+riscv-qemu               ./testdata/size-corpus                   2      22477      763       64    16636
 cortex-m-qemu            ./testdata/size-init-recover             z       2686      762        4     4176
 cortex-m-qemu            ./testdata/size-init-recover             2       6620      316        4     4180
 pico2                    ./testdata/size-init-regexp              z      12829    11003      908     5856
@@ -28,7 +28,7 @@ pico2                    ./testdata/size-init-regexp              2      24384  
 cortex-m-qemu            ./testdata/size-init-crc                 z       3865      767        4     4432
 cortex-m-qemu            ./testdata/size-init-crc                 2       8156      316        4     4436
 cortex-m-qemu            ./testdata/size-init-map                 z       2923      813      148     4176
-cortex-m-qemu            ./testdata/size-init-map                 2       7703      369      148     4180
+cortex-m-qemu            ./testdata/size-init-map                 2       7373      363      148     4180
 cortex-m-qemu            ./testdata/size-init-errors              z       2763      869       28     4176
 cortex-m-qemu            ./testdata/size-init-errors              2       6718      314        4     4180
 cortex-m-qemu            ./testdata/size-init-config              z       3272      784        4     4176

@@ -80,12 +80,12 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.rangeLocal(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.rangeLocal(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
 rangeindex.loop:                                  ; preds = %entry
-  %0 = shl nuw i32 %s.len, 2
+  %0 = shl nuw nsw i32 %s.len, 2
   call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
   br label %rangeindex.done
 
@@ -183,12 +183,12 @@ unwind.return:                                    ; preds = %gep.throw
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.forLocal(ptr %s.data, i32 range(i32 0, -2147483648) %s.len, i32 range(i32 0, -2147483648) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.forLocal(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %for.loop
 
 for.loop:                                         ; preds = %entry
-  %0 = shl nuw i32 %s.len, 1
+  %0 = shl nuw nsw i32 %s.len, 1
   call void @llvm.memset.p0.i32(ptr align 2 %s.data, i8 0, i32 %0, i1 false)
   br label %for.done
 
@@ -200,7 +200,7 @@ for.done:                                         ; preds = %for.loop
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.structZero(ptr %s.data, i32 range(i32 0, 214748365) %s.len, i32 range(i32 0, 214748365) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.structZero(ptr %s.data, i32 range(i32 0, 107374183) %s.len, i32 range(i32 0, 107374183) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
@@ -217,7 +217,7 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.structZeroVar(ptr %s.data, i32 range(i32 0, 214748365) %s.len, i32 range(i32 0, 214748365) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.structZeroVar(ptr %s.data, i32 range(i32 0, 107374183) %s.len, i32 range(i32 0, 107374183) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
@@ -234,12 +234,12 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.arrayZero(ptr %s.data, i32 range(i32 0, 268435456) %s.len, i32 range(i32 0, 268435456) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.arrayZero(ptr %s.data, i32 range(i32 0, 134217728) %s.len, i32 range(i32 0, 134217728) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
 rangeindex.loop:                                  ; preds = %entry
-  %0 = shl nuw i32 %s.len, 4
+  %0 = shl nuw nsw i32 %s.len, 4
   call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
   br label %rangeindex.done
 
@@ -251,12 +251,12 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.complexZero(ptr %s.data, i32 range(i32 0, 268435456) %s.len, i32 range(i32 0, 268435456) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.complexZero(ptr %s.data, i32 range(i32 0, 134217728) %s.len, i32 range(i32 0, 134217728) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
 rangeindex.loop:                                  ; preds = %entry
-  %0 = shl nuw i32 %s.len, 4
+  %0 = shl nuw nsw i32 %s.len, 4
   call void @llvm.memset.p0.i32(ptr align 8 %s.data, i8 0, i32 %0, i1 false)
   br label %rangeindex.done
 
@@ -268,12 +268,12 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.stringZero(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.stringZero(ptr %s.data, i32 range(i32 0, 268435456) %s.len, i32 range(i32 0, 268435456) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
 rangeindex.loop:                                  ; preds = %entry
-  %0 = shl nuw i32 %s.len, 3
+  %0 = shl nuw nsw i32 %s.len, 3
   call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
   br label %rangeindex.done
 
@@ -285,12 +285,12 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.interfaceZero(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.interfaceZero(ptr %s.data, i32 range(i32 0, 268435456) %s.len, i32 range(i32 0, 268435456) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
 rangeindex.loop:                                  ; preds = %entry
-  %0 = shl nuw i32 %s.len, 3
+  %0 = shl nuw nsw i32 %s.len, 3
   call void @llvm.memset.p0.i32(ptr align 4 %s.data, i8 0, i32 %0, i1 false)
   br label %rangeindex.done
 
@@ -302,7 +302,7 @@ rangeindex.done:                                  ; preds = %rangeindex.loop
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.nonZero(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.nonZero(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
@@ -333,7 +333,7 @@ unwind.return:                                    ; preds = %lookup.throw
 declare void @runtime.lookupPanic(ptr) #0
 
 ; Function Attrs: nounwind
-define hidden void @main.extraStatement(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %t.data, i32 range(i32 0, 1073741824) %t.len, i32 range(i32 0, 1073741824) %t.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.extraStatement(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %t.data, i32 range(i32 0, 536870912) %t.len, i32 range(i32 0, 536870912) %t.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
@@ -474,7 +474,7 @@ lookup.throw:                                     ; preds = %deref.next2
 }
 
 ; Function Attrs: nounwind
-define hidden i32 @main.indexUsedAfter(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden i32 @main.indexUsedAfter(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %rangeindex.loop
 
@@ -504,7 +504,7 @@ unwind.return:                                    ; preds = %lookup.throw
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.stepTwo(ptr %s.data, i32 range(i32 0, 1073741824) %s.len, i32 range(i32 0, 1073741824) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.stepTwo(ptr %s.data, i32 range(i32 0, 536870912) %s.len, i32 range(i32 0, 536870912) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   br label %for.loop
 
@@ -562,7 +562,7 @@ unwind.return:                                    ; preds = %lookup.throw
 }
 
 ; Function Attrs: nounwind
-define hidden void @main.explicitFields(ptr %s.data, i32 range(i32 0, 214748365) %s.len, i32 range(i32 0, 214748365) %s.cap, ptr %context) unnamed_addr #1 {
+define hidden void @main.explicitFields(ptr %s.data, i32 range(i32 0, 107374183) %s.len, i32 range(i32 0, 107374183) %s.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   br label %rangeindex.loop

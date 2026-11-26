@@ -428,7 +428,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-define hidden %runtime._string @main.namedRuneSliceToString(ptr %a.data, i32 range(i32 0, 1073741824) %a.len, i32 range(i32 0, 1073741824) %a.cap, ptr %context) unnamed_addr #1 {
+define hidden %runtime._string @main.namedRuneSliceToString(ptr %a.data, i32 range(i32 0, 536870912) %a.len, i32 range(i32 0, 536870912) %a.cap, ptr %context) unnamed_addr #1 {
 entry:
   %stackalloc = alloca i8, align 1
   %0 = call %runtime._string @runtime.stringFromRunes(ptr %a.data, i32 %a.len, i32 %a.cap, ptr undef) #4
@@ -437,7 +437,7 @@ entry:
   ret %runtime._string %0
 }
 
-declare %runtime._string @runtime.stringFromRunes(ptr readonly captures(none), i32 range(i32 0, 1073741824), i32 range(i32 0, 1073741824), ptr) #0
+declare %runtime._string @runtime.stringFromRunes(ptr readonly captures(none), i32 range(i32 0, 536870912), i32 range(i32 0, 536870912), ptr) #0
 
 ; Function Attrs: nounwind
 define hidden i1 @main.byteSliceStringCompareLess(ptr %a.data, i32 range(i32 0, -2147483648) %a.len, i32 range(i32 0, -2147483648) %a.cap, ptr %b.data, i32 range(i32 0, -2147483648) %b.len, i32 range(i32 0, -2147483648) %b.cap, ptr %context) unnamed_addr #1 {
