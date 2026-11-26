@@ -28,7 +28,7 @@ func (err errorContext) String() string {
 // [error-context.debug-message]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md#error-contextdebug-message
 func (err errorContext) DebugMessage() string {
 	var s string
-	wasmimport_errorContextDebugMessage(err, unsafe.Pointer(&s))
+	wasmimport_errorContextDebugMessage(uint32(err), unsafe.Pointer(&s))
 	return s
 }
 
@@ -36,5 +36,5 @@ func (err errorContext) DebugMessage() string {
 //
 // [error-context.drop]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md#error-contextdrop
 func (err errorContext) Drop() {
-	wasmimport_errorContextDrop(err)
+	wasmimport_errorContextDrop(uint32(err))
 }

@@ -57,7 +57,11 @@ func abort() {
 
 //go:linkname syscall_Exit syscall.Exit
 func syscall_Exit(code int) {
-	exit.Exit(code != 0)
+	status := cm.BoolResult(cm.ResultOK)
+	if code != 0 {
+		status = cm.ResultErr
+	}
+	exit.Exit(status)
 }
 
 // WASIp2 does not use wasi-libc's stdio.

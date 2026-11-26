@@ -7,6 +7,12 @@ import (
 	"unsafe"
 )
 
+// IPv6AddressShape is used for storage in variant or result types.
+type IPv6AddressShape struct {
+	_     cm.HostLayout
+	shape [unsafe.Sizeof(IPv6Address{})]byte
+}
+
 // IPv6SocketAddressShape is used for storage in variant or result types.
 type IPv6SocketAddressShape struct {
 	_     cm.HostLayout

@@ -6,8 +6,8 @@ import "unsafe"
 //
 //go:wasmimport canon error-context.debug-message
 //go:noescape
-func wasmimport_errorContextDebugMessage(err errorContext, msg unsafe.Pointer)
+func wasmimport_errorContextDebugMessage(err uint32, msg unsafe.Pointer)
 
 //go:wasmimport canon error-context.drop
 //go:noescape
-func wasmimport_errorContextDrop(err errorContext)
+func wasmimport_errorContextDrop(err uint32)

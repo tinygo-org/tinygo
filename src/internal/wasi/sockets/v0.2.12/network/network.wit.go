@@ -256,7 +256,7 @@ type IPv6Address [8]uint16
 //		ipv4(ipv4-address),
 //		ipv6(ipv6-address),
 //	}
-type IPAddress cm.Variant[uint8, IPv6Address, IPv6Address]
+type IPAddress cm.Variant[uint8, IPv6AddressShape, IPv6Address]
 
 // IPAddressIPv4 returns a [IPAddress] of case "ipv4".
 func IPAddressIPv4(data IPv4Address) IPAddress {

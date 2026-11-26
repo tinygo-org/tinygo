@@ -2,16 +2,12 @@
 
 package run
 
-import (
-	"internal/cm"
-)
-
 // This file contains wasmimport and wasmexport declarations for "wasi:cli@0.2.12".
 
 //go:wasmexport wasi:cli/run@0.2.12#run
 //export wasi:cli/run@0.2.12#run
 func wasmexport_Run() (result0 uint32) {
 	result := Exports.Run()
-	result0 = (uint32)(cm.BoolToU32(result))
+	result0 = (uint32)(result)
 	return
 }

@@ -32,7 +32,7 @@ require (
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/golangci/misspell v0.6.0 // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mgechev/dots v0.0.0-20210922191527-e955255bf517 // indirect
@@ -41,13 +41,13 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/regclient/regclient v0.8.2 // indirect
+	github.com/regclient/regclient v0.8.3 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
-	github.com/urfave/cli/v3 v3.0.0-beta1 // indirect
-	go.bytecodealliance.org v0.6.2 // indirect
-	go.bytecodealliance.org/cm v0.2.2 // indirect
+	github.com/urfave/cli/v3 v3.3.3 // indirect
+	go.bytecodealliance.org v0.7.0 // indirect
+	go.bytecodealliance.org/cm v0.3.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/telemetry v0.0.0-20260908163034-4bcc4b2ee518 // indirect
 	golang.org/x/text v0.42.0 // indirect
