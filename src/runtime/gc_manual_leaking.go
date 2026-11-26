@@ -13,3 +13,6 @@ func allocManual(size uintptr) unsafe.Pointer {
 	}
 	return alloc(size, gclayout.NoPtrs.AsPtr())
 }
+
+func markGlobals() {
+}
