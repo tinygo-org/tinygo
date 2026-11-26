@@ -11,8 +11,6 @@ import (
 	"unsafe"
 )
 
-const numCPU = 2
-
 // Level 1, level triggered line for the FROM_CPU software interrupts. See
 // XCHAL_INT3_LEVEL in esp-idf components/xtensa/<chip>/include/xtensa/config/core-isa.h.
 const crossCoreCPUInterrupt = 3

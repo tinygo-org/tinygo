@@ -10,8 +10,6 @@ import (
 	"sync/atomic"
 )
 
-const numCPU = 2
-
 // CPU interrupt line for the FROM_CPU software interrupts, on both cores.
 const crossCoreCPUInterrupt = 11
 
