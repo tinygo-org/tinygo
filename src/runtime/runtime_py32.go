@@ -11,7 +11,7 @@ func main() {
 	configureHSI()
 
 	initSysTick()
-	machine.InitSerial()
+	initStdio()
 
 	run()
 	exit(0)

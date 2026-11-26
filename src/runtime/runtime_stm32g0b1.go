@@ -9,7 +9,7 @@ import (
 func init() {
 	initCLK()
 
-	machine.InitSerial()
+	initStdio()
 
 	initTickTimer(&machine.TIM3)
 }

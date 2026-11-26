@@ -4,7 +4,6 @@ package runtime
 
 import (
 	"device/esp"
-	"machine"
 	"unsafe"
 )
 
@@ -29,7 +28,7 @@ func main() {
 	rom_i2c_writeReg(103, 4, 2, 145)
 
 	// Initialize UART.
-	machine.InitSerial()
+	initStdio()
 
 	// Initialize timer. Bits:
 	//  ENABLE:   timer enable

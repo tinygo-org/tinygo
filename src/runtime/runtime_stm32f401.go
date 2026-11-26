@@ -59,7 +59,7 @@ func init() {
 	initOSC()
 	initCLK()
 
-	machine.InitSerial()
+	initStdio()
 
 	initTickTimer(&machine.TIM3)
 }

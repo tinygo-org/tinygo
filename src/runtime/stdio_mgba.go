@@ -26,3 +26,6 @@ func buffered() int {
 	// dummy, TODO
 	return 0
 }
+
+func initStdio() {
+}

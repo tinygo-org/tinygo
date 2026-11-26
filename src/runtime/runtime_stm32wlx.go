@@ -25,7 +25,7 @@ func init() {
 	initTickTimer(&machine.TIM1)
 
 	// UART init
-	machine.InitSerial()
+	initStdio()
 }
 
 func initCLK() {

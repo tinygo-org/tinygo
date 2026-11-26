@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	machine.InitSerial()
+	initStdio()
 }
 
 // interruptInit initializes the interrupt controller.

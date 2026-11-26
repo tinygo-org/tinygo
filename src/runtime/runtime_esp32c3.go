@@ -79,7 +79,7 @@ func main() {
 
 func init() {
 	// Initialize UART.
-	machine.InitSerial()
+	initStdio()
 }
 
 // interruptInit initialize the interrupt controller and called from runtime once.

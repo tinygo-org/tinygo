@@ -64,7 +64,7 @@ func init() {
 	initOSC() // configure oscillators
 	initCLK()
 
-	initCOM()
+	initStdio()
 
 	initTickTimer(&machine.TIM3)
 }
@@ -152,10 +152,4 @@ func initCLK() {
 
 	// enable the CCM RAM clock
 	stm32.RCC.AHB1ENR.SetBits(CLK_CCM_RAM)
-}
-
-func initCOM() {
-	if machine.NUM_UART_INTERFACES > 0 {
-		machine.InitSerial()
-	}
 }
