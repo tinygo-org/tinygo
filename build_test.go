@@ -228,6 +228,7 @@ func TestBuild(t *testing.T) {
 		"string.go",
 		"stringfrombytes.go",
 		"stringfrombytes_stress.go",
+		"structpad.go",
 		"structs.go",
 		"testing.go",
 		"timer_node_reuse_gc.go",

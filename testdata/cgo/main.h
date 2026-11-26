@@ -136,6 +136,8 @@ extern int globalStructSize;
 extern short globalArray[3];
 extern joined_t globalUnion;
 extern int globalUnionSize;
+struct endarray { int len; char data[0]; };
+extern int endArraySize;
 extern option_t globalOption;
 extern bitfield_t globalBitfield;
 

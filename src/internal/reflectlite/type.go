@@ -388,7 +388,7 @@ type funcType struct {
 	numIn  uint8
 	numOut uint16
 	ptrTo  *RawType
-	inOut  [0]*RawType
+	inOut  [0]*RawType // not followed by a pad byte, so size with unsafe.Offsetof
 }
 
 const funcTypeVariadic = 0x8000
@@ -418,7 +418,7 @@ type methodEntry struct {
 // Method set, as emitted by the compiler.
 type methodSet struct {
 	length     uintptr
-	signatures [0]unsafe.Pointer
+	signatures [0]unsafe.Pointer // not followed by a pad byte, so size with unsafe.Offsetof
 }
 
 // Equivalent to (go/types.Type).Underlying(): if this is a named type return
@@ -2037,6 +2037,13 @@ func StructOf(fields []StructField) Type {
 		}
 	}
 
+	if size > 0 && len(rawFields) > 0 && rawFields[len(rawFields)-1].Type.Size() == 0 {
+		// Pad a zero-sized final field as the compiler does.
+		size++
+		if size == 0 || uint64(size) > uint64(^uint32(0)) {
+			panic("reflect.StructOf: struct size would exceed virtual address space")
+		}
+	}
 	alignedSize := align(size, alignment)
 	if alignedSize < size || uint64(alignedSize) > uint64(^uint32(0)) {
 		panic("reflect.StructOf: struct size would exceed virtual address space")
@@ -2306,7 +2313,7 @@ func funcOf(rawIn, rawOut []*RawType, variadic bool) *RawType {
 		}
 	}
 
-	size := unsafe.Sizeof(funcType{}) + uintptr(len(rawIn)+len(rawOut))*unsafe.Sizeof(unsafe.Pointer(nil))
+	size := unsafe.Offsetof(funcType{}.inOut) + uintptr(len(rawIn)+len(rawOut))*unsafe.Sizeof(unsafe.Pointer(nil))
 	storage := make([]byte, size+3)
 	addr := align(uintptr(unsafe.Pointer(unsafe.SliceData(storage))), 4)
 	typ := (*funcType)(unsafe.Pointer(addr))

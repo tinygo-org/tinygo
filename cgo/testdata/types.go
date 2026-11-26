@@ -27,6 +27,12 @@ struct type2 {
 	int _type;
 };
 
+// A zero-sized final field is dropped, so the Go size matches C.
+struct endarray {
+	int  len;
+	char data[0];
+};
+
 // Unions.
 typedef union {
 	// Union should be treated as a struct.
@@ -127,6 +133,9 @@ var (
 	// Structs with reserved field names.
 	_ C.struct_type1
 	_ C.struct_type2
+
+	// Struct with a zero-sized final field.
+	_ C.struct_endarray
 
 	// Unions.
 	_ C.union1_t

@@ -490,7 +490,7 @@ func (c *context) getTypeCode(typ types.Type) llvm.Value {
 			}, typeFieldTypes...)
 		}
 		globalType := types.NewStruct(typeFieldTypes, nil)
-		global = llvm.AddGlobal(c.mod, c.getLLVMType(globalType), globalName)
+		global = llvm.AddGlobal(c.mod, c.getTypeCodeLLVMType(globalType), globalName)
 		if isLocal {
 			c.interfaceTypes.Set(typ, global)
 		}
@@ -2005,4 +2005,18 @@ func (c *context) getInterfaceInvokeWrapper(fn *ssa.Function, llvmFnType llvm.Ty
 	}
 
 	return wrapper
+}
+
+// getTypeCodeLLVMType is getLLVMType without the pad after a zero-sized final
+// field, as type codes are read past their final zero-length arrays.
+func (c *context) getTypeCodeLLVMType(t types.Type) llvm.Type {
+	st, ok := t.(*types.Struct)
+	if !ok {
+		return c.getLLVMType(t)
+	}
+	members := make([]llvm.Type, st.NumFields())
+	for i := range members {
+		members[i] = c.getTypeCodeLLVMType(st.Field(i).Type())
+	}
+	return c.ctx.StructType(members, false)
 }

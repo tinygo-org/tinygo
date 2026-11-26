@@ -148,7 +148,13 @@ func (s *stdSizes) Sizeof(T types.Type) int64 {
 		// care of:
 		//     struct { int32 n; byte b }
 		offsets := s.Offsetsof(fields)
-		return align(offsets[n-1]+s.Sizeof(fields[n-1].Type()), maxAlign)
+		lastSize := s.Sizeof(fields[n-1].Type())
+		size := offsets[n-1] + lastSize
+		if size > 0 && lastSize == 0 {
+			// Pad a zero-sized final field as gc does (https://go.dev/issue/9401).
+			size++
+		}
+		return align(size, maxAlign)
 	case *types.Interface:
 		return s.PtrSize * 2
 	case *types.Pointer, *types.Chan, *types.Map:

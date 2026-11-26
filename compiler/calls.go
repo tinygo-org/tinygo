@@ -698,7 +698,7 @@ func (c *context) flattenAggregateType(t llvm.Type, name string, goType types.Ty
 	case llvm.StructTypeKind:
 		var paramInfos []paramInfo
 		for i, subfield := range t.StructElementTypes() {
-			if c.targetData.TypeAllocSize(subfield) == 0 {
+			if c.skipFlattened(subfield) {
 				continue
 			}
 			suffix := strconv.Itoa(i)
@@ -745,6 +745,11 @@ func (c *context) flattenAggregateType(t llvm.Type, name string, goType types.Ty
 	default:
 		return []paramInfo{c.getParamInfo(t, name, goType)}
 	}
+}
+
+// skipFlattened reports whether a struct member is left out when flattening.
+func (c *context) skipFlattened(t llvm.Type) bool {
+	return c.targetData.TypeAllocSize(t) == 0 || c.isEndPad(t)
 }
 
 // getParamInfo collects information about a parameter. For example, if this
@@ -804,7 +809,7 @@ func (c *context) flattenAggregateTypeOffsets(t llvm.Type) []uint64 {
 	case llvm.StructTypeKind:
 		var fields []uint64
 		for fieldIndex, field := range t.StructElementTypes() {
-			if c.targetData.TypeAllocSize(field) == 0 {
+			if c.skipFlattened(field) {
 				continue
 			}
 			suboffsets := c.flattenAggregateTypeOffsets(field)
@@ -827,7 +832,7 @@ func (b *builder) flattenAggregate(v llvm.Value) []llvm.Value {
 	case llvm.StructTypeKind:
 		var fields []llvm.Value
 		for i, field := range v.Type().StructElementTypes() {
-			if b.targetData.TypeAllocSize(field) == 0 {
+			if b.skipFlattened(field) {
 				continue
 			}
 			subfield := b.CreateExtractValue(v, i, "")
@@ -860,7 +865,7 @@ func (b *builder) collapseFormalParamInternal(t llvm.Type, fields []llvm.Value) 
 		if len(flattened) <= maxFieldsPerParam {
 			value := llvm.ConstNull(t)
 			for i, subtyp := range t.StructElementTypes() {
-				if b.targetData.TypeAllocSize(subtyp) == 0 {
+				if b.skipFlattened(subtyp) {
 					continue
 				}
 				structField, remaining := b.collapseFormalParamInternal(subtyp, fields)

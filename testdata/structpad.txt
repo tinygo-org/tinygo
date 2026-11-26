@@ -1,0 +1,10 @@
+endsEmpty: 4097
+endsZeroArray: 2
+onlyEmpty: 0
+nested: 4098
+emptyFirst: 3
+array of endsEmpty: 8194
+end field inside object: true
+by value: 42 6
+reflect sizes: true true true true true
+StructOf size: true
