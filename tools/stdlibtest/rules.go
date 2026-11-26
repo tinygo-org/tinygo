@@ -167,7 +167,6 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	// Linux and macOS coverage
 	if !linux && !darwin {
 		if !windows {
-			r.skipPackage("crypto/subtle")
 			r.skipPackage("encoding/json/jsontext")
 			r.skipPackage("encoding/json/v2")
 			r.skipPackage("encoding/xml")
@@ -177,6 +176,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 			if !browser {
 				r.skipPackage("crypto/cipher")
 				r.skipPackage("crypto/sha3")
+				r.skipPackage("crypto/subtle")
 			}
 		}
 		if !windows && !wasip2 {
