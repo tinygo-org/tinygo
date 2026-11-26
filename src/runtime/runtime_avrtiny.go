@@ -47,10 +47,6 @@ func initUART() {
 	// no UART configured
 }
 
-func putchar(b byte) {
-	// no-op
-}
-
 // ticksToNanoseconds converts RTC ticks (at 32768Hz) to nanoseconds.
 func ticksToNanoseconds(ticks timeUnit) int64 {
 	// The following calculation is actually the following, but with both sides

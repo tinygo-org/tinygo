@@ -30,20 +30,6 @@ func sysTickFrequency() uint32 {
 // UART0 output register.
 var stdoutWrite = (*volatile.Register8)(unsafe.Pointer(uintptr(0x4000c000)))
 
-func putchar(c byte) {
-	stdoutWrite.Set(uint8(c))
-}
-
-func getchar() byte {
-	// dummy, TODO
-	return 0
-}
-
-func buffered() int {
-	// dummy, TODO
-	return 0
-}
-
 func abort() {
 	exit(1)
 }

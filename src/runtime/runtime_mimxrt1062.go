@@ -124,30 +124,6 @@ func initPins() {
 	nxp.IOMUXC_GPR.GPR29.Set(0xFFFFFFFF)
 }
 
-func putchar(c byte) {
-	// Drop early output so a print from a fault handler before InitSerial
-	// does not cause a second fault.
-	if !serialReady() {
-		return
-	}
-	machine.Serial.WriteByte(c)
-}
-
-func getchar() byte {
-	for !serialReady() || machine.Serial.Buffered() == 0 {
-		Gosched()
-	}
-	v, _ := machine.Serial.ReadByte()
-	return v
-}
-
-func buffered() int {
-	if !serialReady() {
-		return 0
-	}
-	return machine.Serial.Buffered()
-}
-
 func exit(code int) {
 	abort()
 }

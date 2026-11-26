@@ -251,20 +251,6 @@ var (
 	})(unsafe.Pointer(uintptr(0x0200_0000)))
 )
 
-func putchar(c byte) {
-	stdoutWrite.Set(uint8(c))
-}
-
-func getchar() byte {
-	// dummy, TODO
-	return 0
-}
-
-func buffered() int {
-	// dummy, TODO
-	return 0
-}
-
 // Hint to the CPU that this core is just waiting, and the core can go into a
 // lower energy state.
 func spinLoopWait() {
