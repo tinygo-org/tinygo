@@ -39,6 +39,9 @@ const (
 const (
 	RX = GPIO2
 	TX = GPIO1
+
+	UART0_TX_PIN = TX
+	UART0_RX_PIN = RX
 )
 
 const (
