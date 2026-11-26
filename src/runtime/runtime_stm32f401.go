@@ -5,6 +5,7 @@ package runtime
 import (
 	"device/stm32"
 	"machine"
+	_ "machine/usb/cdc"
 )
 
 const (
