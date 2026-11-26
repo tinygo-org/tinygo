@@ -10,6 +10,7 @@ import (
 const (
 	timerDivider = 4
 	nsPerTick    = 125
+	timerConfig  = esp.TIMG_T0CONFIG_EN | esp.TIMG_T0CONFIG_INCREASE | timerDivider<<esp.TIMG_T0CONFIG_DIVIDER_Pos
 )
 
 // This is the function called on startup after the flash (IROM/DROM) is
