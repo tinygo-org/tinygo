@@ -75,7 +75,7 @@ func TestAnalysisPatterns(t *testing.T) {
 		"src/machine/testdata/hidden/hidden.go": "package hidden\n",
 		"src/machine/_private/private.go":       "package private\n",
 		"src/.hidden/hidden.go":                 "package hidden\n",
-		"src/runtime/internal/sys/zversion.go":  "//go:build tinygo_root_test_marker\n\npackage sys\n",
+		"src/runtime/runtime.go":                "//go:build tinygo_root_test_marker\n\npackage runtime\n",
 	}
 	for name, contents := range files {
 		path := filepath.Join(dir, name)

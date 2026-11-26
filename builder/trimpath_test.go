@@ -33,7 +33,7 @@ func TestTrimPathCFlagsMapTinyGoSource(t *testing.T) {
 				tinygoRoot = cache + "-source"
 			}
 			for _, name := range []string{
-				"src/runtime/internal/sys/zversion.go",
+				"src/runtime/runtime.go",
 				"src/device/arm/arm.go",
 			} {
 				filename := filepath.Join(tinygoRoot, filepath.FromSlash(name))

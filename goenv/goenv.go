@@ -330,7 +330,7 @@ func sourceDir() string {
 
 // isSourceDir returns true if the directory looks like a TinyGo source directory.
 func isSourceDir(root string) bool {
-	_, err := os.Stat(filepath.Join(root, "src/runtime/internal/sys/zversion.go"))
+	_, err := os.Stat(filepath.Join(root, "src/runtime/runtime.go"))
 	if err != nil {
 		return false
 	}
