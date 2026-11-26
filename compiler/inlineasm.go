@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go/constant"
 	"go/token"
+	"go/types"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,6 +14,94 @@ import (
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
 )
+
+func isInlineAsmFull(name string) bool {
+	switch name {
+	case "device.AsmFull", "device/arm.AsmFull", "device/arm64.AsmFull", "device/avr.AsmFull", "device/riscv.AsmFull":
+		return true
+	default:
+		return false
+	}
+}
+
+// omittedInlineAsmInstructions identifies SSA instructions used only to
+// construct AsmFull operands that do not need to be emitted as LLVM IR.
+func (b *builder) omittedInlineAsmInstructions() map[ssa.Instruction]bool {
+	omit := make(map[ssa.Instruction]bool)
+	ignorableDebug := func(ref *ssa.DebugRef) bool {
+		_, variable := ref.Object().(*types.Var)
+		return !b.Debug || !variable || ref.IsAddr
+	}
+	for _, block := range b.fn.Blocks {
+		for _, instr := range block.Instrs {
+			m, ok := instr.(*ssa.MakeMap)
+			if !ok || m.Referrers() == nil {
+				continue
+			}
+			var updates []*ssa.MapUpdate
+			calls := 0
+			valid := true
+			for _, ref := range *m.Referrers() {
+				switch ref := ref.(type) {
+				case *ssa.DebugRef:
+					if !ignorableDebug(ref) {
+						valid = false
+					}
+				case *ssa.MapUpdate:
+					if ref.Map != m || ref.Block() != block {
+						valid = false
+					}
+					updates = append(updates, ref)
+				case *ssa.Call:
+					fn := ref.Call.StaticCallee()
+					if fn == nil || !isInlineAsmFull(b.getFunctionInfo(fn).linkName) {
+						valid = false
+					} else if len(ref.Call.Args) != 2 || ref.Call.Args[1] != m || ref.Block() != block {
+						valid = false
+					}
+					calls++
+				default:
+					valid = false
+				}
+			}
+			if !valid || calls != 1 {
+				continue
+			}
+			omit[m] = true
+			for _, ref := range *m.Referrers() {
+				if _, ok := ref.(*ssa.DebugRef); ok {
+					omit[ref] = true
+				}
+			}
+			for _, update := range updates {
+				omit[update] = true
+			}
+			for _, update := range updates {
+				value, ok := update.Value.(*ssa.MakeInterface)
+				if !ok || value.Referrers() == nil {
+					continue
+				}
+				onlyUpdates := true
+				for _, ref := range *value.Referrers() {
+					debug, isDebug := ref.(*ssa.DebugRef)
+					if !omit[ref] && !(isDebug && ignorableDebug(debug)) {
+						onlyUpdates = false
+					}
+				}
+				if !onlyUpdates {
+					continue
+				}
+				omit[value] = true
+				for _, ref := range *value.Referrers() {
+					if _, ok := ref.(*ssa.DebugRef); ok {
+						omit[ref] = true
+					}
+				}
+			}
+		}
+	}
+	return omit
+}
 
 // This is a compiler builtin, which emits a piece of inline assembly with no
 // operands or return values. It is useful for trivial instructions, like wfi in

@@ -1437,6 +1437,7 @@ func (b *builder) createFunction() {
 
 	// Find loops that zero a slice, to be replaced with a memset.
 	clearLoops := findClearLoops(b.fn)
+	ignoredAsmInstructions := b.omittedInlineAsmInstructions()
 
 	// Fill blocks with instructions.
 	b.loweringBody = true
@@ -1452,6 +1453,9 @@ func (b *builder) createFunction() {
 			continue
 		}
 		for _, instr := range block.Instrs {
+			if ignoredAsmInstructions[instr] {
+				continue
+			}
 			if instr, ok := instr.(*ssa.DebugRef); ok {
 				if !b.Debug {
 					continue
@@ -2517,7 +2521,7 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		switch {
 		case name == "device.Asm" || name == "device/arm.Asm" || name == "device/arm64.Asm" || name == "device/avr.Asm" || name == "device/riscv.Asm":
 			return b.createInlineAsm(instr.Args)
-		case name == "device.AsmFull" || name == "device/arm.AsmFull" || name == "device/arm64.AsmFull" || name == "device/avr.AsmFull" || name == "device/riscv.AsmFull":
+		case isInlineAsmFull(name):
 			return b.createInlineAsmFull(instr)
 		case strings.HasPrefix(name, "device/arm.SVCall"):
 			return b.emitSVCall(instr.Args, getPos(instr))

@@ -287,6 +287,50 @@ func TestCompiler(t *testing.T) {
 	}
 }
 
+func TestInlineAsmOperands(t *testing.T) {
+	// Check the IR before LLVM optimization can remove the map.
+	for _, debug := range []bool{false, true} {
+		t.Run(strconv.FormatBool(debug), func(t *testing.T) {
+			mod, errs := testCompilePackageWithDebug(t, &compileopts.Options{Target: "cortex-m-qemu"}, "asmfull-operands.go", debug)
+			if len(errs) != 0 {
+				for _, err := range errs {
+					t.Error(err)
+				}
+				return
+			}
+			defer mod.Dispose()
+			if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
+				t.Fatal(err)
+			}
+			asm := mod.NamedFunction("main.inlineAsm").String()
+			if strings.Contains(asm, "hashmap") || strings.Contains(asm, "interface") {
+				t.Errorf("inline asm operands created a map or interface:\n%s", asm)
+			}
+			operand := strings.Index(asm, "main.operand")
+			call := strings.Index(asm, "asm sideeffect")
+			if operand < 0 || call < operand || !strings.Contains(asm, "mov $0, ${1}") {
+				t.Errorf("missing operand evaluation or inline asm:\n%s", asm)
+			}
+			ordered := mod.NamedFunction("main.inlineAsmOrdered").String()
+			first := strings.Index(ordered, "call i32 @main.firstOperand")
+			second := strings.Index(ordered, "call i32 @main.secondOperand")
+			inline := strings.Index(ordered, "asm sideeffect")
+			if first < 0 || second <= first || inline <= second || !strings.Contains(ordered, "add $0, ${1}, ${2}") {
+				t.Errorf("operands were not evaluated in order before inline asm:\n%s", ordered)
+			}
+			if strings.Contains(ordered, "hashmap") || strings.Contains(ordered, "interface") {
+				t.Errorf("inline asm operands created a map or interface:\n%s", ordered)
+			}
+			for _, name := range []string{"ordinaryMap", "sharedMap"} {
+				ir := mod.NamedFunction("main." + name).String()
+				if !strings.Contains(ir, "hashmap") {
+					t.Errorf("%s lost its map operations:\n%s", name, ir)
+				}
+			}
+		})
+	}
+}
+
 func TestWasmExportBasicBlockContext(t *testing.T) {
 	for _, scheduler := range []string{"none", "asyncify"} {
 		t.Run(scheduler, func(t *testing.T) {
