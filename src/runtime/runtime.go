@@ -198,6 +198,14 @@ func godebug_setNewIncNonDefault(newIncNonDefault func(string) func()) {
 	// Dummy function necessary in Go 1.21.
 }
 
+//go:linkname subtle_setDITEnabled crypto/subtle.setDITEnabled
+func subtle_setDITEnabled() bool {
+	return false
+}
+
+//go:linkname subtle_setDITDisabled crypto/subtle.setDITDisabled
+func subtle_setDITDisabled() {}
+
 // Write to the given file descriptor.
 // This is called from internal/godebug starting with Go 1.21, and only seems to
 // be called with the stderr file descriptor.
