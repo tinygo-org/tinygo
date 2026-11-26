@@ -4,24 +4,7 @@ package runtime
 
 import (
 	"device/stm32"
-	"machine"
 )
-
-func putchar(c byte) {
-	machine.Serial.WriteByte(c)
-}
-
-func getchar() byte {
-	for machine.Serial.Buffered() == 0 {
-		Gosched()
-	}
-	v, _ := machine.Serial.ReadByte()
-	return v
-}
-
-func buffered() int {
-	return machine.Serial.Buffered()
-}
 
 func initCLK() {
 	// Configure SYSCLK to 160 MHz via PLL1 using MSIS (4 MHz reset default) as the source.
