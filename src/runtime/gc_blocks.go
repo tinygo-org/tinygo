@@ -451,7 +451,15 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			break
 		}
 		if lazySweep && sweepActive {
+			var t0 int64
+			if gcPauseStats {
+				t0 = nanotime()
+			}
 			sweepSome(sweepChunk)
+			if gcPauseStats {
+				sweepSomeCalls++
+				pauseRecord(&sweepSomeHist, &sweepSomeMax, nanotime()-t0)
+			}
 			continue
 		}
 
@@ -628,6 +636,10 @@ func runGC() (freeBytes uintptr) {
 		println("running collection cycle...")
 	}
 
+	var pauseStart int64
+	if gcPauseStats {
+		pauseStart = nanotime()
+	}
 	finishSweep()
 
 	// Mark phase: mark all reachable objects, recursively.
@@ -680,6 +692,9 @@ func runGC() (freeBytes uintptr) {
 		startSweep()
 	} else {
 		freeBytes = sweep()
+	}
+	if gcPauseStats {
+		pauseRecord(&gcPauseHist, &gcPauseMax, nanotime()-pauseStart)
 	}
 
 	if gcDebugVerbose {
@@ -895,6 +910,55 @@ var (
 	sweepFreed     uintptr // blocks freed by the current sweep
 	sweepGrowCheck bool    // apply the headroom check when the sweep ends
 )
+
+// EXPERIMENT: pause histograms, log2 buckets of nanoseconds.
+var (
+	gcPauseHist    [40]uint32
+	gcPauseMax     int64
+	sweepSomeHist  [40]uint32
+	sweepSomeMax   int64
+	sweepSomeCalls uint32
+)
+
+func pauseRecord(hist *[40]uint32, max *int64, ns int64) {
+	b := 0
+	for v := ns; v > 1 && b < 39; v >>= 1 {
+		b++
+	}
+	hist[b]++
+	if ns > *max {
+		*max = ns
+	}
+}
+
+func pausePercentile(hist *[40]uint32, p uint32) int64 {
+	var total uint32
+	for _, c := range hist {
+		total += c
+	}
+	if total == 0 {
+		return 0
+	}
+	want := (total*p + 99) / 100
+	var seen uint32
+	for b, c := range hist {
+		seen += c
+		if seen >= want {
+			return int64(1) << b
+		}
+	}
+	return 0
+}
+
+//go:linkname gcPauseReport
+func gcPauseReport() {
+	var n uint32
+	for _, c := range gcPauseHist {
+		n += c
+	}
+	println("collections:", n, " pause p50 <", pausePercentile(&gcPauseHist, 50), "ns  p99 <", pausePercentile(&gcPauseHist, 99), "ns  max", gcPauseMax, "ns")
+	println("sweepSome calls:", sweepSomeCalls, " p50 <", pausePercentile(&sweepSomeHist, 50), "ns  p99 <", pausePercentile(&sweepSomeHist, 99), "ns  max", sweepSomeMax, "ns")
+}
 
 // sweepChunk is the number of blocks swept per sweepSome call.
 const sweepChunk = 1024
