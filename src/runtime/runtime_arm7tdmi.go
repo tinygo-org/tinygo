@@ -7,20 +7,6 @@ import (
 	"unsafe"
 )
 
-func putchar(c byte) {
-	// dummy, TODO
-}
-
-func getchar() byte {
-	// dummy, TODO
-	return 0
-}
-
-func buffered() int {
-	// dummy, TODO
-	return 0
-}
-
 //go:extern _sbss
 var _sbss [0]byte
 

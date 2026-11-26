@@ -54,15 +54,6 @@ func sleepTicks(d timeUnit) {
 	}
 }
 
-func putchar(c byte) {
-	if c == '\n' {
-		buf := [2]uefi.CHAR16{uefi.CHAR16('\r'), 0}
-		uefi.ST().ConOut.OutputString(&buf[0])
-	}
-	buf := [2]uefi.CHAR16{uefi.CHAR16(c), 0}
-	uefi.ST().ConOut.OutputString(&buf[0])
-}
-
 func exit(code int) {
 	uefi.BS().Exit(uefi.GetImageHandle(), uefi.EFI_STATUS(code), 0, nil)
 }
@@ -122,14 +113,6 @@ func waitForEvents() {
 //go:noinline
 func runMain() {
 	run()
-}
-
-func buffered() int {
-	return 0
-}
-
-func getchar() byte {
-	return 0
 }
 
 //export efi_main
