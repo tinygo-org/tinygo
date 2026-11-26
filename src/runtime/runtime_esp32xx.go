@@ -1,4 +1,4 @@
-//go:build esp32 || esp32c3 || esp32c6 || esp32h2 || esp32p4
+//go:build esp32 || esp32s3 || esp32c3 || esp32c6 || esp32h2 || esp32p4
 
 package runtime
 
@@ -22,8 +22,10 @@ func initTimer() {
 	//   EN:       Enable the timer.
 	//   INCREASE: Count up every tick (as opposed to counting down).
 	//   DIVIDER:  16-bit prescaler. Each chip sets timerDivider.
+	// Each chip sets timerConfig, because the esp32s3 SVD names the fields
+	// TIMG_TCONFIG_* where the other chips use TIMG_T0CONFIG_*.
 	// esp.TIMG0.T0CONFIG.Set(0 << esp.TIMG_T0CONFIG_T0_EN_Pos)
-	esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_EN | esp.TIMG_T0CONFIG_INCREASE | timerDivider<<esp.TIMG_T0CONFIG_DIVIDER_Pos)
+	esp.TIMG0.T0CONFIG.Set(timerConfig)
 	// esp.TIMG0.T0CONFIG.Set(1 << esp.TIMG_T0CONFIG_T0_DIVCNT_RST_Pos)
 	// esp.TIMG0.T0CONFIG.Set(esp.TIMG_T0CONFIG_T0_EN)
 
