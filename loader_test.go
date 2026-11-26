@@ -18,6 +18,7 @@ import (
 
 	"github.com/tinygo-org/tinygo/builder"
 	"github.com/tinygo-org/tinygo/compileopts"
+	"tinygo.org/x/go-llvm"
 )
 
 func TestTest(t *testing.T) {
@@ -264,9 +265,19 @@ func TestGetListOfPackages(t *testing.T) {
 	}
 }
 
+// Flags that wasmtime needs to run a wasip3 component.
+var wasip3WasmtimeFlags = []string{"--wasm", "component-model", "-Sp3", "-Wcomponent-model-async", "-Wcomponent-model-threading"}
+
 func TestWASIWorkingDirectory(t *testing.T) {
-	for _, target := range []string{"wasip1", "wasip2"} {
+	for _, target := range []string{"wasip1", "wasip2", "wasip3"} {
 		t.Run(target, func(t *testing.T) {
+			var wasmtimeFlags []string
+			if target == "wasip3" {
+				if llvm.VersionMajor < 23 {
+					t.Skipf("wasip3 requires LLVM 23 or newer, have %s", llvm.Version)
+				}
+				wasmtimeFlags = wasip3WasmtimeFlags
+			}
 			opts := optionsFromTarget(target, sema)
 			emuCheck(t, opts)
 			config, err := builder.NewConfig(&opts)
@@ -297,7 +308,8 @@ func TestWASIWorkingDirectory(t *testing.T) {
 				{"UnmappedPWDWithPreopen", "/no-access", []string{preopen, "--env=PWD=/no-access", "--env=EXPECT_FILE_FAILURE=missing"}},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
-					args := []string{"run", "--env=ENV1=VALUE1", "--env=ENV2=VALUE2", "--env=EXPECT_CWD=" + tc.cwd}
+					args := append([]string{"run"}, wasmtimeFlags...)
+					args = append(args, "--env=ENV1=VALUE1", "--env=ENV2=VALUE2", "--env=EXPECT_CWD="+tc.cwd)
 					args = append(args, tc.args...)
 					args = append(args, result.Binary, "first", "second")
 					ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -313,11 +325,23 @@ func TestWASIWorkingDirectory(t *testing.T) {
 	}
 }
 
-func TestWASIp2WorkingDirectory(t *testing.T) {
+func TestWASIComponentWorkingDirectory(t *testing.T) {
 	if testing.Short() {
 		t.Skip("cross-target tests disabled")
 	}
-	opts := optionsFromTarget("wasip2", sema)
+	t.Run("wasip2", func(t *testing.T) {
+		testWASIComponentWorkingDirectory(t, "wasip2", nil)
+	})
+	t.Run("wasip3", func(t *testing.T) {
+		if llvm.VersionMajor < 23 {
+			t.Skipf("wasip3 requires LLVM 23 or newer, have %s", llvm.Version)
+		}
+		testWASIComponentWorkingDirectory(t, "wasip3", wasip3WasmtimeFlags)
+	})
+}
+
+func testWASIComponentWorkingDirectory(t *testing.T, target string, wasmtimeFlags []string) {
+	opts := optionsFromTarget(target, sema)
 	opts.Tags = append(opts.Tags, "runtime_asserts")
 	emuCheck(t, opts)
 	config, err := builder.NewConfig(&opts)
@@ -348,7 +372,7 @@ func TestWASIp2WorkingDirectory(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
-			args := []string{"run"}
+			args := append([]string{"run"}, wasmtimeFlags...)
 			preopens := []string{"--dir=" + wd + "::/workspace", "--dir=" + filepath.Join(wd, "testdata") + "::/workspace/test"}
 			if tc.name == "FirstPreopen" {
 				preopens[0], preopens[1] = preopens[1], preopens[0]

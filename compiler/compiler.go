@@ -2659,11 +2659,20 @@ func (b *builder) getValue(expr ssa.Value, pos token.Pos) llvm.Value {
 		}
 		return b.createConst(expr, pos)
 	case *ssa.Function:
+		var fn llvm.Value
 		if b.getFunctionInfo(expr).isExported() {
-			b.addError(expr.Pos(), "cannot use an exported function as value: "+expr.String())
-			return llvm.Undef(b.getLLVMType(expr.Type()))
+			// Imports (//go:wasmimport) are wrapped in a Go ABI function.
+			// Other exported functions use a different ABI.
+			if expr.Blocks == nil {
+				fn = b.getImportFuncValueWrapper(expr)
+			}
+			if fn.IsNil() {
+				b.addError(expr.Pos(), "cannot use an exported function as value: "+expr.String())
+				return llvm.Undef(b.getLLVMType(expr.Type()))
+			}
+		} else {
+			_, fn = b.getFunction(expr)
 		}
-		_, fn := b.getFunction(expr)
 		b.markReflectFunctionValue(expr, fn)
 		return b.createFuncValue(fn, b.dataPtrUndef, expr.Signature)
 	case *ssa.Global:

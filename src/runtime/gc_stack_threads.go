@@ -5,6 +5,7 @@ package runtime
 import "internal/task"
 
 func gcMarkReachable() {
+	keepStackChain()
 	task.GCStopWorldAndScan()
 }
 

@@ -1,4 +1,4 @@
-//go:build tinygo.wasm && !wasm_unknown && !wasip2
+//go:build tinygo.wasm && !wasm_unknown && !wasip2 && !wasip3
 
 // This file is for wasm/wasip1 and for wasm/js, which both use much of the
 // WASIp1 API.

@@ -1,4 +1,4 @@
-//go:build tinygo.wasi || js
+//go:build (tinygo.wasi && !wasip3) || js
 
 package syscall
 
@@ -6,3 +6,11 @@ package syscall
 //
 //go:extern errno
 var libcErrno Errno
+
+func getLibcErrno() Errno {
+	return libcErrno
+}
+
+func setLibcErrno(e Errno) {
+	libcErrno = e
+}

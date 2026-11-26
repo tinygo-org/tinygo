@@ -1,4 +1,4 @@
-//go:build wasip1
+//go:build wasip1 && !wasip3
 
 // Internal-test helpers exposed via go:linkname so user code can drive
 // the deadline-aware Read/Write loop without becoming a stdlib package.

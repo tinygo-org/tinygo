@@ -37,8 +37,9 @@ var libVersions = map[string]int{
 	"picolibc":         2,
 	"wasmbuiltins":     1,
 	"compiler-rt":      1,
-	"wasi-libc":        1,
-	"wasi-libc-wasip2": 1,
+	"wasi-libc":        3,
+	"wasi-libc-wasip2": 3,
+	"wasi-libc-wasip3": 3,
 }
 
 // Config keeps all configuration affecting the build in a single struct.
@@ -471,6 +472,20 @@ func (c *Config) CFlags(libclang bool) []string {
 	return cflags
 }
 
+// WasiLibcName returns the name of the wasi-libc library variant for the WASI
+// preview that is targeted.
+func (c *Config) WasiLibcName() string {
+	for _, tag := range c.Target.BuildTags {
+		switch tag {
+		case "wasip2":
+			return "wasi-libc-wasip2"
+		case "wasip3":
+			return "wasi-libc-wasip3"
+		}
+	}
+	return "wasi-libc"
+}
+
 // LibcCFlags returns the C compiler flags for the configured libc.
 // It only uses flags that are part of the libc path (triple, cpu, abi, libc
 // name) so it can safely be used to compile another C library.
@@ -511,11 +526,16 @@ func (c *Config) LibcCFlags() []string {
 			"-isystem", filepath.Join(root, "lib", "musl", "include"),
 		}
 	case "wasi-libc":
-		path := c.LibraryPath("wasi-libc")
-		return []string{
+		path := c.LibraryPath(c.WasiLibcName())
+		cflags := []string{
 			"-nostdlibinc",
 			"-isystem", filepath.Join(path, "include"),
 		}
+		if c.WasiLibcName() == "wasi-libc-wasip3" {
+			// Needed for wasi/wasip3_tls.h.
+			cflags = append(cflags, "-I"+filepath.Join(goenv.Get("TINYGOROOT"), "lib/wasi-libc/libc-top-half/headers/private"))
+		}
+		return cflags
 	case "wasmbuiltins":
 		// nothing to add (library is purely for builtins)
 		return nil

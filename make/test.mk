@@ -21,6 +21,7 @@ stdlib-test-sum = $(if $(filter -plan -packages,$(STDLIB_TEST_FLAGS)),,gotestsum
 .PHONY: tinygo-test tinygo-test-plan tinygo-test-fast tinygo-test-wasm
 .PHONY: tinygo-test-wasi tinygo-test-wasip1 tinygo-test-wasip1-fast
 .PHONY: tinygo-test-wasip2-slow tinygo-test-wasip2-fast tinygo-test-wasip2-sum-slow tinygo-test-wasip2-sum-fast
+.PHONY: tinygo-test-wasip3-slow tinygo-test-wasip3-fast
 .PHONY: tinygo-test-baremetal tinygo-bench tinygo-bench-fast
 .PHONY: tinygo-bench-wasip1 tinygo-bench-wasip1-fast tinygo-bench-wasip2 tinygo-bench-wasip2-fast
 .PHONY: report-stdlib-tests-pass
@@ -43,6 +44,10 @@ tinygo-test-wasip2-slow:
 	$(call stdlib-test,-mode=slow,-target=wasip2)
 tinygo-test-wasip2-fast:
 	$(call stdlib-test,-mode=fast,-target=wasip2)
+tinygo-test-wasip3-slow:
+	$(call stdlib-test,-mode=slow,-target=wasip3)
+tinygo-test-wasip3-fast:
+	$(call stdlib-test,-mode=fast,-target=wasip3)
 tinygo-test-wasip2-sum-slow:
 	$(call stdlib-test-sum,slow)
 tinygo-test-wasip2-sum-fast:

@@ -1,0 +1,6 @@
+waves sum ok: true
+goroutines after waves: 0
+goexit runs: true
+recovered panics: true
+woken: true
+goroutines at end: 0

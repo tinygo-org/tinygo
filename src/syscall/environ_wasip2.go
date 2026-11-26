@@ -1,4 +1,4 @@
-//go:build wasip2
+//go:build wasip2 || wasip3
 
 package syscall
 
