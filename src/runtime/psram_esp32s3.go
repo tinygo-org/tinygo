@@ -165,7 +165,8 @@ func setPSRAMClockDivider(n, h, l uint32) {
 //  5. Configure SPI0's cache-facing read/write command phases for Octal DTR.
 //  6. Map the __psram_size bytes the target declares into the MMU.
 func initPSRAM() string {
-	psramStart, _, mmuPages := psramWindow()
+	psramStart := uintptr(unsafe.Pointer(&_psram_start))
+	mmuPages := uint32(psramDeclaredSize() / 65536)
 
 	// Enable SPI0/SPI1 peripheral clock and clear resets.
 	esp.SYSTEM.SetPERIP_CLK_EN0_SPI01_CLK_EN(1)
@@ -216,17 +217,16 @@ func initPSRAM() string {
 	writePSRAMModeReg(0x0, mr0)
 
 	if !checkPSRAMConnected() {
-		return "PSRAM init failed: sync read/write mismatch, chip not detected"
+		return "sync read/write mismatch, chip not detected"
 	}
 
 	mr1 := readPSRAMModeReg(0x1) // vendor id
 	vendorID := mr1 & 0x1f
 	if vendorID != opiVendorIDAP && vendorID != opiVendorIDUnilc {
-		return "PSRAM init failed: unrecognized vendor id"
+		return "unrecognized vendor id"
 	}
 
 	// Density in 64KB pages, decoded as in esp_psram_impl_octal.c.
-	// A chip smaller than __psram_size means the wrong target.
 	var chipPages int
 	switch readPSRAMModeReg(0x2) & 0x7 {
 	case 0x1:
@@ -238,8 +238,8 @@ func initPSRAM() string {
 	case 0x6, 0x7:
 		chipPages = 512
 	}
-	if chipPages < mmuPages {
-		return "PSRAM init failed: chip is smaller than the target declares"
+	if err := checkPSRAMSize(uintptr(chipPages) * 65536); err != "" {
+		return err
 	}
 
 	// Perform DQS / MSPI delay timing calibration to upgrade Octal PSRAM to
@@ -293,13 +293,13 @@ func initPSRAM() string {
 
 	// Map PSRAM into the MMU: PSRAM physical page 0 at _psram_start, 64KB
 	// pages, fixed=0 (physical pages grow linearly with virtual pages).
-	mmuErr := romCacheDbusMMUSet(mmuAccessSpiram, uint32(psramStart), 0, 64, uint32(mmuPages), 0)
+	mmuErr := romCacheDbusMMUSet(mmuAccessSpiram, uint32(psramStart), 0, 64, mmuPages, 0)
 
 	// Re-enable DCache before checking mmuErr so any error string in .rodata
 	// is readable. Cache_Disable_DCache above already invalidated all tag memory.
 	romCacheEnableDCache(0)
 	if mmuErr != 0 {
-		return "PSRAM init failed: Cache_Dbus_MMU_Set error"
+		return "Cache_Dbus_MMU_Set error"
 	}
 
 	return ""
@@ -508,12 +508,3 @@ func checkPSRAMConnected() bool {
 }
 
 const mmuAccessSpiram = 0x8000 // SOC_MMU_TYPE / SOC_MMU_ACCESS_SPIRAM: routes entry to PSRAM instead of flash.
-
-// psramWindow returns the PSRAM vaddr window that the target declares with
-// __psram_size (targets/esp32s3.ld) and its size in 64KB MMU pages.
-func psramWindow() (start, end uintptr, pageCap int) {
-	start = uintptr(unsafe.Pointer(&_psram_start))
-	end = uintptr(unsafe.Pointer(&_psram_end))
-	pageCap = int((end - start) / 65536)
-	return
-}
