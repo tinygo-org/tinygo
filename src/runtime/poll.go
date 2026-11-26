@@ -21,3 +21,13 @@ func poll_runtime_pollClose(ctx uintptr) {
 func poll_runtime_pollUnblock(ctx uintptr) {
 	panic("todo: runtime_pollUnblock")
 }
+
+//go:linkname semacquire internal/poll.runtime_Semacquire
+func semacquire(sema *uint32) {
+	panic("todo: semacquire")
+}
+
+//go:linkname semrelease internal/poll.runtime_Semrelease
+func semrelease(sema *uint32) {
+	panic("todo: semrelease")
+}
