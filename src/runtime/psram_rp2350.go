@@ -8,7 +8,7 @@ func machineInitPSRAM() bool
 // initPSRAM maps the PSRAM. It must run after machineInit, which sets up the clocks.
 func initPSRAM() string {
 	if !machineInitPSRAM() {
-		return "PSRAM init failed: no PSRAM found"
+		return "no PSRAM found"
 	}
 	return ""
 }

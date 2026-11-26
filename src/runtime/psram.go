@@ -61,6 +61,19 @@ func machinePSRAM() (uintptr, int) {
 	return start, int(uintptr(unsafe.Pointer(&_psram_end)) - start)
 }
 
+// psramDeclaredSize returns the __psram_size bytes that the target declares.
+func psramDeclaredSize() uintptr {
+	return uintptr(unsafe.Pointer(&_psram_end)) - uintptr(unsafe.Pointer(&_psram_start))
+}
+
+// checkPSRAMSize returns an error if the chip has fewer bytes than the target declares.
+func checkPSRAMSize(chip uintptr) string {
+	if chip < psramDeclaredSize() {
+		return "the chip is smaller than __psram_size"
+	}
+	return ""
+}
+
 // zeroInitPSRAM zero-initializes .psram BSS after PSRAM has been mapped
 // into the MMU, verifying with a known pattern first that writes actually
 // reach the chip (a hardware or timing issue could otherwise silently
@@ -74,11 +87,11 @@ func zeroInitPSRAM() string {
 
 	*(*uint32)(unsafe.Pointer(spsram)) = 0x5A5A5A5A
 	if *(*uint32)(unsafe.Pointer(spsram)) != 0x5A5A5A5A {
-		return "PSRAM readback test failed"
+		return "read back test failed"
 	}
 	*(*uint32)(unsafe.Pointer(spsram)) = 0
 	if *(*uint32)(unsafe.Pointer(spsram)) != 0 {
-		return "PSRAM readback test failed"
+		return "read back test failed"
 	}
 
 	for addr := spsram + 4; addr < epsram; addr += 4 {

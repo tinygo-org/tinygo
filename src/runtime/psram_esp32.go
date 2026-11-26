@@ -94,32 +94,30 @@ func initPSRAM() string {
 	if reason != psramOK {
 		return psramReasonText(reason)
 	}
-	if uintptr(unsafe.Pointer(&_psram_end))-uintptr(unsafe.Pointer(&_psram_start)) > uintptr(psramSize) {
-		return "PSRAM init failed: the PSRAM is smaller than __psram_size"
-	}
-	return ""
+	return checkPSRAMSize(uintptr(psramSize))
 }
 
 func psramReasonText(reason uint8) string {
 	switch reason {
 	case psramWrongPackage:
-		return "PSRAM init failed: chip package is not ESP32-D0WD"
+		return "chip package is not ESP32-D0WD"
 	case psramOldChip:
-		return "PSRAM init failed: chip revision is below 3"
+		return "chip revision is below 3"
 	case psramFlashPins:
-		return "PSRAM init failed: flash does not use the default pins"
+		return "flash does not use the default pins"
 	case psramNoChip:
-		return "PSRAM init failed: no PSRAM found"
+		return "no PSRAM found"
 	case psramOldPSRAM:
-		return "PSRAM init failed: 32Mbit PSRAM version 0 is not supported"
+		return "32Mbit PSRAM version 0 is not supported"
 	case psramBadReadBack:
-		return "PSRAM init failed: read back test failed"
+		return "read back test failed"
 	case psramUnknownSize:
-		return "PSRAM init failed: unknown size in the PSRAM ID"
+		return "unknown size in the PSRAM ID"
 	case psramMapFailed:
-		return "PSRAM init failed: memory map failed"
+		return "memory map failed"
+	default:
+		return "unknown reason"
 	}
-	return "PSRAM init failed"
 }
 
 //go:section .iram.psram
