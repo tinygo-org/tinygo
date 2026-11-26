@@ -12,6 +12,8 @@ import (
 	"internal/cm"
 )
 
+const GOOS = "wasip2"
+
 func init() {
 	if gorootEnvEnabled() {
 		if value := startupEnv("GOROOT"); value != "" {
