@@ -273,10 +273,6 @@ func spinLoopWait() {
 	riscv.Asm("pause")
 }
 
-func currentCPU() uint32 {
-	return uint32(riscv.MHARTID.Get())
-}
-
 func startSecondaryCores() {
 	// Start all the other cores besides hart 0.
 	for hart := 1; hart < numCPU; hart++ {

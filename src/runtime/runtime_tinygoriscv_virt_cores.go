@@ -4,6 +4,10 @@ package runtime
 
 import "device/riscv"
 
+func currentCPU() uint32 {
+	return uint32(riscv.MHARTID.Get())
+}
+
 // Spin until the time is up, or until another hart ends the sleep. esp32p4
 // sleeps the same way.
 func sleepTicks(d timeUnit) {
