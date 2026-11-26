@@ -113,13 +113,13 @@ type B struct {
 // a call to StopTimer.
 func (b *B) StartTimer() {
 	if !b.timerOn {
-		b.start = time.Now()
-		b.timerOn = true
-
 		var mstats runtime.MemStats
 		runtime.ReadMemStats(&mstats)
 		b.startAllocs = mstats.Mallocs
 		b.startBytes = mstats.TotalAlloc
+
+		b.start = time.Now()
+		b.timerOn = true
 	}
 }
 
@@ -149,12 +149,12 @@ func (b *B) ResetTimer() {
 		clear(b.extra)
 	}
 	if b.timerOn {
-		b.start = time.Now()
-
 		var mstats runtime.MemStats
 		runtime.ReadMemStats(&mstats)
 		b.startAllocs = mstats.Mallocs
 		b.startBytes = mstats.TotalAlloc
+
+		b.start = time.Now()
 	}
 	b.duration = 0
 	b.netAllocs = 0
