@@ -82,8 +82,12 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	} else {
 		r.skipPackage("internal/godebug")
 	}
-	// The polling tests reach an unimplemented semacquire path.
-	r.skipPackage("internal/poll")
+	if linux {
+		// TestSplicePipePool waits for GC to drain sync.Pool and finalize pipes.
+		r.skipTest("internal/poll", `^TestSplicePipePool$`)
+	} else {
+		r.skipPackage("internal/poll")
+	}
 	// The stock runtime tests need Go's atomic entry points and internal ABI types.
 	r.skipPackage("internal/runtime/atomic")
 	r.skipPackage("internal/runtime/maps")
