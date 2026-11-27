@@ -33,6 +33,8 @@ func (b *builder) defineIntrinsicFunction() {
 		b.createVolatileLoad()
 	case strings.HasPrefix(name, "runtime/volatile.Store"):
 		b.createVolatileStore()
+	case strings.HasPrefix(name, "(*runtime/volatile.Register"):
+		b.createVolatileRegisterMethod()
 	case strings.HasPrefix(name, "sync/atomic.") && token.IsExported(b.fn.Name()):
 		b.createFunctionStart(true)
 		returnValue := b.createAtomicOp(b.fn.Name())

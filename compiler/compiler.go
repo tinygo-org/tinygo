@@ -973,7 +973,10 @@ func (c *context) createPackage(irbuilder llvm.Builder, pkg *ssa.Package) {
 						continue
 					}
 					if fn.Blocks == nil {
-						continue // external function
+						// Try to define this as an intrinsic method, or leave it
+						// as an external function.
+						newBuilder(c, irbuilder, fn).defineIntrinsicFunction()
+						continue
 					}
 					if fn.Synthetic != "" && fn.Synthetic != "package initializer" {
 						// This function is a kind of wrapper function (created by
@@ -2525,6 +2528,10 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			return b.emitSV64Call(instr.Args, getPos(instr))
 		case strings.HasPrefix(name, "(device/riscv.CSR)."):
 			return b.emitCSROperation(instr)
+		case strings.HasPrefix(name, "runtime/volatile.") || strings.HasPrefix(name, "(*runtime/volatile."):
+			if val, ok, err := b.createVolatileCall(instr, name); ok {
+				return val, err
+			}
 		case (strings.HasPrefix(name, "syscall.Syscall") || strings.HasPrefix(name, "syscall.RawSyscall") || strings.HasPrefix(name, "golang.org/x/sys/unix.Syscall") || strings.HasPrefix(name, "golang.org/x/sys/unix.RawSyscall")) && name != "syscall.SyscallN":
 			return b.createSyscall(instr)
 		case name == "syscall.syscalln":
