@@ -95,6 +95,12 @@ const blockStateEach = 1<<blocksPerStateByte - 1
 // The byte value of a block where every block is a 'tail' block.
 const blockStateByteAllTails = byte(blockStateTail) * blockStateEach
 
+// stateByteHasMark reports whether any block in a state byte is marked, that
+// is, has both its head and its tail bit set.
+func stateByteHasMark(stateByte byte) bool {
+	return stateByte&(stateByte>>blocksPerStateByte) != 0
+}
+
 // String returns a human-readable version of the block state, for debugging.
 func (s blockState) String() string {
 	switch s {
@@ -167,6 +173,22 @@ func (b gcBlock) findHead() gcBlock {
 		if b.state() != blockStateHead && b.state() != blockStateMark {
 			runtimeFatal("gc: found tail without head")
 		}
+	}
+	return b
+}
+
+// skipTailsDown moves down from block b past the tail blocks just below it,
+// a state byte at a time where the byte is all tails, like findHead.
+func skipTailsDown(b gcBlock) gcBlock {
+	for b > 0 {
+		if b%blocksPerStateByte == 0 && (b-1).stateByte() == blockStateByteAllTails {
+			b -= blocksPerStateByte
+			continue
+		}
+		if (b - 1).state() != blockStateTail {
+			break
+		}
+		b--
 	}
 	return b
 }
@@ -309,10 +331,42 @@ func popFreeRange(len uintptr) unsafe.Pointer {
 	}
 
 	if removedLen > len {
+		if lazySweep {
+			// Hand out the high end so the rest keeps its start, which lets
+			// insertSweptRun merge it with free blocks swept below it.
+			insertFreeRange(ptr, removedLen-len)
+			return unsafe.Add(ptr, (removedLen-len)*bytesPerBlock)
+		}
 		// Insert the leftover range.
 		insertFreeRange(unsafe.Add(ptr, len*bytesPerBlock), removedLen-len)
 	}
 	return ptr
+}
+
+// removeFreeRangeAt removes the free range that starts at ptr, if there is one,
+// and returns its length in blocks, or 0.
+func removeFreeRangeAt(ptr unsafe.Pointer) uintptr {
+	for dst := &freeRanges; *dst != nil; dst = &(*dst).nextLen {
+		r := *dst
+		if unsafe.Pointer(r) == ptr {
+			if more := r.nextWithLen; more != nil {
+				// Make the next range with this length the list head.
+				head := (*freeRange)(unsafe.Pointer(more))
+				*head = freeRange{len: r.len, nextLen: r.nextLen, nextWithLen: more.next}
+				*dst = head
+			} else {
+				*dst = r.nextLen
+			}
+			return r.len
+		}
+		for mdst := &r.nextWithLen; *mdst != nil; mdst = &(*mdst).next {
+			if unsafe.Pointer(*mdst) == ptr {
+				*mdst = (*mdst).next
+				return r.len
+			}
+		}
+	}
+	return 0
 }
 
 func isOnHeap(ptr uintptr) bool {
@@ -450,13 +504,27 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 		if pointer != nil {
 			break
 		}
+		if lazySweep && sweepActive {
+			var t0 int64
+			if gcPauseStats {
+				t0 = nanotime()
+			}
+			sweepSome(sweepStep(neededBlocks), neededBlocks)
+			if gcPauseStats {
+				sweepSomeCalls++
+				pauseRecord(&sweepSomeHist, &sweepSomeMax, nanotime()-t0)
+			}
+			continue
+		}
 
 		if !ranGC {
 			// Run the collector and try again.
 			freeBytes := runGC()
 			ranGC = true
 			heapSize := uintptr(metadataStart) - heapStart
-			if freeBytes < heapSize/2 {
+			if lazySweep {
+				sweepGrowCheck = true
+			} else if freeBytes < heapSize/2 {
 				// Keep at least half the heap free, so a program can allocate
 				// about as much as its live data between collections.
 				if growHeap() && (gcStats || gcDebug) {
@@ -574,7 +642,9 @@ func free(ptr unsafe.Pointer) {
 	for block := firstBlock; block <= lastBlock; block++ {
 		block.free()
 	}
-	insertFreeRange(firstBlock.pointer(), uintptr(lastBlock-firstBlock+1))
+	if !(lazySweep && sweepActive && lastBlock < sweepCursor) {
+		insertFreeRange(firstBlock.pointer(), uintptr(lastBlock-firstBlock+1))
+	}
 	gcLock.Unlock()
 }
 
@@ -590,7 +660,9 @@ func freeTaskStack(addr uintptr) {
 	for block := firstBlock; block <= lastBlock; block++ {
 		block.free()
 	}
-	insertFreeRange(ptr, uintptr(lastBlock-firstBlock+1))
+	if !(lazySweep && sweepActive && lastBlock < sweepCursor) {
+		insertFreeRange(ptr, uintptr(lastBlock-firstBlock+1))
+	}
 	gcLock.Unlock()
 }
 
@@ -598,6 +670,7 @@ func freeTaskStack(addr uintptr) {
 func GC() {
 	gcLock.Lock()
 	runGC()
+	finishSweep()
 	gcLock.Unlock()
 
 	// If the GC queued any finalizers, run them now that gcLock is free.
@@ -616,6 +689,12 @@ func runGC() (freeBytes uintptr) {
 	if gcDebug {
 		println("running collection cycle...")
 	}
+
+	var pauseStart int64
+	if gcPauseStats {
+		pauseStart = nanotime()
+	}
+	finishSweep()
 
 	// Mark phase: mark all reachable objects, recursively.
 	gcMarkReachable()
@@ -663,7 +742,14 @@ func runGC() (freeBytes uintptr) {
 
 	// Sweep phase: free all non-marked objects and unmark marked objects for
 	// the next collection cycle. This also rebuilds the free ranges list.
-	freeBytes = sweep()
+	if lazySweep {
+		startSweep()
+	} else {
+		freeBytes = sweep()
+	}
+	if gcPauseStats {
+		pauseRecord(&gcPauseHist, &gcPauseMax, nanotime()-pauseStart)
+	}
 
 	if gcDebugVerbose {
 		dumpHeap()
@@ -830,9 +916,21 @@ func sweep() uintptr {
 	var freeBlocks uintptr
 	for {
 		// Scan backwards until we find a marked head.
-		// Free the blocks as we go.
+		// Free the blocks as we go, a whole state byte at a time if it holds
+		// no marked block.
 		freeEnd := block
-		for block > 0 && (block-1).state() != blockStateMark {
+		for block > 0 {
+			if block%blocksPerStateByte == 0 {
+				p := (*uint8)(unsafe.Add(metadataStart, (block-1)/blocksPerStateByte))
+				if !stateByteHasMark(*p) {
+					*p = 0
+					block -= blocksPerStateByte
+					continue
+				}
+			}
+			if (block - 1).state() == blockStateMark {
+				break
+			}
 			block--
 			block.free()
 		}
@@ -855,10 +953,8 @@ func sweep() uintptr {
 			block.unmark()
 		}
 
-		// Skip the tail.
-		for block > 0 && (block-1).state() == blockStateTail {
-			block--
-		}
+		// Skip the tail, a whole state byte at a time if it is all tails.
+		block = skipTailsDown(block)
 	}
 
 	if gcDebugVerbose {
@@ -867,6 +963,182 @@ func sweep() uintptr {
 	}
 
 	return freeBlocks * bytesPerBlock
+}
+
+// Incremental sweep state, used when lazySweep is set. Blocks below sweepCursor
+// have not been swept yet, and allocation never uses them.
+var (
+	sweepActive    bool
+	sweepCursor    gcBlock
+	sweepFreeEnd   gcBlock // end of the pending free run that ends at sweepCursor
+	sweepFreed     uintptr // blocks freed by the current sweep
+	sweepGrowCheck bool    // apply the headroom check when the sweep ends
+	sweepEarly     gcBlock // start of a free run inserted before the run ended
+	sweepHasEarly  bool    // sweepEarly is set
+)
+
+// EXPERIMENT: pause histograms, log2 buckets of nanoseconds.
+var (
+	gcPauseHist    [40]uint32
+	gcPauseMax     int64
+	sweepSomeHist  [40]uint32
+	sweepSomeMax   int64
+	sweepSomeCalls uint32
+)
+
+func pauseRecord(hist *[40]uint32, max *int64, ns int64) {
+	b := 0
+	for v := ns; v > 1 && b < 39; v >>= 1 {
+		b++
+	}
+	hist[b]++
+	if ns > *max {
+		*max = ns
+	}
+}
+
+func pausePercentile(hist *[40]uint32, p uint32) int64 {
+	var total uint32
+	for _, c := range hist {
+		total += c
+	}
+	if total == 0 {
+		return 0
+	}
+	want := (total*p + 99) / 100
+	var seen uint32
+	for b, c := range hist {
+		seen += c
+		if seen >= want {
+			return int64(1) << b
+		}
+	}
+	return 0
+}
+
+//go:linkname gcPauseReport
+func gcPauseReport() {
+	var n uint32
+	for _, c := range gcPauseHist {
+		n += c
+	}
+	println("collections:", n, " pause p50 <", pausePercentile(&gcPauseHist, 50), "ns  p99 <", pausePercentile(&gcPauseHist, 99), "ns  max", gcPauseMax, "ns")
+	println("sweepSome calls:", sweepSomeCalls, " p50 <", pausePercentile(&sweepSomeHist, 50), "ns  p99 <", pausePercentile(&sweepSomeHist, 99), "ns  max", sweepSomeMax, "ns")
+}
+
+// sweepChunk is the least number of blocks swept after a failed pop. Larger
+// requests sweep sweepScale times their size, so they need fewer steps.
+const (
+	sweepChunk     = 1024
+	sweepHeapShift = 4 // baremetal sweeps at most 1/16 of the heap per step
+	sweepScale     = 4
+)
+
+// sweepStep returns the number of blocks to sweep after a failed pop. A small
+// baremetal heap cannot grow, so there a step is a fixed fraction of the heap.
+func sweepStep(neededBlocks uintptr) uintptr {
+	n := uintptr(sweepChunk)
+	if baremetal {
+		n = min(n, max(uintptr(endBlock)>>sweepHeapShift, 1))
+	}
+	return max(n, sweepScale*neededBlocks)
+}
+
+// startSweep starts an incremental sweep after a mark phase.
+func startSweep() {
+	freeRanges = nil
+	sweepActive = true
+	sweepCursor = endBlock
+	sweepFreeEnd = endBlock
+	sweepFreed = 0
+	sweepHasEarly = false
+}
+
+// insertSweptRun inserts the swept free run [lo, hi). A free range starting at
+// hi, such as the rest of a run inserted early, is merged into it.
+func insertSweptRun(lo, hi gcBlock) {
+	if sweepHasEarly && hi == sweepEarly {
+		hi += gcBlock(removeFreeRangeAt(hi.pointer()))
+		sweepHasEarly = false
+	}
+	insertFreeRange(lo.pointer(), uintptr(hi-lo))
+}
+
+// sweepSome sweeps about n blocks, the same way sweep does. A free run that
+// reaches the cursor is kept pending until a live object ends it, so free
+// ranges are not split, unless it is already long enough for a request of
+// need blocks: then it is inserted now and merged with the rest later.
+func sweepSome(n, need uintptr) {
+	block := sweepCursor
+	freeEnd := sweepFreeEnd
+	for {
+		for block > 0 {
+			if block%blocksPerStateByte == 0 && n >= blocksPerStateByte {
+				p := (*uint8)(unsafe.Add(metadataStart, (block-1)/blocksPerStateByte))
+				if !stateByteHasMark(*p) {
+					*p = 0
+					n -= blocksPerStateByte
+					block -= blocksPerStateByte
+					continue
+				}
+			}
+			if (block - 1).state() == blockStateMark {
+				break
+			}
+			if n == 0 {
+				if freeLen := uintptr(freeEnd - block); need != 0 && freeLen >= need {
+					sweepFreed += freeLen
+					insertSweptRun(block, freeEnd)
+					sweepEarly, sweepHasEarly = block, true
+					freeEnd = block
+				}
+				sweepCursor = block
+				sweepFreeEnd = freeEnd
+				return
+			}
+			n--
+			block--
+			block.free()
+		}
+		if freeLen := uintptr(freeEnd - block); freeLen > 0 {
+			sweepFreed += freeLen
+			insertSweptRun(block, freeEnd)
+		}
+		sweepHasEarly = false // the run ended, so an early part cannot grow
+		if block == 0 {
+			break
+		}
+		block--
+		header := (*objHeader)(unsafe.Add(block.pointer(), bytesPerBlock-unsafe.Sizeof(objHeader{})))
+		if header.next != 1 {
+			block.unmark()
+		}
+		block = skipTailsDown(block)
+		freeEnd = block
+		if n == 0 {
+			sweepCursor = block
+			sweepFreeEnd = freeEnd
+			return
+		}
+		n--
+	}
+	sweepActive = false
+	sweepCursor = 0
+	sweepFreeEnd = 0
+	if sweepGrowCheck {
+		sweepGrowCheck = false
+		heapSize := uintptr(metadataStart) - heapStart
+		if sweepFreed*bytesPerBlock < heapSize/2 {
+			growHeap()
+		}
+	}
+}
+
+// finishSweep sweeps the rest of the heap.
+func finishSweep() {
+	if lazySweep && sweepActive {
+		sweepSome(^uintptr(0), 0)
+	}
 }
 
 // freeRangeStats returns the total number of free blocks and the length of the
@@ -923,6 +1195,7 @@ func dumpHeap() {
 // call to ReadMemStats. This would not do GC implicitly for you.
 func ReadMemStats(m *MemStats) {
 	gcLock.Lock()
+	finishSweep()
 
 	// Calculate the raw size of the heap.
 	heapEnd := heapEnd
