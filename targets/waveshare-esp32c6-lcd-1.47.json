@@ -1,0 +1,4 @@
+{
+	"inherits": ["esp32c6"],
+	"build-tags": ["waveshare_esp32c6_lcd_1_47"]
+}
