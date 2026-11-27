@@ -1,5 +1,6 @@
 {
 	"inherits": ["nrf52840-s140v7"],
+	"inheritable-only": true,
 	"build-tags": ["nrf52840_reset_uf2"],
 	"linkerscript": "targets/nrf52840-s140v7-uf2.ld",
 	"serial": "usb",
