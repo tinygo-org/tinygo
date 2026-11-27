@@ -32,8 +32,9 @@ func (b *builder) createVolatileCall(instr *ssa.CallCommon, name string) (llvm.V
 		store.SetVolatile(true)
 		return store, true, nil
 	case strings.HasPrefix(name, "(*runtime/volatile.Register"):
-		if strings.HasSuffix(name, ").Bit") || strings.Contains(name, "$") {
-			// Bitband methods and bound or thunk wrappers use the normal call path.
+		if instr.StaticCallee().Blocks != nil {
+			// Methods with a Go body, such as Bit, and the bound and thunk
+			// wrappers use the normal call path.
 			return llvm.Value{}, false, nil
 		}
 		val, err := b.createVolatileRegisterOp(name, instr.Args, pos)
