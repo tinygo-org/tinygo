@@ -455,7 +455,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			if gcPauseStats {
 				t0 = nanotime()
 			}
-			sweepSome(max(sweepChunk, sweepScale*neededBlocks))
+			sweepSome(sweepStep(neededBlocks))
 			if gcPauseStats {
 				sweepSomeCalls++
 				pauseRecord(&sweepSomeHist, &sweepSomeMax, nanotime()-t0)
@@ -963,9 +963,20 @@ func gcPauseReport() {
 // sweepChunk is the least number of blocks swept after a failed pop. Larger
 // requests sweep sweepScale times their size, so they need fewer steps.
 const (
-	sweepChunk = 1024
-	sweepScale = 4
+	sweepChunk     = 1024
+	sweepHeapShift = 4 // baremetal sweeps at most 1/16 of the heap per step
+	sweepScale     = 4
 )
+
+// sweepStep returns the number of blocks to sweep after a failed pop. A small
+// baremetal heap cannot grow, so there a step is a fixed fraction of the heap.
+func sweepStep(neededBlocks uintptr) uintptr {
+	n := uintptr(sweepChunk)
+	if baremetal {
+		n = min(n, max(uintptr(endBlock)>>sweepHeapShift, 1))
+	}
+	return max(n, sweepScale*neededBlocks)
+}
 
 // startSweep starts an incremental sweep after a mark phase.
 func startSweep() {
