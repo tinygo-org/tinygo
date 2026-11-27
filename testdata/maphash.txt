@@ -1,0 +1,11 @@
+string: true
+int: true
+struct: true
+array: true
+float zero: true
+interface: true
+pointer: true
+different string: true
+different struct: true
+different seed: true
+WriteComparable: true

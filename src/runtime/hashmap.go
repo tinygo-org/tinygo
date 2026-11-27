@@ -840,6 +840,14 @@ func hashmapInterfaceHash(itf interface{}, seed uintptr) uint32 {
 	}
 }
 
+// maphashComparableHash implements hash/maphash.comparableHash. It combines two
+// 32-bit hashes the same way as comparableHash in hash/maphash/maphash.go.
+func maphashComparableHash(itf interface{}, seed uint64) uint64 {
+	lo := hashmapInterfaceHash(itf, uintptr(uint32(seed)))
+	hi := hashmapInterfaceHash(itf, uintptr(seed>>32))
+	return uint64(hi)<<32 | uint64(lo)
+}
+
 func panicUnhashable(t *reflectlite.RawType) {
 	runtimePanic(plainError(runtimeErrorPrefix + "hash of unhashable type " + t.String()))
 }

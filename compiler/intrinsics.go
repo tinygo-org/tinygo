@@ -4,6 +4,7 @@ package compiler
 
 import (
 	"go/token"
+	"go/types"
 	"strconv"
 	"strings"
 
@@ -149,6 +150,27 @@ func (b *builder) createAbiEscapeImpl() {
 	result := b.createCall(asmType, asmFn, []llvm.Value{pointerValue}, "")
 
 	b.CreateRet(result)
+}
+
+// createAbiEscapeNonStringImpl implements internal/abi.EscapeNonString. Go
+// moves values to the heap because goroutine stacks can move, TinyGo stacks do not.
+func (b *builder) createAbiEscapeNonStringImpl() {
+	b.createFunctionStart(true)
+	b.CreateRetVoid()
+}
+
+// createMaphashComparableHashImpl implements hash/maphash.comparableHash. The
+// upstream version reads the hasher from the gc map type, TinyGo has no such field.
+func (b *builder) createMaphashComparableHashImpl() {
+	b.createFunctionStart(true)
+	pos := getPos(b.fn)
+	v := b.fn.Params[0]
+	itf := b.getValue(v, pos)
+	if !types.IsInterface(v.Type()) {
+		itf = b.createMakeInterface(itf, v.Type(), pos)
+	}
+	seed := b.CreateExtractValue(b.getValue(b.fn.Params[1], pos), 0, "")
+	b.CreateRet(b.createRuntimeCall("maphashComparableHash", []llvm.Value{itf, seed}, ""))
 }
 
 // Implement machine.keepAliveNoEscape, which makes sure the compiler keeps the
