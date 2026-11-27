@@ -21,18 +21,30 @@ import (
 // attributes to a function. For example, it adds optsize when requested from
 // the -opt= compiler flag.
 func AddStandardAttributes(fn llvm.Value, config *compileopts.Config) {
-	ctx := fn.Type().Context()
+	addFunctionAttributes(fn, standardAttributes(fn.Type().Context(), config))
+}
+
+// standardAttributes returns the attributes that AddStandardAttributes adds.
+func standardAttributes(ctx llvm.Context, config *compileopts.Config) []llvm.Attribute {
+	var attrs []llvm.Attribute
 	_, _, sizeLevel := config.OptLevel()
 	if sizeLevel >= 1 {
-		fn.AddFunctionAttr(ctx.CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
+		attrs = append(attrs, ctx.CreateEnumAttribute(llvm.AttributeKindID("optsize"), 0))
 	}
 	if sizeLevel >= 2 {
-		fn.AddFunctionAttr(ctx.CreateEnumAttribute(llvm.AttributeKindID("minsize"), 0))
+		attrs = append(attrs, ctx.CreateEnumAttribute(llvm.AttributeKindID("minsize"), 0))
 	}
-	if config.CPU() != "" {
-		fn.AddFunctionAttr(ctx.CreateStringAttribute("target-cpu", config.CPU()))
+	if cpu := config.CPU(); cpu != "" {
+		attrs = append(attrs, ctx.CreateStringAttribute("target-cpu", cpu))
 	}
-	if config.Features() != "" {
-		fn.AddFunctionAttr(ctx.CreateStringAttribute("target-features", config.Features()))
+	if features := config.Features(); features != "" {
+		attrs = append(attrs, ctx.CreateStringAttribute("target-features", features))
+	}
+	return attrs
+}
+
+func addFunctionAttributes(fn llvm.Value, attrs []llvm.Attribute) {
+	for _, attr := range attrs {
+		fn.AddFunctionAttr(attr)
 	}
 }

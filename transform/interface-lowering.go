@@ -119,6 +119,7 @@ type lowerInterfacesPass struct {
 	interfaces      map[string]*interfaceInfo
 	keepMethodNames bool
 	methodFuncNames map[string]struct{} // nil keeps all exported method functions
+	standardAttrs   []llvm.Attribute
 }
 
 // LowerInterfaces lowers all intermediate interface calls and globals that are
@@ -327,6 +328,10 @@ func (p *lowerInterfacesPass) run() error {
 	}
 	if len(abiErrors) != 0 {
 		return abiErrors
+	}
+
+	if len(interfaceInvokeFunctions) != 0 || len(interfaceAssertFunctions) != 0 {
+		p.standardAttrs = standardAttributes(p.ctx, p.config)
 	}
 
 	// Define all interface invoke thunks.
@@ -1060,7 +1065,7 @@ func (p *lowerInterfacesPass) defineInterfaceMethodFunc(fn llvm.Value, itf *inte
 	actualType.SetName("actualType")
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
-	AddStandardAttributes(fn, p.config)
+	addFunctionAttributes(fn, p.standardAttrs)
 
 	// Collect the params that will be passed to the functions to call.
 	// These params exclude the receiver (which may actually consist of multiple
@@ -1259,7 +1264,7 @@ func (p *lowerInterfacesPass) defineInterfaceAssertFunc(fn llvm.Value, itf *inte
 	actualType.SetName("actualType")
 	fn.SetLinkage(llvm.InternalLinkage)
 	fn.SetUnnamedAddr(true)
-	AddStandardAttributes(fn, p.config)
+	addFunctionAttributes(fn, p.standardAttrs)
 
 	entry := p.ctx.AddBasicBlock(fn, "entry")
 	p.builder.SetInsertPointAtEnd(entry)
