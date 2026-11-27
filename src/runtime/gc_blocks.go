@@ -95,6 +95,12 @@ const blockStateEach = 1<<blocksPerStateByte - 1
 // The byte value of a block where every block is a 'tail' block.
 const blockStateByteAllTails = byte(blockStateTail) * blockStateEach
 
+// stateByteHasMark reports whether any block in a state byte is marked, that
+// is, has both its head and its tail bit set.
+func stateByteHasMark(stateByte byte) bool {
+	return stateByte&(stateByte>>blocksPerStateByte) != 0
+}
+
 // String returns a human-readable version of the block state, for debugging.
 func (s blockState) String() string {
 	switch s {
@@ -167,6 +173,22 @@ func (b gcBlock) findHead() gcBlock {
 		if b.state() != blockStateHead && b.state() != blockStateMark {
 			runtimeFatal("gc: found tail without head")
 		}
+	}
+	return b
+}
+
+// skipTailsDown moves down from block b past the tail blocks just below it,
+// a state byte at a time where the byte is all tails, like findHead.
+func skipTailsDown(b gcBlock) gcBlock {
+	for b > 0 {
+		if b%blocksPerStateByte == 0 && (b-1).stateByte() == blockStateByteAllTails {
+			b -= blocksPerStateByte
+			continue
+		}
+		if (b - 1).state() != blockStateTail {
+			break
+		}
+		b--
 	}
 	return b
 }
@@ -862,9 +884,21 @@ func sweep() uintptr {
 	var freeBlocks uintptr
 	for {
 		// Scan backwards until we find a marked head.
-		// Free the blocks as we go.
+		// Free the blocks as we go, a whole state byte at a time if it holds
+		// no marked block.
 		freeEnd := block
-		for block > 0 && (block-1).state() != blockStateMark {
+		for block > 0 {
+			if block%blocksPerStateByte == 0 {
+				p := (*uint8)(unsafe.Add(metadataStart, (block-1)/blocksPerStateByte))
+				if !stateByteHasMark(*p) {
+					*p = 0
+					block -= blocksPerStateByte
+					continue
+				}
+			}
+			if (block - 1).state() == blockStateMark {
+				break
+			}
 			block--
 			block.free()
 		}
@@ -887,10 +921,8 @@ func sweep() uintptr {
 			block.unmark()
 		}
 
-		// Skip the tail.
-		for block > 0 && (block-1).state() == blockStateTail {
-			block--
-		}
+		// Skip the tail, a whole state byte at a time if it is all tails.
+		block = skipTailsDown(block)
 	}
 
 	if gcDebugVerbose {
@@ -994,7 +1026,19 @@ func sweepSome(n uintptr) {
 	block := sweepCursor
 	freeEnd := sweepFreeEnd
 	for {
-		for block > 0 && (block-1).state() != blockStateMark {
+		for block > 0 {
+			if block%blocksPerStateByte == 0 && n >= blocksPerStateByte {
+				p := (*uint8)(unsafe.Add(metadataStart, (block-1)/blocksPerStateByte))
+				if !stateByteHasMark(*p) {
+					*p = 0
+					n -= blocksPerStateByte
+					block -= blocksPerStateByte
+					continue
+				}
+			}
+			if (block - 1).state() == blockStateMark {
+				break
+			}
 			if n == 0 {
 				sweepCursor = block
 				sweepFreeEnd = freeEnd
@@ -1016,9 +1060,7 @@ func sweepSome(n uintptr) {
 		if header.next != 1 {
 			block.unmark()
 		}
-		for block > 0 && (block-1).state() == blockStateTail {
-			block--
-		}
+		block = skipTailsDown(block)
 		freeEnd = block
 		if n == 0 {
 			sweepCursor = block
