@@ -108,6 +108,7 @@ type context struct {
 	functionABIs                map[functionABIKey]functionABI
 	astComments                 map[string]astGlobalInfo
 	cgoImportDynamic            map[string]string // //go:cgo_import_dynamic local name -> remote symbol
+	weakOverridden              map[string]bool
 	embedGlobals                map[string][]*loader.EmbedFile
 	pkg                         *types.Package
 	loaderPkg                   *loader.Package // current package being compiled (for AST access)
@@ -137,6 +138,7 @@ func newContext(moduleName string, machine llvm.TargetMachine, config *Config, d
 		functionABIs:     map[functionABIKey]functionABI{},
 		astComments:      map[string]astGlobalInfo{},
 		cgoImportDynamic: map[string]string{},
+		weakOverridden:   map[string]bool{},
 	}
 
 	c.ctx = llvm.NewContext()
@@ -1212,21 +1214,46 @@ func (c *context) getEmbedFileString(file *loader.EmbedFile) llvm.Value {
 // parameters, create basic blocks, and set up debug information.
 // This is separated out from createFunction() so that it is also usable to
 // define compiler intrinsics like the atomic operations in sync/atomic.
-func (b *builder) createFunctionStart(intrinsic bool) {
+func (b *builder) createFunctionStart(intrinsic bool) bool {
 	if b.dumpSSA {
 		fmt.Printf("\nfunc %s:\n", b.fn)
 	}
 	if !b.llvmFn.IsDeclaration() {
-		errValue := b.llvmFn.Name() + " redeclared in this program"
-		fnPos := getPosition(b.llvmFn)
-		if fnPos.IsValid() {
-			errValue += "\n\tprevious declaration at " + fnPos.String()
+		alreadyOverridden := b.weakOverridden[b.info.linkName]
+		existingIsWeak := b.llvmFn.Linkage() == llvm.WeakAnyLinkage
+		isWeakAfterStrong := b.info.isWeak() && !existingIsWeak && !alreadyOverridden
+		isStrongAfterWeak := !b.info.isWeak() && existingIsWeak && !alreadyOverridden
+		if !isWeakAfterStrong && !isStrongAfterWeak {
+			errValue := b.llvmFn.Name() + " redeclared in this program"
+			fnPos := getPosition(b.llvmFn)
+			if fnPos.IsValid() {
+				errValue += "\n\tprevious declaration at " + fnPos.String()
+			}
+			b.addError(b.fn.Pos(), errValue)
+			return false
 		}
-		b.addError(b.fn.Pos(), errValue)
-		return
+		expectedType, _, _ := b.llvmFunctionSignature(b.fn, b.info)
+		if expectedType != b.llvmFn.GlobalValueType() {
+			b.addError(b.fn.Pos(), fmt.Sprintf("signature of %s does not match previous definition", b.info.linkName))
+			return false
+		}
+		b.weakOverridden[b.info.linkName] = true
+		if isWeakAfterStrong {
+			return false
+		}
+		// Replace the weak LLVM function so no weak-specific attributes leak to the override.
+		oldFn := b.llvmFn
+		_, newFn := b.addFunctionDeclaration(b.fn, b.info, b.info.linkName+".strong")
+		oldFn.ReplaceAllUsesWith(newFn)
+		oldFn.EraseFromParentAsFunction()
+		newFn.SetName(b.info.linkName)
+		b.llvmFn = newFn
 	}
 
 	b.addStandardDefinedAttributes(b.llvmFn)
+	if b.info.isWeak() {
+		b.llvmFn.SetLinkage(llvm.WeakAnyLinkage)
+	}
 	if b.info.isNoRuntime() {
 		b.llvmFn.AddFunctionAttr(b.ctx.CreateStringAttribute("tinygo-noruntime", ""))
 	}
@@ -1425,16 +1452,14 @@ func (b *builder) createFunctionStart(intrinsic bool) {
 		// because runtime.trackPointer is replaced by an alloca store.
 		b.stackChainAlloca = b.CreateAlloca(b.i8, "stackalloc")
 	}
+	return true
 }
 
 // createFunction builds the LLVM IR implementation for this function. The
 // function must not yet be defined, otherwise this function will create a
 // diagnostic.
 func (b *builder) createFunction() {
-	b.createFunctionStart(false)
-	if len(b.blockInfo) == 0 && len(b.fn.Blocks) != 0 {
-		// createFunctionStart reported an error (a redeclared function) and
-		// built nothing, so there is no body to fill.
+	if !b.createFunctionStart(false) {
 		return
 	}
 

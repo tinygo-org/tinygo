@@ -46,6 +46,7 @@ const (
 	funcNoHeap                                // go:noheap
 	funcNoRuntime                             // go:noruntime
 	funcVariadic                              // go:variadic (CGo only)
+	funcWeak                                  // go:weak
 	funcInlineShift = iota                    // go:inline, go:noinline
 )
 
@@ -66,6 +67,7 @@ func (info *functionInfo) isNoEscape() bool  { return info.flags&funcNoEscape !=
 func (info *functionInfo) isNoHeap() bool    { return info.flags&funcNoHeap != 0 }
 func (info *functionInfo) isNoRuntime() bool { return info.flags&funcNoRuntime != 0 }
 func (info *functionInfo) isVariadic() bool  { return info.flags&funcVariadic != 0 }
+func (info *functionInfo) isWeak() bool      { return info.flags&funcWeak != 0 }
 
 type inlineType int
 
@@ -97,19 +99,11 @@ const (
 	allocKindAligned
 )
 
-// getFunction returns the LLVM function for the given *ssa.Function, creating
-// it if needed. It can later be filled with context.createFunction().
-func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
-	info := c.getFunctionInfo(fn)
-	llvmFn := c.mod.NamedFunction(info.linkName)
-	if !llvmFn.IsNil() {
-		return llvmFn.GlobalValueType(), llvmFn
-	}
-
+func (c *context) llvmFunctionSignature(fn *ssa.Function, info *functionInfo) (llvm.Type, []paramInfo, bool) {
 	abi := c.getFunctionABI(fn.Signature, info.isExported())
 	retType := abi.resultType
 
-	var paramInfos []paramInfo
+	paramInfos := []paramInfo{}
 	if abi.indirectResult {
 		paramInfos = append(paramInfos, paramInfo{
 			llvmType: c.dataPtrType,
@@ -137,15 +131,36 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 		paramInfos = append(paramInfos, paramInfo{llvmType: c.dataPtrType, name: "context", elemSize: 0})
 	}
 
-	var paramTypes []llvm.Type
+	paramTypes := make([]llvm.Type, 0, len(paramInfos))
 	hasIndirectABI := abi.indirectResult
 	for _, info := range paramInfos {
 		paramTypes = append(paramTypes, info.llvmType)
 		hasIndirectABI = hasIndirectABI || info.flags&paramIsIndirect != 0
 	}
 
-	fnType := llvm.FunctionType(retType, paramTypes, info.isVariadic())
-	llvmFn = llvm.AddFunction(c.mod, info.linkName, fnType)
+	return llvm.FunctionType(retType, paramTypes, info.isVariadic()), paramInfos, hasIndirectABI
+}
+
+// getFunction returns the LLVM function for the given *ssa.Function, creating
+// it if needed. It can later be filled with context.createFunction().
+func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
+	info := c.getFunctionInfo(fn)
+	llvmFn := c.mod.NamedFunction(info.linkName)
+	if !llvmFn.IsNil() {
+		return llvmFn.GlobalValueType(), llvmFn
+	}
+
+	fnType, llvmFn := c.addFunctionDeclaration(fn, info, info.linkName)
+
+	// Build the function if needed.
+	c.maybeCreateSyntheticFunction(fn, llvmFn)
+
+	return fnType, llvmFn
+}
+
+func (c *context) addFunctionDeclaration(fn *ssa.Function, info *functionInfo, name string) (llvm.Type, llvm.Value) {
+	fnType, paramInfos, hasIndirectABI := c.llvmFunctionSignature(fn, info)
+	llvmFn := llvm.AddFunction(c.mod, name, fnType)
 	if hasIndirectABI {
 		// Argument promotion only rewrites functions whose uses are all direct
 		// calls. Keep an address use so LLVM cannot reconstruct the large
@@ -315,15 +330,12 @@ func (c *context) getFunction(fn *ssa.Function) (llvm.Type, llvm.Value) {
 
 			llvmFn.AddFunctionAttr(c.ctx.CreateStringAttribute("wasm-import-name", info.wasmName))
 		}
-		for i, typ := range paramTypes {
-			if typ.TypeKind() == llvm.PointerTypeKind {
+		for i, paramInfo := range paramInfos {
+			if paramInfo.llvmType.TypeKind() == llvm.PointerTypeKind {
 				llvmFn.AddAttributeAtIndex(i+1, c.nocapture)
 			}
 		}
 	}
-
-	// Build the function if needed.
-	c.maybeCreateSyntheticFunction(fn, llvmFn)
 
 	return fnType, llvmFn
 }
@@ -461,65 +473,15 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 	decl, _ := syntax.(*ast.FuncDecl)
 	hasBody := decl != nil && decl.Body != nil
 
-	// Read all pragmas of this function.
-	var pragmas []*ast.Comment
-	hasWasmExport := false
-	if decl != nil && decl.Doc != nil {
-		for _, comment := range decl.Doc.List {
-			text := comment.Text
-			if strings.HasPrefix(text, "//go:") || strings.HasPrefix(text, "//export ") {
-				pragmas = append(pragmas, comment)
-				if strings.HasPrefix(comment.Text, "//go:wasmexport ") {
-					hasWasmExport = true
-				}
-			}
-		}
+	var doc *ast.CommentGroup
+	if decl != nil {
+		doc = decl.Doc
 	}
-
-	// Also scan file-level //go:linkname directives. These appear as
-	// free-standing comments in *ast.File.Comments (not attached to any
-	// declaration), and are used by modern golang.org/x/sys/unix and others.
-	// Function-attached directives (above) take precedence — we only add
-	// file-level ones if no doc-comment linkname was found for this function.
-	//
-	// TODO: the hasUnsafeImport gate enforced downstream (see the
-	// //go:linkname case below) is package-level. gc enforces it per
-	// file, on the file containing the directive. For file-level
-	// linknames this is more important than for function-attached ones,
-	// because the directive can live in a file separate from the
-	// function. A stricter implementation would check whether the file
-	// returned by fileForFunc imports "unsafe", not whether any file in
-	// the package does.
-	hasFunctionLinkname := false
-	for _, comment := range pragmas {
-		if strings.HasPrefix(comment.Text, "//go:linkname ") {
-			parts := strings.Fields(comment.Text)
-			if len(parts) == 3 && parts[1] == f.Name() {
-				hasFunctionLinkname = true
-				break
-			}
-		}
+	var linkFile *ast.File
+	if decl == nil || decl.Recv == nil {
+		linkFile = c.fileForFunc(f)
 	}
-	if !hasFunctionLinkname {
-		if file := c.fileForFunc(f); file != nil {
-			for _, group := range file.Comments {
-				// Skip the function's own doc comment — already handled above.
-				if decl != nil && group == decl.Doc {
-					continue
-				}
-				for _, comment := range group.List {
-					if !strings.HasPrefix(comment.Text, "//go:linkname ") {
-						continue
-					}
-					parts := strings.Fields(comment.Text)
-					if len(parts) != 3 || parts[1] != f.Name() {
-						continue
-					}
-					pragmas = append(pragmas, comment)
-				}
-			}
-		}
-	}
+	pragmas, hasWasmExport := collectFuncPragmas(doc, linkFile, f.Name())
 
 	// Parse each pragma.
 	for _, comment := range pragmas {
@@ -660,12 +622,133 @@ func (c *context) parsePragmas(info *functionInfo, f *ssa.Function) {
 				// This prefix was created as a result of CGo preprocessing.
 				info.flags |= funcVariadic
 			}
+		case "//go:weak":
+			// Emit WeakAnyLinkage for runtime/machine defaults overridden at link time.
+			if !c.checkDefinition(hasBody, comment, pragma) {
+				continue
+			}
+			pkgPath := ""
+			if f.Pkg != nil && f.Pkg.Pkg != nil {
+				pkgPath = f.Pkg.Pkg.Path()
+			}
+			if pkgPath != "runtime" && pkgPath != "machine" {
+				c.addPragmaError(comment, "can only use //go:weak in runtime or machine")
+				continue
+			}
+			info.flags |= funcWeak
 		}
 	}
 
 	if c.Nobounds {
 		info.flags |= funcNoBounds
 	}
+}
+
+// DeclLinkInfo describes the resolved link name and //go:weak status of a declaration.
+type DeclLinkInfo struct {
+	LinkName string
+	IsWeak   bool
+	HasWeak  bool
+}
+
+// ParseDeclLinkInfo extracts linkname, export, and //go:weak pragmas for decl.
+// Keep its export, linkname, and weak handling aligned with parsePragmas.
+func ParseDeclLinkInfo(pkg *types.Package, file *ast.File, decl *ast.FuncDecl, fn *types.Func) DeclLinkInfo {
+	pkgPath := pkg.Path()
+	hasUnsafe := slices.Contains(pkg.Imports(), types.Unsafe)
+	linkName := pkgPath + "." + decl.Name.Name
+	if fn != nil {
+		linkName = fn.FullName()
+	}
+	var linkFile *ast.File
+	if decl.Recv == nil {
+		linkFile = file
+	}
+	pragmas, hasWasmExport := collectFuncPragmas(decl.Doc, linkFile, decl.Name.Name)
+
+	info := DeclLinkInfo{LinkName: linkName}
+	for _, comment := range pragmas {
+		parts := strings.Fields(comment.Text)
+		switch parts[0] {
+		case "//export", "//go:export":
+			if len(parts) == 2 && !hasWasmExport {
+				info.LinkName = parts[1]
+			}
+		case "//go:linkname", "//go:linknamestd":
+			if len(parts) == 3 && parts[1] == decl.Name.Name && hasUnsafe {
+				info.LinkName = parts[2]
+			}
+		case "//go:weak":
+			if len(parts) != 1 {
+				continue
+			}
+			info.HasWeak = true
+			if decl.Body != nil && (pkgPath == "runtime" || pkgPath == "machine") {
+				info.IsWeak = true
+			}
+		}
+	}
+	return info
+}
+
+// collectFuncPragmas gathers function-attached directives and, when no
+// doc-comment linkname is present, also scans file-level //go:linkname
+// directives. These appear as free-standing comments in *ast.File.Comments
+// (not attached to any declaration), and are used by modern
+// golang.org/x/sys/unix and others. Function-attached directives take
+// precedence — we only add file-level ones if no doc-comment linkname was
+// found for this function.
+//
+// TODO: the hasUnsafeImport gate enforced downstream (see the
+// //go:linkname case above and in ParseDeclLinkInfo) is package-level. gc
+// enforces it per file, on the file containing the directive. For file-level
+// linknames this is more important than for function-attached ones, because the
+// directive can live in a file separate from the function. A stricter
+// implementation would check whether the file returned by fileForFunc imports
+// "unsafe", not whether any file in the package does.
+func collectFuncPragmas(doc *ast.CommentGroup, file *ast.File, funcName string) ([]*ast.Comment, bool) {
+	var pragmas []*ast.Comment
+	hasWasmExport := false
+	if doc != nil {
+		for _, comment := range doc.List {
+			text := comment.Text
+			if strings.HasPrefix(text, "//go:") || strings.HasPrefix(text, "//export ") {
+				pragmas = append(pragmas, comment)
+				if strings.HasPrefix(text, "//go:wasmexport ") {
+					hasWasmExport = true
+				}
+			}
+		}
+	}
+
+	hasFunctionLinkname := false
+	for _, comment := range pragmas {
+		if isLinknameCommentForFunc(comment.Text, funcName) {
+			hasFunctionLinkname = true
+			break
+		}
+	}
+	if !hasFunctionLinkname && file != nil {
+		for _, group := range file.Comments {
+			if doc != nil && group == doc {
+				continue
+			}
+			for _, comment := range group.List {
+				if isLinknameCommentForFunc(comment.Text, funcName) {
+					pragmas = append(pragmas, comment)
+				}
+			}
+		}
+	}
+	return pragmas, hasWasmExport
+}
+
+func isLinknameCommentForFunc(text, funcName string) bool {
+	if !strings.HasPrefix(text, "//go:linkname ") && !strings.HasPrefix(text, "//go:linknamestd ") {
+		return false
+	}
+	parts := strings.Fields(text)
+	return len(parts) == 3 && parts[1] == funcName
 }
 
 // flagPragmas are the function pragmas that do not accept parameters.
@@ -678,6 +761,7 @@ var flagPragmas = map[string]bool{
 	"//go:noinline":  true,
 	"//go:noruntime": true,
 	"//go:variadic":  true,
+	"//go:weak":      true,
 }
 
 // addPragmaError reports an error once per pragma, even when each generic
