@@ -58,6 +58,14 @@ def main():
         print('%s has more commands than %s' % (path1, path0))
         print('   ', sizes1[len(sizes0)]['command'])
     comparisons.sort(key=lambda x: x.flashdiff)
+    if not comparisons:
+        return
+    changed = [c for c in comparisons if c.flashdiff != 0 or c.ramdiff != 0]
+    unchanged = len(comparisons) - len(changed)
+    if not changed:
+        label = 'binary' if len(comparisons) == 1 else 'binaries'
+        print('No binary size changes (%d %s).' % (len(comparisons), label))
+        return
     totalFlash0 = 0
     totalFlash1 = 0
     totalRam0 = 0
@@ -71,7 +79,8 @@ def main():
     for comparison in comparisons:
         diffPct = comparison.flashdiff / comparison.flash0
         diffRamPct = comparison.ramdiff / comparison.ram0
-        print('%7d %7d %6d %6.2f%% %7d %7d %6d %6.2f%% %s' % (comparison.flash0, comparison.flash1, comparison.flashdiff, diffPct * 100, comparison.ram0, comparison.ram1, comparison.ramdiff, diffRamPct * 100, comparison.command))
+        if comparison.flashdiff != 0 or comparison.ramdiff != 0:
+            print('%7d %7d %6d %6.2f%% %7d %7d %6d %6.2f%% %s' % (comparison.flash0, comparison.flash1, comparison.flashdiff, diffPct * 100, comparison.ram0, comparison.ram1, comparison.ramdiff, diffRamPct * 100, comparison.command))
         totalFlash0 += comparison.flash0
         totalFlash1 += comparison.flash1
         totalDiff += comparison.flashdiff
@@ -82,7 +91,8 @@ def main():
         totalRamProduct *= (1 + diffRamPct)
     geomean = totalProduct ** (1.0 / float(len(comparisons)))
     geomeanRam = totalRamProduct ** (1.0 / float(len(comparisons)))
-    print('%7d %7d %6d %6.2f%% %7d %7d %6d %6.2f%%' % (totalFlash0, totalFlash1, totalDiff, geomean - 1, totalRam0, totalRam1, totalRamDiff, geomeanRam - 1))
+    suffix = ' (%d unchanged)' % unchanged if unchanged else ''
+    print('%7d %7d %6d %6.2f%% %7d %7d %6d %6.2f%%%s' % (totalFlash0, totalFlash1, totalDiff, geomean - 1, totalRam0, totalRam1, totalRamDiff, geomeanRam - 1, suffix))
 
 
 if __name__ == '__main__':
