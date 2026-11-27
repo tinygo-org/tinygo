@@ -6,8 +6,10 @@ import (
 	"errors"
 	"io"
 	. "os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -81,13 +83,153 @@ func TestForkExecProcDirNotExist(t *testing.T) {
 }
 
 func TestForkExecProcSys(t *testing.T) {
-	proc, err := StartProcess("/bin/echo", []string{"hello", "world"}, &ProcAttr{Sys: &syscall.SysProcAttr{}})
-	if !errors.Is(err, ErrNotImplementedSys) {
-		t.Fatalf("wanted ErrNotImplementedSys, got %v\n", err)
+	dir := t.TempDir()
+	stdinR, stdinW, err := Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdinR.Close()
+	defer stdinW.Close()
+
+	stdoutR, stdoutW, err := Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdoutR.Close()
+
+	attr := &ProcAttr{
+		Dir:   dir,
+		Files: []*File{stdinR, stdoutW, nil},
+		Sys:   &syscall.SysProcAttr{Setsid: true},
+	}
+	proc, err := StartProcess("/bin/sh", []string{"sh", "-c", "read x || true; if [ -e /proc/$$/fd/2 ]; then echo open; else pwd -P; fi"}, attr)
+	stdoutW.Close()
+	if err != nil {
+		t.Fatal(err)
 	}
 
+	sid, _, errno := syscall.Syscall(syscall.SYS_GETSID, uintptr(proc.Pid), 0, 0)
+	if errno != 0 {
+		stdinW.Close()
+		proc.Wait()
+		t.Fatalf("getsid(%d) failed: %v", proc.Pid, errno)
+	}
+	if int(sid) != proc.Pid {
+		stdinW.Close()
+		proc.Wait()
+		t.Fatalf("getsid(%d) = %d, want %d", proc.Pid, sid, proc.Pid)
+	}
+
+	stdinW.Close()
+	out, err := io.ReadAll(stdoutR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps, err := proc.Wait()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ps.Success() {
+		t.Fatalf("child did not exit cleanly: %v", ps)
+	}
+
+	want, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != want+"\n" {
+		t.Fatalf("child output = %q, want %q", out, want+"\n")
+	}
+}
+
+func TestForkExecProcSysErrNotExist(t *testing.T) {
+	proc, err := StartProcess("invalid", []string{"invalid"}, &ProcAttr{Sys: &syscall.SysProcAttr{}})
+	if !errors.Is(err, ErrNotExist) {
+		t.Fatalf("wanted ErrNotExist, got %v", err)
+	}
 	if proc != nil {
-		t.Fatalf("wanted nil, got %v\n", proc)
+		t.Fatalf("wanted nil, got %v", proc)
+	}
+}
+
+func parseProcSigMask(t *testing.T, status, key string) uint64 {
+	t.Helper()
+	for _, line := range strings.Split(status, "\n") {
+		if strings.HasPrefix(line, key) {
+			hex := strings.TrimSpace(strings.TrimPrefix(line, key))
+			if len(hex) > 16 {
+				hex = hex[len(hex)-16:]
+			}
+			v, err := strconv.ParseUint(hex, 16, 64)
+			if err != nil {
+				t.Fatalf("parse %s %q: %v", key, hex, err)
+			}
+			return v
+		}
+	}
+	t.Fatalf("missing %s in status", key)
+	return 0
+}
+
+func TestForkExecProcSysSignals(t *testing.T) {
+	parentBefore, err := ReadFile("/proc/self/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantBlk := parseProcSigMask(t, string(parentBefore), "SigBlk:")
+
+	ch := make(chan Signal, 1)
+	signal.Ignore(syscall.SIGUSR1)
+	signal.Notify(ch, syscall.SIGUSR2)
+	defer signal.Reset(syscall.SIGUSR1, syscall.SIGUSR2)
+
+	r, w, err := Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+
+	attr := &ProcAttr{
+		Files: []*File{Stdin, w, Stderr},
+		Sys:   &syscall.SysProcAttr{},
+	}
+	proc, err := StartProcess("/bin/cat", []string{"cat", "/proc/self/status"}, attr)
+	w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps, err := proc.Wait()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ps.Success() {
+		t.Fatalf("child failed: %v", ps)
+	}
+
+	parentAfter, err := ReadFile("/proc/self/status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := parseProcSigMask(t, string(parentAfter), "SigBlk:"); got != wantBlk {
+		t.Fatalf("parent SigBlk = %#x, want %#x", got, wantBlk)
+	}
+
+	childStatus := string(out)
+	if got := parseProcSigMask(t, childStatus, "SigBlk:"); got != wantBlk {
+		t.Fatalf("child SigBlk = %#x, want %#x", got, wantBlk)
+	}
+	childIgn := parseProcSigMask(t, childStatus, "SigIgn:")
+	usr1Bit := uint64(1) << (uint(syscall.SIGUSR1) - 1)
+	usr2Bit := uint64(1) << (uint(syscall.SIGUSR2) - 1)
+	if childIgn&usr1Bit == 0 {
+		t.Fatalf("child SigIgn = %#x, want SIGUSR1 (%#x) ignored", childIgn, usr1Bit)
+	}
+	if childIgn&usr2Bit != 0 {
+		t.Fatalf("child SigIgn = %#x, want SIGUSR2 (%#x) not ignored", childIgn, usr2Bit)
 	}
 }
 

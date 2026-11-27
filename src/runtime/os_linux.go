@@ -90,3 +90,37 @@ func fcntl(fd int32, cmd int32, arg int32) (ret int32, errno int32) {
 	errno = *libc_errno_location()
 	return
 }
+
+//go:linkname syscall_RawSyscall6 syscall.RawSyscall6
+func syscall_RawSyscall6(trap, a1, a2, a3, a4, a5, a6 uintptr) (r1, r2, err uintptr)
+
+//go:linkname syscall_rawVforkSyscall syscall.rawVforkSyscall
+func syscall_rawVforkSyscall(trap, a1, a2, a3 uintptr) (r1, err uintptr) {
+	// Clear CLONE_VFORK|CLONE_VM (0x4100) from linux/sched.h so the child gets
+	// a copy-on-write stack instead of sharing the parent stack frame.
+	const cloneVforkVM = 0x4100
+	sysClone := uintptr(120)
+	sysClone3 := uintptr(435)
+	switch GOARCH {
+	case "amd64":
+		sysClone = 56
+	case "arm64", "riscv64", "loong64":
+		sysClone = 220
+	case "mips", "mipsle":
+		sysClone = 4120
+		sysClone3 = 4435
+	case "mips64", "mips64le":
+		sysClone = 5055
+		sysClone3 = 5435
+	}
+	if trap == sysClone3 && a1 != 0 {
+		*(*uint64)(unsafe.Pointer(a1)) &^= cloneVforkVM
+	} else if trap == sysClone {
+		a1 &^= cloneVforkVM
+	}
+	r1, _, err = syscall_RawSyscall6(trap, a1, a2, a3, 0, 0, 0)
+	if err != 0 {
+		return ^uintptr(0), err
+	}
+	return r1, 0
+}
