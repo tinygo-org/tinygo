@@ -11,7 +11,7 @@ jobs:
   sizediff:
     runs-on: ubuntu-24.04
     permissions:
-      pull-requests: write
+      contents: read
     steps:
       # Prepare, install tools
       - name: Add GOBIN to $PATH
@@ -119,11 +119,15 @@ jobs:
           cat sizediff.txt >> comment.txt
           echo "</pre></details>" >> comment.txt
       - name: Comment contents
-        run: cat comment.txt
-      - name: Add comment
-        if: ${{ github.event.pull_request.head.repo.full_name == github.event.pull_request.base.repo.full_name }}
-        uses: thollander/actions-comment-pull-request@v2.3.1
+        run: |
+          cat comment.txt
+          cat comment.txt >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ github.event.pull_request.number }}" > pr-number.txt
+      - name: Upload comment
+        uses: actions/upload-artifact@v7
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          filePath: comment.txt
-          comment_tag: sizediff
+          name: sizediff-comment
+          path: |
+            comment.txt
+            pr-number.txt
+          retention-days: 1

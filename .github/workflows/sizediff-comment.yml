@@ -1,0 +1,44 @@
+name: Binary size comment
+
+# Pull requests from forks receive a read-only token, so a separate run posts the comment.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run
+on:
+  workflow_run:
+    workflows: ["Binary size difference"]
+    types: [completed]
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Download comment
+        uses: actions/download-artifact@v8
+        with:
+          name: sizediff-comment
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Check pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          pr="$(cat pr-number.txt)"
+          [[ "$pr" =~ ^[0-9]+$ ]]
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" -q .head.sha)" != "$HEAD_SHA" ]; then
+            echo "::notice::Pull request #$pr has newer commits, not commenting"
+            exit 0
+          fi
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+      - name: Add comment
+        if: steps.pr.outputs.number != ''
+        uses: thollander/actions-comment-pull-request@v2.3.1
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          pr_number: ${{ steps.pr.outputs.number }}
+          filePath: comment.txt
+          comment_tag: sizediff
