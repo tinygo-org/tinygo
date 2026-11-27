@@ -16,6 +16,13 @@ import (
 
 const cpuInterruptFromUSB = 8
 
+// Masks for the RX interrupt and the EP1 OUT FIFO status.
+const (
+	usbEP1OutDataAvail = esp.USB_DEVICE_EP1_CONF_SERIAL_OUT_EP_DATA_AVAIL
+	usbRecvPktIntEna   = esp.USB_DEVICE_INT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA
+	usbRecvPktIntClr   = esp.USB_DEVICE_INT_CLR_SERIAL_OUT_RECV_PKT_INT_CLR
+)
+
 // usbHandleInterrupt is the top-level interrupt handler passed to
 // interrupt.New. It must be a plain function (not a closure) because
 // interrupt.New is a compiler intrinsic that does not support closures.
@@ -39,15 +46,6 @@ func (usbdev *USB_DEVICE) configure(config UARTConfig) error {
 	_ = interrupt.New(cpuInterruptFromUSB, usbHandleInterrupt).Enable()
 
 	return nil
-}
-
-// handleInterrupt is called from the CPU interrupt vector when the USB
-// peripheral raises an interrupt.  Disable INT_ENA to prevent the
-// level-triggered interrupt from re-asserting immediately (data may
-// still be in the FIFO).  Buffered() re-enables after draining.
-func (usbdev *USB_DEVICE) handleInterrupt() {
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(0)
-	usbdev.Bus.SetINT_CLR_SERIAL_OUT_RECV_PKT_INT_CLR(1)
 }
 
 func (usbdev *USB_DEVICE) WriteByte(c byte) error {
@@ -110,29 +108,6 @@ func (usbdev *USB_DEVICE) Write(data []byte) (n int, err error) {
 	usbdev.flush()
 	usbdev.txPending = false
 	return len(data), nil
-}
-
-// Buffered returns the number of bytes waiting in the receive ring buffer.
-// It drains any data sitting in the hardware FIFO and re-enables the
-// peripheral-level USB interrupt (which the ISR disables to prevent a
-// level-triggered interrupt storm).
-func (usbdev *USB_DEVICE) Buffered() int {
-	usbdev.ensureConfigured()
-	// Flush any pending TX data so callers like echo loops don't
-	// need to explicitly flush after WriteByte.
-	if usbdev.txPending {
-		usbdev.flush()
-		usbdev.txPending = false
-	}
-	// Drain the hardware FIFO into the ring buffer.
-	for usbdev.Bus.GetEP1_CONF_SERIAL_OUT_EP_DATA_AVAIL() != 0 {
-		b := byte(usbdev.Bus.EP1.Get())
-		usbdev.Buffer.Put(b)
-	}
-	// Clear pending flags and re-enable the RX interrupt at the peripheral level.
-	usbdev.Bus.INT_CLR.Set(0xFFFFFFFF)
-	usbdev.Bus.SetINT_ENA_SERIAL_OUT_RECV_PKT_INT_ENA(1)
-	return int(usbdev.Buffer.Used())
 }
 
 // flush signals WR_DONE to tell the hardware to send the data that has

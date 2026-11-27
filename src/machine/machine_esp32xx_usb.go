@@ -82,15 +82,58 @@ func (usbdev *USB_DEVICE) ensureConfigured() {
 	}
 }
 
+// Buffered returns the number of bytes in the receive ring buffer. It also sends
+// the bytes that wait in the EP1 IN FIFO, so that an echo loop does not need to flush.
+func (usbdev *USB_DEVICE) Buffered() int {
+	usbdev.ensureConfigured()
+	if usbdev.txPending {
+		usbdev.flush()
+		usbdev.txPending = false
+	}
+	usbdev.resumeRX()
+	return int(usbdev.Buffer.Used())
+}
+
 // ReadByte returns a byte from the receive ring buffer, or errNoByte when it
 // is empty.
 func (usbdev *USB_DEVICE) ReadByte() (byte, error) {
 	usbdev.ensureConfigured()
 	b, ok := usbdev.Buffer.Get()
+	usbdev.resumeRX()
 	if !ok {
 		return 0, errNoByte
 	}
 	return b, nil
+}
+
+// handleInterrupt moves received bytes from the EP1 OUT FIFO to the ring buffer.
+// When the ring buffer is full, it leaves the rest in the FIFO, so the controller
+// stops accepting data from the host, and pauses the RX interrupt until
+// resumeRX. The status is cleared only when the FIFO is empty, and the FIFO is
+// checked again after that, so a packet that arrives during the clear is not lost.
+func (usbdev *USB_DEVICE) handleInterrupt() {
+	for {
+		for usbdev.Bus.EP1_CONF.HasBits(usbEP1OutDataAvail) {
+			if usbdev.Buffer.Used() == bufferSize {
+				usbdev.Bus.INT_ENA.ClearBits(usbRecvPktIntEna)
+				return
+			}
+			usbdev.Buffer.Put(byte(usbdev.Bus.EP1.Get()))
+		}
+		usbdev.Bus.INT_CLR.Set(usbRecvPktIntClr)
+		if !usbdev.Bus.EP1_CONF.HasBits(usbEP1OutDataAvail) {
+			return
+		}
+	}
+}
+
+// resumeRX enables the RX interrupt again after handleInterrupt paused it and
+// there is room in the ring buffer. The status is still set, so the interrupt
+// then drains the FIFO. Only handleInterrupt writes to the ring buffer.
+func (usbdev *USB_DEVICE) resumeRX() {
+	if !usbdev.Bus.INT_ENA.HasBits(usbRecvPktIntEna) && usbdev.Buffer.Used() < bufferSize {
+		usbdev.Bus.INT_ENA.SetBits(usbRecvPktIntEna)
+	}
 }
 
 func (usbdev *USB_DEVICE) DTR() bool {
