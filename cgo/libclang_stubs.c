@@ -17,14 +17,6 @@ CXString tinygo_clang_getCursorSpelling(CXCursor c) {
 	return clang_getCursorSpelling(c);
 }
 
-CXString tinygo_clang_getCursorPrettyPrinted(CXCursor c, CXPrintingPolicy policy) {
-	return clang_getCursorPrettyPrinted(c, policy);
-}
-
-CXPrintingPolicy tinygo_clang_getCursorPrintingPolicy(CXCursor c) {
-	return clang_getCursorPrintingPolicy(c);
-}
-
 enum CXCursorKind tinygo_clang_getCursorKind(CXCursor c) {
 	return clang_getCursorKind(c);
 }
