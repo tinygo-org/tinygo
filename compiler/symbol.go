@@ -881,13 +881,17 @@ func (c *context) addStandardDefinedAttributes(llvmFn llvm.Value) {
 }
 
 // hasFramePointers reports whether functions keep a frame pointer, so that
-// perf and other frame pointer unwinders can walk native Linux stacks.
+// profilers can walk native stacks on Linux and macOS.
 func (c *context) hasFramePointers() bool {
 	parts := strings.Split(c.Triple, "-")
-	if len(parts) < 3 || parts[2] != "linux" {
+	if len(parts) < 3 {
 		return false
 	}
-	return parts[0] == "x86_64" || parts[0] == "aarch64"
+	switch parts[0] {
+	case "x86_64", "aarch64", "arm64":
+		return parts[2] == "linux" || strings.HasPrefix(parts[2], "macos") || parts[2] == "darwin"
+	}
+	return false
 }
 
 // addStandardAttributes adds all attributes added to defined functions.
