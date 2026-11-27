@@ -2,6 +2,7 @@ package compileopts
 
 import (
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -209,5 +210,144 @@ func TestLDFlagsWasmStackSize(t *testing.T) {
 	config.Options.Scheduler = "asyncify"
 	if got := config.LDFlags(); slices.Contains(got, "stack-size=16777216") {
 		t.Fatalf("unexpected stack-size in LDFlags for scheduler=asyncify, got %v", got)
+	}
+}
+
+func TestBuildTagsBoardPackage(t *testing.T) {
+	t.Run("auto append", func(t *testing.T) {
+		config := &Config{
+			Options: &Options{},
+			Target: &TargetSpec{
+				BoardPackage: "example.com/board",
+			},
+		}
+		if got := config.BuildTags(); !slices.Contains(got, "boardpackage") {
+			t.Errorf("BuildTags() = %v, missing boardpackage", got)
+		}
+	})
+
+	t.Run("no duplicate from target or options", func(t *testing.T) {
+		for _, tc := range []struct {
+			name    string
+			tags    []string
+			optTags []string
+		}{
+			{name: "target", tags: []string{"boardpackage"}},
+			{name: "options", optTags: []string{"boardpackage"}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				config := &Config{
+					Options: &Options{Tags: tc.optTags},
+					Target: &TargetSpec{
+						BuildTags:    tc.tags,
+						BoardPackage: "example.com/board",
+					},
+				}
+				count := 0
+				for _, tag := range config.BuildTags() {
+					if tag == "boardpackage" {
+						count++
+					}
+				}
+				if count != 1 {
+					t.Errorf("boardpackage appeared %d times in %v, want 1", count, config.BuildTags())
+				}
+			})
+		}
+	})
+
+	t.Run("omitted when empty", func(t *testing.T) {
+		config := &Config{
+			Options: &Options{},
+			Target:  &TargetSpec{},
+		}
+		if got := config.BuildTags(); slices.Contains(got, "boardpackage") {
+			t.Errorf("BuildTags() = %v, unexpected boardpackage", got)
+		}
+	})
+}
+
+func TestLDFlagsAbsoluteLinkerScript(t *testing.T) {
+	t.Run("absolute linker script adds directory before TINYGOROOT", func(t *testing.T) {
+		absDir := t.TempDir()
+		absScript := filepath.Join(absDir, "custom.ld")
+		config := &Config{
+			Options: &Options{},
+			Target: &TargetSpec{
+				LinkerScript: absScript,
+			},
+		}
+		flags := config.LDFlags()
+		root := goenv.Get("TINYGOROOT")
+		extLIdx, rootLIdx, tIdx := -1, -1, -1
+		for i := 0; i < len(flags)-1; i++ {
+			if flags[i] == "-L" && flags[i+1] == absDir {
+				extLIdx = i
+			}
+			if flags[i] == "-L" && flags[i+1] == root {
+				rootLIdx = i
+			}
+			if flags[i] == "-T" && flags[i+1] == absScript {
+				tIdx = i
+			}
+		}
+		if extLIdx < 0 || rootLIdx < 0 || extLIdx > rootLIdx {
+			t.Fatalf("LDFlags() = %v, want -L %s before -L %s", flags, absDir, root)
+		}
+		if tIdx < 0 {
+			t.Fatalf("LDFlags() = %v, missing -T %s", flags, absScript)
+		}
+	})
+
+	t.Run("relative linker script keeps only TINYGOROOT -L", func(t *testing.T) {
+		config := &Config{
+			Options: &Options{},
+			Target: &TargetSpec{
+				LinkerScript: "targets/arm.ld",
+			},
+		}
+		flags := config.LDFlags()
+		lCount := 0
+		hasT := false
+		for i := 0; i < len(flags)-1; i++ {
+			if flags[i] == "-L" {
+				lCount++
+			}
+			if flags[i] == "-T" && flags[i+1] == "targets/arm.ld" {
+				hasT = true
+			}
+		}
+		if lCount != 1 {
+			t.Fatalf("LDFlags() = %v, got %d -L flags, want 1", flags, lCount)
+		}
+		if !hasT {
+			t.Fatalf("LDFlags() = %v, missing -T targets/arm.ld", flags)
+		}
+	})
+}
+
+func TestConfigTargetDir(t *testing.T) {
+	extDir := t.TempDir()
+	extTarget := filepath.Join(extDir, "board.json")
+	extConfig := &Config{
+		Options: &Options{Target: extTarget},
+	}
+	if got := extConfig.TargetDir(); got != extDir {
+		t.Errorf("TargetDir() for external target = %q, want %q", got, extDir)
+	}
+
+	builtinName := &Config{
+		Options: &Options{Target: "pico"},
+	}
+	if got := builtinName.TargetDir(); got != "" {
+		t.Errorf("TargetDir() for built-in name = %q, want empty", got)
+	}
+
+	builtinPath := filepath.Join(goenv.Get("TINYGOROOT"), "targets", "pico.json")
+	builtinPathCfg := &Config{
+		Options: &Options{Target: builtinPath},
+	}
+	if got := builtinPathCfg.TargetDir(); got != "" {
+		t.Errorf("TargetDir() for built-in path = %q, want empty", got)
 	}
 }

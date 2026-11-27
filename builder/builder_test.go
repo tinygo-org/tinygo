@@ -1,14 +1,18 @@
 package builder
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
+	"github.com/tinygo-org/tinygo/interp"
 	"tinygo.org/x/go-llvm"
 )
 
@@ -438,4 +442,156 @@ func TestMain(m *testing.M) {
 
 	// Run normal tests.
 	os.Exit(m.Run())
+}
+
+func TestExtraFilePaths(t *testing.T) {
+	root := t.TempDir()
+	targetDir := filepath.Join(t.TempDir(), "board")
+	config := &compileopts.Config{
+		Options: &compileopts.Options{},
+		Target:  &compileopts.TargetSpec{GOOS: "linux"},
+	}
+
+	relAbs, relTrim := extraFilePaths(root, targetDir, "src/runtime/foo.c")
+	if relAbs != filepath.Join(root, "src/runtime/foo.c") {
+		t.Errorf("relative abspath = %q, want %q", relAbs, filepath.Join(root, "src/runtime/foo.c"))
+	}
+	wantRelRecorded := config.CSourcePath("github.com/tinygo-org/tinygo/src/runtime/foo.c")
+	if got := config.CSourcePath(relTrim); got != wantRelRecorded {
+		t.Errorf("relative CSourcePath = %q, want %q", got, wantRelRecorded)
+	}
+
+	underTarget := filepath.Join(targetDir, "sub", "board_init.c")
+	underOut, underTrim := extraFilePaths(root, targetDir, underTarget)
+	if underOut != underTarget {
+		t.Errorf("under-target abspath = %q, want %q", underOut, underTarget)
+	}
+	wantUnderRecorded := config.CSourcePath("target/sub/board_init.c")
+	if got := config.CSourcePath(underTrim); got != wantUnderRecorded {
+		t.Errorf("under-target CSourcePath = %q, want %q", got, wantUnderRecorded)
+	}
+
+	base1 := t.TempDir()
+	parent1 := filepath.Join(base1, "parent1", "common.c")
+	parent2 := filepath.Join(base1, "parent2", "common.c")
+	target1 := filepath.Join(base1, "board")
+	out1, trim1 := extraFilePaths(root, target1, parent1)
+	if out1 != parent1 {
+		t.Errorf("parent1 abspath = %q, want %q", out1, parent1)
+	}
+	rec1 := config.CSourcePath(trim1)
+	if !strings.HasPrefix(rec1, "/_/external/") || !strings.HasSuffix(rec1, "/common.c") {
+		t.Errorf("parent1 CSourcePath = %q, want /_/external/<hash>/common.c", rec1)
+	}
+	if strings.Contains(rec1, base1) || strings.Contains(rec1, filepath.ToSlash(base1)) {
+		t.Errorf("parent1 CSourcePath = %q, leaked host dir %q", rec1, base1)
+	}
+
+	_, trim2 := extraFilePaths(root, target1, parent2)
+	rec2 := config.CSourcePath(trim2)
+	if rec1 == rec2 {
+		t.Errorf("distinct external dirs collided on recorded path %q", rec1)
+	}
+
+	base2 := t.TempDir()
+	parent1OtherHost := filepath.Join(base2, "parent1", "common.c")
+	target2 := filepath.Join(base2, "board")
+	_, trim1OtherHost := extraFilePaths(root, target2, parent1OtherHost)
+	if rec1Other := config.CSourcePath(trim1OtherHost); rec1Other != rec1 {
+		t.Errorf("same relative layout produced different paths across hosts: %q vs %q", rec1Other, rec1)
+	}
+
+	noTargetOut, noTargetTrim := extraFilePaths(root, "", parent1)
+	if noTargetOut != parent1 {
+		t.Errorf("empty-targetDir abspath = %q, want %q", noTargetOut, parent1)
+	}
+	recNoTarget := config.CSourcePath(noTargetTrim)
+	if !strings.HasPrefix(recNoTarget, "/_/external/") || !strings.HasSuffix(recNoTarget, "/common.c") {
+		t.Errorf("empty-targetDir CSourcePath = %q, want /_/external/<hash>/common.c", recNoTarget)
+	}
+	if strings.Contains(recNoTarget, base1) || strings.Contains(recNoTarget, filepath.ToSlash(base1)) {
+		t.Errorf("empty-targetDir CSourcePath = %q, leaked host dir %q", recNoTarget, base1)
+	}
+}
+
+func TestBuildExternalTargetExtraFilesAndBoardPackage(t *testing.T) {
+	t.Setenv("GOFLAGS", "")
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":  "module example.com/extbuild\n\ngo 1.25.0\n",
+		"go.work": "go 1.25.0\n\nuse .\n",
+		"target/extra.c": `int ext_extra_marker(void) { return 42; }
+`,
+		"target/board.json": `{
+	"inherits": ["wasm"],
+	"extra-files": ["extra.c"],
+	"board-package": "example.com/extbuild/board"
+}
+`,
+		"board/board.go": `//go:build boardpackage
+
+package board
+
+var Initialized bool
+
+func init() {
+	Initialized = true
+}
+`,
+		"app/main.go": `package main
+
+//export ext_extra_marker
+func extExtraMarker() int32
+
+func main() {
+	if extExtraMarker() == 0 {
+		panic("bad")
+	}
+}
+`,
+	}
+	for name, content := range files {
+		full := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("GOWORK", filepath.Join(dir, "go.work"))
+
+	options := &compileopts.Options{
+		Target:                  filepath.Join(dir, "target", "board.json"),
+		Opt:                     "z",
+		Directory:               dir,
+		Semaphore:               make(chan struct{}, 2),
+		Debug:                   true,
+		TrimPath:                true,
+		InterpTimeout:           60 * time.Second,
+		InterpMaxLoopIterations: interp.DefaultMaxInterpBlockEntries,
+	}
+	config, err := NewConfig(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(config.BuildTags(), "boardpackage") {
+		t.Fatalf("BuildTags() = %v, missing boardpackage", config.BuildTags())
+	}
+
+	outPath := filepath.Join(t.TempDir(), "out.wasm")
+	result, err := Build("./app", outPath, t.TempDir(), config)
+	if err != nil {
+		t.Fatalf("Build() failed: %v", err)
+	}
+	bin, err := os.ReadFile(result.Binary)
+	if err != nil {
+		t.Fatalf("missing output binary: %v", err)
+	}
+	if bytes.Contains(bin, []byte(dir)) || bytes.Contains(bin, []byte(filepath.ToSlash(dir))) {
+		t.Errorf("trimmed binary leaked host directory %q", dir)
+	}
+	if !bytes.Contains(bin, []byte("/_/target")) {
+		t.Errorf("trimmed binary missing trimmed /_/target debug path")
+	}
 }
