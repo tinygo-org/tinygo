@@ -1,4 +1,4 @@
-//go:build esp32 || esp32c3 || esp32s3
+//go:build esp32 || esp32c3 || esp32c6 || esp32s3
 
 // PWM on ESP32 chips uses the LEDC peripheral. LEDC means "LED Control", but it
 // works for any PWM job, not only LEDs.
@@ -15,9 +15,6 @@
 //	setTimerConf  program one timer
 //	chanOp        set up a channel or change its duty
 //	chanDisable   stop a channel from driving its pin
-//
-// The classic ESP32 has them in machine_esp32_pwm.go. The C3 and S3 have them in
-// machine_esp32xx_ls_pwm.go and machine_esp32{c3,s3}_pwm.go.
 //
 // The order of setup is the one ESP-IDF uses: configure the timer, then the
 // channel, then write the duty and tell the hardware to use it. See
