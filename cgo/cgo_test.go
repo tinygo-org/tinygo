@@ -489,6 +489,118 @@ var _ = C.identity(C.unsigned(2))
 	}
 }
 
+func TestCGoMacroParameterShadowsType(t *testing.T) {
+	source := `package main
+/*
+typedef int flag_t;
+#define F(flag_t) ((flag_t) - 1)
+#define TYPEDEF_RESULT F(5)
+#define G(int) ((int) * 2)
+#define BUILTIN_RESULT G(5)
+#define H(flag_t) (flag_t)
+#define PAREN_RESULT H(5)
+*/
+import "C"
+const (
+	gotTypedef = C.TYPEDEF_RESULT
+	gotBuiltin = C.BUILTIN_RESULT
+	gotParen = C.PAREN_RESULT
+)
+`
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "macro.go", source, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, _, _, _, _, _, errs := Process(
+		[]*ast.File{f}, ".", "main", fset,
+		[]string{"--target=armv6m-unknown-unknown-eabi"}, Flags{}, "linux", "arm", nil,
+	)
+	if len(errs) != 0 {
+		t.Fatalf("CGo errors: %v", errs)
+	}
+	config := types.Config{Importer: newSimpleImporter(), Sizes: types.SizesFor("gccgo", "arm")}
+	pkg, err := config.Check("main", fset, append([]*ast.File{f}, generated...), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		want string
+	}{
+		{"gotTypedef", "4"},
+		{"gotBuiltin", "10"},
+		{"gotParen", "5"},
+	} {
+		if got := pkg.Scope().Lookup(tc.name).(*types.Const).Val().ExactString(); got != tc.want {
+			t.Errorf("%s = %s, want %s", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestCGoMacroCastMultipleFiles(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		first        string
+		second       string
+		want         string
+		inconsistent bool
+	}{
+		{"direct cast", "(flag_t)1", "(flag_t)1", "1", false},
+		{"binary expression", "((flag_t)(1 << 0))", "((flag_t)(1 << 0))", "1", false},
+		{"unary expression", "((int)-1)", "((int)-1)", "-1", false},
+		{"nested casts", "((flag_t)((int)1))", "((flag_t)((int)1))", "1", false},
+		{"different cast types", "(flag_t)1", "(int)1", "", true},
+		{"different cast arguments", "(flag_t)1", "(flag_t)2", "", true},
+		{"different binary operators", "((flag_t)(1 + 2))", "((flag_t)(1 - 2))", "", true},
+		{"different unary operands", "((int)-1)", "((int)-2)", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fset := token.NewFileSet()
+			var files []*ast.File
+			for i, expr := range []string{tc.first, tc.second} {
+				source := fmt.Sprintf(`package main
+/*
+typedef int flag_t;
+#define RESULT %s
+*/
+import "C"
+const value%d = C.RESULT
+`, expr, i)
+				f, err := parser.ParseFile(fset, fmt.Sprintf("macro%d.go", i), source, parser.ParseComments)
+				if err != nil {
+					t.Fatal(err)
+				}
+				files = append(files, f)
+			}
+			generated, _, _, _, _, _, errs := Process(
+				files, ".", "main", fset,
+				[]string{"--target=armv6m-unknown-unknown-eabi"}, Flags{}, "linux", "arm", nil,
+			)
+			if tc.inconsistent {
+				if len(errs) != 1 || !strings.Contains(errs[0].Error(), "RESULT defined previously") {
+					t.Fatalf("CGo errors: %v, want inconsistent definition", errs)
+				}
+				return
+			}
+			if len(errs) != 0 {
+				t.Fatalf("CGo errors: %v", errs)
+			}
+			config := types.Config{Importer: newSimpleImporter(), Sizes: types.SizesFor("gccgo", "arm")}
+			pkg, err := config.Check("main", fset, append(files, generated...), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range files {
+				name := fmt.Sprintf("value%d", i)
+				if got := pkg.Scope().Lookup(name).(*types.Const).Val().ExactString(); got != tc.want {
+					t.Errorf("%s = %s, want %s", name, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func Test_cgoPackage_isEquivalentAST(t *testing.T) {
 	fieldA := &ast.Field{Type: &ast.BasicLit{Kind: token.STRING, Value: "a"}}
 	fieldB := &ast.Field{Type: &ast.BasicLit{Kind: token.STRING, Value: "b"}}

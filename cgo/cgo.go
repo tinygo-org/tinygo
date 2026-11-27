@@ -1108,6 +1108,26 @@ func (p *cgoPackage) isEquivalentAST(a, b ast.Node) bool {
 		// Note: this comparison is not correct in general ("1e2" equals "100"),
 		// but is correct for its use in the cgo package.
 		return node.Value == b.Value
+	case *ast.BinaryExpr:
+		b, ok := b.(*ast.BinaryExpr)
+		if !ok || node.Op != b.Op {
+			return false
+		}
+		return p.isEquivalentAST(node.X, b.X) && p.isEquivalentAST(node.Y, b.Y)
+	case *ast.CallExpr:
+		b, ok := b.(*ast.CallExpr)
+		if !ok || node.Ellipsis.IsValid() != b.Ellipsis.IsValid() || len(node.Args) != len(b.Args) {
+			return false
+		}
+		if !p.isEquivalentAST(node.Fun, b.Fun) {
+			return false
+		}
+		for i, arg := range node.Args {
+			if !p.isEquivalentAST(arg, b.Args[i]) {
+				return false
+			}
+		}
+		return true
 	case *ast.CommentGroup:
 		b, ok := b.(*ast.CommentGroup)
 		if !ok {
@@ -1203,6 +1223,12 @@ func (p *cgoPackage) isEquivalentAST(a, b ast.Node) bool {
 			return false
 		}
 		return node.Name == b.Name
+	case *ast.ParenExpr:
+		b, ok := b.(*ast.ParenExpr)
+		if !ok {
+			return false
+		}
+		return p.isEquivalentAST(node.X, b.X)
 	case *ast.SelectorExpr:
 		b, ok := b.(*ast.SelectorExpr)
 		if !ok {
@@ -1236,6 +1262,12 @@ func (p *cgoPackage) isEquivalentAST(a, b ast.Node) bool {
 			return false
 		}
 		return p.isEquivalentAST(node.Type, b.Type)
+	case *ast.UnaryExpr:
+		b, ok := b.(*ast.UnaryExpr)
+		if !ok || node.Op != b.Op {
+			return false
+		}
+		return p.isEquivalentAST(node.X, b.X)
 	case *ast.ValueSpec:
 		b, ok := b.(*ast.ValueSpec)
 		if !ok {
