@@ -1354,6 +1354,17 @@ func createEmbedObjectFile(data, hexSum, sourceFile, sourceDir, tmpdir string, c
 	dibuilder.Finalize()
 	dibuilder.Destroy()
 
+	// Match the ABI of the compiled packages, see compiler.go.
+	if compilerConfig.ABI != "" {
+		mod.AddNamedMetadataOperand("llvm.module.flags",
+			ctx.MDNode([]llvm.Metadata{
+				llvm.ConstInt(ctx.Int32Type(), 1, false).ConstantAsMetadata(), // Error on mismatch
+				ctx.MDString("target-abi"),
+				ctx.MDString(compilerConfig.ABI),
+			}),
+		)
+	}
+
 	// Write this LLVM module out as an object file.
 	machine, err := compiler.NewTargetMachine(compilerConfig)
 	if err != nil {
