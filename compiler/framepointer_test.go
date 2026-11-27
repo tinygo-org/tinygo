@@ -13,6 +13,10 @@ func TestFramePointers(t *testing.T) {
 	}{
 		{&compileopts.Options{GOOS: "linux", GOARCH: "amd64"}, "all"},
 		{&compileopts.Options{GOOS: "linux", GOARCH: "arm64"}, "all"},
+		{&compileopts.Options{GOOS: "darwin", GOARCH: "amd64"}, "all"},
+		{&compileopts.Options{GOOS: "darwin", GOARCH: "arm64"}, "all"},
+		{&compileopts.Options{GOOS: "windows", GOARCH: "arm64"}, ""},
+		{&compileopts.Options{GOOS: "windows", GOARCH: "amd64"}, ""},
 		{&compileopts.Options{Target: "wasm"}, ""},
 	} {
 		name := tc.options.GOOS + "/" + tc.options.GOARCH + tc.options.Target

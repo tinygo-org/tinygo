@@ -45,6 +45,23 @@ struct state_pass {
 // Handle the GC pause in Go.
 void tinygo_task_gc_pause(int sig);
 
+#if __APPLE__
+// CPU profiler hook, in src/runtime/cpuprof_darwin.c.
+void tinygo_cpuprof_thread_exit(uintptr_t fn);
+#endif
+
+// Entry function of the goroutine running on this thread, or 0 on the main
+// thread.
+static __thread uintptr_t current_start;
+
+// Called once before a thread exits, by returning from its goroutine or
+// through tinygo_task_exit_thread.
+static void thread_exiting(void) {
+    #if __APPLE__
+    tinygo_cpuprof_thread_exit(current_start);
+    #endif
+}
+
 // Initialize the main thread.
 void tinygo_task_init(void *mainTask, pthread_t *thread, int *numCPU, void *context) {
     // Make sure the current task pointer is set correctly for the main
@@ -78,6 +95,7 @@ static void* start_wrapper(void *arg) {
     void *(*start)(void*) = state->start;
     void *args = state->args;
     current_task = state->task;
+    current_start = (uintptr_t)start;
 
     // Save the current stack pointer in the goroutine state, for the GC.
     int stackAddr;
@@ -93,6 +111,8 @@ static void* start_wrapper(void *arg) {
 
     // Run the goroutine function.
     start(args);
+
+    thread_exiting();
 
     // Notify the Go side this thread will exit.
     tinygo_task_exited(current_task);
@@ -147,6 +167,7 @@ void* tinygo_task_current(void) {
 
 // Exit the current thread.
 void tinygo_task_exit_thread(void) {
+    thread_exiting();
     pthread_exit(NULL);
 }
 
