@@ -1,6 +1,9 @@
 package main
 
-import "runtime/volatile"
+import (
+	"runtime/volatile"
+	"unsafe"
+)
 
 func load8(p *uint8) uint8 {
 	return volatile.LoadUint8(p)
@@ -74,4 +77,16 @@ type register32Ptr = *volatile.Register32
 
 func regGetAlias(r register32Ptr) uint32 {
 	return r.Get()
+}
+
+func load32Unsafe(p unsafe.Pointer) uint32 {
+	return volatile.LoadUint32((*uint32)(p))
+}
+
+func store32Unsafe(p unsafe.Pointer, v uint32) {
+	volatile.StoreUint32((*uint32)(p), v)
+}
+
+func regGetUnsafe(p unsafe.Pointer) uint32 {
+	return (*volatile.Register32)(p).Get()
 }

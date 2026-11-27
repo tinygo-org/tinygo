@@ -339,6 +339,33 @@ unwind.return:                                    ; preds = %deref.throw
   ret i32 undef
 }
 
+; Function Attrs: nounwind
+define hidden i32 @main.load32Unsafe(ptr %p, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %p, ptr nonnull %stackalloc, ptr undef) #2
+  %0 = load volatile i32, ptr %p, align 4
+  ret i32 %0
+}
+
+; Function Attrs: nounwind
+define hidden void @main.store32Unsafe(ptr %p, i32 %v, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %p, ptr nonnull %stackalloc, ptr undef) #2
+  store volatile i32 %v, ptr %p, align 4
+  ret void
+}
+
+; Function Attrs: nounwind
+define hidden i32 @main.regGetUnsafe(ptr %p, ptr %context) unnamed_addr #1 {
+entry:
+  %stackalloc = alloca i8, align 1
+  call void @runtime.trackPointer(ptr %p, ptr nonnull %stackalloc, ptr undef) #2
+  %0 = load volatile i32, ptr %p, align 4
+  ret i32 %0
+}
+
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { nounwind }
