@@ -154,7 +154,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("net/http/internal")
 	}
 	r.skipPackage("net/internal/cgotest")
-	if !linux && !darwin {
+	if !linux {
 		r.skipPackage("net/internal/socktest")
 	}
 	if baremetal || (wasm && !wasi) {
