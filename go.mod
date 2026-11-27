@@ -2,6 +2,8 @@ module github.com/tinygo-org/tinygo
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/aykevl/go-wasm v0.0.2-0.20250317121156-42b86c494139
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2
