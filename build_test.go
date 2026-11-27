@@ -211,6 +211,7 @@ func TestBuild(t *testing.T) {
 		"localtypes.go",
 		"map.go",
 		"map_bigkey.go",
+		"maphash.go",
 		"math.go",
 		"oldgo/",
 		"print.go",
@@ -745,6 +746,15 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 		}
 		if options.Target == "cortex-m-qemu" && name == "gcstacks.go" {
 			// Too many goroutines for the LM3S6965's RAM.
+			continue
+		}
+		if (options.Target == "cortex-m-qemu" || options.Target == "simavr") && goMinor < 27 && name == "maphash.go" {
+			// Go 1.26 maphash.MakeSeed calls crypto/rand.Read, and the LM3S6965 and ATmega1284P have no RNG.
+			continue
+		}
+		if options.Target == "simavr" && goMinor >= 27 && name == "maphash.go" {
+			// Go 1.27 internal/runtime/math.MulUintptr uses 1<<(4*goarch.PtrSize), which is
+			// 1<<16 with GOARCH=arm and overflows the 16-bit AVR uintptr.
 			continue
 		}
 		if options.Target == "riscv-qemu" && name == "gcstacks.go" && scheduler == "tasks" {

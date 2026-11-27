@@ -69,6 +69,9 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipPackage("internal/godebug")
 	// The polling tests reach an unimplemented semacquire path.
 	r.skipPackage("internal/poll")
+	// The tests call FuncPCTestFn from abi_test.s, and TinyGo lowers
+	// abi.FuncPCABI0 only on darwin.
+	r.skipPackage("internal/abi")
 	// The stock runtime tests need Go's atomic entry points and internal ABI types.
 	r.skipPackage("internal/runtime/atomic")
 	r.skipPackage("internal/runtime/maps")

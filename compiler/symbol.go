@@ -355,6 +355,16 @@ func (c *context) maybeCreateSyntheticFunction(fn *ssa.Function, llvmFn llvm.Val
 			// is really called, making it clear it needs to be implemented.
 			return
 		}
+		if origin := fn.Origin(); origin != nil {
+			switch origin.RelString(nil) {
+			case "internal/abi.EscapeNonString":
+				c.createSyntheticIntrinsic(fn, llvmFn, (*builder).createAbiEscapeNonStringImpl)
+				return
+			case "hash/maphash.comparableHash":
+				c.createSyntheticIntrinsic(fn, llvmFn, (*builder).createMaphashComparableHashImpl)
+				return
+			}
+		}
 		if len(fn.Blocks) == 0 {
 			c.addError(fn.Pos(), "missing function body")
 			return
@@ -366,6 +376,14 @@ func (c *context) maybeCreateSyntheticFunction(fn *ssa.Function, llvmFn llvm.Val
 		llvmFn.SetLinkage(llvm.LinkOnceODRLinkage)
 		llvmFn.SetUnnamedAddr(true)
 	}
+}
+
+func (c *context) createSyntheticIntrinsic(fn *ssa.Function, llvmFn llvm.Value, create func(*builder)) {
+	irbuilder := c.mod.NewBuilder()
+	defer irbuilder.Dispose()
+	create(newBuilder(c, irbuilder, fn))
+	llvmFn.SetLinkage(llvm.LinkOnceODRLinkage)
+	llvmFn.SetUnnamedAddr(true)
 }
 
 // getFunctionInfo returns information about a function that is not directly
