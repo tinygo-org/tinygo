@@ -6,6 +6,7 @@ require (
 	github.com/aykevl/go-wasm v0.0.2-0.20250317121156-42b86c494139
 	github.com/blakesmith/ar v0.0.0-20150311145944-8bd4349a67f2
 	github.com/gofrs/flock v0.8.1
+	github.com/google/pprof v0.0.0-20261026192309-dbd0ed30aa88
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf
 	github.com/inhies/go-bytesize v0.0.0-20220417184213-4913239db9cf
 	github.com/marcinbor85/gohex v0.0.0-20200531091804-343a4b548892
