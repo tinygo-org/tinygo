@@ -125,6 +125,15 @@ func Uses(value llvm.Value) iter.Seq[llvm.Value] {
 	}
 }
 
+// ConstPtrAdd returns a constant getelementptr i8 that adds offset bytes to
+// ptr. LLVM 24 creates the same constant for LLVMConstPtrAdd.
+func ConstPtrAdd(i8 llvm.Type, ptr, offset llvm.Value, inbounds bool) llvm.Value {
+	if inbounds {
+		return llvm.ConstInBoundsGEP(i8, ptr, []llvm.Value{offset})
+	}
+	return llvm.ConstGEP(i8, ptr, []llvm.Value{offset})
+}
+
 // InterfaceStub describes a function that the compiler declares for an
 // interface method call or type assert, which interface lowering defines.
 type InterfaceStub struct {

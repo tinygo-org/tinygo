@@ -47,6 +47,9 @@ import (
 // src/internal/reflectlite/type.go.
 const numMethodHasMethodSet = 0x8000
 
+// RawType.ptrtag in src/internal/reflectlite/type.go reads the low two bits.
+const typecodeTagMask = 3
+
 // Meta byte values from src/internal/reflectlite/type.go.
 const (
 	kindMask  = 31
@@ -155,6 +158,7 @@ func LowerInterfaces(mod llvm.Module, config *compileopts.Config) error {
 
 // run runs the pass itself.
 func (p *lowerInterfacesPass) run() error {
+	i8, i32, i64 := p.ctx.Int8Type(), p.ctx.Int32Type(), p.ctx.Int64Type()
 	if p.dibuilder != nil {
 		p.dibuilder.CreateCompileUnit(llvm.DICompileUnit{
 			Language:  0xb, // DW_LANG_C99 (0xc, off-by-one?)
@@ -186,13 +190,10 @@ func (p *lowerInterfacesPass) run() error {
 				// are i8 arrays, not structs. Thus, examine the type of the
 				// first element, and read its value only from a struct.
 				initializer := global.Initializer()
-				if elementType(initializer.Type(), 0) != p.ctx.Int8Type() {
+				if elementType(initializer.Type(), 0) != i8 {
 					firstField := initializer.AggregateElement(0)
 					// Temporary metadata precedes the kind byte at index 1.
-					t.typecodeGEP = llvm.ConstGEP(global.GlobalValueType(), global, []llvm.Value{
-						llvm.ConstInt(p.ctx.Int32Type(), 0, false),
-						llvm.ConstInt(p.ctx.Int32Type(), 1, false),
-					})
+					t.typecodeGEP = llvmutil.ConstPtrAdd(i8, global, llvm.ConstInt(i32, p.targetData.ElementOffset(global.GlobalValueType(), 1), false), false)
 					if strings.HasPrefix(name, "func:") {
 						t.callAdapter = stripPointerCasts(firstField.Operand(0))
 						t.makeFuncAdapter = stripPointerCasts(firstField.Operand(1))
@@ -364,9 +365,7 @@ func (p *lowerInterfacesPass) run() error {
 			typecodeGEP := t.typecodeGEP
 			if gepOffset != 0 {
 				// This is a tagged pointer.
-				typecodeGEP = llvm.ConstInBoundsGEP(p.ctx.Int8Type(), typecodeGEP, []llvm.Value{
-					llvm.ConstInt(p.ctx.Int64Type(), gepOffset, false),
-				})
+				typecodeGEP = llvmutil.ConstPtrAdd(i8, typecodeGEP, llvm.ConstInt(i64, gepOffset, false), true)
 			}
 			commaOk := p.builder.CreateICmp(llvm.IntEQ, typecodeGEP, actualType, "typeassert.ok")
 			use.ReplaceAllUsesWith(commaOk)
@@ -487,35 +486,7 @@ func (p *lowerInterfacesPass) run() error {
 				}
 				newInitializerFields = append(newInitializerFields, field)
 			}
-			if t.typeID != 0 {
-				newInitializerFields[1] = llvm.ConstInt(p.ctx.Int8Type(), uint64(t.typeID), false)
-			}
-			newInitializer := p.ctx.ConstStruct(newInitializerFields, false)
-			typecodeName := t.typecode.Name()
-			newGlobal := llvm.AddGlobal(p.mod, newInitializer.Type(), typecodeName+".tmp")
-			newGlobal.SetInitializer(newInitializer)
-			newGlobal.SetLinkage(t.typecode.Linkage())
-			newGlobal.SetGlobalConstant(true)
-			newGlobal.SetAlignment(t.typecode.Alignment())
-			for _, use := range getUses(t.typecode) {
-				if !use.IsAConstantExpr().IsNil() {
-					opcode := use.Opcode()
-					if opcode == llvm.GetElementPtr && use.OperandsCount() == 3 {
-						if use.Operand(1).ZExtValue() == 0 && use.Operand(2).ZExtValue() == 1 {
-							use.ReplaceAllUsesWith(newGlobal)
-						}
-					}
-				}
-			}
-			// Fallback.
-			if hasUses(t.typecode) {
-				negativeOffset := -int64(p.targetData.ElementOffset(t.typecode.GlobalValueType(), 1))
-				gep := llvm.ConstInBoundsGEP(p.ctx.Int8Type(), newGlobal, []llvm.Value{llvm.ConstInt(p.ctx.Int32Type(), uint64(negativeOffset), true)})
-				t.typecode.ReplaceAllUsesWith(gep)
-			}
-			t.typecode.EraseFromParentAsGlobal()
-			newGlobal.SetName(typecodeName)
-			t.typecode = newGlobal
+			t.typecode = p.replaceTypecode(t, newInitializerFields)
 		} else {
 			initializer := t.typecode.Initializer()
 			if initializer.Type().TypeKind() != llvm.StructTypeKind {
@@ -1203,9 +1174,7 @@ func (p *lowerInterfacesPass) createTypeIDSwitch(fn, actualType llvm.Value, type
 	}
 	bad := p.builder.CreateICmp(llvm.IntEQ, actualType, llvm.ConstNull(actualType.Type()), "isnil")
 	if anyType {
-		// Pointer to pointer typecodes are tagged in the low 2 bits, see ptrtag
-		// in src/internal/reflectlite/type.go.
-		tag := p.builder.CreateAnd(p.builder.CreatePtrToInt(actualType, p.uintptrType, ""), llvm.ConstInt(p.uintptrType, 3, false), "tag")
+		tag := p.builder.CreateAnd(p.builder.CreatePtrToInt(actualType, p.uintptrType, ""), llvm.ConstInt(p.uintptrType, typecodeTagMask, false), "tag")
 		isTagged := p.builder.CreateICmp(llvm.IntNE, tag, llvm.ConstInt(p.uintptrType, 0, false), "istagged")
 		bad = p.builder.CreateOr(bad, isTagged, "")
 	}
@@ -1516,4 +1485,85 @@ func isSubsetOf(sub, super map[string]struct{}) bool {
 		}
 	}
 	return true
+}
+
+func (p *lowerInterfacesPass) replaceTypecode(t *typeInfo, fields []llvm.Value) llvm.Value {
+	old := t.typecode
+	typ := old.GlobalValueType()
+	prefix := p.targetData.ElementOffset(typ, 1)
+	i8 := p.ctx.Int8Type()
+	alignment := old.Alignment()
+	var padding uint64
+	uses := getUses(old)
+	offsets := make([]uint64, len(uses))
+	for i, use := range uses {
+		offset, ok := p.typecodeOffset(use, typ, prefix)
+		if !ok {
+			// Keep the original layout for unknown uses. Inbounds GEPs cannot start before
+			// the allocation (https://llvm.org/docs/LangRef.html#getelementptr-instruction).
+			alignment = max(alignment, p.targetData.ABITypeAlignment(typ), typecodeTagMask+1)
+			padding = (prefix + typecodeTagMask) &^ typecodeTagMask
+			init := old.Initializer()
+			fields = fields[:0]
+			for i := 1; i < typ.StructElementTypesCount(); i++ {
+				fields = append(fields, init.AggregateElement(i))
+			}
+			break
+		}
+		offsets[i] = offset
+	}
+	if t.typeID != 0 {
+		fields[1] = llvm.ConstInt(i8, uint64(t.typeID), false)
+	}
+	if padding != 0 {
+		fields = slices.Insert(fields, 0, llvm.ConstNull(typ.StructTypeAtIndex(0)))
+		if padding > prefix {
+			fields = slices.Insert(fields, 0, llvm.ConstNull(llvm.ArrayType(i8, int(padding-prefix))))
+		}
+	}
+
+	name := old.Name()
+	initializer := p.ctx.ConstStruct(fields, false)
+	global := llvm.AddGlobal(p.mod, initializer.Type(), name+".tmp")
+	global.SetInitializer(initializer)
+	global.SetLinkage(old.Linkage())
+	global.SetGlobalConstant(true)
+	global.SetAlignment(alignment)
+	ptrAt := func(offset uint64) llvm.Value {
+		return llvmutil.ConstPtrAdd(i8, global, llvm.ConstInt(p.uintptrType, offset, false), false)
+	}
+	base := global
+	if padding != 0 {
+		base = ptrAt(padding - prefix)
+	} else {
+		for i, use := range uses {
+			use.ReplaceAllUsesWith(ptrAt(offsets[i]))
+		}
+	}
+	old.ReplaceAllUsesWith(base)
+	old.EraseFromParentAsGlobal()
+	global.SetName(name)
+	return ptrAt(padding)
+}
+
+func (p *lowerInterfacesPass) typecodeOffset(gep llvm.Value, typ llvm.Type, fieldOffset uint64) (uint64, bool) {
+	if gep.IsAConstantExpr().IsNil() || gep.Opcode() != llvm.GetElementPtr {
+		return 0, false
+	}
+	if gep.OperandsCount() == 3 && gep.GEPSourceElementType() == typ {
+		baseIndex := gep.Operand(1)
+		return 0, !baseIndex.IsAConstantInt().IsNil() && baseIndex.IsNull() && gep.Operand(2) == llvm.ConstInt(p.ctx.Int32Type(), 1, false)
+	}
+	if gep.OperandsCount() != 2 || gep.GEPSourceElementType() != p.ctx.Int8Type() {
+		return 0, false
+	}
+	index := gep.Operand(1)
+	if index.IsAConstantInt().IsNil() {
+		return 0, false
+	}
+	if index.Type().IntTypeWidth() > p.uintptrType.IntTypeWidth() {
+		index = llvm.ConstTrunc(index, p.uintptrType)
+	}
+	tag := uint64(index.SExtValue()) - fieldOffset
+	return tag, tag <= typecodeTagMask
 }

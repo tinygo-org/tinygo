@@ -13,19 +13,23 @@ import (
 
 func TestInterfaceLowering(t *testing.T) {
 	t.Parallel()
-	testTransform(t, "testdata/interface", func(mod llvm.Module) {
-		err := transform.LowerInterfaces(mod, defaultTestConfig)
-		if err != nil {
-			t.Error(err)
-		}
-
-		po := llvm.NewPassBuilderOptions()
-		defer po.Dispose()
-		err = mod.RunPasses("globaldce", llvm.TargetMachine{}, po)
-		if err != nil {
-			t.Error("failed to run passes:", err)
-		}
-	})
+	for _, tc := range []struct{ name, passes string }{
+		{"interface", "globaldce"},
+		{"interface-offsets", "function(instcombine),globaldce"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			testTransform(t, "testdata/"+tc.name, func(mod llvm.Module) {
+				if err := transform.LowerInterfaces(mod, defaultTestConfig); err != nil {
+					t.Fatal(err)
+				}
+				po := llvm.NewPassBuilderOptions()
+				defer po.Dispose()
+				if err := mod.RunPasses(tc.passes, llvm.TargetMachine{}, po); err != nil {
+					t.Fatal(err)
+				}
+			})
+		})
+	}
 }
 
 // TestInterfaceLoweringBoxedTypes checks which types an interface invoke

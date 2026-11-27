@@ -8,6 +8,34 @@ import (
 	"tinygo.org/x/go-llvm"
 )
 
+func TestRetainedTypecodePrefix16Bit(t *testing.T) {
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	mod := ctx.NewModule("typecode")
+	defer mod.Dispose()
+	mod.SetDataLayout("e-p:16:8-i16:8")
+	td := llvm.NewTargetData(mod.DataLayout())
+	defer td.Dispose()
+	i8, i16 := ctx.Int8Type(), ctx.Int16Type()
+	ptr := llvm.PointerType(i8, 0)
+	field := llvm.ConstInt(i8, 34, false)
+	init := ctx.ConstStruct([]llvm.Value{llvm.ConstNull(ptr), field}, false)
+	old := llvm.AddGlobal(mod, init.Type(), "descriptor")
+	old.SetInitializer(init)
+	raw := llvm.AddGlobal(mod, ptr, "raw")
+	raw.SetInitializer(old)
+
+	p := lowerInterfacesPass{mod: mod, ctx: ctx, targetData: td, uintptrType: i16}
+	kind := p.replaceTypecode(&typeInfo{typecode: old}, []llvm.Value{field})
+	storage := mod.NamedGlobal("descriptor")
+	if storage.Alignment() < 4 || kind != llvmutil.ConstPtrAdd(i8, storage, llvm.ConstInt(i16, 4, false), false) {
+		t.Fatalf("kind pointer is not tag-aligned: %v in %v", kind, storage)
+	}
+	if raw.Initializer() != llvmutil.ConstPtrAdd(i8, storage, llvm.ConstInt(i16, 2, false), false) {
+		t.Fatalf("original base is not two bytes before the kind: %v", raw)
+	}
+}
+
 func TestOptimizeInterfacesIndirectABIRoots(t *testing.T) {
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
