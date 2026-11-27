@@ -157,6 +157,44 @@ func (stub *InterfaceStub) Apply(fn llvm.Value) {
 	}
 }
 
+// GlobalProperties are the properties of a global that stay the same when its
+// initializer is replaced.
+type GlobalProperties struct {
+	linkage         llvm.Linkage
+	visibility      llvm.Visibility
+	alignment       int
+	section         string
+	threadLocal     bool
+	threadLocalMode int
+	constant        bool
+}
+
+func ReadGlobalProperties(global llvm.Value) *GlobalProperties {
+	return &GlobalProperties{
+		linkage:         global.Linkage(),
+		visibility:      global.Visibility(),
+		alignment:       global.Alignment(),
+		section:         global.Section(),
+		threadLocal:     global.IsThreadLocal(),
+		threadLocalMode: readThreadLocalMode(global),
+		constant:        global.IsGlobalConstant(),
+	}
+}
+
+func (props *GlobalProperties) Apply(global llvm.Value) {
+	global.SetLinkage(props.linkage)
+	global.SetVisibility(props.visibility)
+	global.SetAlignment(props.alignment)
+	if props.section != "" {
+		global.SetSection(props.section)
+	}
+	global.SetThreadLocal(props.threadLocal)
+	if props.threadLocal {
+		setThreadLocalMode(global, props.threadLocalMode)
+	}
+	global.SetGlobalConstant(props.constant)
+}
+
 // CreateEntryBlockAlloca creates a new alloca in the entry block, even though
 // the IR builder is located elsewhere. It assumes that the insert point is
 // at the end of the current block.
