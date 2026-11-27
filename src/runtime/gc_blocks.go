@@ -455,7 +455,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			if gcPauseStats {
 				t0 = nanotime()
 			}
-			sweepSome(sweepChunk)
+			sweepSome(max(sweepChunk, sweepScale*neededBlocks))
 			if gcPauseStats {
 				sweepSomeCalls++
 				pauseRecord(&sweepSomeHist, &sweepSomeMax, nanotime()-t0)
@@ -960,8 +960,12 @@ func gcPauseReport() {
 	println("sweepSome calls:", sweepSomeCalls, " p50 <", pausePercentile(&sweepSomeHist, 50), "ns  p99 <", pausePercentile(&sweepSomeHist, 99), "ns  max", sweepSomeMax, "ns")
 }
 
-// sweepChunk is the number of blocks swept per sweepSome call.
-const sweepChunk = 1024
+// sweepChunk is the least number of blocks swept after a failed pop. Larger
+// requests sweep sweepScale times their size, so they need fewer steps.
+const (
+	sweepChunk = 1024
+	sweepScale = 4
+)
 
 // startSweep starts an incremental sweep after a mark phase.
 func startSweep() {
