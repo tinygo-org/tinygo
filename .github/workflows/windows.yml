@@ -145,6 +145,10 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: windows-2022
     needs: build-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/2', '2/2']
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -160,12 +164,16 @@ jobs:
           path: build/
         # This build is already unzipped.
       - name: Test stdlib packages
-        run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo
+        run: make tinygo-test TINYGO=$(PWD)/build/tinygo/bin/tinygo STDLIB_TEST_FLAGS="-shard=${{ matrix.shard }}"
 
   stdlib-wasi-test-windows:
     if: github.event_name != 'pull_request'
     runs-on: windows-2022
     needs: build-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
     steps:
       - uses: MinoruSekine/setup-scoop@v4
       - name: Install Dependencies
@@ -189,4 +197,4 @@ jobs:
           path: build/
         # This build is already unzipped.
       - name: Test stdlib packages on wasip1
-        run: make tinygo-test-wasip1-fast TINYGO=$(PWD)/build/tinygo/bin/tinygo
+        run: make tinygo-test-wasip1-fast TINYGO=$(PWD)/build/tinygo/bin/tinygo STDLIB_TEST_FLAGS="-shard=${{ matrix.shard }}"
