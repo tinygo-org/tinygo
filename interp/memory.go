@@ -232,6 +232,10 @@ func (mv *memoryView) markExternal(llvmValue llvm.Value, mark uint8) error {
 				}
 			}
 		case llvm.ArrayTypeKind:
+			if llvmValue.IsAConstantDataSequential() {
+				// Constant data arrays hold only integers or floats.
+				return nil
+			}
 			numElements := llvmType.ArrayLength()
 			for i := range numElements {
 				element := llvmValue.AggregateElement(i)
@@ -1005,6 +1009,15 @@ func (v rawValue) toLLVMValue(llvmType llvm.Type, mem *memoryView) (llvm.Value, 
 	case llvm.ArrayTypeKind:
 		numElements := llvmType.ArrayLength()
 		childType := llvmType.ElementType()
+		if size := dataElementSize(childType); size != 0 &&
+			int(mem.r.targetData.TypeAllocSize(childType)) == size && !v.hasPointer() {
+			data := make([]byte, numElements*size)
+			swap := mem.r.swapData(size)
+			for i := range data {
+				data[i] = byte(v.buf[dataIndex(i, size, swap)])
+			}
+			return llvm.ConstDataArray(childType, data), nil
+		}
 		childTypeSize := mem.r.targetData.TypeAllocSize(childType)
 		fields := make([]llvm.Value, numElements)
 		for i := range fields {
@@ -1230,8 +1243,16 @@ func (v *rawValue) set(llvmValue llvm.Value, r *runner) bool {
 				}
 			}
 		case llvm.ArrayTypeKind:
-			numElements := llvmType.ArrayLength()
 			childType := llvmType.ElementType()
+			if size := dataElementSize(childType); size != 0 &&
+				int(r.targetData.TypeAllocSize(childType)) == size && llvmValue.IsAConstantDataSequential() {
+				swap := r.swapData(size)
+				for i, b := range llvmValue.RawDataValues() {
+					v.buf[dataIndex(i, size, swap)] = uint64(b)
+				}
+				break
+			}
+			numElements := llvmType.ArrayLength()
 			childTypeSize := r.targetData.TypeAllocSize(childType)
 			for i := range numElements {
 				offset := i * int(childTypeSize)
@@ -1506,4 +1527,41 @@ func reverseBytes(buf []byte) {
 func isPSRAMGlobal(global llvm.Value) bool {
 	section := global.Section()
 	return section == ".psram" || strings.HasPrefix(section, ".psram.")
+}
+
+// dataElementSize returns the size of an element of type t in a
+// ConstantDataArray, or 0 if interp doesn't handle such arrays in bulk.
+func dataElementSize(t llvm.Type) int {
+	switch t.TypeKind() {
+	case llvm.IntegerTypeKind:
+		switch width := t.IntTypeWidth(); width {
+		case 8, 16, 32, 64:
+			return width / 8
+		default:
+			return 0
+		}
+	case llvm.FloatTypeKind:
+		return 4
+	case llvm.DoubleTypeKind:
+		return 8
+	default:
+		return 0
+	}
+}
+
+var hostLittleEndian = binary.NativeEndian.Uint16([]byte{1, 0}) == 1
+
+// swapData returns whether elements of this size in LLVM raw data, which is in
+// host byte order, must be swapped to the target byte order.
+func (r *runner) swapData(size int) bool {
+	return size > 1 && (r.byteOrder.Uint16([]byte{1, 0}) == 1) != hostLittleEndian
+}
+
+// dataIndex returns the index of byte i of raw data with elements of the given
+// size, after an optional swap of the bytes in each element.
+func dataIndex(i, size int, swap bool) int {
+	if !swap {
+		return i
+	}
+	return i - i%size + size - 1 - i%size
 }
