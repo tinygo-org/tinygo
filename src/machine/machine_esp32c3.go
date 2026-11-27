@@ -462,3 +462,36 @@ func initADCClock() {
 	esp.APB_SARADC.SetCTRL_SARADC_SAR_CLK_DIV(1)
 	esp.APB_SARADC.SetCLKM_CONF_CLK_EN(1)
 }
+
+const spiClockFreq = 80_000_000 // APB_CLK, MST_CLK_SEL 1. See ESP-IDF hal/esp32c3/include/hal/spi_ll.h spi_ll_master_cal_clock.
+
+const (
+	FSPICLK_IN_IDX  = uint32(63)
+	FSPICLK_OUT_IDX = uint32(63)
+	FSPIQ_IN_IDX    = uint32(64)
+	FSPIQ_OUT_IDX   = uint32(64)
+	FSPID_IN_IDX    = uint32(65)
+	FSPID_OUT_IDX   = uint32(65)
+	FSPIHD_IN_IDX   = uint32(66)
+	FSPIHD_OUT_IDX  = uint32(66)
+	FSPIWP_IN_IDX   = uint32(67)
+	FSPIWP_OUT_IDX  = uint32(67)
+	FSPICS0_IN_IDX  = uint32(68)
+	FSPICS0_OUT_IDX = uint32(68)
+	FSPICS1_OUT_IDX = uint32(69)
+	FSPICS2_OUT_IDX = uint32(70)
+	FSPICS3_OUT_IDX = uint32(71)
+	FSPICS4_OUT_IDX = uint32(72)
+	FSPICS5_OUT_IDX = uint32(73)
+)
+
+// enableSPIClock enables and resets the clock of an SPI bus.
+func enableSPIClock(bus *esp.SPI2_Type) {
+	switch bus {
+	case esp.SPI2:
+		esp.SYSTEM.SetPERIP_RST_EN0_SPI2_RST(1)
+		esp.SYSTEM.SetPERIP_RST_EN0_SPI2_RST(0)
+		esp.SYSTEM.SetPERIP_CLK_EN0_SPI2_CLK_EN(1)
+		esp.SYSTEM.SetPERIP_RST_EN0_SPI2_RST(0)
+	}
+}
