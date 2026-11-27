@@ -40,6 +40,7 @@ type Options struct {
 	PanicUnwind             string
 	Scheduler               string
 	StackSize               uint64 // goroutine stack size (if none could be automatically determined)
+	StackCheck              string // "true" or "false" to override the stack-limit-check target setting
 	Serial                  string
 	Work                    bool // -work flag to print temporary build directory
 	InterpTimeout           time.Duration
@@ -108,6 +109,10 @@ func (o *Options) Verify() error {
 				o.Scheduler,
 				strings.Join(validSchedulerOptions, ", "))
 		}
+	}
+
+	if o.StackCheck != "" && o.StackCheck != "true" && o.StackCheck != "false" {
+		return fmt.Errorf(`invalid stack-check option '%s': valid values are true, false`, o.StackCheck)
 	}
 
 	if o.Serial != "" {

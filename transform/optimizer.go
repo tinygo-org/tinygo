@@ -248,6 +248,14 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		}
 	}
 
+	// Run after MakeGCStackSlots, since the GC frame is part of the stack frame.
+	if config.StackLimitCheck() {
+		AddStackLimitChecks(mod)
+		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
+			return []error{errors.New("stack limit checks caused a verification failure")}
+		}
+	}
+
 	return nil
 }
 

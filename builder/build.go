@@ -1067,6 +1067,10 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 
 				if config.Scheduler() == "asyncify" {
 					args = append(args, "--asyncify")
+					if config.StackLimitCheck() {
+						// The overflow handler never returns, so its callers need no instrumentation.
+						args = append(args, "--pass-arg=asyncify-removelist@internal/task.stackOverflow")
+					}
 				}
 
 				inputFile := result.Binary
@@ -1425,6 +1429,9 @@ func optimizeProgram(mod llvm.Module, config *compileopts.Config) error {
 	if _, speedLevel, _ := config.OptLevel(); speedLevel == 0 && slices.Contains(config.BuildTags(), "esp32") && slices.Contains(config.BuildTags(), "machine.psram") {
 		// The ESP32 PSRAM start-up must run from IRAM, which needs the inliner.
 		return errors.New("ESP32 PSRAM targets need -opt=1 or higher")
+	}
+	if config.StackLimitCheck() {
+		transform.KeepStackCheckRuntime(mod)
 	}
 	if err := transform.PrepareRuntimeStartup(mod); err != nil {
 		return err
