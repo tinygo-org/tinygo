@@ -400,6 +400,12 @@ func (c *context) getFunctionInfo(f *ssa.Function) *functionInfo {
 	// Check for //go: pragmas, which may change the link name (among others).
 	c.parsePragmas(info, f)
 
+	// Pre-heap boot hooks (*0) run before the heap is set up.
+	switch info.linkName {
+	case "runtime.hwInit0", "runtime.socInit0", "runtime.boardInit0":
+		info.flags |= funcNoHeap
+	}
+
 	c.functionInfos[f] = info
 	return info
 }

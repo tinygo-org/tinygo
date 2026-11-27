@@ -147,6 +147,9 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 				}
 			},
 		)
+		if errs := CheckNoHeapInit(mod); len(errs) > 0 {
+			return errs
+		}
 		OptimizeStringToBytes(mod)
 		OptimizeStringFromBytes(mod)
 		OptimizeStringEqual(mod)
@@ -167,6 +170,11 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		err := mod.RunPasses("globaldce", llvm.TargetMachine{}, po)
 		if err != nil {
 			return []error{fmt.Errorf("could not build pass pipeline: %w", err)}
+		}
+		// OptimizeAllocs does not run at -opt=0, so stack-promotable
+		// allocations stay as runtime.alloc calls and are rejected here.
+		if errs := CheckNoHeapInit(mod); len(errs) > 0 {
+			return errs
 		}
 	}
 
