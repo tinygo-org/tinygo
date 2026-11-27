@@ -215,6 +215,7 @@ func TestBuild(t *testing.T) {
 		"oldgo/",
 		"print.go",
 		"promoted.go",
+		"rangefuncdefer.go",
 		"reflect.go",
 		"reflect-method-values.go",
 		"reflect-promoted-lookup.go",
