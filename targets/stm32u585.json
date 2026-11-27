@@ -1,5 +1,6 @@
 {
   "inherits": ["stm32u5"],
+  "inheritable-only": true,
   "build-tags": ["stm32u585"],
   "extra-files": [
     "src/device/stm32/stm32u585.s"
