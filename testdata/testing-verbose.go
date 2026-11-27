@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"io"
 	"os"
 	"testing"
 )
@@ -17,6 +18,10 @@ type matchString func(pattern, name string) (bool, error)
 func (f matchString) MatchString(pattern, name string) (bool, error) {
 	return f(pattern, name)
 }
+
+func (f matchString) StartCPUProfile(w io.Writer) error           { return nil }
+func (f matchString) StopCPUProfile()                             {}
+func (f matchString) WriteProfileTo(string, io.Writer, int) error { return nil }
 
 func main() {
 	testing.Init()

@@ -157,8 +157,18 @@ func (c *Config) BuildTags() []string {
 	for i := 1; i <= c.GoMinorVersion; i++ {
 		tags = append(tags, fmt.Sprintf("go1.%d", i))
 	}
+	if c.ShadowStack() {
+		// Stacks are only useful with heap profiling, so turn it on too.
+		tags = append(tags, "tinygo.shadowstack", "tinygo.memprofile")
+	}
 	tags = append(tags, c.Options.Tags...)
 	return tags
+}
+
+// ShadowStack returns whether calls record their call site in a shadow stack,
+// so the heap profile has stacks on wasm, where the call stack can't be read.
+func (c *Config) ShadowStack() bool {
+	return c.Options.MemProfileStacks && c.GOARCH() == "wasm"
 }
 
 // GC returns the garbage collection strategy in use on this platform. Valid

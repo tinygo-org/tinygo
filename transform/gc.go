@@ -10,6 +10,19 @@ import (
 // MakeGCStackSlots converts all calls to runtime.trackPointer to explicit
 // stores to stack slots that are scannable by the GC.
 func MakeGCStackSlots(mod llvm.Module) bool {
+	return makeGCStackSlots(mod, nil)
+}
+
+// MakeGCStackSlotsWithSites is MakeGCStackSlots, but every function with calls
+// gets a stack object that records the current call site, for the heap profile.
+func MakeGCStackSlotsWithSites(mod llvm.Module) bool {
+	var sites shadowSites
+	changed := makeGCStackSlots(mod, &sites)
+	defineShadowTables(mod, sites.frames)
+	return changed
+}
+
+func makeGCStackSlots(mod llvm.Module, sites *shadowSites) bool {
 	hasGlobalRoots := makeGCGlobalRoots(mod)
 
 	// Check whether there are allocations at all.
@@ -30,7 +43,7 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	}
 
 	trackPointer := mod.NamedFunction("runtime.trackPointer")
-	if trackPointer.IsNil() || trackPointer.FirstUse().IsNil() {
+	if sites == nil && (trackPointer.IsNil() || trackPointer.FirstUse().IsNil()) {
 		return hasGlobalRoots
 	}
 
@@ -111,8 +124,104 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 	stackChainStartType := stackChainStart.GlobalValueType()
 	stackChainStart.SetInitializer(llvm.ConstNull(stackChainStartType))
 
+	// The header is the parent object, the number of slots and, with sites, the
+	// current call site.
+	header := []llvm.Type{stackChainStartType, uintptrType}
+	if sites != nil {
+		header = append(header, uintptrType)
+	}
+	stackObjects := map[llvm.Value]llvm.Value{}
+	stackObjectTypes := map[llvm.Value]llvm.Type{}
+
+	// createStackObject pushes a stack object on entry to fn and pops it on
+	// return, and stores each pointer into its slot once it is created.
+	createStackObject := func(fn llvm.Value, pointers []llvm.Value) {
+		var returns []llvm.Value
+		for bb := range llvmutil.BasicBlocks(fn) {
+			for inst := range llvmutil.Instructions(bb) {
+				if inst.InstructionOpcode() == llvm.Ret {
+					returns = append(returns, inst)
+				}
+			}
+		}
+
+		// Determine the type of the required stack slot.
+		fields := append([]llvm.Type(nil), header...)
+		for _, ptr := range pointers {
+			fields = append(fields, ptr.Type())
+		}
+		stackObjectType := ctx.StructType(fields, false)
+
+		// Create the stack object at the function entry.
+		builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
+		stackObject := builder.CreateAlloca(stackObjectType, "gc.stackobject")
+		initialStackObject := llvm.ConstNull(stackObjectType)
+		numSlots := (targetData.TypeAllocSize(stackObjectType) - uint64(targetData.PointerSize())*uint64(len(header))) / uint64(targetData.ABITypeAlignment(uintptrType))
+		numSlotsValue := llvm.ConstInt(uintptrType, numSlots, false)
+		initialStackObject = builder.CreateInsertValue(initialStackObject, numSlotsValue, 1, "")
+		builder.CreateStore(initialStackObject, stackObject)
+
+		// Update stack start. With sites, compiler glue is left out of the
+		// chain, as asyncify may run its entry again on a rewind.
+		link := sites == nil || fn.Subprogram().C != nil
+		var parent llvm.Value
+		if link {
+			parent = builder.CreateLoad(stackChainStartType, stackChainStart, "")
+			gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
+				llvm.ConstInt(ctx.Int32Type(), 0, false),
+				llvm.ConstInt(ctx.Int32Type(), 0, false),
+			}, "")
+			builder.CreateStore(parent, gep)
+			builder.CreateStore(stackObject, stackChainStart)
+		}
+
+		// Do a store to the stack object after each new pointer that is created.
+		for i, ptr := range pointers {
+			// Insert the store after the pointer value is created.
+			insertionPoint := llvm.NextInstruction(ptr)
+			for !insertionPoint.IsAPHINode().IsNil() {
+				// PHI nodes are required to be at the start of the block.
+				// Insert after the last PHI node.
+				insertionPoint = llvm.NextInstruction(insertionPoint)
+			}
+			builder.SetInsertPointBefore(insertionPoint)
+
+			// Extract a pointer to the appropriate section of the stack object.
+			gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
+				llvm.ConstInt(ctx.Int32Type(), 0, false),
+				llvm.ConstInt(ctx.Int32Type(), uint64(len(header)+i), false),
+			}, "")
+
+			// Store the pointer into the stack slot.
+			builder.CreateStore(ptr, gep)
+		}
+
+		// Make sure this stack object is popped from the linked list of stack
+		// objects at return.
+		for _, ret := range returns {
+			if !link {
+				break
+			}
+			// Check for any tail calls at this return.
+			prev := llvm.PrevInstruction(ret)
+			if !prev.IsNil() && !prev.IsABitCastInst().IsNil() {
+				// A bitcast can appear before a tail call, so skip backwards more.
+				prev = llvm.PrevInstruction(prev)
+			}
+			if !prev.IsNil() && !prev.IsACallInst().IsNil() {
+				// This is no longer a tail call.
+				prev.SetTailCall(false)
+			}
+			builder.SetInsertPointBefore(ret)
+			builder.CreateStore(parent, stackChainStart)
+		}
+		stackObjects[fn] = stackObject
+		stackObjectTypes[fn] = stackObjectType
+	}
+
 	// Iterate until runtime.trackPointer has no uses left.
-	for use := trackPointer.FirstUse(); !use.IsNil(); use = trackPointer.FirstUse() {
+	for !trackPointer.IsNil() && !trackPointer.FirstUse().IsNil() {
+		use := trackPointer.FirstUse()
 		// Pick the first use of runtime.trackPointer.
 		call := use.User()
 		if call.IsACallInst().IsNil() {
@@ -136,16 +245,10 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 
 		// Find all calls to runtime.trackPointer in this function.
 		var calls []llvm.Value
-		var returns []llvm.Value
 		for bb := range llvmutil.BasicBlocks(fn) {
 			for inst := range llvmutil.Instructions(bb) {
-				switch inst.InstructionOpcode() {
-				case llvm.Call:
-					if inst.CalledValue() == trackPointer {
-						calls = append(calls, inst)
-					}
-				case llvm.Ret:
-					returns = append(returns, inst)
+				if inst.InstructionOpcode() == llvm.Call && inst.CalledValue() == trackPointer {
+					calls = append(calls, inst)
 				}
 			}
 		}
@@ -269,74 +372,11 @@ func MakeGCStackSlots(mod llvm.Module) bool {
 			// This function does not need to keep track of stack pointers.
 			continue
 		}
+		createStackObject(fn, pointers)
+	}
 
-		// Determine the type of the required stack slot.
-		fields := []llvm.Type{
-			stackChainStartType, // Pointer to parent frame.
-			uintptrType,         // Number of elements in this frame.
-		}
-		for _, ptr := range pointers {
-			fields = append(fields, ptr.Type())
-		}
-		stackObjectType := ctx.StructType(fields, false)
-
-		// Create the stack object at the function entry.
-		builder.SetInsertPointBefore(fn.EntryBasicBlock().FirstInstruction())
-		stackObject := builder.CreateAlloca(stackObjectType, "gc.stackobject")
-		initialStackObject := llvm.ConstNull(stackObjectType)
-		numSlots := (targetData.TypeAllocSize(stackObjectType) - uint64(targetData.PointerSize())*2) / uint64(targetData.ABITypeAlignment(uintptrType))
-		numSlotsValue := llvm.ConstInt(uintptrType, numSlots, false)
-		initialStackObject = builder.CreateInsertValue(initialStackObject, numSlotsValue, 1, "")
-		builder.CreateStore(initialStackObject, stackObject)
-
-		// Update stack start.
-		parent := builder.CreateLoad(stackChainStartType, stackChainStart, "")
-		gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
-			llvm.ConstInt(ctx.Int32Type(), 0, false),
-			llvm.ConstInt(ctx.Int32Type(), 0, false),
-		}, "")
-		builder.CreateStore(parent, gep)
-		builder.CreateStore(stackObject, stackChainStart)
-
-		// Do a store to the stack object after each new pointer that is created.
-		pointerStores := make(map[llvm.Value]struct{})
-		for i, ptr := range pointers {
-			// Insert the store after the pointer value is created.
-			insertionPoint := llvm.NextInstruction(ptr)
-			for !insertionPoint.IsAPHINode().IsNil() {
-				// PHI nodes are required to be at the start of the block.
-				// Insert after the last PHI node.
-				insertionPoint = llvm.NextInstruction(insertionPoint)
-			}
-			builder.SetInsertPointBefore(insertionPoint)
-
-			// Extract a pointer to the appropriate section of the stack object.
-			gep := builder.CreateGEP(stackObjectType, stackObject, []llvm.Value{
-				llvm.ConstInt(ctx.Int32Type(), 0, false),
-				llvm.ConstInt(ctx.Int32Type(), uint64(2+i), false),
-			}, "")
-
-			// Store the pointer into the stack slot.
-			store := builder.CreateStore(ptr, gep)
-			pointerStores[store] = struct{}{}
-		}
-
-		// Make sure this stack object is popped from the linked list of stack
-		// objects at return.
-		for _, ret := range returns {
-			// Check for any tail calls at this return.
-			prev := llvm.PrevInstruction(ret)
-			if !prev.IsNil() && !prev.IsABitCastInst().IsNil() {
-				// A bitcast can appear before a tail call, so skip backwards more.
-				prev = llvm.PrevInstruction(prev)
-			}
-			if !prev.IsNil() && !prev.IsACallInst().IsNil() {
-				// This is no longer a tail call.
-				prev.SetTailCall(false)
-			}
-			builder.SetInsertPointBefore(ret)
-			builder.CreateStore(parent, stackChainStart)
-		}
+	if sites != nil {
+		addCallSites(mod, sites, builder, stackChainStart, stackObjects, stackObjectTypes, createStackObject)
 	}
 
 	return true

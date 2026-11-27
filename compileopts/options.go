@@ -52,6 +52,7 @@ type Options struct {
 	Semaphore               chan struct{}                    `json:"-"` // -p controls capacity, which must be positive
 	Debug                   bool
 	Nobounds                bool
+	MemProfileStacks        bool // record stacks for the heap profile with a shadow stack on wasm
 	PrintSizes              string
 	PrintAllocs             *regexp.Regexp // regexp string
 	PrintBounds             *regexp.Regexp // regexp of functions for which remaining bounds checks are printed

@@ -241,7 +241,12 @@ func Optimize(mod llvm.Module, config *compileopts.Config) []error {
 		}
 	}
 
-	hasGCPass := MakeGCStackSlots(mod)
+	var hasGCPass bool
+	if config.ShadowStack() {
+		hasGCPass = MakeGCStackSlotsWithSites(mod)
+	} else {
+		hasGCPass = MakeGCStackSlots(mod)
+	}
 	if hasGCPass {
 		if err := llvm.VerifyModule(mod, llvm.PrintMessageAction); err != nil {
 			return []error{errors.New("GC pass caused a verification failure")}

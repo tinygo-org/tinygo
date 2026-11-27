@@ -440,6 +440,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// Update the total allocation counters.
 	gcTotalAlloc += uint64(rawSize)
 	gcMallocs++
+	sampled := memProfileEnabled && layout != memProfileTableLayout && memProfileCount(rawSize)
 
 	// Acquire a range of free blocks.
 	var ranGC bool
@@ -517,6 +518,11 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 	// Clear the allocation body.
 	memzero(pointer, size)
 
+	if sampled {
+		// The stack walk in memProfileAlloc relies on this direct call.
+		memProfileAlloc(pointer, rawSize)
+	}
+
 	// Return a pointer to this allocation.
 	return pointer
 }
@@ -571,6 +577,9 @@ func free(ptr unsafe.Pointer) {
 		gcLock.Unlock()
 		runtimeFatal("free: invalid pointer")
 	}
+	if memProfileSampled(lastBlock) {
+		memProfileFree(lastBlock)
+	}
 	for block := firstBlock; block <= lastBlock; block++ {
 		block.free()
 	}
@@ -587,6 +596,9 @@ func freeTaskStack(addr uintptr) {
 		runtimeFatal("gc: freeing pointer inside allocation")
 	}
 	lastBlock := firstBlock.findHead()
+	if memProfileSampled(lastBlock) {
+		memProfileFree(lastBlock)
+	}
 	for block := firstBlock; block <= lastBlock; block++ {
 		block.free()
 	}
@@ -664,6 +676,10 @@ func runGC() (freeBytes uintptr) {
 	// Sweep phase: free all non-marked objects and unmark marked objects for
 	// the next collection cycle. This also rebuilds the free ranges list.
 	freeBytes = sweep()
+
+	if memProfileEnabled {
+		memProfileFlush()
+	}
 
 	if gcDebugVerbose {
 		dumpHeap()
@@ -834,6 +850,9 @@ func sweep() uintptr {
 		freeEnd := block
 		for block > 0 && (block-1).state() != blockStateMark {
 			block--
+			if memProfileSampled(block) && block.state() == blockStateHead {
+				memProfileFree(block)
+			}
 			block.free()
 		}
 
