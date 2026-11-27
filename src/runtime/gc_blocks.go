@@ -331,10 +331,42 @@ func popFreeRange(len uintptr) unsafe.Pointer {
 	}
 
 	if removedLen > len {
+		if lazySweep {
+			// Hand out the high end so the rest keeps its start, which lets
+			// insertSweptRun merge it with free blocks swept below it.
+			insertFreeRange(ptr, removedLen-len)
+			return unsafe.Add(ptr, (removedLen-len)*bytesPerBlock)
+		}
 		// Insert the leftover range.
 		insertFreeRange(unsafe.Add(ptr, len*bytesPerBlock), removedLen-len)
 	}
 	return ptr
+}
+
+// removeFreeRangeAt removes the free range that starts at ptr, if there is one,
+// and returns its length in blocks, or 0.
+func removeFreeRangeAt(ptr unsafe.Pointer) uintptr {
+	for dst := &freeRanges; *dst != nil; dst = &(*dst).nextLen {
+		r := *dst
+		if unsafe.Pointer(r) == ptr {
+			if more := r.nextWithLen; more != nil {
+				// Make the next range with this length the list head.
+				head := (*freeRange)(unsafe.Pointer(more))
+				*head = freeRange{len: r.len, nextLen: r.nextLen, nextWithLen: more.next}
+				*dst = head
+			} else {
+				*dst = r.nextLen
+			}
+			return r.len
+		}
+		for mdst := &r.nextWithLen; *mdst != nil; mdst = &(*mdst).next {
+			if unsafe.Pointer(*mdst) == ptr {
+				*mdst = (*mdst).next
+				return r.len
+			}
+		}
+	}
+	return 0
 }
 
 func isOnHeap(ptr uintptr) bool {
@@ -477,7 +509,7 @@ func alloc(size uintptr, layout unsafe.Pointer) unsafe.Pointer {
 			if gcPauseStats {
 				t0 = nanotime()
 			}
-			sweepSome(sweepStep(neededBlocks))
+			sweepSome(sweepStep(neededBlocks), neededBlocks)
 			if gcPauseStats {
 				sweepSomeCalls++
 				pauseRecord(&sweepSomeHist, &sweepSomeMax, nanotime()-t0)
@@ -941,6 +973,8 @@ var (
 	sweepFreeEnd   gcBlock // end of the pending free run that ends at sweepCursor
 	sweepFreed     uintptr // blocks freed by the current sweep
 	sweepGrowCheck bool    // apply the headroom check when the sweep ends
+	sweepEarly     gcBlock // start of a free run inserted before the run ended
+	sweepHasEarly  bool    // sweepEarly is set
 )
 
 // EXPERIMENT: pause histograms, log2 buckets of nanoseconds.
@@ -1017,12 +1051,24 @@ func startSweep() {
 	sweepCursor = endBlock
 	sweepFreeEnd = endBlock
 	sweepFreed = 0
+	sweepHasEarly = false
+}
+
+// insertSweptRun inserts the swept free run [lo, hi). A free range starting at
+// hi, such as the rest of a run inserted early, is merged into it.
+func insertSweptRun(lo, hi gcBlock) {
+	if sweepHasEarly && hi == sweepEarly {
+		hi += gcBlock(removeFreeRangeAt(hi.pointer()))
+		sweepHasEarly = false
+	}
+	insertFreeRange(lo.pointer(), uintptr(hi-lo))
 }
 
 // sweepSome sweeps about n blocks, the same way sweep does. A free run that
 // reaches the cursor is kept pending until a live object ends it, so free
-// ranges are not split.
-func sweepSome(n uintptr) {
+// ranges are not split, unless it is already long enough for a request of
+// need blocks: then it is inserted now and merged with the rest later.
+func sweepSome(n, need uintptr) {
 	block := sweepCursor
 	freeEnd := sweepFreeEnd
 	for {
@@ -1040,6 +1086,12 @@ func sweepSome(n uintptr) {
 				break
 			}
 			if n == 0 {
+				if freeLen := uintptr(freeEnd - block); need != 0 && freeLen >= need {
+					sweepFreed += freeLen
+					insertSweptRun(block, freeEnd)
+					sweepEarly, sweepHasEarly = block, true
+					freeEnd = block
+				}
 				sweepCursor = block
 				sweepFreeEnd = freeEnd
 				return
@@ -1050,8 +1102,9 @@ func sweepSome(n uintptr) {
 		}
 		if freeLen := uintptr(freeEnd - block); freeLen > 0 {
 			sweepFreed += freeLen
-			insertFreeRange(block.pointer(), freeLen)
+			insertSweptRun(block, freeEnd)
 		}
+		sweepHasEarly = false // the run ended, so an early part cannot grow
 		if block == 0 {
 			break
 		}
@@ -1084,7 +1137,7 @@ func sweepSome(n uintptr) {
 // finishSweep sweeps the rest of the heap.
 func finishSweep() {
 	if lazySweep && sweepActive {
-		sweepSome(^uintptr(0))
+		sweepSome(^uintptr(0), 0)
 	}
 }
 
