@@ -199,6 +199,10 @@ func (b *builder) createNilCheck(inst ssa.Value, ptr llvm.Value, blockPrefix str
 		}
 	}
 
+	b.createNilCheckPointer(ptr, blockPrefix)
+}
+
+func (b *builder) createNilCheckPointer(ptr llvm.Value, blockPrefix string) {
 	// Compare against nil.
 	// We previously used a hack to make sure this wouldn't break escape
 	// analysis, but this is not necessary anymore since
