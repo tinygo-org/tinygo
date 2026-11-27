@@ -21,7 +21,7 @@ func (b *builder) createVolatileCall(instr *ssa.CallCommon, name string) (llvm.V
 	case strings.HasPrefix(name, "runtime/volatile.Load"):
 		addr := b.getValue(instr.Args[0], pos)
 		b.createNilCheck(instr.Args[0], addr, "deref")
-		valType := b.getLLVMType(instr.Args[0].Type().(*types.Pointer).Elem())
+		valType := b.getLLVMType(instr.Args[0].Type().Underlying().(*types.Pointer).Elem())
 		val := b.CreateLoad(valType, addr, "")
 		val.SetVolatile(true)
 		return val, true, nil
@@ -48,7 +48,7 @@ func (b *builder) createVolatileCall(instr *ssa.CallCommon, name string) (llvm.V
 func (b *builder) createVolatileRegisterOp(name string, args []ssa.Value, pos token.Pos) (llvm.Value, error) {
 	method := name[strings.LastIndex(name, ".")+1:]
 	recv := args[0]
-	regType := recv.Type().(*types.Pointer).Elem()
+	regType := recv.Type().Underlying().(*types.Pointer).Elem()
 	fieldType := regType.Underlying().(*types.Struct).Field(0).Type()
 	valType := b.getLLVMType(fieldType)
 	// Reg is the only field, so the receiver is the register address.

@@ -63,3 +63,15 @@ func regCallMethodValue(p *peripheral, v uint32) {
 	f := p.CTRL.Set
 	f(v)
 }
+
+type uint32Ptr = *uint32
+
+func load32Alias(p uint32Ptr) uint32 {
+	return volatile.LoadUint32(p)
+}
+
+type register32Ptr = *volatile.Register32
+
+func regGetAlias(r register32Ptr) uint32 {
+	return r.Get()
+}

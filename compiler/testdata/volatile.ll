@@ -303,6 +303,42 @@ unwind.return:                                    ; preds = %gep.throw
   ret void
 }
 
+; Function Attrs: nounwind
+define hidden i32 @main.load32Alias(ptr dereferenceable_or_null(4) %p, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %p, null
+  br i1 %0, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  %1 = load volatile i32, ptr %p, align 4
+  ret i32 %1
+
+deref.throw:                                      ; preds = %entry
+  call void @runtime.nilPanic(ptr undef) #2
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i32 undef
+}
+
+; Function Attrs: nounwind
+define hidden i32 @main.regGetAlias(ptr dereferenceable_or_null(4) %r, ptr %context) unnamed_addr #1 {
+entry:
+  %0 = icmp eq ptr %r, null
+  br i1 %0, label %deref.throw, label %deref.next
+
+deref.next:                                       ; preds = %entry
+  %1 = load volatile i32, ptr %r, align 4
+  ret i32 %1
+
+deref.throw:                                      ; preds = %entry
+  call void @runtime.nilPanic(ptr undef) #2
+  br label %unwind.return
+
+unwind.return:                                    ; preds = %deref.throw
+  ret i32 undef
+}
+
 attributes #0 = { "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #1 = { nounwind "target-features"="+bulk-memory,+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+nontrapping-fptoint,+sign-ext,-multivalue,-reference-types" }
 attributes #2 = { nounwind }
