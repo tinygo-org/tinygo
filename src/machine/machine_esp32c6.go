@@ -460,3 +460,38 @@ func GetRNG() (ret uint32, err error) {
 	}
 	return esp.LP_PERI.GetRNG_DATA(), nil
 }
+
+const spiClockFreq = 80_000_000 // PLL_F80M, PCR SPI2_CLKM_SEL 1. See ESP-IDF hal/esp32c6/include/hal/spi_ll.h spi_ll_set_clk_source.
+
+// GPIO matrix signals, from ESP-IDF soc/esp32c6/include/soc/gpio_sig_map.h.
+const (
+	FSPICLK_IN_IDX  = uint32(63)
+	FSPICLK_OUT_IDX = uint32(63)
+	FSPIQ_IN_IDX    = uint32(64)
+	FSPIQ_OUT_IDX   = uint32(64)
+	FSPID_IN_IDX    = uint32(65)
+	FSPID_OUT_IDX   = uint32(65)
+	FSPIHD_IN_IDX   = uint32(66)
+	FSPIHD_OUT_IDX  = uint32(66)
+	FSPIWP_IN_IDX   = uint32(67)
+	FSPIWP_OUT_IDX  = uint32(67)
+	FSPICS0_IN_IDX  = uint32(68)
+	FSPICS0_OUT_IDX = uint32(68)
+	FSPICS1_OUT_IDX = uint32(101)
+	FSPICS2_OUT_IDX = uint32(102)
+	FSPICS3_OUT_IDX = uint32(103)
+	FSPICS4_OUT_IDX = uint32(104)
+	FSPICS5_OUT_IDX = uint32(105)
+)
+
+// enableSPIClock enables and resets the clock of an SPI bus.
+func enableSPIClock(bus *esp.SPI2_Type) {
+	switch bus {
+	case esp.SPI2:
+		esp.PCR.SetSPI2_CONF_SPI2_CLK_EN(1)
+		esp.PCR.SetSPI2_CONF_SPI2_RST_EN(1)
+		esp.PCR.SetSPI2_CONF_SPI2_RST_EN(0)
+		esp.PCR.SetSPI2_CLKM_CONF_SPI2_CLKM_SEL(1)
+		esp.PCR.SetSPI2_CLKM_CONF_SPI2_CLKM_EN(1)
+	}
+}

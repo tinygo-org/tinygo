@@ -1,12 +1,10 @@
-//go:build esp32c3
+//go:build esp32c3 || esp32c6
 
 package machine
 
-// On the C3 variant, SPI2 is a general purpose SPI controller. SPI0 and SPI1
-// are used internally to access the ESP32-C3’s attached flash memory. Due to
-// different registers between SPI2 and the other SPI ports, this driver
-// currently supports only the the general purpose FSPI SPI2 controller.
-// https://docs.espressif.com/projects/esp-idf/en/latest/esp32c3/api-reference/peripherals/spi_master.html
+// SPI2 is the general purpose SPI controller on the ESP32-C3 and ESP32-C6. SPI0
+// and SPI1 access the attached flash memory. Both chips have the same SPI2
+// registers, so this code serves both.
 
 import (
 	"device/esp"
@@ -14,29 +12,7 @@ import (
 	"unsafe"
 )
 
-const spiClockFreq = 80_000_000 // APB_CLK, MST_CLK_SEL 1. See ESP-IDF hal/esp32c3/include/hal/spi_ll.h spi_ll_master_cal_clock.
-
-const (
-	FSPICLK_IN_IDX  = uint32(63)
-	FSPICLK_OUT_IDX = uint32(63)
-	FSPIQ_IN_IDX    = uint32(64)
-	FSPIQ_OUT_IDX   = uint32(64)
-	FSPID_IN_IDX    = uint32(65)
-	FSPID_OUT_IDX   = uint32(65)
-	FSPIHD_IN_IDX   = uint32(66)
-	FSPIHD_OUT_IDX  = uint32(66)
-	FSPIWP_IN_IDX   = uint32(67)
-	FSPIWP_OUT_IDX  = uint32(67)
-	FSPICS0_IN_IDX  = uint32(68)
-	FSPICS0_OUT_IDX = uint32(68)
-	FSPICS1_OUT_IDX = uint32(69)
-	FSPICS2_OUT_IDX = uint32(70)
-	FSPICS3_OUT_IDX = uint32(71)
-	FSPICS4_OUT_IDX = uint32(72)
-	FSPICS5_OUT_IDX = uint32(73)
-)
-
-// Serial Peripheral Interface on the ESP32-C3.
+// Serial Peripheral Interface on the ESP32-C3 and ESP32-C6.
 type SPI struct {
 	Bus *esp.SPI2_Type
 }
@@ -58,17 +34,6 @@ func spiBusFor(bus *esp.SPI2_Type) (spiBus, bool) {
 		}, true
 	default:
 		return spiBus{}, false
-	}
-}
-
-// enableSPIClock enables and resets the clock of an SPI bus.
-func enableSPIClock(bus *esp.SPI2_Type) {
-	switch bus {
-	case esp.SPI2:
-		esp.SYSTEM.SetPERIP_RST_EN0_SPI2_RST(1)
-		esp.SYSTEM.SetPERIP_RST_EN0_SPI2_RST(0)
-		esp.SYSTEM.SetPERIP_CLK_EN0_SPI2_CLK_EN(1)
-		esp.SYSTEM.SetPERIP_RST_EN0_SPI2_RST(0)
 	}
 }
 
