@@ -106,18 +106,21 @@ jobs:
       # TODO: add a summary, something like:
       #  - overall size difference (percent)
       #  - number of binaries that grew / shrank / remained the same
-      #  - don't show the full diff when no binaries changed
       - name: Calculate size diff
         run: |
           set -o pipefail
           ./tools/sizediff drivers/sizes-dev.txt drivers/sizes-pr.txt | tee sizediff.txt
       - name: Create comment
         run: |
-          echo "Size difference with the dev branch:" > comment.txt
-          echo "<details><summary>Binary size difference</summary>" >> comment.txt
-          echo "<pre>" >> comment.txt
-          cat sizediff.txt >> comment.txt
-          echo "</pre></details>" >> comment.txt
+          if [ "$(wc -l < sizediff.txt)" -le 1 ]; then
+            cat sizediff.txt > comment.txt
+          else
+            echo "Size difference with the dev branch:" > comment.txt
+            echo "<details><summary>Binary size difference</summary>" >> comment.txt
+            echo "<pre>" >> comment.txt
+            cat sizediff.txt >> comment.txt
+            echo "</pre></details>" >> comment.txt
+          fi
       - name: Comment contents
         run: |
           cat comment.txt
