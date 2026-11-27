@@ -65,7 +65,7 @@ func (clks *clocksType) clock(cix clockIndex) clock {
 // no constraints on its inputs.
 //
 // Not all clocks have both types of mux.
-func (clk *clock) hasGlitchlessMux() bool {
+func (clk clock) hasGlitchlessMux() bool {
 	return clk.cix == clkSys || clk.cix == clkRef
 }
 
@@ -73,7 +73,7 @@ func (clk *clock) hasGlitchlessMux() bool {
 // and the auxiliary clock source auxsrc
 // and finally setting the clock frequency to freq
 // given the input clock source frequency srcFreq.
-func (clk *clock) configure(src, auxsrc, srcFreq, freq uint32) {
+func (clk clock) configure(src, auxsrc, srcFreq, freq uint32) {
 	if freq > srcFreq {
 		panic("clock frequency cannot be greater than source frequency")
 	}
