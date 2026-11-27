@@ -129,8 +129,7 @@ const (
 )
 
 func getErrno() error {
-	// libcErrno is the errno from wasi-libc for wasip1 and the errno for libc_wasip2 for wasip2
-	return libcErrno
+	return *libc_errno_location()
 }
 
 func (e Errno) Is(target error) bool {
@@ -359,11 +358,11 @@ func Readdir(dir uintptr) (dirent *Dirent, err error) {
 	// There might be a leftover errno value in the global variable, so we have
 	// to clear it before calling readdir because we cannot know whether a nil
 	// return means that we reached EOF or that an error occurred.
-	libcErrno = 0
+	*libc_errno_location() = 0
 
 	dirent = libc_readdir(unsafe.Pointer(dir))
 
-	if dirent == nil && libcErrno != 0 {
+	if dirent == nil && *libc_errno_location() != 0 {
 		err = getErrno()
 	}
 	return
