@@ -38,6 +38,10 @@ func Open(path string, flag int, mode uint32) (fd int, err error) {
 	if path == "" {
 		return -1, ENOENT
 	}
+	if flag&(O_RDONLY|O_WRONLY) == 0 {
+		// Go's O_RDONLY is 0, but wasi-libc's is a bit, and its open fails without one.
+		flag |= O_RDONLY
+	}
 	data := cstring(path)
 	fd = int(libc_open(&data[0], int32(flag), mode))
 	if fd < 0 {
