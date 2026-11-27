@@ -562,6 +562,7 @@ func TestBuild(t *testing.T) {
 			options := optionsFromOSARCH(osArch, sema)
 			if options.GOARCH != runtime.GOARCH { // Native architecture already run above.
 				t.Run(name, func(t *testing.T) {
+					t.Parallel()
 					runPlatTests(options, tests, t)
 				})
 			}
