@@ -48,7 +48,7 @@ func syscall_Getpagesize() int {
 	return libc_getpagesize()
 }
 
-func hardwareRand() (n uint64, ok bool) {
+func osRand() (n uint64, ok bool) {
 	read := libc_getrandom(unsafe.Pointer(&n), 8, 0)
 	if read != 8 {
 		return 0, false

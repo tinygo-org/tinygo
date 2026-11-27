@@ -1,4 +1,4 @@
-//go:build !linux || baremetal || nintendoswitch || tinygo.wasi || wasm_unknown
+//go:build (!linux && !darwin) || baremetal || nintendoswitch || tinygo.wasi || wasm_unknown
 
 package runtime
 
