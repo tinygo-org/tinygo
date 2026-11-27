@@ -4,5 +4,5 @@
   "linkerscript": "targets/ra4m1.ld",
   "openocd-target": "r7fa4m1ab",
   "openocd-transport": "swd",
-  "extra-files": ["src/device/renesas/r7fa4m1ab.s"]
+  "extra-files": ["src/device/renesas/R7FA4M1AB.s"]
 }
