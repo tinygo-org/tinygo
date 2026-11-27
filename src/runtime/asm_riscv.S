@@ -1,3 +1,10 @@
+#ifdef __riscv_32e
+#define NREG 3
+#else
+#define NREG 13
+#endif
+
+
 #if __riscv_xlen==64
 #define REGSIZE 8
 #define SREG sd
@@ -13,20 +20,22 @@
 .type    tinygo_scanCurrentStack, %function
 tinygo_scanCurrentStack:
    // Push callee-saved registers onto the stack.
-   addi sp, sp, -13*REGSIZE
+   addi sp, sp, -NREG*REGSIZE
    SREG ra,  0*REGSIZE(sp)
-   SREG s11, 1*REGSIZE(sp)
-   SREG s10, 2*REGSIZE(sp)
-   SREG s9,  3*REGSIZE(sp)
-   SREG s8,  4*REGSIZE(sp)
-   SREG s7,  5*REGSIZE(sp)
-   SREG s6,  6*REGSIZE(sp)
-   SREG s5,  7*REGSIZE(sp)
-   SREG s4,  8*REGSIZE(sp)
-   SREG s3,  9*REGSIZE(sp)
-   SREG s2,  10*REGSIZE(sp)
-   SREG s1,  11*REGSIZE(sp)
-   SREG s0,  12*REGSIZE(sp)
+   SREG s0,  1*REGSIZE(sp)
+   SREG s1,  2*REGSIZE(sp)
+#ifndef __riscv_32e
+   SREG s2,  3*REGSIZE(sp)
+   SREG s3,  4*REGSIZE(sp)
+   SREG s4,  5*REGSIZE(sp)
+   SREG s5,  6*REGSIZE(sp)
+   SREG s6,  7*REGSIZE(sp)
+   SREG s7,  8*REGSIZE(sp)
+   SREG s8,  9*REGSIZE(sp)
+   SREG s9,  10*REGSIZE(sp)
+   SREG s10, 11*REGSIZE(sp)
+   SREG s11, 12*REGSIZE(sp)
+#endif
 
    // Scan the stack.
    mv a0, sp
@@ -36,7 +45,7 @@ tinygo_scanCurrentStack:
    LREG ra, 0(sp)
 
    // Restore stack state.
-   addi sp, sp, 13*REGSIZE
+   addi sp, sp, NREG*REGSIZE
 
    // Return to the caller.
    ret

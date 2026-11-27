@@ -1,5 +1,11 @@
 //go:build tinygo
 
+#ifdef __riscv_32e
+#define NREG 3
+#else
+#define NREG 13
+#endif
+
 #if __riscv_xlen == 64
 #define REGSIZE 8
 #define SREG sd
@@ -48,7 +54,8 @@ tinygo_swapTaskRISC:
     csrrci t0, mstatus, 8
 
     // Push all callee-saved registers.
-    addi sp, sp, -13*REGSIZE
+    addi sp, sp, -NREG*REGSIZE
+#ifndef __riscv_32e
     SREG ra,  12*REGSIZE(sp)
     SREG s11, 11*REGSIZE(sp)
     SREG s10, 10*REGSIZE(sp)
@@ -62,6 +69,11 @@ tinygo_swapTaskRISC:
     SREG s2,   2*REGSIZE(sp)
     SREG s1,   1*REGSIZE(sp)
     SREG s0,   0*REGSIZE(sp)
+#else
+    SREG ra, 2*REGSIZE(sp)
+    SREG s1, 1*REGSIZE(sp)
+    SREG s0, 0*REGSIZE(sp)
+#endif
 
     // Save the current stack pointer in oldStack.
     SREG sp,  0(a1)
@@ -75,6 +87,7 @@ tinygo_swapTaskRISC:
 1:
 
     // Pop all saved registers from this new stack.
+#ifndef __riscv_32e
     LREG ra,  12*REGSIZE(sp)
     LREG s11, 11*REGSIZE(sp)
     LREG s10, 10*REGSIZE(sp)
@@ -88,7 +101,12 @@ tinygo_swapTaskRISC:
     LREG s2,   2*REGSIZE(sp)
     LREG s1,   1*REGSIZE(sp)
     LREG s0,   0*REGSIZE(sp)
-    addi sp, sp, 13*REGSIZE
+#else
+    LREG ra, 2*REGSIZE(sp)
+    LREG s1, 1*REGSIZE(sp)
+    LREG s0, 0*REGSIZE(sp)
+#endif
+    addi sp, sp, NREG*REGSIZE
 
     // Restore the interrupt-enable state.
     andi t0, t0, 8

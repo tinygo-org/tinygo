@@ -26,6 +26,8 @@ src/device/rp/*.go
 src/device/rp/*.s
 src/device/py32/*.go
 src/device/py32/*.s
+src/device/ch32/*.go
+src/device/ch32/*.s
 ./vendor
 llvm-build
 llvm-project
