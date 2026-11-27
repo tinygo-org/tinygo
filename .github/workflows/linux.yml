@@ -251,6 +251,12 @@ jobs:
     # Run all tests that can run on Linux, with LLVM assertions enabled to catch
     # potential bugs.
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - host
+          - emulated
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -285,6 +291,7 @@ jobs:
       - name: Setup `wasm-tools`
         uses: bytecodealliance/actions/wasm-tools/setup@v1
       - name: Install Espressif QEMU
+        if: matrix.shard == 'host'
         run: |
           release=esp-develop-9.2.2-20260417
           archive=qemu-xtensa-softmmu-${release//-/_}-x86_64-linux-gnu.tar.xz
@@ -293,11 +300,13 @@ jobs:
           tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/qemu/bin" >> "$GITHUB_PATH"
       - uses: ./.github/actions/setup-llvm
+        with:
+          save-cache: ${{ matrix.shard == 'host' }}
       - name: Get Binaryen revision
         id: binaryen-revision
         run: echo "revision=$(git rev-parse HEAD:lib/binaryen)" >> "$GITHUB_OUTPUT"
-      - name: Cache Binaryen
-        uses: actions/cache@v5
+      - name: Restore Binaryen
+        uses: actions/cache/restore@v5
         id: cache-binaryen
         with:
           key: binaryen-linux-asserts-v2-${{ steps.binaryen-revision.outputs.revision }}
@@ -305,14 +314,30 @@ jobs:
       - name: Build Binaryen
         if: steps.cache-binaryen.outputs.cache-hit != 'true'
         run: make binaryen
+      - name: Save Binaryen
+        uses: actions/cache/save@v5
+        if: matrix.shard == 'host' && steps.cache-binaryen.outputs.cache-hit != 'true'
+        with:
+          key: binaryen-linux-asserts-v2-${{ steps.binaryen-revision.outputs.revision }}
+          path: build/wasm-opt
       - uses: ./.github/actions/gen-device
       - name: Test TinyGo
-        run: make ASSERT=1 test
+        env:
+          EMULATED_TESTS: '^TestBuild$$/^(EmulatedCortexM3|EmulatedRISCV|AVR|WebAssembly|WASIp1|WASIp2)$$'
+        run: |
+          if [ "${{ matrix.shard }}" = "emulated" ]; then
+            GOTESTPKGS=. GOTESTFLAGS="-run '$EMULATED_TESTS'" make ASSERT=1 test
+          else
+            GOTESTFLAGS="-skip '$EMULATED_TESTS'" make ASSERT=1 test
+          fi
       - name: Check for unreachable functions
+        if: matrix.shard == 'host'
         run: make ASSERT=1 deadcode
       - name: Check golden IR files are up to date
+        if: matrix.shard == 'host'
         run: make ASSERT=1 golden-check
       - name: Check Go code formatting after device generation
+        if: matrix.shard == 'host'
         run: make fmt-check
 
   assert-build-linux:
