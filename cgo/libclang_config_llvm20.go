@@ -3,11 +3,11 @@
 package cgo
 
 /*
-#cgo linux        CFLAGS:  -I/usr/include/llvm-20 -I/usr/include/llvm-c-20 -I/usr/lib/llvm-20/include -I/usr/lib64/llvm20/include
+#cgo linux        CFLAGS:  -I/usr/include/llvm-20 -I/usr/include/llvm-c-20 -I/usr/lib/llvm-20/include -I/usr/lib64/llvm20/include -I/usr/lib/llvm20/include
 #cgo darwin,amd64 CFLAGS:  -I/usr/local/opt/llvm@20/include
 #cgo darwin,arm64 CFLAGS:  -I/opt/homebrew/opt/llvm@20/include
 #cgo freebsd      CFLAGS:  -I/usr/local/llvm20/include
-#cgo linux        LDFLAGS: -L/usr/lib/llvm-20/lib -lclang
+#cgo linux        LDFLAGS: -L/usr/lib/llvm-20/lib -L/usr/lib/llvm20/lib -lclang
 #cgo darwin,amd64 LDFLAGS: -L/usr/local/opt/llvm@20/lib -lclang
 #cgo darwin,arm64 LDFLAGS: -L/opt/homebrew/opt/llvm@20/lib -lclang
 #cgo freebsd      LDFLAGS: -L/usr/local/llvm20/lib -lclang

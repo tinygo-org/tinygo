@@ -63,6 +63,15 @@ func init() {
 		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld")
 		commands["lldb"] = append(commands["lldb"], prefix+"lldb")
 	}
+	// Add the path to LLVM installed from the versioned Arch Linux packages.
+	// https://archlinux.org/packages/extra/x86_64/clang22/files/
+	if runtime.GOOS == "linux" {
+		prefix := "/usr/lib/llvm" + llvmMajor + "/bin/"
+		commands["clang"] = append(commands["clang"], prefix+"clang-"+llvmMajor)
+		commands["ld.lld"] = append(commands["ld.lld"], prefix+"ld.lld")
+		commands["wasm-ld"] = append(commands["wasm-ld"], prefix+"wasm-ld")
+		commands["lldb"] = append(commands["lldb"], prefix+"lldb")
+	}
 }
 
 // LookupCommand looks up the executable name for a given LLVM tool such as
