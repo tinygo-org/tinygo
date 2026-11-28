@@ -356,6 +356,17 @@ func TestBuild(t *testing.T) {
 			runTestWithConfig("print.go", t, opts, nil, nil)
 		})
 
+		if !testing.Short() {
+			t.Run("wasip1-multipart-scheduler=none-opt=2", func(t *testing.T) {
+				t.Parallel()
+				opts := optionsFromTarget("wasip1", sema)
+				opts.Opt = "2"
+				opts.GC = "precise"
+				opts.Scheduler = "none"
+				runTestWithConfig("wasi-multipart-noscheduler.go", t, opts, nil, nil)
+			})
+		}
+
 		t.Run("opt=0-gc=boehm", func(t *testing.T) {
 			t.Parallel()
 			opts := optionsFromTarget("", sema)
@@ -924,4 +935,51 @@ func runGCLivenessTest(options compileopts.Options, t *testing.T) {
 		t.Parallel()
 		runTest("gc-liveness-repro.go", options, t, nil, nil)
 	})
+}
+
+func TestWASINoSchedulerPoll(t *testing.T) {
+	if testing.Short() {
+		t.Skip("WASI test needs a cross-target runner")
+	}
+	t.Parallel()
+	opts := optionsFromTarget("wasip1", sema)
+	opts.Opt = "0"
+	opts.Scheduler = "none"
+	config, err := builder.NewConfig(&opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"timeout", "", "timed out\nbad fd: 8\n"},
+		{"ready", "x", "ready: 1 <nil> x\nexpired: 0 i/o timeout\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reader.Close()
+			defer writer.Close()
+			if tc.input != "" {
+				if _, err := writer.Write([]byte(tc.input)); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			output := &bytes.Buffer{}
+			_, err = buildAndRun("testdata/wasi-poll-noscheduler.go", config, output, []string{tc.name}, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+				cmd.Stdin = reader
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			checkOutputData(t, []byte(tc.want), output.Bytes())
+		})
+	}
 }
