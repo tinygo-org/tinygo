@@ -500,3 +500,14 @@ func enableSPIClock(bus *esp.SPI2_Type) {
 func ResetReasonRaw() uint32 {
 	return esp.RTC_CNTL.GetRESET_STATE_RESET_CAUSE_PROCPU()
 }
+
+// Config writes reach the watchdog clock domain only after this bit is set,
+// see ESP-IDF hal/esp32c3/include/hal/mwdt_ll.h.
+const wdtConfUpdate = esp.TIMG_WDTCONFIG0_WDT_CONF_UPDATE_EN
+
+// MWDT1 uses the 80 MHz APB clock, WDT_USE_XTAL is left at 0.
+func wdtClockInit() {
+	esp.SYSTEM.SetPERIP_CLK_EN0_TIMERGROUP1_CLK_EN(1)
+	esp.SYSTEM.SetPERIP_RST_EN0_TIMERGROUP1_RST(0)
+	esp.TIMG1.SetREGCLK_WDT_CLK_IS_ACTIVE(1)
+}

@@ -500,3 +500,16 @@ func enableSPIClock(bus *esp.SPI2_Type) {
 func ResetReasonRaw() uint32 {
 	return esp.LP_CLKRST.GetRESET_CAUSE()
 }
+
+// Config writes reach the watchdog clock domain only after this bit is set,
+// see ESP-IDF hal/esp32c6/include/hal/mwdt_ll.h.
+const wdtConfUpdate = esp.TIMG_WDTCONFIG0_WDT_CONF_UPDATE_EN
+
+// MWDT1 uses PLL_F80M, clock select 1 in mwdt_ll_set_clock_source. The XTAL
+// default would make every timeout twice as long.
+func wdtClockInit() {
+	esp.PCR.SetTIMERGROUP1_CONF_TG1_CLK_EN(1)
+	esp.PCR.SetTIMERGROUP1_CONF_TG1_RST_EN(0)
+	esp.PCR.SetTIMERGROUP1_WDT_CLK_CONF_TG1_WDT_CLK_SEL(1)
+	esp.PCR.SetTIMERGROUP1_WDT_CLK_CONF_TG1_WDT_CLK_EN(1)
+}

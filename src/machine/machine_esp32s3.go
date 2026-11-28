@@ -489,3 +489,12 @@ func ReadTemperature() int32 {
 func ResetReasonRaw() uint32 {
 	return esp.RTC_CNTL.GetRESET_STATE_RESET_CAUSE_PROCPU()
 }
+
+// MWDT1 runs from the APB clock and has no config update bit, see ESP-IDF
+// hal/esp32s3/include/hal/mwdt_ll.h.
+const wdtConfUpdate = 0
+
+func wdtClockInit() {
+	esp.SYSTEM.SetPERIP_CLK_EN0_TIMERGROUP1_CLK_EN(1)
+	esp.SYSTEM.SetPERIP_RST_EN0_TIMERGROUP1_RST(0)
+}

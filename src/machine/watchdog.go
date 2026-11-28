@@ -1,4 +1,4 @@
-//go:build nrf52840 || nrf52833 || rp2040 || rp2350 || atsamd21 || atsamd51 || atsame5x || stm32 || esp32
+//go:build nrf52840 || nrf52833 || rp2040 || rp2350 || atsamd21 || atsamd51 || atsame5x || stm32 || esp32 || esp32c3 || esp32c6 || esp32s3
 
 package machine
 
