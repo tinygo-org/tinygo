@@ -119,7 +119,7 @@ type EFI_SYSTEM_TABLE struct {
 	FirmwareVendor       *CHAR16
 	FirmwareRevision     uint32
 	ConsoleInHandle      EFI_HANDLE
-	ConIn                *VOID
+	ConIn                *EFI_SIMPLE_TEXT_INPUT_PROTOCOL
 	ConsoleOutHandle     EFI_HANDLE
 	ConOut               *EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL
 	StandardErrorHandle  EFI_HANDLE
