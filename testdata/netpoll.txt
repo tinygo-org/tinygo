@@ -1,0 +1,4 @@
+pipe deadline: read pipe: i/o timeout
+pipe wakeup: 5 hello
+pipe close: EOF
+netpoll ok

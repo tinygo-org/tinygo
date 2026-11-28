@@ -247,6 +247,23 @@ func nanosecondsToTicks(ns int64) timeUnit {
 }
 
 func sleepTicks(d timeUnit) {
+	// Netpoller hook (linux/amd64, see poll_epoll_linux.go): when fds are
+	// registered with the poller, block in epoll_wait for the sleep duration
+	// instead of a bare futex wait, so parked I/O waiters get woken.
+	if netpollWaitHook != nil {
+		// Clamp in int64 BEFORE the int32 conversion: int32(ns/1e6) takes the
+		// low 32 bits, so a sleep longer than ~24.8 days can wrap to an
+		// arbitrary value (positive or negative) that no sign check catches.
+		ms64 := ticksToNanoseconds(d) / 1e6
+		if ms64 > 0x7fffffff {
+			ms64 = 0x7fffffff // largest positive timeout epoll_pwait accepts
+		} else if ms64 < 1 {
+			ms64 = 1
+		}
+		if netpollWaitHook(int32(ms64)) {
+			return
+		}
+	}
 	until := ticks() + d
 
 	if !hasScheduler {
@@ -314,6 +331,16 @@ func now() (sec int64, nsec int32, mono int64) {
 func syscall_Exit(code int) {
 	exit(code)
 }
+
+//go:linkname os_beforeExit os.runtime_beforeExit
+//go:noinline
+func os_beforeExit(exitCode int) {
+	// TinyGo has no exit hooks, race detector, or asan leak check.
+}
+
+// osBeforeExitKeepalive keeps os_beforeExit reachable from the SSA call graph
+// (it is only called from upstream os via a bodyless declaration).
+var osBeforeExitKeepalive = os_beforeExit
 
 // TinyGo does not yet support any form of parallelism on an OS, so these can be
 // left empty.
@@ -533,6 +560,11 @@ func checkSignals() bool {
 }
 
 func waitForEvents() {
+	// Netpoller hook (linux/amd64): with registered fds, block in epoll_wait
+	// until an fd is ready (or the wakeup eventfd fires).
+	if netpollWaitHook != nil && netpollWaitHook(-1) {
+		return
+	}
 	if hasSignals {
 		// Wait as long as the futex value is 0.
 		// This can happen either before or during the call to Wait.
