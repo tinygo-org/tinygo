@@ -447,7 +447,7 @@ func TestFunctionResultCount(t *testing.T) {
 	}
 }
 
-func TestTypeFor(t *testing.T) {
+func TestTinyGoTypeFor(t *testing.T) {
 	type (
 		mystring string
 		myiface  interface{}

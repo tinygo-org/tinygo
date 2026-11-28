@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -23,7 +24,9 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -96,8 +99,8 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 	// The directories are created in sorted order so that nested directories are created without extra work.
 	{
 		var dirs []string
-		for dir, merge := range overrides {
-			if merge {
+		for dir, override := range overrides {
+			if override.mode != gorootReplace {
 				dirs = append(dirs, filepath.Join(tmpgoroot, "src", dir))
 			}
 		}
@@ -143,12 +146,13 @@ func GetCachedGoroot(config *compileopts.Config) (string, error) {
 }
 
 // listGorootMergeLinks searches goroot and tinygoroot for all symlinks that must be created within the merged goroot.
-func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) (map[string]string, error) {
+func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]gorootOverride) (map[string]string, error) {
 	goSrc := filepath.Join(goroot, "src")
 	tinygoSrc := filepath.Join(tinygoroot, "src")
 	merges := make(map[string]string)
-	for dir, merge := range overrides {
-		if !merge {
+	for dir, override := range overrides {
+		mode := override.mode
+		if mode == gorootReplace {
 			// Use the TinyGo version.
 			merges[filepath.Join("src", dir)] = filepath.Join(tinygoSrc, dir)
 			continue
@@ -162,33 +166,29 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 		}
 		var hasTinyGoFiles bool
 		for _, e := range tinygoEntries {
+			name := e.Name()
 			if e.IsDir() {
+				if mode == gorootMergeTests {
+					if _, ok := overrides[path.Join(dir, name)+"/"]; !ok {
+						merges[filepath.Join("src", dir, name)] = filepath.Join(tinygoDir, name)
+					}
+				}
 				continue
 			}
 
 			// Link this file.
-			name := e.Name()
 			merges[filepath.Join("src", dir, name)] = filepath.Join(tinygoDir, name)
 
 			hasTinyGoFiles = true
 		}
 
-		// Add all directories from $GOROOT that are not part of the TinyGo
-		// overrides.
+		// Add entries from $GOROOT that are not overridden by TinyGo.
 		goDir := filepath.Join(goSrc, dir)
 		goEntries, err := os.ReadDir(goDir)
 		if err != nil {
 			return nil, err
 		}
 		for _, e := range goEntries {
-			isDir := e.IsDir()
-			if hasTinyGoFiles && !isDir {
-				// Only merge files from Go if TinyGo does not have any files.
-				// Otherwise we'd end up with a weird mix from both Go
-				// implementations.
-				continue
-			}
-
 			name := e.Name()
 			if _, ok := overrides[path.Join(dir, name)+"/"]; ok {
 				// This entry is overridden by TinyGo.
@@ -196,8 +196,33 @@ func listGorootMergeLinks(goroot, tinygoroot string, overrides map[string]bool) 
 				continue
 			}
 
+			dst := filepath.Join("src", dir, name)
+			isDir := e.IsDir()
+			if mode == gorootMergeTests {
+				if !isDir {
+					if !strings.HasSuffix(name, "_test.go") || slices.Contains(override.skipTestFiles, name) {
+						continue
+					}
+					if _, ok := merges[dst]; ok {
+						return nil, fmt.Errorf("goroot merge conflict: %s exists in both TinyGo and upstream Go; rename the TinyGo file or list %q in skipTestFiles", dst, name)
+					}
+				} else if _, ok := merges[dst]; ok {
+					continue
+				}
+			} else {
+				if _, ok := merges[dst]; ok {
+					continue
+				}
+				if hasTinyGoFiles && !isDir {
+					// Only merge files from Go if TinyGo does not have any files.
+					// Otherwise we'd end up with a weird mix from both Go
+					// implementations.
+					continue
+				}
+			}
+
 			// Add a link to this entry
-			merges[filepath.Join("src", dir, name)] = filepath.Join(goDir, name)
+			merges[dst] = filepath.Join(goDir, name)
 		}
 	}
 
@@ -225,63 +250,96 @@ func needsSyscallPackage(buildTags []string) bool {
 	return false
 }
 
-// The boolean indicates whether to merge the subdirs. True means merge, false
-// means use the TinyGo version.
-func pathsToOverride(config *compileopts.Config) map[string]bool {
-	paths := map[string]bool{
-		"":                            true,
-		"crypto/":                     true,
-		"crypto/internal/":            true,
-		"crypto/internal/boring/":     true,
-		"crypto/internal/boring/sig/": false,
+type gorootOverrideMode uint8
+
+const (
+	gorootReplace gorootOverrideMode = iota
+	gorootMergeSubdirs
+	gorootMergeTests
+)
+
+type gorootOverride struct {
+	mode          gorootOverrideMode
+	skipTestFiles []string
+}
+
+func gorootMergeTestsWith(skipTestFiles ...string) gorootOverride {
+	return gorootOverride{
+		mode:          gorootMergeTests,
+		skipTestFiles: skipTestFiles,
+	}
+}
+
+// pathsToOverride returns the GOROOT directories overridden by TinyGo.
+//
+// gorootReplace links the TinyGo directory directly, gorootMergeSubdirs merges
+// subdirectories, and gorootMergeTests keeps TinyGo's implementation while
+// linking *_test.go files and subdirectories from GOROOT. Upstream test files
+// that TinyGo replaces or omits must be listed in skipTestFiles.
+func pathsToOverride(config *compileopts.Config) map[string]gorootOverride {
+	replace := gorootOverride{mode: gorootReplace}
+	mergeSubdirs := gorootOverride{mode: gorootMergeSubdirs}
+	paths := map[string]gorootOverride{
+		"":                            mergeSubdirs,
+		"crypto/":                     mergeSubdirs,
+		"crypto/internal/":            mergeSubdirs,
+		"crypto/internal/boring/":     mergeSubdirs,
+		"crypto/internal/boring/sig/": replace,
 		// Go 1.26 added a CPU jitter entropy source for FIPS 140-3 that
 		// allocates a 32 MiB global buffer (ScratchBuffer [1<<25]byte).
 		// This is fine on systems with virtual memory, but causes RAM
 		// overflow on microcontrollers. Replace with a zero-size stub
 		// since TinyGo targets never use FIPS jitter entropy.
-		"crypto/internal/entropy/":        true,
-		"crypto/internal/entropy/v1.0.0/": false,
-		"crypto/rand/":                    false,
-		"crypto/tls/":                     false,
-		"crypto/x509/":                    true,
-		"crypto/x509/internal/":           true,
-		"crypto/x509/internal/macos/":     false,
-		"device/":                         false,
-		"examples/":                       false,
-		"internal/":                       true,
-		"internal/abi/":                   false,
-		"internal/bytealg/":               false,
-		"internal/cm/":                    false,
-		"internal/futex/":                 false,
-		"internal/fuzz/":                  false,
-		"internal/itoa/":                  false,
-		"internal/reflectlite/":           false,
-		"internal/gclayout":               false,
-		"internal/task/":                  false,
-		"internal/wasi/":                  false,
-		"machine/":                        false,
-		"net/":                            true,
-		"net/http/":                       false,
-		"os/":                             true,
-		"reflect/":                        false,
-		"runtime/":                        false,
-		"sync/":                           true,
-		"testing/":                        true,
-		"tinygo/":                         false,
+		"crypto/internal/entropy/":        mergeSubdirs,
+		"crypto/internal/entropy/v1.0.0/": replace,
+		"crypto/rand/":                    gorootMergeTestsWith(),
+		"crypto/tls/":                     replace,
+		"crypto/x509/":                    mergeSubdirs,
+		"crypto/x509/internal/":           mergeSubdirs,
+		"crypto/x509/internal/macos/":     replace,
+		"device/":                         replace,
+		"examples/":                       replace,
+		"internal/":                       mergeSubdirs,
+		"internal/abi/":                   replace,
+		"internal/bytealg/":               replace,
+		"internal/cm/":                    replace,
+		"internal/futex/":                 replace,
+		"internal/fuzz/":                  replace,
+		"internal/itoa/":                  replace,
+		"internal/reflectlite/":           replace,
+		"internal/gclayout":               replace,
+		"internal/task/":                  replace,
+		"internal/wasi/":                  replace,
+		"machine/":                        replace,
+		"net/":                            mergeSubdirs,
+		"net/http/":                       replace,
+		"os/":                             mergeSubdirs,
+		"reflect/":                        gorootMergeTestsWith("abi_test.go", "export_test.go", "nih_test.go"),
+		"runtime/":                        replace,
+		"sync/": gorootMergeTestsWith(
+			"export_test.go",
+			"map_bench_test.go",
+			"map_reference_test.go",
+			"map_test.go",
+			"oncefunc_test.go",
+			"pool_test.go",
+		),
+		"testing/": mergeSubdirs,
+		"tinygo/":  replace,
 		// Go 1.26 added SWAR optimizations to unicode/utf8 that use
 		// constants assuming at least 32-bit uintptr. TinyGo supports
 		// 16-bit targets (AVR) where these constants overflow, so we
 		// provide a patched version.
-		"unicode/":      true,
-		"unicode/utf8/": false,
-		"unique/":       false,
+		"unicode/":      mergeSubdirs,
+		"unicode/utf8/": gorootMergeTestsWith(),
+		"unique/":       replace,
 	}
 
 	if needsSyscallPackage(config.BuildTags()) {
-		paths["internal/poll/"] = false
-		paths["syscall/"] = true // include syscall/js
-		paths["internal/syscall/"] = true
-		paths["internal/syscall/unix/"] = false
+		paths["internal/poll/"] = replace
+		paths["syscall/"] = mergeSubdirs // include syscall/js
+		paths["internal/syscall/"] = mergeSubdirs
+		paths["internal/syscall/unix/"] = replace
 	}
 
 	return paths

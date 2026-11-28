@@ -23,7 +23,7 @@ func TestWaitGroupUncontended(t *testing.T) {
 }
 
 // TestWaitGroup tests the typical usage of WaitGroup.
-func TestWaitGroup(t *testing.T) {
+func TestTinyGoWaitGroup(t *testing.T) {
 	const n = 5
 	var wg sync.WaitGroup
 	wg.Add(n)

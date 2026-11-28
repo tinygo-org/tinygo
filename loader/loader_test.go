@@ -262,6 +262,76 @@ func BenchmarkRecordedPath(b *testing.B) {
 	}
 }
 
+func TestListGorootMergeLinksMergeTests(t *testing.T) {
+	goroot := t.TempDir()
+	tinygoroot := t.TempDir()
+	for _, rel := range []string{
+		"src/pkg/impl.go",
+		"src/pkg/all_test.go",
+		"src/pkg/export_test.go",
+		"src/pkg/skipped_test.go",
+		"src/pkg/testdata/sample.txt",
+		"src/pkg/internal/up.go",
+	} {
+		p := filepath.Join(goroot, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, rel := range []string{
+		"src/pkg/tinygo.go",
+		"src/pkg/export_test.go",
+		"src/pkg/tinygo_test.go",
+		"src/pkg/internal/tg.go",
+	} {
+		p := filepath.Join(tinygoroot, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := listGorootMergeLinks(goroot, tinygoroot, map[string]gorootOverride{
+		"":     {mode: gorootMergeSubdirs},
+		"pkg/": gorootMergeTestsWith(),
+	}); err == nil || !strings.Contains(err.Error(), "export_test.go") {
+		t.Fatalf("expected conflict error for unlisted export_test.go, got %v", err)
+	}
+
+	links, err := listGorootMergeLinks(goroot, tinygoroot, map[string]gorootOverride{
+		"":     {mode: gorootMergeSubdirs},
+		"pkg/": gorootMergeTestsWith("export_test.go", "skipped_test.go"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := map[string]string{
+		filepath.FromSlash("src/pkg/tinygo.go"):      filepath.Join(tinygoroot, filepath.FromSlash("src/pkg/tinygo.go")),
+		filepath.FromSlash("src/pkg/export_test.go"): filepath.Join(tinygoroot, filepath.FromSlash("src/pkg/export_test.go")),
+		filepath.FromSlash("src/pkg/tinygo_test.go"): filepath.Join(tinygoroot, filepath.FromSlash("src/pkg/tinygo_test.go")),
+		filepath.FromSlash("src/pkg/internal"):       filepath.Join(tinygoroot, filepath.FromSlash("src/pkg/internal")),
+		filepath.FromSlash("src/pkg/all_test.go"):    filepath.Join(goroot, filepath.FromSlash("src/pkg/all_test.go")),
+		filepath.FromSlash("src/pkg/testdata"):       filepath.Join(goroot, filepath.FromSlash("src/pkg/testdata")),
+	}
+	for dst, wantSrc := range want {
+		if gotSrc := links[dst]; gotSrc != wantSrc {
+			t.Errorf("links[%q] = %q, want %q", dst, gotSrc, wantSrc)
+		}
+	}
+	if gotSrc, ok := links[filepath.FromSlash("src/pkg/impl.go")]; ok {
+		t.Errorf("unexpected GOROOT non-test file link: %q", gotSrc)
+	}
+	if gotSrc, ok := links[filepath.FromSlash("src/pkg/skipped_test.go")]; ok {
+		t.Errorf("unexpected skipped GOROOT test file link: %q", gotSrc)
+	}
+}
+
 func TestRecordedPathPrecedence(t *testing.T) {
 	root := t.TempDir()
 	testPath := func(path string) string {

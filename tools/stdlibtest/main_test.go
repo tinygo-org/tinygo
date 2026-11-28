@@ -22,6 +22,42 @@ func TestPackagePlan(t *testing.T) {
 	}
 }
 
+func TestSkipTests(t *testing.T) {
+	var hosted ruleSet
+	hosted.skipTests("reflect", "TestA")
+	hosted.skipTests("reflect", "TestB", "TestC")
+	if hosted.err != nil {
+		t.Fatal(hosted.err)
+	}
+	wantHosted := []string{`-skip=^TestA$|^(TestB|TestC)$`}
+	if got := hosted.planPackage("reflect").flags(); !slices.Equal(got, wantHosted) {
+		t.Fatalf("hosted flags = %v, want %v", got, wantHosted)
+	}
+
+	bm := ruleSet{baremetal: true}
+	bm.skipTests("reflect", "TestA")
+	bm.skipTests("reflect", "TestB", "TestC")
+	if bm.err != nil {
+		t.Fatal(bm.err)
+	}
+	wantBM := []string{`-skip=TestA|TestB|TestC`}
+	if got := bm.planPackage("reflect").flags(); !slices.Equal(got, wantBM) {
+		t.Fatalf("baremetal flags = %v, want %v", got, wantBM)
+	}
+
+	for _, add := range []func(*ruleSet){
+		func(r *ruleSet) { r.skipTests("reflect") },
+		func(r *ruleSet) { r.skipTests("reflect", "^TestA$") },
+		func(r *ruleSet) { r.skipTests("reflect", "TestA/Sub") },
+	} {
+		var bad ruleSet
+		add(&bad)
+		if bad.err == nil {
+			t.Errorf("expected invalid test name error")
+		}
+	}
+}
+
 func TestPackageExclusion(t *testing.T) {
 	var rules ruleSet
 	rules.skipPackage("crypto/internal/fips140/...")

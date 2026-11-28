@@ -14,7 +14,7 @@ type mutex interface {
 	TryLock() bool
 }
 
-func HammerMutex(m mutex, loops int, cdone chan bool) {
+func hammerTinyGoMutex(m mutex, loops int, cdone chan bool) {
 	for i := range loops {
 		if i%3 == 0 {
 			if m.TryLock() {
@@ -28,7 +28,7 @@ func HammerMutex(m mutex, loops int, cdone chan bool) {
 	cdone <- true
 }
 
-func TestMutex(t *testing.T) {
+func TestTinyGoMutex(t *testing.T) {
 	m := new(sync.Mutex)
 
 	m.Lock()
@@ -43,7 +43,7 @@ func TestMutex(t *testing.T) {
 
 	c := make(chan bool)
 	for range 10 {
-		go HammerMutex(m, 1000, c)
+		go hammerTinyGoMutex(m, 1000, c)
 	}
 	for range 10 {
 		<-c
@@ -248,7 +248,7 @@ func TestRWMutexReadToWrite(t *testing.T) {
 	}
 }
 
-func TestRWMutex(t *testing.T) {
+func TestTinyGoRWMutex(t *testing.T) {
 	m := new(sync.RWMutex)
 
 	m.Lock()
@@ -263,7 +263,7 @@ func TestRWMutex(t *testing.T) {
 
 	c := make(chan bool)
 	for range 10 {
-		go HammerMutex(m, 1000, c)
+		go hammerTinyGoMutex(m, 1000, c)
 	}
 	for range 10 {
 		<-c

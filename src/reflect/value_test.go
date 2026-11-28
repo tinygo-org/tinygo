@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"internal/reflectlite"
 	"math/rand"
 	randv2 "math/rand/v2"
 	. "reflect"
@@ -862,7 +861,7 @@ func TestTinyNumMethods(t *testing.T) {
 	}
 }
 
-func TestAssignableTo(t *testing.T) {
+func TestTinyGoAssignableTo(t *testing.T) {
 	var a any
 	refa := ValueOf(&a).Elem()
 	refa.Set(ValueOf(4))
@@ -1439,61 +1438,6 @@ func equal[T comparable](a, b []T) bool {
 	return true
 }
 
-func TestTypeAssert(t *testing.T) {
-	testTypeAssert(t, int(123456789), int(123456789), true)
-	testTypeAssert(t, int(-123456789), int(-123456789), true)
-	testTypeAssert(t, int32(123456789), int32(123456789), true)
-	testTypeAssert(t, int8(-123), int8(-123), true)
-	testTypeAssert(t, [2]int{1234, -5678}, [2]int{1234, -5678}, true)
-	testTypeAssert(t, "test value", "test value", true)
-	testTypeAssert(t, any("test value"), any("test value"), true)
-
-	v := 123456789
-	testTypeAssert(t, &v, &v, true)
-
-	testTypeAssert(t, int(123), uint(0), false)
-
-	testTypeAssert[any](t, 1, 1, true)
-	testTypeAssert[any](t, any(nil), nil, false)
-	testTypeAssert[any](t, error(nil), nil, false)
-	testTypeAssert[any](t, (*int)(nil), (*int)(nil), true)
-	testTypeAssert[fmt.Stringer](t, 1, nil, false)
-
-	vv := testTypeWithMethod{"test"}
-	testTypeAssert[any](t, vv, vv, true)
-	testTypeAssert[any](t, &vv, &vv, true)
-	testTypeAssert[fmt.Stringer](t, vv, vv, true)
-	testTypeAssert[fmt.Stringer](t, &vv, &vv, true)
-	testTypeAssert[interface{ A() }](t, vv, nil, false)
-	testTypeAssert[interface{ A() }](t, &vv, nil, false)
-	testTypeAssert(t, any(vv), any(vv), true)
-	testTypeAssert(t, fmt.Stringer(vv), fmt.Stringer(vv), true)
-
-	testTypeAssert(t, fmt.Stringer(vv), any(vv), true)
-	testTypeAssert(t, any(vv), fmt.Stringer(vv), true)
-	testTypeAssert(t, fmt.Stringer(vv), interface{ M() }(vv), true)
-	testTypeAssert(t, interface{ M() }(vv), fmt.Stringer(vv), true)
-
-	testTypeAssert(t, any(int(1)), int(1), true)
-	testTypeAssert(t, any(int(1)), byte(0), false)
-	testTypeAssert(t, fmt.Stringer(vv), vv, true)
-}
-
-func testTypeAssert[T comparable, V any](t *testing.T, val V, wantVal T, wantOk bool) {
-	t.Helper()
-
-	v, ok := TypeAssert[T](ValueOf(&val).Elem())
-	if v != wantVal || ok != wantOk {
-		t.Errorf("TypeAssert[%v](%#v) = (%#v, %v); want = (%#v, %v)", TypeFor[T](), val, v, ok, wantVal, wantOk)
-	}
-
-	// Additionally make sure that TypeAssert[T](v) behaves in the same way as v.Interface().(T).
-	v2, ok2 := ValueOf(&val).Elem().Interface().(T)
-	if v != v2 || ok != ok2 {
-		t.Errorf("reflect.ValueOf(%#v).Interface().(%v) = (%#v, %v); want = (%#v, %v)", val, TypeFor[T](), v2, ok2, v, ok)
-	}
-}
-
 func TestTypeAssertStruct(t *testing.T) {
 	type taStruct struct {
 		i int
@@ -1538,24 +1482,6 @@ func TestTypeAssertStruct(t *testing.T) {
 		t.Errorf("TypeAssert[*S] failed: got ok=false")
 	}
 
-}
-
-type testTypeWithMethod struct{ val string }
-
-func (v testTypeWithMethod) String() string { return v.val }
-func (v testTypeWithMethod) M()             {}
-
-func TestTypeAssertPanic(t *testing.T) {
-	t.Run("zero val", func(t *testing.T) {
-		defer func() { recover() }()
-		TypeAssert[int](Value{})
-		t.Fatalf("TypeAssert did not panic")
-	})
-	t.Run("read only", func(t *testing.T) {
-		defer func() { recover() }()
-		TypeAssert[int](ValueOf(&testTypeWithMethod{}).FieldByName("val"))
-		t.Fatalf("TypeAssert did not panic")
-	})
 }
 
 type tinyMakeChanElement struct {
@@ -2135,12 +2061,68 @@ func TestTinyDeepEqualLargeCycle(t *testing.T) {
 	}
 }
 
-// Functions needed by all_test.go
-
-func IsRO(v Value) bool {
-	return reflectlite.IsRO(v.Value)
+type tinygoInner struct {
+	x int
 }
 
-func MakeRO(v Value) Value {
-	return Value{reflectlite.MakeRO(v.Value, true)}
+type tinygoOuter struct {
+	y int
+	tinygoInner
+}
+
+func (i *tinygoInner) M() int { return i.x }
+func (o *tinygoOuter) M() int { return o.y }
+
+func TestTinyGoNestedMethods(t *testing.T) {
+	receiver := ValueOf(&tinygoOuter{y: 42, tinygoInner: tinygoInner{x: 17}})
+	typ := receiver.Type()
+	if got := typ.NumMethod(); got != 1 {
+		t.Fatalf("outer has %d methods, want 1", got)
+	}
+	method := typ.Method(0)
+	if !method.Func.IsValid() || method.Func.Type() != TypeOf((*tinygoOuter).M) {
+		t.Fatalf("wrong method function for outer: %v", method.Func)
+	}
+	if got := method.Func.Call([]Value{receiver})[0].Int(); got != 42 {
+		t.Errorf("reflected outer.M returned %d, want 42", got)
+	}
+}
+
+type tinygoInnerInt struct {
+	X int
+}
+
+type tinygoOuterInt struct {
+	Y int
+	tinygoInnerInt
+}
+
+func (i *tinygoInnerInt) M() int {
+	return i.X
+}
+
+func TestTinyGoEmbeddedMethods(t *testing.T) {
+	typ := TypeOf((*tinygoOuterInt)(nil))
+	if typ.NumMethod() != 1 || typ.Method(0).Func.Type() != ValueOf((*tinygoOuterInt).M).Type() {
+		t.Errorf("Wrong method table for tinygoOuterInt: (m=%p)", (*tinygoOuterInt).M)
+		for i := 0; i < typ.NumMethod(); i++ {
+			m := typ.Method(i)
+			t.Errorf("\t%d: %s %p\n", i, m.Name, m.Func.UnsafePointer())
+		}
+	}
+
+	i := &tinygoInnerInt{3}
+	if v := ValueOf(i).Method(0).Call(nil)[0].Int(); v != 3 {
+		t.Errorf("i.M() = %d, want 3", v)
+	}
+
+	o := &tinygoOuterInt{1, tinygoInnerInt{2}}
+	if v := ValueOf(o).Method(0).Call(nil)[0].Int(); v != 2 {
+		t.Errorf("o.M() = %d, want 2", v)
+	}
+
+	f := (*tinygoOuterInt).M
+	if v := f(o); v != 2 {
+		t.Errorf("f(o) = %d, want 2", v)
+	}
 }
