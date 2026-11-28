@@ -1,3 +1,5 @@
+//go:build esp32 || esp32s3_supermini || feather_esp32s3_tft || xiao_esp32s3
+
 package main
 
 import (
@@ -17,18 +19,24 @@ func main() {
 	}
 
 	// Measure the untouched value first, so do not touch the pad at startup.
+	time.Sleep(100 * time.Millisecond)
 	var sum uint32
 	for i := 0; i < 16; i++ {
-		sum += uint32(pad.Get())
+		sum += pad.Get()
 		time.Sleep(10 * time.Millisecond)
 	}
-	threshold := sum / 16 * 80 / 100
+	base := sum / 16
 
+	// The count drops on the ESP32 and rises on the ESP32-S3 when touched.
 	for {
-		val := uint32(pad.Get())
-		touched := val != 0 && val < threshold
+		val := pad.Get()
+		diff := val - base
+		if val < base {
+			diff = base - val
+		}
+		touched := val != 0 && diff > base/5
 		led.Set(touched)
 		println(val, touched)
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(100 * time.Millisecond)
 	}
 }

@@ -4,27 +4,13 @@ package touch
 
 import (
 	"device/esp"
-	"errors"
 	"machine"
 	"runtime/volatile"
 	"unsafe"
 )
 
-// Pad reads the capacitive touch sensor on one pin. The count drops
-// when the pad is touched (ESP32 TRM v4.2 section 29.2.4, page 589).
-type Pad struct {
-	Pin machine.Pin
-}
-
-var ErrInvalidPin = errors.New("touch: invalid touch pin for ESP32")
-
-var initialized bool
-
-// Init puts the touch sensor under software control. Configure calls it
-// when it has not run yet.
-func Init() {
-	initialized = true
-
+// initSensor puts the touch sensor under software control.
+func initSensor() {
 	esp.SENS.SetSAR_TOUCH_ENABLE_TOUCH_PAD_WORKEN(0)
 	esp.SENS.SetSAR_TOUCH_ENABLE_TOUCH_PAD_OUTEN1(0)
 	esp.SENS.SetSAR_TOUCH_ENABLE_TOUCH_PAD_OUTEN2(0)
@@ -44,18 +30,7 @@ func Init() {
 	esp.RTC_CNTL.SetSTATE0_TOUCH_SLP_TIMER_EN(1)
 }
 
-// Configure hands the pin to the touch sensor. Only touch pads T0 to T7 are
-// supported.
-func (t Pad) Configure() error {
-	pad, ok := padNumber(t.Pin)
-	if !ok {
-		return ErrInvalidPin
-	}
-
-	if !initialized {
-		Init()
-	}
-
+func configurePad(pin machine.Pin, pad uint32) {
 	reg := padReg(pad)
 	v := reg.Get()
 	v &^= esp.RTC_GPIO_TOUCH_PAD0_FUN_SEL_Msk | esp.RTC_GPIO_TOUCH_PAD0_FUN_IE_Msk |
@@ -67,18 +42,10 @@ func (t Pad) Configure() error {
 
 	// Touch pads T0 to T7 are RTC GPIO 10 to 17.
 	esp.RTC_IO.SetENABLE_W1TC(1 << (pad + 10))
-
-	return nil
 }
 
-// Get runs one measurement and returns the raw count, or 0 if the pin is not
-// a touch pad or the sensor was never set up.
-func (t Pad) Get() uint16 {
-	pad, ok := padNumber(t.Pin)
-	if !ok || !initialized {
-		return 0
-	}
-
+// readPad runs one measurement and returns the raw count.
+func readPad(pad uint32) uint32 {
 	esp.SENS.SetSAR_TOUCH_ENABLE_TOUCH_PAD_WORKEN(1 << pad)
 
 	esp.SENS.SetSAR_TOUCH_CTRL2_TOUCH_START_EN(0)
@@ -91,13 +58,9 @@ func (t Pad) Get() uint16 {
 	// (ESP32 TRM v4.2 section 29.7.1, page 608).
 	out := (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.SENS.SAR_TOUCH_OUT1), uintptr(pad/2)*4))
 	if pad%2 == 0 {
-		return uint16(out.Get() >> 16)
+		return out.Get() >> 16
 	}
-	return uint16(out.Get())
-}
-
-func padReg(pad uint32) *volatile.Register32 {
-	return (*volatile.Register32)(unsafe.Add(unsafe.Pointer(&esp.RTC_IO.TOUCH_PAD0), uintptr(pad)*4))
+	return out.Get() & 0xffff
 }
 
 // padNumber maps a pin to its touch pad (ESP32 TRM v4.2 table 122,
