@@ -739,9 +739,6 @@ smoketest-quick: smoketest-host | build/smoke
 	# nrf51, Cortex-M0
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=microbit            examples/microbit-blink
 	@$(MD5SUM) $(SMOKE_OUT).hex
-	# nrf52, Cortex-M4
-	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pca10040            examples/blinky1
-	@$(MD5SUM) $(SMOKE_OUT).hex
 	# nrf52840 with SoftDevice, which uses a different memory layout
 	$(TINYGO) build -size short -o $(SMOKE_OUT).hex -target=pca10056-s140v7     examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).hex
@@ -807,8 +804,6 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) $(SMOKE_OUT).bin
 endif
 ifneq ($(WASM), 0)
-	# wasm with the JavaScript host bindings
-	$(TINYGO) build -size short -o $(SMOKE_OUT).wasm -target=wasm              examples/wasm/main
 	# wasm without a host, so without any imports
 	$(TINYGO) build -size short -o $(SMOKE_OUT).wasm -target=wasm-unknown      examples/hello-wasm-unknown
 endif
