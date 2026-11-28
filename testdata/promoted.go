@@ -62,4 +62,13 @@ func main() {
 	println("generic own:", G[int]{}.value())
 	println("generic promoted:", inner.Value(G[int]{}))
 	println("generic string promoted:", inner.Value(G[string]{}))
+
+	// A struct literal type promotes both packages' value methods too.
+	anon := struct {
+		inner.Inner
+		inner2.Inner2
+	}{}
+	println("anonymous inner:", inner.Value(anon))
+	println("anonymous inner2:", inner2.Value(anon))
+	println("anonymous ptr inner2:", inner2.Value(&anon))
 }
