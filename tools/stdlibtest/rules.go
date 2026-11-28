@@ -543,9 +543,14 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	if !linux {
 		r.skipTest("internal/synctest", `^(TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount)$`)
 	}
-	// The output cases need bubble result propagation and caller/helper locations.
+	// The skip output check starts a subprocess.
+	if !linux {
+		r.skipTest("testing/synctest", `^TestSkip$`)
+	}
+	// These cases check caller locations.
+	r.skipTest("testing/synctest", `^(TestFatal|TestError|TestVerboseError|TestVerboseSkip|TestHelper)$`)
 	// The HTTP case needs Transport.DialContext and ExpectContinueTimeout.
-	r.skipTest("testing/synctest", `^(TestFatal|TestError|TestVerboseError|TestSkip|TestVerboseSkip|TestHelper|TestHTTPTransport100Continue)$`)
+	r.skipTest("testing/synctest", `^TestHTTPTransport100Continue$`)
 
 	// Template depth checks run with larger stacks on Linux and macOS.
 	if !linux && !darwin {

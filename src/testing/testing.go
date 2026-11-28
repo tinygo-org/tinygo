@@ -776,8 +776,9 @@ func testingSynctestTest(t *T, f func(*T)) bool {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	synctestT := T{
 		common: common{
-			output:    &logger{logToStdout: flagVerbose},
+			output:    t.output,
 			name:      t.name,
+			indent:    t.indent,
 			parent:    &t.common,
 			level:     t.level + 1,
 			ctx:       ctx,
@@ -1006,12 +1007,16 @@ func runTests(matchString func(pat, str string) (bool, error), tests []InternalT
 }
 
 func (t *T) report() {
+	failed := t.Failed()
+	if failed && t.parent != nil {
+		t.parent.Fail()
+	}
+	if t.isSynctest {
+		return
+	}
 	dstr := fmtDuration(t.duration)
 	format := t.indent + "--- %s: %s (%s)\n"
-	if t.Failed() {
-		if t.parent != nil {
-			t.parent.Fail()
-		}
+	if failed {
 		t.flushToParent(t.name, format, "FAIL", t.name, dstr)
 	} else if flagVerbose {
 		if t.Skipped() {
