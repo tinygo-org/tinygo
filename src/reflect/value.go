@@ -232,10 +232,12 @@ func (v Value) Equal(u Value) bool {
 }
 
 func (v Value) Method(i int) Value {
+	initFuncLookupCache()
 	return Value{v.Value.Method(i)}
 }
 
 func (v Value) MethodByName(name string) Value {
+	initFuncLookupCache()
 	return Value{v.Value.MethodByName(name)}
 }
 
