@@ -96,10 +96,6 @@ func runFix(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	if err := builder.MakeLibcHeaders(config); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
 	machine, err := compiler.NewTargetMachine(&compiler.Config{
 		Triple: config.Triple(), CPU: config.CPU(), Features: config.Features(),
 		CodeModel: config.CodeModel(), RelocationModel: config.RelocationModel(),
@@ -111,7 +107,7 @@ func runFix(args []string, stdout, stderr io.Writer) int {
 	defer machine.Dispose()
 	sizes := compiler.Sizes(machine)
 	changed, err := fix.Run(func(overlay map[string][]byte) (*loader.Analysis, error) {
-		return loader.LoadForAnalysis(config, patterns, sizes, overlay, *includeTests)
+		return loader.LoadForAnalysis(config, patterns, sizes, overlay, *includeTests, builder.PrepareCGoForAnalysis)
 	}, analyzerFlags.Selected(), *diff, stdout, stderr)
 	if err != nil {
 		printBuildOutput(err, false)

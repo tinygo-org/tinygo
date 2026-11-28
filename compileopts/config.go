@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/google/shlex"
@@ -25,28 +24,14 @@ const (
 
 const MaxTypePointerDepth = 5
 
-// Library versions. Whenever an existing library is changed, this number should
-// be added/increased so that existing caches are invalidated.
-//
-// (This is a bit of a layering violation, this should really be part of the
-// builder.Library struct but that's hard to do since we want to know the
-// library path in advance in several places).
-var libVersions = map[string]int{
-	"musl":             3,
-	"bdwgc":            4,
-	"picolibc":         2,
-	"wasmbuiltins":     1,
-	"compiler-rt":      1,
-	"wasi-libc":        1,
-	"wasi-libc-wasip2": 1,
-}
-
 // Config keeps all configuration affecting the build in a single struct.
 type Config struct {
 	Options        *Options
 	Target         *TargetSpec
 	GoMinorVersion int
 	TestConfig     TestConfig
+	LibraryKeys    map[string]string
+	LibcHeaderDir  string
 }
 
 // Triple returns the LLVM target triple, like armv6m-unknown-unknown-eabi.
@@ -367,9 +352,8 @@ func (c *Config) LibraryPath(name string) string {
 		archname += "-" + c.Target.Libc
 	}
 
-	// Append a version string, if this library has a version.
-	if v, ok := libVersions[name]; ok {
-		archname += "-v" + strconv.Itoa(v)
+	if key, ok := c.LibraryKeys[name]; ok {
+		archname += "-h" + key
 	}
 
 	options := ""
@@ -441,6 +425,7 @@ func (c *Config) CFlags(libclang bool) []string {
 		if resourceDir != "" {
 			cflags = append(cflags, FilePrefixMap(resourceDir, c.CSourcePath("clang")))
 		}
+		cflags = append(cflags, c.LibcHeaderPrefixMaps()...)
 	}
 	// Always emit debug information. It is optionally stripped at link time.
 	cflags = append(cflags, "-gdwarf-4")
@@ -471,9 +456,31 @@ func (c *Config) CFlags(libclang bool) []string {
 	return cflags
 }
 
+// LibcHeaderPrefixMaps removes cache keys from generated-header paths.
+func (c *Config) LibcHeaderPrefixMaps() []string {
+	if c.TrimPath() {
+		switch c.Target.Libc {
+		case "musl", "picolibc", "wasi-libc", "mingw-w64":
+			name := c.Target.Libc
+			if name == "wasi-libc" && slices.Contains(c.BuildTags(), "wasip2") {
+				name = "wasi-libc-wasip2"
+			}
+			return []string{FilePrefixMap(c.LibraryPath(name), c.CSourcePath("tinygo-cache/"+name))}
+		}
+	}
+	return nil
+}
+
+func (c *Config) libcHeaderDir(name string) string {
+	if c.LibcHeaderDir != "" {
+		return c.LibcHeaderDir
+	}
+	return filepath.Join(c.LibraryPath(name), "include")
+}
+
 // LibcCFlags returns the C compiler flags for the configured libc.
-// It only uses flags that are part of the libc path (triple, cpu, abi, libc
-// name) so it can safely be used to compile another C library.
+// It only uses flags that are part of the libc path, so it can safely be used
+// to compile another C library.
 func (c *Config) LibcCFlags() []string {
 	switch c.Target.Libc {
 	case "darwin-libSystem":
@@ -485,10 +492,9 @@ func (c *Config) LibcCFlags() []string {
 	case "picolibc":
 		root := goenv.Get("TINYGOROOT")
 		picolibcDir := filepath.Join(root, "lib", "picolibc", "libc")
-		path := c.LibraryPath("picolibc")
 		return []string{
 			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
+			"-isystem", c.libcHeaderDir("picolibc"),
 			"-isystem", filepath.Join(picolibcDir, "include"),
 			"-isystem", filepath.Join(picolibcDir, "stdio"),
 			"-D__PICOLIBC_ERRNO_FUNCTION=__errno_location",
@@ -501,30 +507,31 @@ func (c *Config) LibcCFlags() []string {
 		return []string{"-Wno-unknown-warning-option", "-Wno-gcc-install-dir-libstdcxx"}
 	case "musl":
 		root := goenv.Get("TINYGOROOT")
-		path := c.LibraryPath("musl")
 		arch := MuslArchitecture(c.Triple())
 		return []string{
 			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
+			"-isystem", c.libcHeaderDir("musl"),
 			"-isystem", filepath.Join(root, "lib", "musl", "arch", arch),
 			"-isystem", filepath.Join(root, "lib", "musl", "arch", "generic"),
 			"-isystem", filepath.Join(root, "lib", "musl", "include"),
 		}
 	case "wasi-libc":
-		path := c.LibraryPath("wasi-libc")
+		name := "wasi-libc"
+		if slices.Contains(c.BuildTags(), "wasip2") {
+			name = "wasi-libc-wasip2"
+		}
 		return []string{
 			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
+			"-isystem", c.libcHeaderDir(name),
 		}
 	case "wasmbuiltins":
 		// nothing to add (library is purely for builtins)
 		return nil
 	case "mingw-w64":
 		root := goenv.Get("TINYGOROOT")
-		path := c.LibraryPath("mingw-w64")
 		cflags := []string{
 			"-nostdlibinc",
-			"-isystem", filepath.Join(path, "include"),
+			"-isystem", c.libcHeaderDir("mingw-w64"),
 			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "crt"),
 			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "include"),
 			"-isystem", filepath.Join(root, "lib", "mingw-w64", "mingw-w64-headers", "defaults", "include"),

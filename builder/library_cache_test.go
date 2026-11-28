@@ -28,32 +28,39 @@ func TestLibraryTrimPathCache(t *testing.T) {
 			t.Setenv("XDG_CACHE_HOME", home)
 			t.Setenv("LocalAppData", home)
 			cache := goenv.Get("GOCACHE")
-			cachedArchive := filepath.Join(cache, tc.cachedName, "lib.a")
-			if err := os.MkdirAll(filepath.Dir(cachedArchive), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(cachedArchive, []byte("cached library"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(home, "probe.c"), []byte("int probe(void) { return 1; }\n"), 0o644); err != nil {
+			sourceDir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(sourceDir, "probe.c"), []byte("int probe(void) { return 1; }\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			lib := &Library{
 				name:           "probe",
 				cflags:         func(string, string) []string { return nil },
-				sourceDir:      func() string { return home },
+				sourceDir:      func() string { return sourceDir },
 				librarySources: func(string, bool) ([]string, error) { return []string{"probe.c"}, nil },
 			}
 			config := &compileopts.Config{
 				Options: &compileopts.Options{TrimPath: tc.trimPath},
 				Target:  &compileopts.TargetSpec{Triple: triple, GOOS: "linux", GOARCH: "amd64"},
 			}
-			job, abort, err := lib.load(config, t.TempDir())
+			input, err := lib.cacheInput(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config.LibraryKeys = map[string]string{lib.name: input.key()}
+			suffix := "-h" + input.key()
+			cachedArchive := filepath.Join(cache, tc.cachedName+suffix, "lib.a")
+			if err := os.MkdirAll(filepath.Dir(cachedArchive), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(cachedArchive, []byte("cached library"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			job, abort, err := lib.load(config, t.TempDir(), input)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer abort()
-			want := filepath.Join(cache, tc.wantName, "lib.a")
+			want := filepath.Join(cache, tc.wantName+suffix, "lib.a")
 			if job.result != want {
 				t.Fatalf("library path = %q, want %q", job.result, want)
 			}
@@ -67,7 +74,7 @@ func TestLibraryTrimPathCache(t *testing.T) {
 				if _, err := os.Stat(want); err != nil {
 					t.Fatal(err)
 				}
-				cached, abort, err := lib.load(config, t.TempDir())
+				cached, abort, err := lib.load(config, t.TempDir(), input)
 				if err != nil {
 					t.Fatal(err)
 				}

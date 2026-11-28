@@ -69,7 +69,7 @@ func fixtureWithTests(t *testing.T, files map[string]string, includeTests bool, 
 	t.Cleanup(machine.Dispose)
 	sizes := compiler.Sizes(machine)
 	return func(overlay map[string][]byte) (*loader.Analysis, error) {
-		return loader.LoadForAnalysis(config, patterns, sizes, overlay, includeTests)
+		return loader.LoadForAnalysis(config, patterns, sizes, overlay, includeTests, builder.PrepareCGoForAnalysis)
 	}, dir
 }
 

@@ -121,6 +121,7 @@ var libMusl = Library{
 		return cflags
 	},
 	sourceDir: func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/musl/src") },
+	inputDir:  func() string { return filepath.Join(goenv.Get("TINYGOROOT"), "lib/musl") },
 	librarySources: func(target string, _ bool) ([]string, error) {
 		arch := compileopts.MuslArchitecture(target)
 		globs := []string{

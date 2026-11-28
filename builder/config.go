@@ -3,6 +3,7 @@ package builder
 import (
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 
 	"github.com/tinygo-org/tinygo/compileopts"
@@ -76,4 +77,26 @@ func NewConfig(options *compileopts.Options) (*compileopts.Config, error) {
 		return nil, errors.New("explicit panic unwinding is not supported with the threads scheduler")
 	}
 	return config, nil
+}
+
+// PrepareCGoForAnalysis sets up generated libc headers in a temporary directory.
+func PrepareCGoForAnalysis(config *compileopts.Config) (func(), error) {
+	libc, err := configuredLibc(config)
+	if err != nil {
+		return nil, err
+	}
+	if libc == nil || libc.makeHeaders == nil || libc == &libWasmBuiltins {
+		return nil, nil
+	}
+	dir, err := os.MkdirTemp("", "tinygo-analysis-headers-*")
+	if err != nil {
+		return nil, err
+	}
+	cleanup := func() { os.RemoveAll(dir) }
+	if err := libc.makeHeaders(config.Triple(), dir); err != nil {
+		cleanup()
+		return nil, err
+	}
+	config.LibcHeaderDir = dir
+	return cleanup, nil
 }
