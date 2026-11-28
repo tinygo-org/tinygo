@@ -1,5 +1,6 @@
 {
 	"inherits": ["riscv"],
+	"goarch": "riscv64",
 	"llvm-target": "riscv64-unknown-none",
 	"cpu": "generic-rv64",
 	"target-abi": "lp64",

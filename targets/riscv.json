@@ -1,7 +1,7 @@
 {
 	"goos": "linux",
 	"goarch": "arm",
-	"build-tags": ["tinygo.riscv", "baremetal", "linux", "arm"],
+	"build-tags": ["tinygo.riscv", "baremetal", "linux"],
 	"gc": "conservative",
 	"linker": "ld.lld",
 	"rtlib": "compiler-rt",
