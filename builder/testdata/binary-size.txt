@@ -4,8 +4,8 @@ microbit                 examples/serial                          z       3047  
 wioterminal              examples/pininterrupt                    z       7894     1690      136     7280
 pico                     examples/serial                          z       7673     1071      112     5616
 pico                     examples/serial                          2      15865      799      108     5596
-pico2                    examples/serial                          z       6466     1158      112     5608
-pico2                    examples/serial                          2      15632      904      108     5580
+pico2                    examples/serial                          z       6482     1158      112     5608
+pico2                    examples/serial                          2      15648      904      108     5580
 esp32c3-generic          examples/serial                          z       4864      532        0     8648
 esp32c3-generic          examples/serial                          2       7790      322        0     8648
 cortex-m-qemu            ./testdata/size-slice                    z       3214      794        4     4176
@@ -13,10 +13,10 @@ cortex-m-qemu            ./testdata/size-slice                    2       7454  
 cortex-m-qemu            ./testdata/size-defer                    z       3902      890        4     4184
 cortex-m-qemu            ./testdata/size-contains                 z       3204      764        4     4208
 pico2                    ./testdata/size-contains                 z       6619     1149      112     5632
-pico2                    ./testdata/size-os                       z       6146     1150      112     5600
-pico2                    ./testdata/size-os                       2      14798      898      108     5568
-pico2                    ./testdata/size-timer                    z       9998     1842      112     5688
-pico2                    ./testdata/size-timer                    2      20484     1548      108     5664
+pico2                    ./testdata/size-os                       z       6162     1150      112     5600
+pico2                    ./testdata/size-os                       2      14830      898      108     5568
+pico2                    ./testdata/size-timer                    z      10014     1842      112     5688
+pico2                    ./testdata/size-timer                    2      20500     1548      108     5664
 cortex-m-qemu            ./testdata/size-corpus                   z       8818     1254       80     4196
 cortex-m-qemu            ./testdata/size-corpus                   2      17107      821       72     4200
 riscv-qemu               ./testdata/size-corpus                   z      15672      856       72    16628
@@ -24,7 +24,7 @@ riscv-qemu               ./testdata/size-corpus                   2      22461  
 cortex-m-qemu            ./testdata/size-init-recover             z       2686      762        4     4176
 cortex-m-qemu            ./testdata/size-init-recover             2       6620      316        4     4180
 pico2                    ./testdata/size-init-regexp              z      12749    11003      908     5856
-pico2                    ./testdata/size-init-regexp              2      24077    10763      904     5828
+pico2                    ./testdata/size-init-regexp              2      24109    10763      904     5828
 cortex-m-qemu            ./testdata/size-init-crc                 z       3865      767        4     4432
 cortex-m-qemu            ./testdata/size-init-crc                 2       8156      316        4     4436
 cortex-m-qemu            ./testdata/size-init-map                 z       2923      813      148     4176

@@ -7,16 +7,15 @@ import (
 )
 
 // Watchdog provides access to the hardware watchdog available
-// in the RP2040.
+// in the RP2040 and RP2350.
 var Watchdog = &watchdogImpl{}
 
 const (
-	// WatchdogMaxTimeout in milliseconds (approx 8.3s).
-	//
-	// Nominal 1us per watchdog tick, 24-bit counter,
-	// but due to errata two ticks consumed per 1us.
-	// See: Errata RP2040-E1
-	WatchdogMaxTimeout = (rp.WATCHDOG_LOAD_LOAD_Msk / 1000) / 2
+	// WatchdogMaxTimeout in milliseconds, approx 8.3s on RP2040 and 16.7s on RP2350.
+	WatchdogMaxTimeout = (rp.WATCHDOG_LOAD_LOAD_Msk / 1000) / watchdogXFactor
+
+	// Reset everything apart from ROSC and XOSC. PROC1 is the top bit.
+	watchdogResetMask = (rp.PSM_WDSEL_PROC1<<1 - 1) &^ (rp.PSM_WDSEL_ROSC | rp.PSM_WDSEL_XOSC)
 )
 
 type watchdogImpl struct {
@@ -30,16 +29,14 @@ type watchdogImpl struct {
 // some platforms attempting to reconfigure after starting the watchdog
 // is explicitly forbidden / will not work.
 func (wd *watchdogImpl) Configure(config WatchdogConfig) error {
-	// x2 due to errata RP2040-E1
-	wd.loadValue = config.TimeoutMillis * 1000 * 2
+	wd.loadValue = config.TimeoutMillis * 1000 * watchdogXFactor
 	if wd.loadValue > rp.WATCHDOG_LOAD_LOAD_Msk {
 		wd.loadValue = rp.WATCHDOG_LOAD_LOAD_Msk
 	}
 
 	rp.WATCHDOG.CTRL.ClearBits(rp.WATCHDOG_CTRL_ENABLE)
 
-	// Reset everything apart from ROSC and XOSC
-	rp.PSM.WDSEL.Set(0x0001ffff &^ (rp.PSM_WDSEL_ROSC | rp.PSM_WDSEL_XOSC))
+	rp.PSM.WDSEL.Set(watchdogResetMask)
 
 	// Pause watchdog during debug
 	rp.WATCHDOG.CTRL.SetBits(rp.WATCHDOG_CTRL_PAUSE_DBG0 | rp.WATCHDOG_CTRL_PAUSE_DBG1 | rp.WATCHDOG_CTRL_PAUSE_JTAG)
