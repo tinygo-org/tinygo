@@ -562,6 +562,8 @@ ifneq ($(XTENSA), 0)
 	# xiao-esp32c6
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32c6      	examples/blinky1
 	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32c6   		examples/flash
+	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32c6   		examples/i2c-scan
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32c6   		examples/i2s-tone
