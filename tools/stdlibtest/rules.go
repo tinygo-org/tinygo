@@ -529,7 +529,8 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	if darwin {
 		r.skipTest("flag", `^TestExitCode$`)
 		r.skipTest("math/rand", `^TestDefaultRace$`)
-		// Timer stress tests can exhaust macOS threads.
+		// Timer and goroutine stress tests can exhaust macOS threads.
+		r.skipTest("internal/singleflight", `^TestDoAndForgetUnsharedRace$`)
 		r.skipTest("time", `^(TestStopResult|TestResetResult|TestLongAdjustTimers)$|^TestZeroTimer$/^impl=(func|cache)$`)
 	}
 	// This test can exhaust Boehm's mark stack or Darwin's thread limit.
