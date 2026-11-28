@@ -33,7 +33,7 @@ func BenchmarkRecoverableErrors(b *testing.B) {
 					b.Fatal(err)
 				}
 				b.StartTimer()
-				err = Run(mod, time.Minute, 10, false)
+				err = Run(mod, time.Minute, 10, DefaultMaxInterpHashmapOperations, false)
 				b.StopTimer()
 				if err != nil {
 					b.Fatal(err)

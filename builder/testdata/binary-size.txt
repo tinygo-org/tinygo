@@ -25,8 +25,8 @@ cortex-m-qemu            ./testdata/size-init-recover             z       2686  
 cortex-m-qemu            ./testdata/size-init-recover             2       6620      316        4     4180
 pico2                    ./testdata/size-init-regexp              z      12749    11003      908     5856
 pico2                    ./testdata/size-init-regexp              2      24077    10763      904     5828
-cortex-m-qemu            ./testdata/size-init-crc                 z       3865      767        4     4432
-cortex-m-qemu            ./testdata/size-init-crc                 2       8156      316        4     4436
+cortex-m-qemu            ./testdata/size-init-crc                 z       2686      762        4     4176
+cortex-m-qemu            ./testdata/size-init-crc                 2       6620      316        4     4180
 cortex-m-qemu            ./testdata/size-init-map                 z       2923      813      148     4176
 cortex-m-qemu            ./testdata/size-init-map                 2       7703      369      148     4180
 cortex-m-qemu            ./testdata/size-init-errors              z       2763      869       28     4176

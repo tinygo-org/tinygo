@@ -96,9 +96,9 @@ declare i%[1]d @unknown()
 		t.Fatal(err)
 	}
 	if entrypoint == "runtime.initAll" {
-		err = Run(mod, time.Minute, DefaultMaxInterpBlockEntries, false)
+		err = Run(mod, time.Minute, DefaultMaxInterpBlockEntries, DefaultMaxInterpHashmapOperations, false)
 	} else {
-		err = RunFunc(mod.NamedFunction(entrypoint), time.Minute, DefaultMaxInterpBlockEntries, false)
+		err = RunFunc(mod.NamedFunction(entrypoint), time.Minute, DefaultMaxInterpBlockEntries, DefaultMaxInterpHashmapOperations, false)
 	}
 	if err != nil {
 		t.Fatal(err)

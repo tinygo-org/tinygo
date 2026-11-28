@@ -25,52 +25,53 @@ var (
 // usually passed from the command line, but can also be passed in environment
 // variables for example.
 type Options struct {
-	GOOS                    string // environment variable
-	GOARCH                  string // environment variable
-	GOARM                   string // environment variable (only used with GOARCH=arm)
-	GOMIPS                  string // environment variable (only used with GOARCH=mips and GOARCH=mipsle)
-	Directory               string // working dir, leave it unset to use the current working dir
-	Target                  string
-	BuildMode               string // -buildmode flag
-	TrimPath                bool   // -trimpath flag
-	Opt                     string
-	GC                      string
-	Libc                    string // -libc flag
-	PanicStrategy           string
-	PanicUnwind             string
-	Scheduler               string
-	StackSize               uint64 // goroutine stack size (if none could be automatically determined)
-	Serial                  string
-	Work                    bool // -work flag to print temporary build directory
-	InterpTimeout           time.Duration
-	InterpMaxLoopIterations int
-	PrintIR                 bool
-	DumpSSA                 bool
-	VerifyIR                bool
-	SkipDWARF               bool
-	PrintCommands           func(cmd string, args ...string) `json:"-"`
-	Semaphore               chan struct{}                    `json:"-"` // -p controls capacity, which must be positive
-	Debug                   bool
-	Nobounds                bool
-	PrintSizes              string
-	PrintAllocs             *regexp.Regexp // regexp string
-	PrintBounds             *regexp.Regexp // regexp of functions for which remaining bounds checks are printed
-	PrintAllocsCover        bool           // emit allocs in go coverage tool format
-	PrintStacks             bool
-	Tags                    []string
-	GlobalValues            map[string]map[string]string // map[pkgpath]map[varname]value
-	TestConfig              TestConfig
-	Programmer              string
-	OpenOCDCommands         []string
-	LLVMFeatures            string
-	Monitor                 bool
-	BaudRate                int
-	Timeout                 time.Duration
-	WITPackage              string // pass through to wasm-tools component embed invocation
-	WITWorld                string // pass through to wasm-tools component embed -w option
-	ExtLDFlags              []string
-	GoCompatibility         bool   // enable to check for Go version compatibility
-	BuildVCS                string // -buildvcs: "auto" (default), "true" or "false"
+	GOOS                       string // environment variable
+	GOARCH                     string // environment variable
+	GOARM                      string // environment variable (only used with GOARCH=arm)
+	GOMIPS                     string // environment variable (only used with GOARCH=mips and GOARCH=mipsle)
+	Directory                  string // working dir, leave it unset to use the current working dir
+	Target                     string
+	BuildMode                  string // -buildmode flag
+	TrimPath                   bool   // -trimpath flag
+	Opt                        string
+	GC                         string
+	Libc                       string // -libc flag
+	PanicStrategy              string
+	PanicUnwind                string
+	Scheduler                  string
+	StackSize                  uint64 // goroutine stack size (if none could be automatically determined)
+	Serial                     string
+	Work                       bool // -work flag to print temporary build directory
+	InterpTimeout              time.Duration
+	InterpMaxLoopIterations    int // move an initializer to runtime when a loop block is entered more than this many times in one call; 0 disables
+	InterpMaxHashmapOperations int // move the whole initializer to runtime after this many mutating map operations; 0 disables
+	PrintIR                    bool
+	DumpSSA                    bool
+	VerifyIR                   bool
+	SkipDWARF                  bool
+	PrintCommands              func(cmd string, args ...string) `json:"-"`
+	Semaphore                  chan struct{}                    `json:"-"` // -p controls capacity, which must be positive
+	Debug                      bool
+	Nobounds                   bool
+	PrintSizes                 string
+	PrintAllocs                *regexp.Regexp // regexp string
+	PrintBounds                *regexp.Regexp // regexp of functions for which remaining bounds checks are printed
+	PrintAllocsCover           bool           // emit allocs in go coverage tool format
+	PrintStacks                bool
+	Tags                       []string
+	GlobalValues               map[string]map[string]string // map[pkgpath]map[varname]value
+	TestConfig                 TestConfig
+	Programmer                 string
+	OpenOCDCommands            []string
+	LLVMFeatures               string
+	Monitor                    bool
+	BaudRate                   int
+	Timeout                    time.Duration
+	WITPackage                 string // pass through to wasm-tools component embed invocation
+	WITWorld                   string // pass through to wasm-tools component embed -w option
+	ExtLDFlags                 []string
+	GoCompatibility            bool   // enable to check for Go version compatibility
+	BuildVCS                   string // -buildvcs: "auto" (default), "true" or "false"
 }
 
 // Verify performs a validation on the given options, raising an error if options are not valid.
