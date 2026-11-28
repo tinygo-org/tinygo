@@ -1,4 +1,4 @@
-//go:build !baremetal && !js && !wasm_unknown && !nintendoswitch
+//go:build !baremetal && !wasm_unknown && !nintendoswitch
 
 // Portions copyright 2009-2024 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

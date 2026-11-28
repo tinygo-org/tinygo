@@ -1,4 +1,4 @@
-//go:build baremetal || (tinygo.wasm && !tinygo.wasi) || nintendoswitch
+//go:build baremetal || (tinygo.wasm && !tinygo.wasi && !js) || nintendoswitch
 
 package os
 
@@ -144,6 +144,10 @@ func Chmod(name string, mode FileMode) error {
 }
 
 func Chown(name string, uid, gid int) error {
+	return ErrNotImplemented
+}
+
+func Lchown(name string, uid, gid int) error {
 	return ErrNotImplemented
 }
 

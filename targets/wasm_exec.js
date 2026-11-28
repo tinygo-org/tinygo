@@ -93,11 +93,361 @@
 	const encoder = new TextEncoder("utf-8");
 	const decoder = new TextDecoder("utf-8");
 	let reinterpretBuf = new DataView(new ArrayBuffer(8));
-	var logLine = [];
+	var logLines = { 1: [], 2: [] }; // unfinished stdout and stderr lines
 	const wasmExit = {}; // thrown to exit via proc_exit (not an error)
+
+	// WASI snapshot_preview1 errno values and the jsfs error codes they answer.
+	// https://github.com/WebAssembly/WASI/blob/snapshot-01/phases/snapshot/docs.md#-errno-enumu16
+	const wasiErrno = {
+		E2BIG: 1, EACCES: 2, EAGAIN: 6, EBADF: 8, EBUSY: 10, EEXIST: 20, EFAULT: 21,
+		EFBIG: 22, EINTR: 27, EINVAL: 28, EIO: 29, EISDIR: 31, ELOOP: 32, EMFILE: 33,
+		ENAMETOOLONG: 37, ENODEV: 43, ENOENT: 44, ENOMEM: 48, ENOSPC: 51, ENOSYS: 52,
+		ENOTDIR: 54, ENOTEMPTY: 55, ENOTSUP: 58, EOPNOTSUPP: 58, ENOTTY: 59, EPERM: 63,
+		EPIPE: 64, EROFS: 69, ESPIPE: 70, EXDEV: 75,
+	};
+
+	// nodeJsfs is Node's fs in the shape of bottle's jsfs, whose sync API is
+	// Node's without the Sync suffix, or null outside Node. A browser has a
+	// globalThis.fs too, but it only writes to the console.
+	const nodeJsfs = () => {
+		const fs = globalThis.fs;
+		if (typeof process === "undefined" || !process.versions || !process.versions.node || !fs || !fs.statSync) {
+			return null;
+		}
+		const sync = { constants: fs.constants };
+		for (const name of ["stat", "lstat", "fstat", "open", "read", "write", "close", "fsync",
+			"ftruncate", "mkdir", "rmdir", "unlink", "rename", "readdir", "readlink", "symlink",
+			"link", "utimes"]) {
+			sync[name] = fs[name + "Sync"];
+		}
+		const stdin = () => {
+			const b = new Uint8Array(65536);
+			try {
+				return b.subarray(0, fs.readSync(0, b, 0, b.length, null));
+			} catch (e) {
+				if (e.code === "EOF" || e.code === "EAGAIN") return null;
+				throw e;
+			}
+		};
+		return { sync, stdio: { stdin }, getCwd: () => process.cwd() };
+	};
+
+	// jsfsWasi serves the WASI filesystem imports from bottle's jsfs.sync, so os
+	// works on one in-memory tree shared with the page. The only preopen is "/".
+	const jsfsWasi = (jsfs, buffer) => {
+		const sync = jsfs.sync;
+		const C = sync.constants;
+		const enc = new TextEncoder();
+		const dec = new TextDecoder();
+		const u8 = () => new Uint8Array(buffer());
+		const dv = () => new DataView(buffer());
+		const str = (ptr, len) => dec.decode(new Uint8Array(buffer(), ptr >>> 0, len >>> 0));
+		const errno = (e) => wasiErrno[e && e.code] || 29;
+		const call = (f) => { try { return f() || 0; } catch (e) { return errno(e); } };
+		const fail = (code) => { const e = new Error(code); e.code = code; throw e; };
+
+		// Rights are not enforced here; jsfs checks access when a file is opened.
+		const ALL = 0x1fffffffn, TTY = ALL & ~((1n << 2n) | (1n << 5n));
+		const FD_READ = 1n << 1n, FD_WRITE = 1n << 6n;
+		const OFLAG_CREAT = 1, OFLAG_DIRECTORY = 2, OFLAG_EXCL = 4, OFLAG_TRUNC = 8;
+		const FDFLAG_APPEND = 1, LOOKUP_FOLLOW = 1;
+		const FT_CHR = 2, FT_DIR = 3, FT_REG = 4, FT_LNK = 7;
+
+		const filetype = (mode) => {
+			switch (mode & 0o170000) {
+			case 0o060000: return 1;
+			case 0o020000: return FT_CHR;
+			case 0o040000: return FT_DIR;
+			case 0o100000: return FT_REG;
+			case 0o140000: return 6;
+			case 0o120000: return FT_LNK;
+			}
+			return 0;
+		};
+		const ns = (ms) => BigInt(Math.round((ms || 0) * 1e6));
+
+		// WASI fd -> {kind, path, jfd, pos, append}. Files hold a jsfs fd and keep
+		// their own offset, so append and seek work without reaching into jsfs.
+		const fds = new Map([
+			[0, { kind: "stdio" }], [1, { kind: "stdio" }], [2, { kind: "stdio" }],
+			[3, { kind: "dir", path: "/" }],
+		]);
+		const entry = (fd) => fds.get(fd) || fail("EBADF");
+		const file = (fd) => {
+			const e = entry(fd);
+			if (e.kind === "dir") fail("EISDIR");
+			if (e.kind !== "file") fail("ESPIPE");
+			return e;
+		};
+		const add = (e) => {
+			let fd = 4;
+			while (fds.has(fd)) fd++;
+			fds.set(fd, e);
+			return fd;
+		};
+		const join = (dir, rel) => (rel.startsWith("/") ? rel : (dir === "/" ? "" : dir) + "/" + rel);
+		const at = (dirfd, ptr, len) => {
+			const d = entry(dirfd);
+			if (d.kind !== "dir") fail("ENOTDIR");
+			return join(d.path, str(ptr, len));
+		};
+
+		const putFilestat = (ptr, st) => {
+			const v = dv();
+			ptr >>>= 0;
+			v.setBigUint64(ptr, BigInt(st.dev || 0), true);
+			v.setBigUint64(ptr + 8, BigInt(st.ino || 0), true);
+			v.setUint8(ptr + 16, filetype(st.mode));
+			v.setBigUint64(ptr + 24, BigInt(st.nlink || 1), true);
+			v.setBigUint64(ptr + 32, BigInt(st.size || 0), true);
+			v.setBigUint64(ptr + 40, ns(st.atimeMs), true);
+			v.setBigUint64(ptr + 48, ns(st.mtimeMs), true);
+			v.setBigUint64(ptr + 56, ns(st.ctimeMs), true);
+		};
+		const statOf = (e) => {
+			if (e.kind === "stdio") return { mode: 0o020000, nlink: 1 };
+			if (e.kind === "dir") return sync.stat(e.path);
+			return sync.fstat(e.jfd);
+		};
+
+		// iovs walks a ciovec/iovec array, calling f(ptr, len) until it returns
+		// fewer bytes than asked for.
+		const iovs = (ptr, n, f) => {
+			const v = dv();
+			let total = 0;
+			for (let i = 0; i < n; i++) {
+				const p = v.getUint32(ptr + i * 8, true), l = v.getUint32(ptr + i * 8 + 4, true);
+				const got = f(p, l);
+				total += got;
+				if (got < l) break;
+			}
+			return total;
+		};
+
+		// Stdin keeps what a pulled chunk had beyond the read, rather than drop it.
+		let stdinRest = null;
+		const readStdin = (p, l) => {
+			let chunk = stdinRest;
+			stdinRest = null;
+			if (!chunk) chunk = jsfs.stdio.stdin();
+			if (!chunk || chunk.length === 0) return 0;
+			const n = Math.min(l, chunk.length);
+			u8().set(chunk.subarray(0, n), p);
+			if (n < chunk.length) stdinRest = chunk.slice(n);
+			return n;
+		};
+
+		const readAt = (e, p, l, pos) => sync.read(e.jfd, u8(), p, l, pos);
+		const writeAt = (e, p, l, pos) => sync.write(e.jfd, u8(), p, l, pos);
+		const writeOut = (fd, p, l) => globalThis.fs.writeSync(fd, u8().slice(p, p + l));
+
+		const setTimes = (path, follow, atim, mtim, flags) => {
+			const st = follow ? sync.stat(path) : sync.lstat(path);
+			const nowS = Date.now() / 1000;
+			let a = st.atimeMs / 1000, m = st.mtimeMs / 1000;
+			if (flags & 1) a = Number(atim) / 1e9;
+			if (flags & 2) a = nowS;
+			if (flags & 4) m = Number(mtim) / 1e9;
+			if (flags & 8) m = nowS;
+			sync.utimes(path, a, m);
+		};
+
+		return {
+			fd_prestat_get: (fd, ptr) => {
+				if (fd !== 3 || !fds.has(3)) return wasiErrno.EBADF;
+				dv().setUint8(ptr >>> 0, 0);
+				dv().setUint32((ptr >>> 0) + 4, 1, true);
+				return 0;
+			},
+			fd_prestat_dir_name: (fd, ptr, len) => {
+				if (fd !== 3 || !fds.has(3)) return wasiErrno.EBADF;
+				if (len < 1) return wasiErrno.ENAMETOOLONG;
+				u8()[ptr >>> 0] = 0x2f;
+				return 0;
+			},
+
+			path_open: (dirfd, dirflags, pathPtr, pathLen, oflags, rightsBase, rightsInh, fdflags, fdPtr) => call(() => {
+				const path = at(dirfd, pathPtr, pathLen);
+				const follow = (dirflags & LOOKUP_FOLLOW) !== 0;
+				const rd = (rightsBase & FD_READ) !== 0n, wr = (rightsBase & FD_WRITE) !== 0n;
+				let st = null;
+				try { st = follow ? sync.stat(path) : sync.lstat(path); } catch (e) { if (e.code !== "ENOENT") throw e; }
+				if (st && (oflags & OFLAG_CREAT) && (oflags & OFLAG_EXCL)) fail("EEXIST");
+				if (oflags & OFLAG_DIRECTORY) {
+					if (!st) fail("ENOENT");
+					if (filetype(st.mode) !== FT_DIR) fail("ENOTDIR");
+				}
+				let fd;
+				if (st && filetype(st.mode) === FT_DIR) {
+					if (wr || (oflags & OFLAG_TRUNC)) fail("EISDIR");
+					fd = add({ kind: "dir", path });
+				} else {
+					if (st && filetype(st.mode) === FT_LNK) fail("ELOOP");
+					let flags = wr ? (rd ? C.O_RDWR : C.O_WRONLY) : C.O_RDONLY;
+					if (oflags & OFLAG_CREAT) flags |= C.O_CREAT;
+					if (oflags & OFLAG_EXCL) flags |= C.O_EXCL;
+					if (oflags & OFLAG_TRUNC) flags |= C.O_TRUNC;
+					const jfd = sync.open(path, flags, 0o644);
+					fd = add({ kind: "file", path, jfd, pos: 0, append: (fdflags & FDFLAG_APPEND) !== 0 });
+				}
+				dv().setUint32(fdPtr >>> 0, fd, true);
+			}),
+
+			fd_close: (fd) => call(() => {
+				const e = entry(fd);
+				if (e.kind === "file") sync.close(e.jfd);
+				if (e.kind !== "stdio") fds.delete(fd);
+			}),
+
+			fd_read: (fd, iovsPtr, iovsLen, nPtr) => call(() => {
+				const e = entry(fd);
+				let n;
+				if (e.kind === "stdio") n = fd === 0 ? iovs(iovsPtr >>> 0, iovsLen, readStdin) : fail("EBADF");
+				else n = iovs(iovsPtr >>> 0, iovsLen, (p, l) => {
+					const got = readAt(file(fd), p, l, e.pos);
+					e.pos += got;
+					return got;
+				});
+				dv().setUint32(nPtr >>> 0, n, true);
+			}),
+			fd_pread: (fd, iovsPtr, iovsLen, offset, nPtr) => call(() => {
+				const e = file(fd);
+				let pos = Number(offset);
+				const n = iovs(iovsPtr >>> 0, iovsLen, (p, l) => {
+					const got = readAt(e, p, l, pos);
+					pos += got;
+					return got;
+				});
+				dv().setUint32(nPtr >>> 0, n, true);
+			}),
+			fd_write: (fd, iovsPtr, iovsLen, nPtr) => call(() => {
+				const e = entry(fd);
+				let n;
+				if (e.kind === "stdio") n = fd === 0 ? fail("EBADF") : iovs(iovsPtr >>> 0, iovsLen, (p, l) => writeOut(fd, p, l));
+				else n = iovs(iovsPtr >>> 0, iovsLen, (p, l) => {
+					const f = file(fd);
+					const pos = f.append ? sync.fstat(f.jfd).size : f.pos;
+					const got = writeAt(f, p, l, pos);
+					f.pos = pos + got;
+					return got;
+				});
+				dv().setUint32(nPtr >>> 0, n, true);
+			}),
+			fd_pwrite: (fd, iovsPtr, iovsLen, offset, nPtr) => call(() => {
+				const e = file(fd);
+				let pos = Number(offset);
+				const n = iovs(iovsPtr >>> 0, iovsLen, (p, l) => {
+					const got = writeAt(e, p, l, pos);
+					pos += got;
+					return got;
+				});
+				dv().setUint32(nPtr >>> 0, n, true);
+			}),
+			fd_seek: (fd, offset, whence, ptr) => call(() => {
+				const e = file(fd);
+				const base = whence === 0 ? 0 : whence === 1 ? e.pos : whence === 2 ? sync.fstat(e.jfd).size : fail("EINVAL");
+				const pos = base + Number(offset);
+				if (pos < 0) fail("EINVAL");
+				e.pos = pos;
+				dv().setBigUint64(ptr >>> 0, BigInt(pos), true);
+			}),
+			fd_tell: (fd, ptr) => call(() => { dv().setBigUint64(ptr >>> 0, BigInt(file(fd).pos), true); }),
+
+			fd_fdstat_get: (fd, ptr) => call(() => {
+				const e = entry(fd);
+				const v = dv();
+				ptr >>>= 0;
+				v.setUint8(ptr, e.kind === "stdio" ? FT_CHR : e.kind === "dir" ? FT_DIR : filetype(statOf(e).mode));
+				v.setUint16(ptr + 2, e.append ? FDFLAG_APPEND : 0, true);
+				v.setBigUint64(ptr + 8, e.kind === "stdio" ? TTY : ALL, true);
+				v.setBigUint64(ptr + 16, ALL, true);
+			}),
+			fd_fdstat_set_flags: (fd, flags) => call(() => {
+				const e = entry(fd);
+				if (e.kind === "file") e.append = (flags & FDFLAG_APPEND) !== 0;
+			}),
+			fd_fdstat_set_rights: (fd) => call(() => { entry(fd); }),
+			fd_filestat_get: (fd, ptr) => call(() => { putFilestat(ptr, statOf(entry(fd))); }),
+			fd_filestat_set_size: (fd, size) => call(() => { sync.ftruncate(file(fd).jfd, Number(size)); }),
+			fd_filestat_set_times: (fd, atim, mtim, flags) => call(() => {
+				const e = entry(fd);
+				if (e.kind === "stdio") fail("EBADF");
+				setTimes(e.path, true, atim, mtim, flags);
+			}),
+			fd_sync: (fd) => call(() => { const e = entry(fd); if (e.kind === "file") sync.fsync(e.jfd); }),
+			fd_datasync: (fd) => call(() => { const e = entry(fd); if (e.kind === "file") sync.fsync(e.jfd); }),
+			fd_advise: (fd) => call(() => { entry(fd); }),
+			fd_allocate: (fd, offset, len) => call(() => {
+				const e = file(fd);
+				const end = Number(offset) + Number(len);
+				if (sync.fstat(e.jfd).size < end) sync.ftruncate(e.jfd, end);
+			}),
+			fd_renumber: (from, to) => call(() => {
+				const e = entry(from);
+				const old = entry(to);
+				if (old.kind === "file") sync.close(old.jfd);
+				fds.set(to, e);
+				fds.delete(from);
+			}),
+
+			// Entries are ".", ".." and the directory's names in jsfs order. A cookie
+			// is the index of the next entry, so a listing resumes where it stopped.
+			fd_readdir: (fd, bufPtr, bufLen, cookie, usedPtr) => call(() => {
+				const e = entry(fd);
+				if (e.kind !== "dir") fail("ENOTDIR");
+				const names = [".", ".."].concat(sync.readdir(e.path));
+				const parent = e.path === "/" ? "/" : e.path.slice(0, e.path.lastIndexOf("/")) || "/";
+				bufPtr >>>= 0;
+				let used = 0;
+				for (let i = Number(cookie); i < names.length && used < bufLen; i++) {
+					const name = names[i];
+					let st;
+					try {
+						st = name === "." ? sync.stat(e.path) : name === ".." ? sync.stat(parent) : sync.lstat(join(e.path, name));
+					} catch (err) {
+						st = { ino: 0, mode: 0 };
+					}
+					const nb = enc.encode(name);
+					const rec = new Uint8Array(24 + nb.length);
+					const rv = new DataView(rec.buffer);
+					rv.setBigUint64(0, BigInt(i + 1), true);
+					rv.setBigUint64(8, BigInt(st.ino || 0), true);
+					rv.setUint32(16, nb.length, true);
+					rv.setUint8(20, filetype(st.mode));
+					rec.set(nb, 24);
+					const n = Math.min(rec.length, bufLen - used);
+					u8().set(rec.subarray(0, n), bufPtr + used);
+					used += n;
+				}
+				dv().setUint32(usedPtr >>> 0, used, true);
+			}),
+
+			path_filestat_get: (dirfd, flags, pathPtr, pathLen, ptr) => call(() => {
+				const path = at(dirfd, pathPtr, pathLen);
+				putFilestat(ptr, (flags & LOOKUP_FOLLOW) ? sync.stat(path) : sync.lstat(path));
+			}),
+			path_filestat_set_times: (dirfd, flags, pathPtr, pathLen, atim, mtim, fstFlags) => call(() => {
+				setTimes(at(dirfd, pathPtr, pathLen), (flags & LOOKUP_FOLLOW) !== 0, atim, mtim, fstFlags);
+			}),
+			path_create_directory: (dirfd, pathPtr, pathLen) => call(() => { sync.mkdir(at(dirfd, pathPtr, pathLen), 0o755); }),
+			path_remove_directory: (dirfd, pathPtr, pathLen) => call(() => { sync.rmdir(at(dirfd, pathPtr, pathLen)); }),
+			path_unlink_file: (dirfd, pathPtr, pathLen) => call(() => { sync.unlink(at(dirfd, pathPtr, pathLen)); }),
+			path_rename: (fd1, p1, l1, fd2, p2, l2) => call(() => { sync.rename(at(fd1, p1, l1), at(fd2, p2, l2)); }),
+			path_link: (fd1, flags, p1, l1, fd2, p2, l2) => call(() => { sync.link(at(fd1, p1, l1), at(fd2, p2, l2)); }),
+			path_symlink: (tPtr, tLen, dirfd, pathPtr, pathLen) => call(() => { sync.symlink(str(tPtr, tLen), at(dirfd, pathPtr, pathLen)); }),
+			path_readlink: (dirfd, pathPtr, pathLen, bufPtr, bufLen, usedPtr) => call(() => {
+				const b = enc.encode(sync.readlink(at(dirfd, pathPtr, pathLen)));
+				const n = Math.min(b.length, bufLen >>> 0);
+				u8().set(b.subarray(0, n), bufPtr >>> 0);
+				dv().setUint32(usedPtr >>> 0, n, true);
+			}),
+		};
+	};
 
 	globalThis.Go = class {
 		constructor() {
+			this.argv = ["js"];
+			this.env = {};
 			this._callbackTimeouts = new Map();
 			this._nextCallbackTimeoutID = 1;
 
@@ -182,6 +532,21 @@
 				mem().setBigUint64(addr, v_ref, true);
 			}
 
+			// writeStrings copies list, joined by NUL, into memory when it fits in n
+			// bytes, and returns its length so the caller can size a buffer.
+			const writeStrings = (list, buf, n) => {
+				if (!Array.isArray(list) || list.length === 0) {
+					return 0;
+				}
+				const bytes = encoder.encode(list.join("\0"));
+				buf >>>= 0;
+				n >>>= 0;
+				if (bytes.length <= n) {
+					new Uint8Array(this._inst.exports.memory.buffer, buf, bytes.length).set(bytes);
+				}
+				return bytes.length;
+			}
+
 			const loadSlice = (array, len, cap) => {
 				return new Uint8Array(this._inst.exports.memory.buffer, array, len);
 			}
@@ -208,7 +573,8 @@
 						iovs_len >>>= 0;
 						nwritten_ptr >>>= 0;
 						let nwritten = 0;
-						if (fd == 1) {
+						if (fd == 1 || fd == 2) {
+							const logLine = logLines[fd];
 							for (let iovs_i = 0; iovs_i < iovs_len; iovs_i++) {
 								let iov_ptr = iovs_ptr + iovs_i * 8; // assuming wasm32
 								let ptr = mem().getUint32(iov_ptr + 0, true);
@@ -221,8 +587,8 @@
 									} else if (c == 10) { // LF
 										// write line
 										let line = decoder.decode(new Uint8Array(logLine));
-										logLine = [];
-										console.log(line);
+										logLine.length = 0;
+										console.log(line); // stderr too, as when it went through putchar
 									} else {
 										logLine.push(c);
 									}
@@ -255,6 +621,12 @@
 					},
 				},
 				gojs: {
+					// func argvString(buf unsafe.Pointer, n uint32) uint32
+					"runtime.argvString": (buf, n) => writeStrings(this.argv, buf, n),
+
+					// func envString(buf unsafe.Pointer, n uint32) uint32
+					"runtime.envString": (buf, n) => writeStrings(Object.entries(this.env || {}).map(([k, v]) => k + "=" + v), buf, n),
+
 					// func ticks() int64
 					"runtime.ticks": () => {
 						return BigInt(Math.floor(performance.now() * 1e6));
@@ -286,12 +658,7 @@
 						this._scheduledWakeupDue = due;
 						this._scheduledWakeup = setTimeout(() => {
 							this._scheduledWakeup = undefined;
-							if (this.exited) return;
-							try {
-								this._inst.exports.go_scheduler();
-							} catch (e) {
-								if (e !== wasmExit) throw e;
-							}
+							this._wake();
 						}, ms);
 					},
 
@@ -486,6 +853,54 @@
 			// Go 1.20 uses 'env'. Go 1.21 uses 'gojs'.
 			// For compatibility, we use both as long as Go 1.20 is supported.
 			this.importObject.env = this.importObject.gojs;
+
+			// With bottle's jsfs on the page, os reaches its filesystem through the
+			// WASI imports. Under Node, Node's fs serves the same imports, as Go's
+			// own js target reaches it. Otherwise there are no preopens and every
+			// open fails.
+			const wasi = this.importObject.wasi_snapshot_preview1;
+			this._jsfs = globalThis.jsfs && globalThis.jsfs.sync ? globalThis.jsfs : nodeJsfs();
+			if (this._jsfs) {
+				Object.assign(wasi, jsfsWasi(this._jsfs, () => this._inst.exports.memory.buffer));
+			}
+			// wasi-libc has no chown, so syscall.Chown imports it. jsfs has no
+			// owners, so like Chmod on WASI it succeeds when the path exists.
+			this.importObject.env.chown = (pathPtr, uid, gid) => {
+				if (!this._jsfs) return -1;
+				const bytes = new Uint8Array(this._inst.exports.memory.buffer);
+				let end = pathPtr >>> 0;
+				while (bytes[end] !== 0) end++;
+				try {
+					this._jsfs.sync.stat(decoder.decode(bytes.subarray(pathPtr >>> 0, end)));
+					return 0;
+				} catch (e) {
+					return -1;
+				}
+			};
+			// wasi-libc exits when the environment sizes fail, so they answer empty.
+			const sizes = (a, b) => { mem().setUint32(a >>> 0, 0, true); mem().setUint32(b >>> 0, 0, true); return 0; };
+			const stubs = {
+				args_sizes_get: sizes, args_get: () => 0,
+				environ_sizes_get: sizes, environ_get: () => 0,
+				clock_time_get: (id, precision, ptr) => {
+					const t = id === 0 ? BigInt(Date.now()) * 1000000n : BigInt(Math.round((timeOrigin + performance.now()) * 1e6));
+					mem().setBigUint64(ptr >>> 0, t, true);
+					return 0;
+				},
+				sched_yield: () => 0,
+			};
+			for (const name of ["args_get", "args_sizes_get", "environ_get", "environ_sizes_get",
+				"clock_res_get", "clock_time_get", "fd_advise", "fd_allocate", "fd_close",
+				"fd_datasync", "fd_fdstat_get", "fd_fdstat_set_flags", "fd_fdstat_set_rights",
+				"fd_filestat_get", "fd_filestat_set_size", "fd_filestat_set_times", "fd_pread",
+				"fd_prestat_dir_name", "fd_prestat_get", "fd_pwrite", "fd_read", "fd_readdir",
+				"fd_renumber", "fd_seek", "fd_sync", "fd_tell", "fd_write", "path_create_directory",
+				"path_filestat_get", "path_filestat_set_times", "path_link", "path_open",
+				"path_readlink", "path_remove_directory", "path_rename", "path_symlink",
+				"path_unlink_file", "poll_oneoff", "proc_raise", "sched_yield", "sock_accept",
+				"sock_recv", "sock_send", "sock_shutdown"]) {
+				if (!wasi[name]) wasi[name] = stubs[name] || (() => wasi_ENOSYS);
+			}
 		}
 
 		async run(instance) {
@@ -518,6 +933,11 @@
 			// parity. Any resume() that runs without a pending event -- and resume()
 			// always spawns a handleEvent goroutine -- depends on it.
 			this._pendingEvent = null; // event awaiting dispatch by syscall/js.handleEvent
+			// os starts in $PWD. Unless the caller chose one, that is the jsfs
+			// working directory, which proc.js sets for each process it spawns.
+			if (this._jsfs && !("PWD" in (this.env || {}))) {
+				this.env = Object.assign({}, this.env, { PWD: this._jsfs.getCwd() });
+			}
 
 			if (this._inst.exports._start) {
 				let exitPromise = new Promise((resolve, reject) => {
@@ -536,6 +956,17 @@
 				return this.exitCode;
 			} else {
 				this._inst.exports._initialize();
+			}
+		}
+
+		// _wake runs the scheduler for a timer the program asked for. It is a
+		// method so a host such as proc.js can wrap it, as it wraps _resume.
+		_wake() {
+			if (this.exited) return;
+			try {
+				this._inst.exports.go_scheduler();
+			} catch (e) {
+				if (e !== wasmExit) throw e;
 			}
 		}
 

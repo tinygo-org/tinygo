@@ -1,4 +1,4 @@
-//go:build darwin || (linux && !baremetal && !wasm_unknown && !nintendoswitch) || tinygo.wasi
+//go:build darwin || (linux && !baremetal && !wasm_unknown && !nintendoswitch) || tinygo.wasi || js
 
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style

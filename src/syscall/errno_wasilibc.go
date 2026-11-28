@@ -2,7 +2,8 @@
 
 package syscall
 
-// Use a go:extern definition to access the errno from wasi-libc
+// wasi-libc's errno is thread-local, and cgo code that sets it broke a plain
+// extern errno, so it is reached through __errno_location instead.
 //
-//go:extern errno
-var libcErrno Errno
+//export __errno_location
+func libc_errno_location() *Errno

@@ -1,4 +1,4 @@
-//go:build baremetal || (wasm && !tinygo.wasi) || wasm_unknown
+//go:build baremetal || (wasm && !tinygo.wasi && !js) || wasm_unknown
 
 // This file emulates some file-related functions that are only available
 // under a real operating system.

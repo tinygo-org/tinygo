@@ -1,4 +1,4 @@
-//go:build (linux && !baremetal && !wasm_unknown) || tinygo.wasi
+//go:build (linux && !baremetal && !wasm_unknown) || tinygo.wasi || js
 
 package os
 

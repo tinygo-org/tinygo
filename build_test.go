@@ -871,7 +871,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("alias.go", options, t, nil, nil)
 		})
 	}
-	if options.Target == "" || isWASI {
+	if options.Target == "" || options.Target == "wasm" || isWASI {
 		t.Run("filesystem.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("filesystem.go", options, t, nil, nil)
@@ -883,7 +883,7 @@ func runPlatTests(options compileopts.Options, tests []string, t *testing.T) {
 			runTest("syscall.go", options, t, nil, nil)
 		})
 	}
-	if options.Target == "wasm" || isBaremetal {
+	if isBaremetal {
 		t.Run("devnull.go", func(t *testing.T) {
 			t.Parallel()
 			runTest("devnull.go", options, t, nil, nil)

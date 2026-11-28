@@ -1,4 +1,4 @@
-//go:build baremetal || (tinygo.wasm && !tinygo.wasi) || nintendoswitch
+//go:build baremetal || (tinygo.wasm && !tinygo.wasi && !js) || nintendoswitch
 
 package os
 
