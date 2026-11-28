@@ -234,8 +234,10 @@ func ticks() timeUnit {
 // Technically this is an implementation detail but hopefully they won't change
 // the memory-mapped I/O registers.
 var (
-	// UART0 output register.
-	stdoutWrite = (*volatile.Register8)(unsafe.Pointer(uintptr(0x10000000)))
+	// UART0 data and line status registers of the NS16550A.
+	// See https://github.com/qemu/qemu/blob/master/hw/char/serial.c
+	uartData       = (*volatile.Register8)(unsafe.Pointer(uintptr(0x10000000)))
+	uartLineStatus = (*volatile.Register8)(unsafe.Pointer(uintptr(0x10000005)))
 	// SiFive test finisher
 	testFinisher = (*volatile.Register32)(unsafe.Pointer(uintptr(0x100000)))
 
@@ -287,6 +289,12 @@ func signalHart(hart uint32) {
 	// See RISC-V Unprivileged ISA, section 2.7.
 	riscv.Asm("fence")
 	aclintMSWI.MSIP[hart].Set(1)
+}
+
+// uartReceived reports whether a byte was received, which the line status
+// register shows by setting bit 0 (data ready).
+func uartReceived() bool {
+	return uartLineStatus.Get()&1 != 0
 }
 
 func abort() {

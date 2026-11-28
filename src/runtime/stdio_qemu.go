@@ -2,18 +2,23 @@
 
 package runtime
 
-// stdoutWrite is the address of the emulated UART data register on each machine.
+// Each machine defines uartData and uartReceived for its UART0, which QEMU
+// connects to its own stdin and stdout with -nographic.
 
 func putchar(c byte) {
-	stdoutWrite.Set(uint8(c))
+	uartData.Set(uint8(c))
 }
 
 func getchar() byte {
-	// dummy, TODO
-	return 0
+	for !uartReceived() {
+		Gosched()
+	}
+	return uartData.Get()
 }
 
 func buffered() int {
-	// dummy, TODO
+	if uartReceived() {
+		return 1
+	}
 	return 0
 }

@@ -240,25 +240,46 @@ func TestRuntimeFatal(t *testing.T) {
 	}
 }
 
-// Test that the program can read stdin when the caller supplies it.
+// Test that the program can read stdin when the caller supplies it. The qemu
+// targets run when their emulator is installed.
 func TestStdin(t *testing.T) {
 	t.Parallel()
 
-	options := optionsFromTarget("", sema)
-	config, err := builder.NewConfig(&options)
-	if err != nil {
-		t.Fatal(err)
+	targets := []string{""}
+	for _, target := range []struct{ name, emulator string }{
+		{"cortex-m-qemu", "qemu-system-arm"},
+		{"riscv-qemu", "qemu-system-riscv32"},
+	} {
+		if _, err := exec.LookPath(target.emulator); err == nil {
+			targets = append(targets, target.name)
+		}
 	}
 
-	output := &bytes.Buffer{}
-	_, err = buildAndRun(TESTDATA+"/stdin.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
-		cmd.Stdin = strings.NewReader("hello\nworld\n")
-		return cmd.Run()
-	})
-	if err != nil {
-		t.Error("failed to run:", err)
+	for _, target := range targets {
+		name := target
+		if name == "" {
+			name = "host"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			options := optionsFromTarget(target, sema)
+			config, err := builder.NewConfig(&options)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			output := &bytes.Buffer{}
+			_, err = buildAndRun(TESTDATA+"/stdin.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
+				cmd.Stdin = strings.NewReader("hello\nworld\n\n")
+				return cmd.Run()
+			})
+			if err != nil {
+				t.Error("failed to run:", err)
+			}
+			checkOutput(t, TESTDATA+"/stdin.txt", output.Bytes())
+		})
 	}
-	checkOutput(t, TESTDATA+"/stdin.txt", output.Bytes())
 }
 
 func TestRuntimeGOROOT(t *testing.T) {
