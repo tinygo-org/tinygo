@@ -9,5 +9,6 @@ include make/gen-device.mk
 include make/build.mk
 include make/test.mk
 include make/smoketest.mk
+include make/sizediff.mk
 include make/release.mk
 include make/tools.mk

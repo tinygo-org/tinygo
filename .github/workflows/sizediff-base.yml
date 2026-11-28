@@ -63,6 +63,7 @@ jobs:
           set -o pipefail
           export PATH="$PWD/build:$PATH"
           (cd drivers; make smoke-test | tee sizes-dev.txt)
+          make sizediff TINYGO=tinygo | tee -a drivers/sizes-dev.txt
           test -s drivers/sizes-dev.txt
       - name: Save dev sizes
         if: steps.base-cache.outputs.cache-hit != 'true' && steps.base-cache.outputs.cache-key != ''

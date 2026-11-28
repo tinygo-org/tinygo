@@ -58,6 +58,7 @@ jobs:
           set -o pipefail
           export PATH="$PWD/build:$PATH"
           (cd drivers; make smoke-test | tee sizes-pr.txt)
+          make sizediff TINYGO=tinygo | tee -a drivers/sizes-pr.txt
 
       # Compute sizes for the dev branch
       - name: Restore dev sizes
@@ -101,6 +102,7 @@ jobs:
           set -o pipefail
           export PATH="$PWD/build:$PATH"
           (cd drivers; make smoke-test | tee sizes-dev.txt)
+          make sizediff TINYGO=tinygo | tee -a drivers/sizes-dev.txt
 
       # Create comment
       # TODO: add a summary, something like:

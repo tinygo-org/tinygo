@@ -1,33 +1,20 @@
 package builder
 
 import (
-	"bytes"
-	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/goenv"
-	"github.com/tinygo-org/tinygo/internal/diff"
 	"github.com/tinygo-org/tinygo/interp"
 )
 
 var sema = make(chan struct{}, runtime.NumCPU())
-
-var flagUpdate = flag.Bool("update", false, "update builder package tests")
-
-type sizeTest struct {
-	target string
-	path   string
-	opt    string
-}
 
 func TestTrimPathPackageSize(t *testing.T) {
 	root := goenv.Get("TINYGOROOT")
@@ -50,153 +37,6 @@ func TestTrimPathPackageSize(t *testing.T) {
 			t.Errorf("findPackagePath(%q) = %q, %q; want %q, %q", tc.path, pkg, file, tc.pkg, tc.file)
 		}
 	}
-}
-
-// Test whether code and data size is as expected for the given targets.
-// This tests both the logic of loadProgramSize and checks that code size
-// doesn't change unintentionally.
-//
-// If you find that code or data size is reduced, then great! You can update the
-// golden file by passing -update to the test.
-// If you find that the code or data size is increased, take a look as to why
-// this is. It could be due to an update (LLVM version, Go version, etc) which
-// is fine, but it could also mean that a recent change introduced this size
-// increase. If so, please consider whether this new feature is indeed worth the
-// size increase for all users.
-func TestBinarySize(t *testing.T) {
-	if runtime.GOOS == "linux" && !hasBuiltinTools {
-		// Debian LLVM packages are modified a bit and tend to produce
-		// different machine code. Ideally we'd fix this (with some attributes
-		// or something?), but for now skip it.
-		t.Skip("Skip: using external LLVM version so binary size might differ")
-	}
-
-	// This is a small number of very diverse targets that we want to test.
-	tests := []sizeTest{
-		// microcontrollers
-		{target: "hifive1b", path: "examples/echo", opt: "z"},
-		{target: "microbit", path: "examples/serial", opt: "z"},
-		{target: "wioterminal", path: "examples/pininterrupt", opt: "z"},
-
-		{target: "pico", path: "examples/serial", opt: "z"},
-		{target: "pico", path: "examples/serial", opt: "2"},
-		{target: "pico2", path: "examples/serial", opt: "z"},
-		{target: "pico2", path: "examples/serial", opt: "2"},
-		{target: "esp32c3-generic", path: "examples/serial", opt: "z"},
-		{target: "esp32c3-generic", path: "examples/serial", opt: "2"},
-
-		{target: "cortex-m-qemu", path: "./testdata/size-slice", opt: "z"},
-		{target: "cortex-m-qemu", path: "./testdata/size-slice", opt: "2"},
-		{target: "cortex-m-qemu", path: "./testdata/size-defer", opt: "z"},
-		{target: "cortex-m-qemu", path: "./testdata/size-contains", opt: "z"},
-		{target: "pico2", path: "./testdata/size-contains", opt: "z"},
-		{target: "pico2", path: "./testdata/size-os", opt: "z"},
-		{target: "pico2", path: "./testdata/size-os", opt: "2"},
-		{target: "pico2", path: "./testdata/size-timer", opt: "z"},
-		{target: "pico2", path: "./testdata/size-timer", opt: "2"},
-
-		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "z"},
-		{target: "cortex-m-qemu", path: "./testdata/size-corpus", opt: "2"},
-		{target: "riscv-qemu", path: "./testdata/size-corpus", opt: "z"},
-		{target: "riscv-qemu", path: "./testdata/size-corpus", opt: "2"},
-
-		{target: "cortex-m-qemu", path: "./testdata/size-init-recover", opt: "z"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-recover", opt: "2"},
-		{target: "pico2", path: "./testdata/size-init-regexp", opt: "z"},
-		{target: "pico2", path: "./testdata/size-init-regexp", opt: "2"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-crc", opt: "z"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-crc", opt: "2"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-map", opt: "z"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-map", opt: "2"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-errors", opt: "z"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-errors", opt: "2"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-config", opt: "z"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-config", opt: "2"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-strings", opt: "z"},
-		{target: "cortex-m-qemu", path: "./testdata/size-init-strings", opt: "2"},
-
-		// TODO: also check wasm. Right now this is difficult, because
-		// wasm binaries are run through wasm-opt and therefore the
-		// output varies by binaryen version.
-	}
-	sizes := measureBinarySizes(t, tests)
-	output := formatSizeTable(tests, sizes)
-	checkGolden(t, "testdata/binary-size.txt", output)
-}
-
-func checkGolden(t *testing.T, path string, actual []byte) {
-	t.Helper()
-	if *flagUpdate {
-		if err := os.WriteFile(path, actual, 0o666); err != nil {
-			t.Fatal("failed to write updated golden file:", err)
-		}
-		return
-	}
-	expected, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal("failed to read golden file:", err)
-	}
-	if !bytes.Equal(actual, expected) {
-		t.Errorf("%s does not match expected output (re-run with -update to regenerate):\n%s", path, string(diff.Diff("expected", expected, "actual", actual)))
-	}
-}
-
-func measureBinarySizes(t *testing.T, tests []sizeTest) []*programSize {
-	t.Helper()
-	type result struct {
-		size *programSize
-		err  error
-	}
-	results := make([]result, len(tests))
-	outer := make(chan struct{}, cap(sema))
-	var wg sync.WaitGroup
-	for i, tc := range tests {
-		tmpdir := t.TempDir()
-		wg.Go(func() {
-			outer <- struct{}{}
-			defer func() { <-outer }()
-			size, err := measureBinarySize(tc, tmpdir)
-			results[i] = result{size, err}
-		})
-	}
-	wg.Wait()
-	sizes := make([]*programSize, len(tests))
-	failed := false
-	for i, tc := range tests {
-		if err := results[i].err; err != nil {
-			t.Errorf("%s/%s opt=%s: %v", tc.target, tc.path, tc.opt, err)
-			failed = true
-		}
-		sizes[i] = results[i].size
-	}
-	if failed {
-		t.FailNow()
-	}
-	return sizes
-}
-
-func measureBinarySize(tc sizeTest, tmpdir string) (*programSize, error) {
-	result, err := buildBinaryInDir(tc.target, tc.path, tc.opt, tmpdir, false)
-	if err != nil {
-		return nil, err
-	}
-	size, err := loadProgramSize(result.Executable, nil)
-	if err != nil {
-		return nil, fmt.Errorf("could not read program size: %w", err)
-	}
-	return size, nil
-}
-
-func formatSizeTable(tests []sizeTest, sizes []*programSize) []byte {
-	var output bytes.Buffer
-	fmt.Fprintf(&output, "%-24s %-40s %-3s %8s %8s %8s %8s\n",
-		"target", "package", "opt", "code", "rodata", "data", "bss")
-	for i, tc := range tests {
-		size := sizes[i]
-		fmt.Fprintf(&output, "%-24s %-40s %-3s %8d %8d %8d %8d\n",
-			tc.target, tc.path, tc.opt, size.Code, size.ROData, size.Data, size.BSS)
-	}
-	return output.Bytes()
 }
 
 // Check that the -size=full flag attributes binary size to the correct package.
