@@ -76,6 +76,8 @@ type TargetSpec struct {
 	RelocationModel  string   `json:"relocation-model,omitempty"`
 	WITPackage       string   `json:"wit-package,omitempty"`
 	WITWorld         string   `json:"wit-world,omitempty"`
+
+	GoToolchainGOARCH string `json:"go-toolchain-goarch,omitempty"`
 }
 
 // overrideProperties overrides all properties that are set in child into itself using reflection.

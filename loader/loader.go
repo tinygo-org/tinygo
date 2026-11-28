@@ -907,7 +907,7 @@ func (p *Package) parseFiles() ([]*ast.File, error) {
 			parseFlags,
 			env,
 			p.program.config.GOOS(),
-			p.program.config.GOARCH(),
+			p.program.config.GoToolchainGOARCH(),
 			p.program.config.BuildTags(),
 		)
 		for file, original := range originals {
