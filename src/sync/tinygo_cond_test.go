@@ -7,7 +7,7 @@ import (
 )
 
 // TestCondSignal tests waiting on a Cond and notifying it with Signal.
-func TestCondSignal(t *testing.T) {
+func TestTinyGoCondSignal(t *testing.T) {
 	// Create a Cond with a normal mutex.
 	cond := sync.Cond{
 		L: &sync.Mutex{},
@@ -34,7 +34,7 @@ func TestCondSignal(t *testing.T) {
 	}
 }
 
-func TestCondBroadcast(t *testing.T) {
+func TestTinyGoCondBroadcast(t *testing.T) {
 	// Create a Cond with an RWMutex.
 	var mu sync.RWMutex
 	cond := sync.Cond{

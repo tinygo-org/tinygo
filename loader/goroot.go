@@ -316,9 +316,16 @@ func pathsToOverride(config *compileopts.Config) map[string]gorootOverride {
 		"os/":                             mergeSubdirs,
 		"reflect/":                        gorootMergeTestsWith("abi_test.go", "export_test.go", "nih_test.go"),
 		"runtime/":                        replace,
-		"sync/":                           mergeSubdirs,
-		"testing/":                        mergeSubdirs,
-		"tinygo/":                         replace,
+		"sync/": gorootMergeTestsWith(
+			"export_test.go",
+			"map_bench_test.go",
+			"map_reference_test.go",
+			"map_test.go",
+			"oncefunc_test.go",
+			"pool_test.go",
+		),
+		"testing/": mergeSubdirs,
+		"tinygo/":  replace,
 		// Go 1.26 added SWAR optimizations to unicode/utf8 that use
 		// constants assuming at least 32-bit uintptr. TinyGo supports
 		// 16-bit targets (AVR) where these constants overflow, so we

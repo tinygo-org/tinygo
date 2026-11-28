@@ -541,6 +541,16 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		"TestIndexRune",
 		"TestReplace",
 	)
+	r.skipTests("sync",
+		"TestCondCopy",
+		"TestIssue76126",
+		"TestMutexFairness",
+		"TestRWMutex",
+		"TestSemaphore",
+	)
+	if baremetal || wasip2 {
+		r.skipTests("sync", "TestMutexMisuse")
+	}
 	r.skipTests("unicode/utf16", "TestAllocationsDecode")
 
 	r.skipTests("internal/zstd", "TestAlloc")
@@ -578,10 +588,11 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	// Boehm does not reclaim unreachable timers and tickers in this test.
 	r.skipTests("time", "TestTimerGC")
 
-	// Both tests start subprocesses. macOS startProcess is a stub.
+	// These tests start subprocesses. macOS startProcess is a stub.
 	if darwin {
 		r.skipTests("flag", "TestExitCode")
 		r.skipTests("math/rand", "TestDefaultRace")
+		r.skipTests("sync", "TestMutexMisuse")
 		// Timer and goroutine stress tests can exhaust macOS threads.
 		r.skipTests("internal/singleflight", "TestDoAndForgetUnsharedRace")
 		r.skipTests("time", "TestStopResult", "TestResetResult", "TestLongAdjustTimers")
