@@ -263,14 +263,16 @@ func (b *builder) createSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		//     var err uintptr
 		//     if syscallResult < 0 && syscallResult > -4096 {
 		//         err = -syscallResult
+		//         syscallResult = ^uintptr(0)
 		//     }
 		//     return syscallResult, 0, err
 		inrange1 := b.CreateICmp(llvm.IntSLT, syscallResult, b.uintptrZero, "")
 		inrange2 := b.CreateICmp(llvm.IntSGT, syscallResult, llvm.ConstInt(b.uintptrType, 0xfffffffffffff000, true), "") // -4096
 		hasError := b.CreateAnd(inrange1, inrange2, "")
+		r1 := b.CreateSelect(hasError, llvm.ConstAllOnes(b.uintptrType), syscallResult, "")
 		errResult := b.CreateSelect(hasError, b.CreateSub(b.uintptrZero, syscallResult, ""), b.uintptrZero, "syscallError")
 		retval := llvm.Undef(b.ctx.StructType([]llvm.Type{b.uintptrType, b.uintptrType, b.uintptrType}, false))
-		retval = b.CreateInsertValue(retval, syscallResult, 0, "")
+		retval = b.CreateInsertValue(retval, r1, 0, "")
 		retval = b.CreateInsertValue(retval, b.uintptrZero, 1, "")
 		retval = b.CreateInsertValue(retval, errResult, 2, "")
 		return retval, nil

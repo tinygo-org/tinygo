@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -16,8 +15,7 @@ func main() {
 
 	r1, _, errno := syscall.Syscall(syscall.SYS_CLOSE, 12345, 0, 0)
 	println("Syscall close:", errno == syscall.EBADF)
-	if runtime.GOOS == "darwin" && r1 != ^uintptr(0) {
-		// TinyGo on linux returns -errno in r1 instead.
+	if r1 != ^uintptr(0) {
 		println("unexpected r1:", r1)
 	}
 
