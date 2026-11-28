@@ -390,8 +390,11 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		}
 	}
 
-	if (opts.mode == modeFull || wasi) && !opts.bench {
+	if wasi && !opts.bench {
 		r.short("archive/zip")
+	}
+	if hosted && !opts.bench && (opts.mode == modeFull || opts.mode == modeFast) {
+		r.parallel("archive/zip", 1)
 	}
 	if !opts.bench {
 		if wasi {

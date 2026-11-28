@@ -135,6 +135,18 @@ func (r *ruleSet) short(pkg string) {
 	r.packageRule(pkg, ruleLine()).short = true
 }
 
+func (r *ruleSet) parallel(pkg string, count int) {
+	line := ruleLine()
+	p := r.packageRule(pkg, line)
+	if count < 1 {
+		r.fail(line, "%s has invalid test parallelism %d", pkg, count)
+	}
+	if p.parallel != 0 && p.parallel != count {
+		r.fail(line, "%s has conflicting test parallelism %d and %d", pkg, p.parallel, count)
+	}
+	p.parallel = count
+}
+
 func (r ruleSet) planPackage(name string) packagePlan {
 	p := packagePlan{name: name}
 	if configured := r.packages[name]; configured != nil {
@@ -158,13 +170,14 @@ func (r ruleSet) planPackage(name string) packagePlan {
 }
 
 type packagePlan struct {
-	name    string
-	skipped bool
-	stackMB int
-	short   bool
-	skips   []string
-	run     string
-	lines   []int
+	name     string
+	skipped  bool
+	stackMB  int
+	parallel int
+	short    bool
+	skips    []string
+	run      string
+	lines    []int
 }
 
 func (p packagePlan) flags() []string {
@@ -174,6 +187,9 @@ func (p packagePlan) flags() []string {
 	}
 	if p.stackMB != 0 {
 		flags = append(flags, fmt.Sprintf("-stack-size=%dMB", p.stackMB))
+	}
+	if p.parallel != 0 {
+		flags = append(flags, fmt.Sprintf("-parallel=%d", p.parallel))
 	}
 	if len(p.skips) != 0 {
 		flags = append(flags, "-skip="+strings.Join(p.skips, "|"))

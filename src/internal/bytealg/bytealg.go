@@ -1,5 +1,7 @@
 package bytealg
 
+import "unsafe"
+
 // Some code in this file has been copied from the Go source code, and has
 // copyright of their original authors:
 //
@@ -14,6 +16,11 @@ const (
 
 	MaxLen        = int(-1) >> 31
 	MaxBruteForce = MaxLen
+
+	wordBytes = int(unsafe.Sizeof(uintptr(0)))
+	wordOnes  = ^uintptr(0) / 0xff
+	wordLo    = wordOnes * 0x7f
+	wordHi    = wordOnes * 0x80
 )
 
 // Compare two byte slices.
@@ -66,23 +73,43 @@ func CompareString(a, b string) int {
 
 // Count the number of instances of a byte in a slice.
 func Count(b []byte, c byte) int {
-	// Use a simple implementation, as there is no intrinsic that does this like we want.
-	n := 0
-	for _, v := range b {
-		if v == c {
-			n++
-		}
-	}
-	return n
+	return countByte(b, c)
 }
 
 // Count the number of instances of a byte in a string.
 func CountString(s string, c byte) int {
-	// Use a simple implementation, as there is no intrinsic that does this like we want.
-	// Currently, the compiler does not generate zero-copy byte-string conversions, so this needs to be separate from Count.
+	return countByte(s, c)
+}
+
+func countByte[T []byte | string](value T, c byte) int {
 	n := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
+	i := 0
+	for ; i <= len(value)-wordBytes; i += wordBytes {
+		_ = value[i+wordBytes-1]
+		var word uintptr
+		if wordBytes == 8 {
+			word = uintptr(uint64(value[i]) | uint64(value[i+1])<<8 |
+				uint64(value[i+2])<<16 | uint64(value[i+3])<<24 |
+				uint64(value[i+4])<<32 | uint64(value[i+5])<<40 |
+				uint64(value[i+6])<<48 | uint64(value[i+7])<<56)
+		} else if wordBytes == 4 {
+			word = uintptr(uint32(value[i]) | uint32(value[i+1])<<8 |
+				uint32(value[i+2])<<16 | uint32(value[i+3])<<24)
+		} else if wordBytes == 2 {
+			word = uintptr(uint16(value[i]) | uint16(value[i+1])<<8)
+		} else {
+			word = uintptr(value[i])
+		}
+
+		x := word ^ uintptr(c)*wordOnes
+		// Mark each zero byte's high bit, then sum the marks into the high byte.
+		// See https://graphics.stanford.edu/~seander/bithacks.html#ZeroInWord.
+		zeroBytes := ^(((x & wordLo) + wordLo) | x | wordLo)
+		matches := (zeroBytes & wordHi) >> 7
+		n += int(matches * wordOnes >> (8 * (wordBytes - 1)))
+	}
+	for ; i < len(value); i++ {
+		if value[i] == c {
 			n++
 		}
 	}
