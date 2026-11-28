@@ -271,7 +271,7 @@ func TestStdin(t *testing.T) {
 
 			output := &bytes.Buffer{}
 			_, err = buildAndRun(TESTDATA+"/stdin.go", config, output, nil, nil, time.Minute, func(cmd *exec.Cmd, result *builder.BuildResult) error {
-				cmd.Stdin = strings.NewReader("hello\nworld\n\n")
+				cmd.Stdin = strings.NewReader("hello\nworld\nexit\n")
 				return cmd.Run()
 			})
 			if err != nil {

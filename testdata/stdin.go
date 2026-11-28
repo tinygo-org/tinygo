@@ -7,8 +7,8 @@ import (
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
-	// A UART has no end of file, so an empty line also ends the input.
-	for scanner.Scan() && scanner.Text() != "" {
+	// A UART has no end of file, so the line "exit" also ends the input.
+	for scanner.Scan() && scanner.Text() != "exit" {
 		println("line:", scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
