@@ -43,20 +43,18 @@ def main():
     path1 = sys.argv[2]
     sizes0 = readSizes(path0)
     sizes1 = readSizes(path1)
+    commands1 = {size['command']: size for size in sizes1}
+    commands0 = {size['command'] for size in sizes0}
     comparisons = []
-    for i in range(len(sizes0)):
-        if i >= len(sizes1):
-            print('%s has more commands than %s' % (path0, path1))
-            print('   ', sizes0[i]['command'])
-            break
-        if sizes0[i]['command'] != sizes1[i]['command']:
-            print('not the same command!')
-            print('   ', sizes0[i]['command'])
-            print('   ', sizes1[i]['command'])
-        comparisons.append(Comparison(sizes0[i]['command'], sizes0[i]['flash'], sizes0[i]['ram'], sizes1[i]['flash'], sizes1[i]['ram']))
-    if len(sizes0) < len(sizes1):
-        print('%s has more commands than %s' % (path1, path0))
-        print('   ', sizes1[len(sizes0)]['command'])
+    for size0 in sizes0:
+        size1 = commands1.get(size0['command'])
+        if size1 is None:
+            print('only in %s:' % path0, size0['command'])
+            continue
+        comparisons.append(Comparison(size0['command'], size0['flash'], size0['ram'], size1['flash'], size1['ram']))
+    for size1 in sizes1:
+        if size1['command'] not in commands0:
+            print('only in %s:' % path1, size1['command'])
     comparisons.sort(key=lambda x: x.flashdiff)
     if not comparisons:
         return
