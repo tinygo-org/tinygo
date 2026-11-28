@@ -652,6 +652,10 @@ func runGC() (freeBytes uintptr) {
 		finishMark()
 	}
 
+	// Clear weak pointers to unreachable objects before scanFinalizers
+	// resurrects finalizable objects.
+	scanWeakHandles()
+
 	// Detect finalizable objects that became unreachable and queue their
 	// finalizers. This runs while the world is still stopped, after marking is
 	// complete and before sweep frees anything.
@@ -684,6 +688,40 @@ func runGC() (freeBytes uintptr) {
 	}
 
 	return
+}
+
+var (
+	weakHandleList *weakHandle
+	hasWeakHandles bool
+)
+
+func registerWeakHandle(h *weakHandle, ptr unsafe.Pointer) {
+	gcLock.Lock()
+	if isOnHeap(uintptr(ptr)) {
+		hasWeakHandles = true
+		h.next = weakHandleList
+		weakHandleList = h
+	}
+	gcLock.Unlock()
+}
+
+func scanWeakHandles() {
+	if !hasWeakHandles {
+		return
+	}
+	prev := &weakHandleList
+	for h := *prev; h != nil; {
+		next := h.next
+		addr := ^h.ptr
+		if blockFromAddr(addr).findHead().state() != blockStateMark {
+			h.ptr = 0
+			*prev = next
+			h.next = nil
+		} else {
+			prev = &h.next
+		}
+		h = next
+	}
 }
 
 // markRoots reads all pointers from start to end (exclusive) and if they look
