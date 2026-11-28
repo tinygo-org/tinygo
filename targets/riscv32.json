@@ -1,5 +1,7 @@
 {
 	"inherits": ["riscv"],
+	"goarch": "riscv",
+	"go-toolchain-goarch": "arm",
 	"llvm-target": "riscv32-unknown-none",
 	"cpu": "generic-rv32",
 	"target-abi": "ilp32",
