@@ -32,6 +32,7 @@ const (
 	padEnableMask = rp.PADS_BANK0_GPIO0_IE_Msk |
 		rp.PADS_BANK0_GPIO0_OD_Msk |
 		rp.PADS_BANK0_GPIO0_ISO_Msk
+	watchdogXFactor = 1
 )
 
 const (
@@ -218,7 +219,9 @@ func (clks *clocksType) initTicks() {
 // On RP2040, the watchdog contained a tick generator used to generate a 1μs tick for the watchdog. This was also
 // distributed to the system timer. On RP2350, the watchdog instead takes a tick input from the system-level ticks block. See Section 8.5.
 func (wd *watchdogImpl) startTick(cycles uint32) {
-	rp.TICKS.WATCHDOG_CTRL.SetBits(1)
+	rp.TICKS.SetWATCHDOG_CTRL_ENABLE(0)
+	rp.TICKS.SetWATCHDOG_CYCLES(cycles)
+	rp.TICKS.SetWATCHDOG_CTRL_ENABLE(1)
 }
 
 func adjustCoreVoltage() bool {

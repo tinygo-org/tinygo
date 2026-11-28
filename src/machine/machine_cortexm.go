@@ -1,4 +1,4 @@
-//go:build cortexm
+//go:build cortexm && !rp2040 && !rp2350
 
 package machine
 

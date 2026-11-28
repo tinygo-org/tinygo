@@ -30,6 +30,8 @@ const (
 		rp.RESETS_RESET_PLL_SYS
 	padEnableMask = rp.PADS_BANK0_GPIO0_IE_Msk |
 		rp.PADS_BANK0_GPIO0_OD_Msk
+	// The watchdog counts down twice per tick, see errata RP2040-E1.
+	watchdogXFactor = 2
 )
 
 const (
