@@ -234,8 +234,6 @@ func ticks() timeUnit {
 // Technically this is an implementation detail but hopefully they won't change
 // the memory-mapped I/O registers.
 var (
-	// UART0 output register.
-	stdoutWrite = (*volatile.Register8)(unsafe.Pointer(uintptr(0x10000000)))
 	// SiFive test finisher
 	testFinisher = (*volatile.Register32)(unsafe.Pointer(uintptr(0x100000)))
 
@@ -288,6 +286,9 @@ func signalHart(hart uint32) {
 	riscv.Asm("fence")
 	aclintMSWI.MSIP[hart].Set(1)
 }
+
+// The virt machine UART0 is an NS16550A, see stdio_qemu.go.
+const qemuPL011 = false
 
 func abort() {
 	exit(1)

@@ -5,11 +5,7 @@ package runtime
 // This file implements the Stellaris LM3S6965 Cortex-M3 chip as implemented by
 // QEMU.
 
-import (
-	"device/arm"
-	"runtime/volatile"
-	"unsafe"
-)
+import "device/arm"
 
 //export Reset_Handler
 func main() {
@@ -27,8 +23,8 @@ func sysTickFrequency() uint32 {
 	return 12_500_000
 }
 
-// UART0 output register.
-var stdoutWrite = (*volatile.Register8)(unsafe.Pointer(uintptr(0x4000c000)))
+// The LM3S6965 UART0 is a PL011, see stdio_qemu.go.
+const qemuPL011 = true
 
 func abort() {
 	exit(1)
