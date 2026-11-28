@@ -17,14 +17,6 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: MinoruSekine/setup-scoop@v4
-      - name: Install Dependencies
-        # Only PowerShell gets scoop's exit status, see https://github.com/ScoopInstaller/Scoop/issues/3936
-        shell: pwsh
-        run: |
-          scoop config use_external_7zip true
-          scoop install ninja binaryen
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Checkout
         uses: actions/checkout@v6
       - uses: ./.github/actions/submodules
@@ -32,66 +24,7 @@ jobs:
         id: version
         shell: bash
         run: ./.github/workflows/tinygo-extract-version.sh | tee -a "$GITHUB_OUTPUT"
-      - name: Install Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.27.1'
-          cache: false
-      - name: Restore cached LLVM source
-        uses: actions/cache/restore@v5
-        id: cache-llvm-source
-        with:
-          key: llvm-source-22-windows-v3-${{ hashFiles('llvm-version.txt') }}
-          path: |
-            llvm-project/clang/lib/Headers
-            llvm-project/clang/include
-            llvm-project/compiler-rt
-            llvm-project/lld/include
-            llvm-project/llvm/include
-      - name: Download LLVM source
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        run: make llvm-source
-      - name: Save cached LLVM source
-        uses: actions/cache/save@v5
-        if: steps.cache-llvm-source.outputs.cache-hit != 'true'
-        with:
-          key: ${{ steps.cache-llvm-source.outputs.cache-primary-key }}
-          path: |
-            llvm-project/clang/lib/Headers
-            llvm-project/clang/include
-            llvm-project/compiler-rt
-            llvm-project/lld/include
-            llvm-project/llvm/include
-      - name: Restore cached LLVM build
-        uses: actions/cache/restore@v5
-        id: cache-llvm-build
-        with:
-          key: llvm-build-22-windows-v1-${{ hashFiles('llvm-version.txt') }}
-          path: llvm-build
-      - name: Build LLVM
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          # fetch LLVM source
-          rm -rf llvm-project
-          make llvm-source
-          # build!
-          make llvm-build CCACHE=OFF
-          # Remove unnecessary object files (to reduce cache size).
-          find llvm-build -name CMakeFiles -prune -exec rm -r '{}' \;
-      - name: Save cached LLVM build
-        uses: actions/cache/save@v5
-        if: steps.cache-llvm-build.outputs.cache-hit != 'true'
-        with:
-          key: ${{ steps.cache-llvm-build.outputs.cache-primary-key }}
-          path: llvm-build
-      - name: Cache Go cache
-        uses: actions/cache@v5
-        with:
-          key: go-cache-windows-v3-${{ hashFiles('go.mod') }}
-          path: |
-            C:/Users/runneradmin/AppData/Local/go-build
-            C:/Users/runneradmin/go/pkg/mod
+      - uses: ./.github/actions/setup-windows-build
       - name: make gen-device
         run: make -j3 gen-device
       - name: Test TinyGo
