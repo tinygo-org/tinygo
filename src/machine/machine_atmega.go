@@ -46,7 +46,7 @@ func (i2c *I2C) Configure(config I2CConfig) error {
 // SetBaudRate sets the communication speed for I2C.
 func (i2c *I2C) SetBaudRate(br uint32) error {
 	// Initialize twi prescaler and bit rate.
-	i2c.srReg.SetBits((i2c.srPS0 | i2c.srPS1))
+	i2c.srReg.ClearBits(i2c.srPS0 | i2c.srPS1)
 
 	// twi bit rate formula from atmega128 manual pg. 204:
 	// SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
