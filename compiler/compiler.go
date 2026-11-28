@@ -194,6 +194,7 @@ type builder struct {
 	info               *functionInfo
 	locals             map[ssa.Value]llvm.Value // local variables
 	indirectValues     map[ssa.Value]llvm.Value
+	temporaries        map[ssa.Instruction][]valueStorage // stack slots to end after the instruction
 	indirectReturn     llvm.Value
 	blockInfo          []blockInfo
 	currentBlock       *ssa.BasicBlock
@@ -239,6 +240,7 @@ func newBuilder(c *context, irbuilder llvm.Builder, f *ssa.Function) *builder {
 		info:           c.getFunctionInfo(f),
 		locals:         make(map[ssa.Value]llvm.Value),
 		indirectValues: make(map[ssa.Value]llvm.Value),
+		temporaries:    make(map[ssa.Instruction][]valueStorage),
 		dilocals:       make(map[*types.Var]llvm.Metadata),
 	}
 }
@@ -1500,6 +1502,9 @@ func (b *builder) createFunction() {
 				}
 			}
 			b.createInstruction(instr)
+			for _, storage := range b.temporaries[instr] {
+				b.endValueStorage(storage)
+			}
 		}
 		if b.fn.Name() == "init" && len(block.Instrs) == 0 {
 			b.CreateRetVoid()
@@ -2629,10 +2634,31 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		abi = b.getInterfaceFunctionABI(instr.Signature())
 		paramOffset = 1
 	}
-	params := b.getCallArguments(instr.Args, abi.params[paramOffset:])
+	params := make([]llvm.Value, len(instr.Args))
+	var indirectArgs []int
+	var temporaries []valueStorage
+	for i, value := range instr.Args {
+		param := abi.params[paramOffset+i]
+		if !param.indirect {
+			params[i] = b.getValue(value, getPos(value))
+			continue
+		}
+		indirectArgs = append(indirectArgs, i)
+		if _, ok := b.indirectValues[value]; ok || !b.fitsStackSlot(param.llvmType) {
+			params[i] = b.getValuePointer(value)
+			continue
+		}
+		ptr, size := b.createTemporaryAlloca(param.llvmType, "")
+		b.storeValue(ptr, value)
+		temporaries = append(temporaries, valueStorage{ptr: ptr, size: size, temporary: true})
+		params[i] = ptr
+	}
 	if instr.IsInvoke() {
 		params = append([]llvm.Value{invokeReceiver}, params...)
 		params = append(params, invokeTypecode)
+		for i := range indirectArgs {
+			indirectArgs[i]++
+		}
 	}
 
 	if !exported {
@@ -2640,7 +2666,11 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 			result := b.createIndirectStorage(abi.resultType, "call.result")
 			params = append([]llvm.Value{result}, params...)
 			params = append(params, context)
-			b.createInvoke(calleeType, callee, params, "", instr)
+			for i := range indirectArgs {
+				indirectArgs[i]++
+			}
+			call := b.createInvoke(calleeType, callee, params, "", instr)
+			b.finishCall(call, params, append(indirectArgs, 0), temporaries)
 			return result, nil
 		}
 		// This function takes a context parameter.
@@ -2648,7 +2678,56 @@ func (b *builder) createFunctionCall(instr *ssa.CallCommon) (llvm.Value, error) 
 		params = append(params, context)
 	}
 
-	return b.createInvoke(calleeType, callee, params, "", instr), nil
+	call := b.createInvoke(calleeType, callee, params, "", instr)
+	b.finishCall(call, params, indirectArgs, temporaries)
+	return call, nil
+}
+
+// finishCall marks the params at the indirect indexes as not captured by a
+// function value call, and ends the argument temporaries of the call.
+func (b *builder) finishCall(call llvm.Value, params []llvm.Value, indirect []int, temporaries []valueStorage) {
+	if len(indirect) != 0 && call.CalledValue().IsAFunction().IsNil() {
+		operand := 0
+		for i, param := range params {
+			if slices.Contains(indirect, i) {
+				call.AddCallSiteAttribute(operand+1, b.nocapture)
+			}
+			operand += len(b.expandFormalParamOffsets(param.Type()))
+		}
+	}
+	for _, storage := range temporaries {
+		b.endValueStorage(storage)
+	}
+}
+
+// fitsStackSlot reports whether a temporary of type t may go on the stack.
+// Larger ones use runtime.alloc, which keeps them on the heap.
+func (b *builder) fitsStackSlot(t llvm.Type) bool {
+	return b.targetData.TypeAllocSize(t) <= b.MaxStackAlloc
+}
+
+// temporaryUser returns the only instruction that uses value, if it is in the
+// same block and keeps no pointer to value, so value only needs a stack slot
+// until that instruction is done.
+func temporaryUser(value ssa.Value) ssa.Instruction {
+	var user ssa.Instruction
+	for _, referrer := range *value.Referrers() {
+		switch referrer.(type) {
+		case *ssa.DebugRef:
+			continue
+		case *ssa.Call, *ssa.Lookup, *ssa.MapUpdate, *ssa.Send, *ssa.Store:
+		default:
+			return nil
+		}
+		if user != nil && user != referrer {
+			return nil
+		}
+		user = referrer
+	}
+	if user == nil || user.Block() != value.(ssa.Instruction).Block() {
+		return nil
+	}
+	return user
 }
 
 // getValue returns the LLVM value of a constant, function value, global, or
@@ -4263,6 +4342,13 @@ func (b *builder) createUnOp(unop *ssa.UnOp) (llvm.Value, error) {
 			b.createNilCheck(unop.X, x, "deref")
 			if canUseDereferencePointer(unop) {
 				return x, nil
+			}
+			if user := temporaryUser(unop); user != nil && b.isIndirectAggregate(valueType) && b.fitsStackSlot(valueType) {
+				// Copy now, as *x may change before the user runs.
+				ptr, size := b.createTemporaryAlloca(valueType, "")
+				b.copyIndirectAggregate(ptr, x, valueType)
+				b.temporaries[user] = append(b.temporaries[user], valueStorage{ptr: ptr, size: size, temporary: true})
+				return ptr, nil
 			}
 			return b.loadFromStorage(x, unop.Type(), ""), nil
 		}

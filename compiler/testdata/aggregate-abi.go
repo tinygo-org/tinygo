@@ -2,27 +2,30 @@ package main
 
 type aggregateValue [600]int32
 
-type directAggregate [499]int32
+// The largest aggregate that is passed directly.
+type budgetAggregate [16]int32
 
-type boundaryAggregate [500]int32
+type splitAggregate [17]int32
 
 type moderateAggregate [400]int32
 
 type interfaceBoundaryAggregate [998]int32
 
 //go:noinline
-func readDirectAggregates(x, y directAggregate) int32 {
-	return x[0] + y[len(y)-1]
+func readDirectAggregate(x budgetAggregate, y splitAggregate) int32 {
+	return x[0] + y[0]
+}
+
+// The context and 62 aggregates are 993 parameters, 7 short of the limit.
+//
+//go:noinline
+func readLimitAggregates(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54, a55, a56, a57, a58, a59, a60, a61 budgetAggregate, b0, b1, b2, b3, b4, b5, b6 int32) int32 {
+	return a0[0] + a61[0] + b6
 }
 
 //go:noinline
-func readLimitAggregates(x, y directAggregate) (int32, int32) {
-	return x[0], y[0]
-}
-
-//go:noinline
-func readBoundaryAggregates(x, y boundaryAggregate) int32 {
-	return x[0] + y[len(y)-1]
+func readBoundaryAggregates(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54, a55, a56, a57, a58, a59, a60, a61, a62 budgetAggregate) int32 {
+	return a0[0] + a62[0]
 }
 
 //go:noinline
@@ -41,8 +44,8 @@ func readThreeAggregates(x, y, z moderateAggregate) int32 {
 }
 
 //go:noinline
-func readResultBudget(x directAggregate, y boundaryAggregate) (int32, int32) {
-	return x[0], y[0]
+func readResultBudget(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53, a54, a55, a56, a57, a58, a59, a60, a61 budgetAggregate, b0, b1, b2, b3, b4, b5, b6 int32) (int32, int32) {
+	return a0[0], a61[0] + b6
 }
 
 func selectAggregate(cond bool, x, y aggregateValue) int32 {

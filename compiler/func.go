@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"sort"
 
+	"github.com/tinygo-org/tinygo/compileopts"
 	"github.com/tinygo-org/tinygo/internal/llvmutil"
 	"golang.org/x/tools/go/ssa"
 	"tinygo.org/x/go-llvm"
@@ -16,6 +17,12 @@ import (
 // LLVM recursively expands each struct field and array element into separate
 // values. Pass larger aggregates indirectly before LLVM expands them.
 const maxDirectAggregateValues = 1024
+
+// Each expanded value is a separate move, so a [33]byte argument takes 33.
+// Use this lower limit on large stacks for values that fit in MaxStackAlloc,
+// as larger temporaries would go to the heap. Small stacks keep the higher
+// limit, as the copies make code for microcontrollers larger.
+const maxDirectAggregateValuesOnStack = 16
 
 // The WebAssembly JavaScript API limits function types to 1000 parameters.
 // Apply the same internal ABI cap on every target.
@@ -183,7 +190,12 @@ func (c *context) hasIndirectResult(sig *types.Signature) (llvm.Type, bool) {
 }
 
 func (c *context) isIndirectAggregate(typ llvm.Type) bool {
-	return aggregateValueCountExceeds(typ, maxDirectAggregateValues)
+	if aggregateValueCountExceeds(typ, maxDirectAggregateValues) {
+		return true
+	}
+	return c.DefaultStackSize >= compileopts.LargeStackSize &&
+		aggregateValueCountExceeds(typ, maxDirectAggregateValuesOnStack) &&
+		c.targetData.TypeAllocSize(typ) <= c.MaxStackAlloc
 }
 
 func aggregateValueCountExceeds(typ llvm.Type, limit uint64) bool {
