@@ -5,9 +5,13 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/tinygo-org/tinygo/goenv"
 )
 
 func TestEmulator(t *testing.T) {
@@ -386,6 +390,56 @@ func TestGlibcLinkLibraries(t *testing.T) {
 				if !slices.Contains(target.LDFlags, library) {
 					t.Errorf("glibc linker flags %v do not contain %s", target.LDFlags, library)
 				}
+			}
+		})
+	}
+}
+
+func TestRiscvTargetGOARCH(t *testing.T) {
+	targets, err := filepath.Glob(filepath.Join(goenv.Get("TINYGOROOT"), "targets", "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) == 0 {
+		t.Fatal("no target files found")
+	}
+	for _, path := range targets {
+		name := strings.TrimSuffix(filepath.Base(path), ".json")
+		t.Run(name, func(t *testing.T) {
+			spec, err := LoadTarget(&Options{Target: name})
+			if err != nil {
+				t.Fatal(err)
+			}
+			is32 := slices.Contains(spec.BuildTags, "tinygo.riscv32")
+			is64 := slices.Contains(spec.BuildTags, "tinygo.riscv64")
+			if !is32 && !is64 {
+				return
+			}
+			config := &Config{Target: spec, Options: &Options{}}
+			switch {
+			case is32:
+				if spec.GOARCH != "riscv" {
+					t.Errorf("GOARCH = %q, want riscv", spec.GOARCH)
+				}
+				if got := config.GoToolchainGOARCH(); got != "arm" {
+					t.Errorf("GoToolchainGOARCH = %q, want arm", got)
+				}
+				if !slices.Contains(spec.BuildTags, "arm") {
+					t.Errorf("build tags %v do not contain arm", spec.BuildTags)
+				}
+			case is64:
+				if spec.GOARCH != "riscv64" {
+					t.Errorf("GOARCH = %q, want riscv64", spec.GOARCH)
+				}
+				if got := config.GoToolchainGOARCH(); got != "riscv64" {
+					t.Errorf("GoToolchainGOARCH = %q, want riscv64", got)
+				}
+				if slices.Contains(spec.BuildTags, "arm") {
+					t.Errorf("build tags %v contain arm", spec.BuildTags)
+				}
+			}
+			if !strings.HasPrefix(spec.Triple, "riscv32-") && !strings.HasPrefix(spec.Triple, "riscv64-") {
+				t.Errorf("unexpected LLVM triple %q", spec.Triple)
 			}
 		})
 	}

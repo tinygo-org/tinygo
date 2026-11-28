@@ -491,6 +491,21 @@ func TestBuild(t *testing.T) {
 			}
 		})
 
+		t.Run("RiscvGOARCH", func(t *testing.T) {
+			t.Parallel()
+			t.Run("32-bit", func(t *testing.T) {
+				t.Parallel()
+				runTest("goarch32.go", optionsFromTarget("riscv-qemu", sema), t, nil, nil)
+			})
+			t.Run("64-bit", func(t *testing.T) {
+				t.Parallel()
+				if _, err := exec.LookPath("qemu-system-riscv64"); err != nil {
+					t.Skip("qemu-system-riscv64 not found")
+				}
+				runTest("goarch64.go", optionsFromTarget("riscv64-qemu", sema), t, nil, nil)
+			})
+		})
+
 		t.Run("AVR", func(t *testing.T) {
 			t.Parallel()
 			runPlatTests(optionsFromTarget("simavr", sema), tests, t)
