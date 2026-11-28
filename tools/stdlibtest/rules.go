@@ -485,7 +485,40 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipTests("net/netip", "TestAddrStringAllocs")
 		r.skipTest("net/netip", `^TestNoAllocs$/^(Addr.IsGlobalUnicast|Addr.IsInterfaceLocalMulticast|Addr.IsLinkLocalMulticast|Addr.IsLinkLocalUnicast|Addr.IsPrivate)$|^TestNoAllocs$/^Addr\.Zone$/^6zone$`)
 	}
-	r.skipTests("reflect", "TestMapIterSet")
+	r.skipTests("reflect",
+		// Allocation budgets.
+		"TestAllocations",
+		"TestMapIterSet",
+		"TestTypeAssertAllocs",
+		// Upstream reflect tests that depend on gc internals or unsupported reflect features.
+		"TestArrayOfDirectIface",
+		"TestCallReturnsEmpty",
+		"TestConvert",
+		"TestEmbeddedMethods",
+		"TestExported",
+		"TestFuncLayout",
+		"TestGCBits",
+		"TestGroupSizeZero",
+		"TestInternalIsZero",
+		"TestIsRegularMemory",
+		"TestIssue80332",
+		"TestIssue80332Others",
+		"TestMapOfKeyUpdate",
+		"TestMethodCallValueCodePtr",
+		"TestNestedMethods",
+		"TestOffsetLock",
+		"TestStructOfDirectIface",
+		"TestStructOfEmbeddedIfaceMethodCall",
+		"TestStructOfTooLarge",
+		"TestStructOfTooManyFields",
+		"TestStructOfWithInterface",
+		"TestTypeFieldReadOnly",
+		"TestTypelinksSorted",
+		"TestTypeOfTypeOf",
+		"TestValue_Comparable",
+		"TestValuePointerAndUnsafePointer",
+		"TestValueSeq",
+	)
 	r.skipTests("slices", "TestGrow", "TestInsert", "TestConcat")
 	r.skipTests("sort", "TestSearchWrappersDontAlloc")
 	r.skipTests("strconv", "TestCountMallocs", "TestAllocationsFromBytes")

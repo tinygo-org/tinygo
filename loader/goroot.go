@@ -314,7 +314,7 @@ func pathsToOverride(config *compileopts.Config) map[string]gorootOverride {
 		"net/":                            mergeSubdirs,
 		"net/http/":                       replace,
 		"os/":                             mergeSubdirs,
-		"reflect/":                        replace,
+		"reflect/":                        gorootMergeTestsWith("abi_test.go", "export_test.go", "nih_test.go"),
 		"runtime/":                        replace,
 		"sync/":                           mergeSubdirs,
 		"testing/":                        mergeSubdirs,
