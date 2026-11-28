@@ -10,6 +10,8 @@ func main() {
 	//sleep for 2 secs for console
 	time.Sleep(2 * time.Second)
 
+	println("reset reason:", machine.ResetReason().String())
+
 	config := machine.WatchdogConfig{
 		TimeoutMillis: 1000,
 	}

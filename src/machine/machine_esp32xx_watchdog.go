@@ -1,4 +1,4 @@
-//go:build esp32
+//go:build esp32 || esp32c3 || esp32c6 || esp32s3
 
 package machine
 
@@ -16,7 +16,7 @@ const (
 
 	wdtWriteKey = 0x50D83AA1
 
-	// 80 MHz APB clock / 40000 gives a 0.5 ms tick, the same as ESP-IDF.
+	// 80 MHz clock / 40000 gives a 0.5 ms tick, the same as ESP-IDF.
 	wdtPrescaler  = 40000
 	wdtTicksPerMs = 2
 
@@ -37,11 +37,14 @@ func (wd *watchdogImpl) Configure(config WatchdogConfig) error {
 		ms = WatchdogMaxTimeout
 	}
 
+	wdtClockInit()
+
 	esp.TIMG1.WDTWPROTECT.Set(wdtWriteKey)
 	esp.TIMG1.WDTCONFIG0.Set(wdtResetLength<<esp.TIMG_WDTCONFIG0_WDT_SYS_RESET_LENGTH_Pos |
 		wdtResetLength<<esp.TIMG_WDTCONFIG0_WDT_CPU_RESET_LENGTH_Pos)
 	esp.TIMG1.WDTCONFIG1.Set(wdtPrescaler << esp.TIMG_WDTCONFIG1_WDT_CLK_PRESCALE_Pos)
 	esp.TIMG1.WDTCONFIG2.Set(ms * wdtTicksPerMs)
+	esp.TIMG1.WDTCONFIG0.SetBits(wdtConfUpdate)
 	esp.TIMG1.WDTWPROTECT.Set(0)
 	return nil
 }
@@ -52,6 +55,7 @@ func (wd *watchdogImpl) Start() error {
 	esp.TIMG1.WDTFEED.Set(1)
 	esp.TIMG1.SetWDTCONFIG0_WDT_STG0(wdtStageResetSystem)
 	esp.TIMG1.SetWDTCONFIG0_WDT_EN(1)
+	esp.TIMG1.WDTCONFIG0.SetBits(wdtConfUpdate)
 	esp.TIMG1.WDTWPROTECT.Set(0)
 	return nil
 }

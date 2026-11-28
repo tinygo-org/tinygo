@@ -921,3 +921,8 @@ func (spi *SPI) Tx(w, r []byte) error {
 func ResetReasonRaw() uint32 {
 	return esp.RTC_CNTL.GetRESET_STATE_RESET_CAUSE_PROCPU()
 }
+
+// MWDT1 runs from the APB clock and has no config update bit.
+const wdtConfUpdate = 0
+
+func wdtClockInit() {}

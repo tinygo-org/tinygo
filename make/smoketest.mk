@@ -535,6 +535,12 @@ ifneq ($(XTENSA), 0)
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32c6        examples/reset
 	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32c3-generic     examples/watchdog
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32s3-generic     examples/watchdog
+	@$(MD5SUM) $(SMOKE_OUT).bin
+	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=xiao-esp32c6        examples/watchdog
+	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32-coreboard-v2  examples/touch
 	@$(MD5SUM) $(SMOKE_OUT).bin
 	$(TINYGO) build -size short -o $(SMOKE_OUT).bin -target=esp32s3-supermini   examples/touch

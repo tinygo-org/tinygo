@@ -42,11 +42,12 @@ func main() {
 	esp.RTC_CNTL.WDTCONFIG0.Set(0)
 	esp.RTC_CNTL.WDTWPROTECT.Set(0x0) // Re-enable write protect
 
-	// Disable Timer 0 watchdog.
+	// Disable Timer Group 1 watchdog.
 	esp.TIMG1.WDTWPROTECT.Set(0x50D83AA1) // write protect
-	esp.TIMG1.WDTCONFIG0.Set(0)           // disable TG0 WDT
+	esp.TIMG1.WDTCONFIG0.Set(0)           // disable TG1 WDT
 	esp.TIMG1.WDTWPROTECT.Set(0x0)        // Re-enable write protect
 
+	// Disable Timer Group 0 watchdog.
 	esp.TIMG0.WDTWPROTECT.Set(0x50D83AA1) // write protect
 	esp.TIMG0.WDTCONFIG0.Set(0)           // disable TG0 WDT
 	esp.TIMG0.WDTWPROTECT.Set(0x0)        // Re-enable write protect
