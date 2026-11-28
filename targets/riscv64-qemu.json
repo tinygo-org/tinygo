@@ -1,0 +1,8 @@
+{
+	"inherits": ["riscv64"],
+	"build-tags": ["virt", "qemu"],
+	"code-model": "medium",
+	"default-stack-size": 16384,
+	"linkerscript": "targets/riscv-qemu.ld",
+	"emulator": "qemu-system-riscv64 -machine virt,aclint=on -smp 1 -nographic -bios none -device virtio-rng-device -kernel {}"
+}

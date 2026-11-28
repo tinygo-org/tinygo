@@ -34,8 +34,8 @@ func (o *object) check(what string) {
 	}
 }
 
-// Baremetal targets report GOARCH arm and have little RAM.
-var small = runtime.GOARCH == "arm"
+// Baremetal targets have little RAM.
+var small = runtime.GOARCH == "arm" || runtime.GOARCH == "riscv"
 
 func churn() {
 	batches := 48

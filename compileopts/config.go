@@ -119,10 +119,18 @@ func (c *Config) GOOS() string {
 	return c.Target.GOOS
 }
 
-// GOARCH returns the GOARCH of the target. This might not always be the actual
-// architecture: for example, the AVR target is not supported by the Go standard
-// library so such targets will usually pretend to be linux/arm.
+// GOARCH returns the actual GOARCH of the target.
 func (c *Config) GOARCH() string {
+	return c.Target.GOARCH
+}
+
+// GoToolchainGOARCH returns the GOARCH used to select Go standard library
+// files. It can differ from GOARCH when upstream Go has no port for the real
+// architecture.
+func (c *Config) GoToolchainGOARCH() string {
+	if c.Target.GoToolchainGOARCH != "" {
+		return c.Target.GoToolchainGOARCH
+	}
 	return c.Target.GOARCH
 }
 

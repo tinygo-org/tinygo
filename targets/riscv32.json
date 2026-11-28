@@ -1,10 +1,12 @@
 {
 	"inherits": ["riscv"],
+	"goarch": "riscv",
+	"go-toolchain-goarch": "arm",
 	"llvm-target": "riscv32-unknown-none",
 	"cpu": "generic-rv32",
 	"target-abi": "ilp32",
 	"arch": "rv32imac",
-	"build-tags": ["tinygo.riscv32"],
+	"build-tags": ["tinygo.riscv32", "arm"],
 	"scheduler": "tasks",
 	"default-stack-size": 2048,
 	"ldflags": [

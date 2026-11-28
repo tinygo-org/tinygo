@@ -1,4 +1,4 @@
-//go:build tinygo.riscv32 && virt
+//go:build tinygo.riscv && virt
 
 // Machine implementation for VirtIO targets.
 // At the moment only QEMU RISC-V is supported, but support for ARM for example

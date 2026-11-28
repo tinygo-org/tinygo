@@ -230,7 +230,11 @@ var windowsARM64Builtins = []string{
 var libCompilerRT = Library{
 	name: "compiler-rt",
 	cflags: func(target, headerPath string) []string {
-		return []string{"-Werror", "-Wall", "-std=c11", "-nostdlibinc"}
+		flags := []string{"-Werror", "-Wall", "-std=c11", "-nostdlibinc"}
+		if strings.HasPrefix(target, "riscv64") {
+			flags = append(flags, "-mcmodel=medany")
+		}
+		return flags
 	},
 	sourceDir: func() string {
 		llvmDir := filepath.Join(goenv.Get("TINYGOROOT"), "llvm-project/compiler-rt/lib/builtins")

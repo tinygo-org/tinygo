@@ -2,7 +2,8 @@
 
 package runtime
 
-const GOARCH = "arm64" // riscv pretends to be arm
+// GOARCH reports the real CPU architecture.
+const GOARCH = "riscv64"
 
 // The bitness of the CPU (e.g. 8, 32, 64).
 const TargetBits = 64

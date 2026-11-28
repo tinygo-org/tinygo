@@ -9,8 +9,8 @@ import (
 // Randomized goroutines park in many ways while holding heap objects. The output
 // does not depend on scheduling, so it must match the output with -gc=leaking.
 
-// Baremetal targets report GOARCH arm and have little RAM.
-var small = runtime.GOARCH == "arm"
+// Baremetal targets have little RAM.
+var small = runtime.GOARCH == "arm" || runtime.GOARCH == "riscv"
 
 func size(full, little int) int {
 	if small {

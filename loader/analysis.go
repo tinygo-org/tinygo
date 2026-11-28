@@ -232,7 +232,7 @@ func analysisPatterns(config *compileopts.Config, patterns []string) ([]string, 
 func analysisPackageDirs(root string, config *compileopts.Config) ([]string, error) {
 	context := build.Default
 	context.GOOS = config.GOOS()
-	context.GOARCH = config.GOARCH()
+	context.GOARCH = config.GoToolchainGOARCH()
 	context.CgoEnabled = true
 	context.BuildTags = append(append([]string(nil), context.BuildTags...), config.BuildTags()...)
 	found := make(map[string]bool)

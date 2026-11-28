@@ -244,6 +244,9 @@ func (b *builder) createRawSyscall(call *ssa.CallCommon) (llvm.Value, error) {
 		result := b.CreateSelect(isError, negativeResult, resultCode, "")
 		return result, nil
 
+	case (b.GOARCH == "riscv" || b.GOARCH == "riscv64") && b.GOOS == "linux":
+		return llvm.Value{}, b.makeError(call.Pos(), "system calls are not supported on RISC-V")
+
 	default:
 		return llvm.Value{}, b.makeError(call.Pos(), "unknown GOOS/GOARCH for syscall: "+b.GOOS+"/"+b.GOARCH)
 	}
