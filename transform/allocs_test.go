@@ -90,7 +90,7 @@ func TestAllocsCapturesAttribute(t *testing.T) {
 
 			intType := ctx.Int32Type()
 			ptrType := llvm.PointerType(ctx.Int8Type(), 0)
-			checkType := llvm.FunctionType(ctx.VoidType(), []llvm.Type{ptrType}, false)
+			checkType := llvm.FunctionType(ptrType, []llvm.Type{ptrType}, false)
 			check := llvm.AddFunction(mod, "check", checkType)
 			check.AddAttributeAtIndex(1, ctx.CreateEnumAttribute(llvm.AttributeKindID("captures"), tc.value))
 
