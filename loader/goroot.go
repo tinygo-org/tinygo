@@ -292,7 +292,7 @@ func pathsToOverride(config *compileopts.Config) map[string]gorootOverride {
 		// since TinyGo targets never use FIPS jitter entropy.
 		"crypto/internal/entropy/":        mergeSubdirs,
 		"crypto/internal/entropy/v1.0.0/": replace,
-		"crypto/rand/":                    replace,
+		"crypto/rand/":                    gorootMergeTestsWith(),
 		"crypto/tls/":                     replace,
 		"crypto/x509/":                    mergeSubdirs,
 		"crypto/x509/internal/":           mergeSubdirs,

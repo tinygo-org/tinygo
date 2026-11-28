@@ -136,6 +136,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("crypto/internal/fips140/edwards25519/field")
 		r.skipPackage("crypto/internal/fips140/mldsa")
 		r.skipPackage("crypto/internal/fips140only")
+		r.skipPackage("crypto/rand")
 	}
 	if baremetal {
 		r.skipPackage("internal/nettest")
@@ -471,6 +472,17 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipTests("bufio", "TestReadStringAllocs")
 	r.skipTests("bytes", "TestNewBufferShallow")
 	r.skipTests("crypto/ed25519", "TestAllocations")
+	r.skipTests("crypto/rand",
+		"TestAllocations",
+		"TestDefaultReader",
+		"TestPrimeNondeterministic",
+		"TestReadError",
+	)
+	if browser {
+		// targets/wasm_exec.js passes the full buffer to crypto.getRandomValues,
+		// which rejects reads larger than 65,536 bytes.
+		r.skipTests("crypto/rand", "TestLargeRead", "TestRead")
+	}
 	r.skipTests("crypto/rsa", "TestAllocations")
 	r.skipTests("crypto/sha256", "TestAllocations", "TestAllocatonsWithTypeAsserts")
 	r.skipTests("crypto/sha3", "TestAllocations")
