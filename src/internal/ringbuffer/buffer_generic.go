@@ -1,5 +1,5 @@
 //go:build !atmega
 
-package machine
+package ringbuffer
 
 const bufferSize = 128
