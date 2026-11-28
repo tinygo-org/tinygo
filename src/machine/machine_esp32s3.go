@@ -484,3 +484,8 @@ func ReadTemperature() int32 {
 	//   T_millicelsius = (4386 * raw - 205200) / 10
 	return (4386*raw - 205200) / 10
 }
+
+// ResetReasonRaw returns the chip specific reset code.
+func ResetReasonRaw() uint32 {
+	return esp.RTC_CNTL.GetRESET_STATE_RESET_CAUSE_PROCPU()
+}

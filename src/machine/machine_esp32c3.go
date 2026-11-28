@@ -495,3 +495,8 @@ func enableSPIClock(bus *esp.SPI2_Type) {
 		esp.SYSTEM.SetPERIP_RST_EN0_SPI2_RST(0)
 	}
 }
+
+// ResetReasonRaw returns the chip specific reset code.
+func ResetReasonRaw() uint32 {
+	return esp.RTC_CNTL.GetRESET_STATE_RESET_CAUSE_PROCPU()
+}
