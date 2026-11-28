@@ -332,6 +332,44 @@ func TestTrimPath(t *testing.T) {
 	}
 }
 
+func TestUntrimmedBuildReproducible(t *testing.T) {
+	t.Parallel()
+	options := optionsFromTarget(*testTarget, sema)
+	config, err := builder.NewConfig(&options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.GOOS() == "darwin" {
+		t.Skip("untrimmed darwin binaries store object file paths")
+	}
+	root := t.TempDir()
+	dir := filepath.Join(root, "src")
+	if err := os.CopyFS(dir, os.DirFS(filepath.Join(TESTDATA, "trimpath"))); err != nil {
+		t.Fatal(err)
+	}
+	cache := filepath.Join(root, "cache")
+	var binaries [][]byte
+	for i := range 2 {
+		if err := os.RemoveAll(cache); err != nil {
+			t.Fatal(err)
+		}
+		outpath := filepath.Join(root, fmt.Sprintf("%d.out", i))
+		cmd := trimPathCommand(t, dir, "build", "-p=4", "-o", outpath, ".")
+		cmd.Env = append(cmd.Env, "XDG_CACHE_HOME="+cache, "HOME="+cache, "LocalAppData="+cache)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("build failed: %v\n%s", err, output)
+		}
+		binary, err := os.ReadFile(outpath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		binaries = append(binaries, binary)
+	}
+	if !bytes.Equal(binaries[0], binaries[1]) {
+		t.Error("untrimmed binaries built from an empty cache are not identical")
+	}
+}
+
 func TestTrimPathStackSizes(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

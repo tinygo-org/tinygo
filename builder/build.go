@@ -510,6 +510,8 @@ func Build(pkgName, outpath, tmpdir string, config *compileopts.Config) (*BuildR
 						flags = append(flags,
 							compileopts.FilePrefixMap(tmpdir, config.CSourcePath(pkg.RecordedDir())),
 						)
+					} else {
+						flags = append(flags, "-fdebug-prefix-map="+tmpdir+"="+pkg.OriginalDir())
 					}
 					if config.Options.PrintCommands != nil {
 						config.Options.PrintCommands("clang", flags...)
