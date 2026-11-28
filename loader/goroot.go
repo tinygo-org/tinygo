@@ -324,7 +324,7 @@ func pathsToOverride(config *compileopts.Config) map[string]gorootOverride {
 		// 16-bit targets (AVR) where these constants overflow, so we
 		// provide a patched version.
 		"unicode/":      mergeSubdirs,
-		"unicode/utf8/": replace,
+		"unicode/utf8/": gorootMergeTestsWith(),
 		"unique/":       replace,
 	}
 
