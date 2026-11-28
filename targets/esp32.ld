@@ -383,6 +383,7 @@ PROVIDE(ets_install_putc1 = 0x40007d18);
 PROVIDE(ets_install_uart_printf = 0x40007d28);
 PROVIDE(intr_matrix_set = 0x4000681c);
 PROVIDE(rtc_get_reset_reason = 0x400081d4);
+PROVIDE(software_reset = 0x4000824c);
 PROVIDE(phy_get_romfuncs = 0x40004100);
 PROVIDE(uart_tx_one_char = 0x40009200);
 PROVIDE(uart_rx_one_char = 0x400092d0);

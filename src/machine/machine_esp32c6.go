@@ -495,3 +495,8 @@ func enableSPIClock(bus *esp.SPI2_Type) {
 		esp.PCR.SetSPI2_CLKM_CONF_SPI2_CLKM_EN(1)
 	}
 }
+
+// ResetReasonRaw returns the chip specific reset code.
+func ResetReasonRaw() uint32 {
+	return esp.LP_CLKRST.GetRESET_CAUSE()
+}

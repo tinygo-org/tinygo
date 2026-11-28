@@ -916,3 +916,8 @@ func (spi *SPI) Tx(w, r []byte) error {
 
 	return nil
 }
+
+// ResetReasonRaw returns the chip specific reset code.
+func ResetReasonRaw() uint32 {
+	return esp.RTC_CNTL.GetRESET_STATE_RESET_CAUSE_PROCPU()
+}
