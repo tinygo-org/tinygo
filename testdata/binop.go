@@ -1,5 +1,7 @@
 package main
 
+import "unsafe"
+
 func main() {
 	println("string equality")
 	println(a == "a")
@@ -98,6 +100,47 @@ func main() {
 	println("interface equality")
 	println("a==b", a == b)
 	println("b==b2", b == b2)
+
+	println("large struct equality")
+	println("p1==p2", p1 == p2)
+	p2.b[7] = 1
+	println("p1==p2", p1 == p2, "p1!=p2", p1 != p2)
+	println("p2==zero", p2 == plainStruct{})
+	q2.b[3] = 2
+	println("q1==q2", q1 == q2)
+	q2.b[3] = 0
+	println("q1==q2", q1 == q2)
+	if unsafe.Sizeof(n2) > unsafe.Offsetof(n2.b)+unsafe.Offsetof(n2.b.y)+1 {
+		// Set a padding byte. AVR aligns uint32 to 1 byte, so it has none.
+		*(*byte)(unsafe.Add(unsafe.Pointer(&n2), unsafe.Sizeof(n2)-1)) = 1
+	}
+	println("n1==n2", n1 == n2)
+}
+
+// Globals keep these large values off the 384 byte simavr goroutine stack.
+var (
+	p1, p2 plainStruct
+	q1, q2 paddedStruct
+	n1, n2 nestedPaddedStruct
+)
+
+type plainStruct struct {
+	a [16]uint32
+	b [8]uint32
+	c *int
+}
+
+type paddedStruct struct {
+	a uint8
+	b [32]uint32
+}
+
+type nestedPaddedStruct struct {
+	a [16]uint32
+	b struct {
+		x uint32
+		y uint8
+	}
 }
 
 var x = true
