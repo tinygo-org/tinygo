@@ -19,11 +19,12 @@ import (
 )
 
 type ruleSet struct {
-	packages map[string]*packagePlan
-	subtrees []subtreeRule
-	allow    []allowRule
-	includes []string
-	err      error
+	baremetal bool
+	packages  map[string]*packagePlan
+	subtrees  []subtreeRule
+	allow     []allowRule
+	includes  []string
+	err       error
 }
 
 type subtreeRule struct {
@@ -107,6 +108,30 @@ func (r *ruleSet) skipTest(pkg, pattern string) {
 	p := r.packageRule(pkg, line)
 	r.checkPattern(pattern, line)
 	p.skips = append(p.skips, pattern)
+}
+
+func (r *ruleSet) skipTests(pkg string, names ...string) {
+	line := ruleLine()
+	if len(names) == 0 {
+		r.fail(line, "expected at least one test name")
+		return
+	}
+	for _, name := range names {
+		if name == "" || regexp.QuoteMeta(name) != name || strings.ContainsAny(name, " \t\r\n/") {
+			r.fail(line, "invalid test name %q", name)
+			return
+		}
+	}
+	p := r.packageRule(pkg, line)
+	if r.baremetal {
+		p.skips = append(p.skips, strings.Join(names, "|"))
+		return
+	}
+	if len(names) == 1 {
+		p.skips = append(p.skips, "^"+names[0]+"$")
+		return
+	}
+	p.skips = append(p.skips, "^("+strings.Join(names, "|")+")$")
 }
 
 func (r *ruleSet) runTest(pkg, pattern string) {

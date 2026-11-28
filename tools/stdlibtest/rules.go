@@ -3,9 +3,9 @@ package main
 import "slices"
 
 func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
-	var r ruleSet
 	hasTag := func(tag string) bool { return slices.Contains(target.BuildTags, tag) }
 	baremetal := hasTag("baremetal")
+	r := ruleSet{baremetal: baremetal}
 	wasm := hasTag("tinygo.wasm")
 	wasi := hasTag("tinygo.wasi")
 	browser := wasm && !wasi
@@ -42,7 +42,13 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	// OID encoding and self-signed certificate tests fail.
 	r.skipPackage("crypto/x509")
 	if wasi {
-		r.skipTest("io", `^(TestMultiReaderFlatten|TestMultiWriterSingleChainFlatten|TestMultiReaderFreesExhaustedReaders|TestMultiWriter_WriteStringSingleAlloc|TestPipeAllocations)$`)
+		r.skipTests("io",
+			"TestMultiReaderFlatten",
+			"TestMultiWriterSingleChainFlatten",
+			"TestMultiReaderFreesExhaustedReaders",
+			"TestMultiWriter_WriteStringSingleAlloc",
+			"TestPipeAllocations",
+		)
 	} else {
 		r.skipPackage("io")
 	}
@@ -78,7 +84,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	r.skipPackage("internal/cpu")
 	r.skipPackage("internal/runtime/gc/scan")
 	if linux {
-		r.skipTest("internal/godebug", `^Test(Metrics|CmdBisect|BisectTestCase)$`)
+		r.skipTests("internal/godebug", "TestMetrics", "TestCmdBisect", "TestBisectTestCase")
 	} else {
 		r.skipPackage("internal/godebug")
 	}
@@ -118,7 +124,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	if !hosted && !wasip1 {
 		r.skipPackage("crypto/internal/sysrand")
 	} else if darwin || windows {
-		r.skipTest("crypto/internal/sysrand", `^TestReadError$`)
+		r.skipTests("crypto/internal/sysrand", "TestReadError")
 	}
 	if !hosted && !wasi {
 		r.skipPackage("crypto/internal/fips140/bigmod")
@@ -161,7 +167,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("net/internal/socktest")
 	}
 	if baremetal || browser {
-		r.skipTest("embed/internal/embedtest", `TestXGlobal`)
+		r.skipTests("embed/internal/embedtest", "TestXGlobal")
 	}
 	if baremetal && !qemu {
 		r.skipPackage("expvar")
@@ -264,38 +270,59 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	}
 
 	if windows || wasi {
-		r.skipTest("flag", `^TestExitCode$`)
+		r.skipTests("flag", "TestExitCode")
 	}
 	if windows && hasTag("scheduler.tasks") {
-		r.skipTest("context", `^TestContextErrDoneRace$`)
+		r.skipTests("context", "TestContextErrDoneRace")
 	}
-	if baremetal {
-		r.skipTest("image/draw", `TestPaletted`)
-	} else if browser {
-		r.skipTest("image/draw", `^TestPaletted$`)
+	if baremetal || browser {
+		r.skipTests("image/draw", "TestPaletted")
 	}
 	if wasi {
-		r.skipTest("fmt", `^TestScanInts$`)
-		r.skipTest("regexp", `^TestOnePassCutoff$`)
-		r.skipTest("image/png", `^TestDimensionOverflow$`)
+		r.skipTests("fmt", "TestScanInts")
+		r.skipTests("regexp", "TestOnePassCutoff")
+		r.skipTests("image/png", "TestDimensionOverflow")
 	}
 
 	if wasip2 {
-		r.skipTest("archive/tar", `^TestFileInfoHeaderSymlink$`)
-		r.skipTest("debug/elf", `^TestNoSectionOverlaps$`)
+		r.skipTests("archive/tar", "TestFileInfoHeaderSymlink")
+		r.skipTests("debug/elf", "TestNoSectionOverlaps")
 	}
 	if windows || wasip2 {
-		r.skipTest("math/rand", `^TestDefaultRace$`)
+		r.skipTests("math/rand", "TestDefaultRace")
 	}
 	if wasi {
-		r.skipTest("testing/quick", `^TestMutuallyRecursive$`)
+		r.skipTests("testing/quick", "TestMutuallyRecursive")
 	}
 	if browser {
 		// The Node runner does not provide the filesystem fixtures.
-		r.skipTest("image/gif", `^(TestWriter|TestSubImage|TestEncodeAllGo1Dot4|TestEncodeAllGo1Dot5|TestEncodeAllGo1Dot5GlobalColorModel|TestEncodeWrappedImage)$`)
-		r.skipTest("image/jpeg", `^(TestDecodeProgressive|TestDecodeEOF|TestTruncatedSOSDataDoesntPanic|TestIssue56724|TestBadRestartMarker|TestDecodeFlexSubsampling|TestWriter)$`)
-		r.skipTest("image/png", `^(TestReader|TestReaderError|TestPalettedDecodeConfig|TestInterlaced|TestPaletted8OutOfRangePixel|TestWriter|TestDimensionOverflow)$`)
-		r.skipTest("regexp", `^(TestRE2Exhaustive|TestRE2Search)$`)
+		r.skipTests("image/gif",
+			"TestWriter",
+			"TestSubImage",
+			"TestEncodeAllGo1Dot4",
+			"TestEncodeAllGo1Dot5",
+			"TestEncodeAllGo1Dot5GlobalColorModel",
+			"TestEncodeWrappedImage",
+		)
+		r.skipTests("image/jpeg",
+			"TestDecodeProgressive",
+			"TestDecodeEOF",
+			"TestTruncatedSOSDataDoesntPanic",
+			"TestIssue56724",
+			"TestBadRestartMarker",
+			"TestDecodeFlexSubsampling",
+			"TestWriter",
+		)
+		r.skipTests("image/png",
+			"TestReader",
+			"TestReaderError",
+			"TestPalettedDecodeConfig",
+			"TestInterlaced",
+			"TestPaletted8OutOfRangePixel",
+			"TestWriter",
+			"TestDimensionOverflow",
+		)
+		r.skipTests("regexp", "TestRE2Exhaustive", "TestRE2Search")
 	}
 
 	// Hosted coverage
@@ -311,8 +338,8 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 		r.skipPackage("mime")
 	}
 	if wasip2 {
-		r.skipTest("io/ioutil", `^TestReadOnlyWriteFile$`)
-		r.skipTest("testing/fstest", `^TestSymlink$`)
+		r.skipTests("io/ioutil", "TestReadOnlyWriteFile")
+		r.skipTests("testing/fstest", "TestSymlink")
 	}
 
 	// ARM64 DIT tests need Go assembly for internal/runtime/sys.DITEnabled.
@@ -431,7 +458,7 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	}
 	if wasi {
 		// The deep glob test exhausts the Wasm stack.
-		r.skipTest("io/fs", `^TestCVE202230630$`)
+		r.skipTests("io/fs", "TestCVE202230630")
 	}
 	r.stackSizeMB("path/filepath", 4)
 	r.stackSizeMB("regexp", 1)
@@ -441,124 +468,120 @@ func rulesFor(target targetInfo, opts options, hostOS string) ruleSet {
 	}
 
 	// TinyGo exceeds the upstream allocation budgets for these operations.
-	r.skipTest("bufio", `^TestReadStringAllocs$`)
-	r.skipTest("bytes", `^TestNewBufferShallow$`)
-	r.skipTest("crypto/ed25519", `^TestAllocations$`)
-	r.skipTest("crypto/rsa", `^TestAllocations$`)
-	r.skipTest("crypto/sha256", `^(TestAllocations|TestAllocatonsWithTypeAsserts)$`)
-	r.skipTest("crypto/sha3", `^TestAllocations$`)
-	r.skipTest("crypto/sha512", `^TestAllocations$`)
-	r.skipTest("database/sql", `^TestGrabConnAllocs$`)
-	r.skipTest("encoding/gob", `^TestCountDecodeMallocs$`)
-	r.skipTest("encoding/json/jsontext", `^TestTokenStringAllocations$`)
-	r.skipTest("math/big", `^TestNewIntAllocs$`)
-	r.skipTest("mime", `^TestLookupMallocs$`)
+	r.skipTests("bufio", "TestReadStringAllocs")
+	r.skipTests("bytes", "TestNewBufferShallow")
+	r.skipTests("crypto/ed25519", "TestAllocations")
+	r.skipTests("crypto/rsa", "TestAllocations")
+	r.skipTests("crypto/sha256", "TestAllocations", "TestAllocatonsWithTypeAsserts")
+	r.skipTests("crypto/sha3", "TestAllocations")
+	r.skipTests("crypto/sha512", "TestAllocations")
+	r.skipTests("database/sql", "TestGrabConnAllocs")
+	r.skipTests("encoding/gob", "TestCountDecodeMallocs")
+	r.skipTests("encoding/json/jsontext", "TestTokenStringAllocations")
+	r.skipTests("fmt", "TestCountMallocs")
+	r.skipTests("math/big", "TestNewIntAllocs")
+	r.skipTests("mime", "TestLookupMallocs")
 	if opts.mode == modeFull || opts.mode == modeFast || wasm {
-		r.skipTest("net/netip", `^TestAddrStringAllocs$|^TestNoAllocs$/^(Addr.IsGlobalUnicast|Addr.IsInterfaceLocalMulticast|Addr.IsLinkLocalMulticast|Addr.IsLinkLocalUnicast|Addr.IsPrivate)$|^TestNoAllocs$/^Addr\.Zone$/^6zone$`)
+		r.skipTests("net/netip", "TestAddrStringAllocs")
+		r.skipTest("net/netip", `^TestNoAllocs$/^(Addr.IsGlobalUnicast|Addr.IsInterfaceLocalMulticast|Addr.IsLinkLocalMulticast|Addr.IsLinkLocalUnicast|Addr.IsPrivate)$|^TestNoAllocs$/^Addr\.Zone$/^6zone$`)
 	}
-	if !baremetal {
-		r.skipTest("reflect", `^TestMapIterSet$`)
-	}
-	if !baremetal {
-		r.skipTest("sort", `^TestSearchWrappersDontAlloc$`)
-		r.skipTest("strconv", `^(TestCountMallocs|TestAllocationsFromBytes)$`)
-	}
-	if !baremetal {
-		r.skipTest("unicode/utf16", `^TestAllocationsDecode$`)
-	}
+	r.skipTests("reflect", "TestMapIterSet")
+	r.skipTests("slices", "TestGrow", "TestInsert", "TestConcat")
+	r.skipTests("sort", "TestSearchWrappersDontAlloc")
+	r.skipTests("strconv", "TestCountMallocs", "TestAllocationsFromBytes")
+	r.skipTests("strings",
+		"TestBuilderAllocs",
+		"TestBuilderGrow",
+		"TestBuilderGrowSizeclasses",
+		"TestIndexRune",
+		"TestReplace",
+	)
+	r.skipTests("unicode/utf16", "TestAllocationsDecode")
 
-	// The same allocation checks on bare metal use substring matches.
-	if baremetal {
-		r.skipTest("reflect", `TestMapIterSet`)
-		r.skipTest("sort", `TestSearchWrappersDontAlloc`)
-		r.skipTest("strconv", `TestCountMallocs|TestAllocationsFromBytes`)
-		r.skipTest("unicode/utf16", `TestAllocationsDecode`)
+	r.skipTests("internal/zstd", "TestAlloc")
+	if !linux {
+		// On bare metal, TestLarge also matches TestLargeXXHash.
+		r.skipTests("internal/zstd", "TestLarge")
 	}
-	if qemu {
-		r.skipTest("fmt", `TestCountMallocs`)
-		r.skipTest("slices", `TestGrow|TestInsert|TestConcat`)
-		r.skipTest("strings", `TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace`)
-	} else {
-		r.skipTest("fmt", `^TestCountMallocs$`)
-		r.skipTest("slices", `^(TestGrow|TestInsert|TestConcat)$`)
-		r.skipTest("strings", `^(TestBuilderAllocs|TestBuilderGrow|TestBuilderGrowSizeclasses|TestIndexRune|TestReplace)$`)
-	}
-
 	if baremetal {
-		// TestLarge also matches TestLargeXXHash.
-		r.skipTest("internal/zstd", `TestAlloc|TestLarge|TestFileSamples`)
-	} else {
-		r.skipTest("internal/zstd", `^TestAlloc$`)
-		if !linux {
-			r.skipTest("internal/zstd", `^TestLarge$`)
-		}
-		if browser {
-			r.skipTest("internal/zstd", `^(TestFileSamples|TestLargeXXHash)$`)
-		}
+		r.skipTests("internal/zstd", "TestFileSamples")
+	} else if browser {
+		r.skipTests("internal/zstd", "TestFileSamples", "TestLargeXXHash")
 	}
 
 	// TestPureGoTag calls go/build, which rejects runtime.Compiler == "tinygo".
 	// TestDisallowedAssemblyInstructions walks GOROOT/src/crypto on disk.
-	if baremetal {
-		r.skipTest("crypto", `TestPureGoTag|TestDisallowedAssemblyInstructions`)
-	} else if browser || (hostOS == "windows" && wasi) {
-		r.skipTest("crypto", `^(TestPureGoTag|TestDisallowedAssemblyInstructions)$`)
-	} else {
-		r.skipTest("crypto", `^TestPureGoTag$`)
+	r.skipTests("crypto", "TestPureGoTag")
+	if baremetal || browser || (hostOS == "windows" && wasi) {
+		r.skipTests("crypto", "TestDisallowedAssemblyInstructions")
 	}
 	// The ML-DSA allocation check times out.
-	r.skipTest("crypto/mldsa", `^TestAllocations$`)
+	r.skipTests("crypto/mldsa", "TestAllocations")
 	// The ASN.1 nesting tests can exhaust fixed stacks. Linux uses a 20 MB stack.
 	if !linux {
-		r.skipTest("encoding/asn1", `TestUnmarshalNestingLimitSlice|TestUnmarshalNestingLimitStruct`)
+		r.skipTests("encoding/asn1", "TestUnmarshalNestingLimitSlice", "TestUnmarshalNestingLimitStruct")
 	}
 	// TestHTTPDecoding cannot reach its local HTTP server.
 	if !windows {
-		r.skipTest("encoding/json", `^TestHTTPDecoding$`)
+		r.skipTests("encoding/json", "TestHTTPDecoding")
 	}
 	// The warning for late flag definitions needs the caller's file and line.
+	r.skipTests("flag", "TestDefineAfterSet")
 	if qemu {
-		r.skipTest("flag", `TestExitCode|TestDefineAfterSet`)
-	} else {
-		r.skipTest("flag", `^TestDefineAfterSet$`)
+		r.skipTests("flag", "TestExitCode")
 	}
 	// Boehm does not reclaim unreachable timers and tickers in this test.
-	r.skipTest("time", `^TestTimerGC$`)
+	r.skipTests("time", "TestTimerGC")
 
 	// Both tests start subprocesses. macOS startProcess is a stub.
 	if darwin {
-		r.skipTest("flag", `^TestExitCode$`)
-		r.skipTest("math/rand", `^TestDefaultRace$`)
+		r.skipTests("flag", "TestExitCode")
+		r.skipTests("math/rand", "TestDefaultRace")
 		// Timer and goroutine stress tests can exhaust macOS threads.
-		r.skipTest("internal/singleflight", `^TestDoAndForgetUnsharedRace$`)
-		r.skipTest("time", `^(TestStopResult|TestResetResult|TestLongAdjustTimers)$|^TestZeroTimer$/^impl=(func|cache)$`)
+		r.skipTests("internal/singleflight", "TestDoAndForgetUnsharedRace")
+		r.skipTests("time", "TestStopResult", "TestResetResult", "TestLongAdjustTimers")
+		r.skipTest("time", `^TestZeroTimer$/^impl=(func|cache)$`)
 	}
 	// This test can exhaust Boehm's mark stack or Darwin's thread limit.
 	if hasTag("gc.boehm") || darwin {
-		r.skipTest("internal/synctest", `^TestWaitGroupManyBubbles$`)
+		r.skipTests("internal/synctest", "TestWaitGroupManyBubbles")
 	}
 	// Concurrent FuncOf and StructOf creation times out.
-	r.skipTest("internal/synctest", `^TestReflectFuncOf$`)
+	r.skipTests("internal/synctest", "TestReflectFuncOf")
 	// Bubble ownership checks start subprocesses.
 	if !linux {
-		r.skipTest("internal/synctest", `^(TestChannelMovedOutOfBubble|TestTimerFromInsideBubble|TestWaitGroupMovedIntoBubble|TestWaitGroupMovedOutOfBubble|TestWaitGroupMovedBetweenBubblesWithNonZeroCount)$`)
+		r.skipTests("internal/synctest",
+			"TestChannelMovedOutOfBubble",
+			"TestTimerFromInsideBubble",
+			"TestWaitGroupMovedIntoBubble",
+			"TestWaitGroupMovedOutOfBubble",
+			"TestWaitGroupMovedBetweenBubblesWithNonZeroCount",
+		)
 	}
 	// The output cases need bubble result propagation and caller/helper locations.
 	// The HTTP case needs Transport.DialContext and ExpectContinueTimeout.
-	r.skipTest("testing/synctest", `^(TestFatal|TestError|TestVerboseError|TestSkip|TestVerboseSkip|TestHelper|TestHTTPTransport100Continue)$`)
+	r.skipTests("testing/synctest",
+		"TestFatal",
+		"TestError",
+		"TestVerboseError",
+		"TestSkip",
+		"TestVerboseSkip",
+		"TestHelper",
+		"TestHTTPTransport100Continue",
+	)
 
 	// Template depth checks run with larger stacks on Linux and macOS.
 	if !linux && !darwin {
-		r.skipTest("html/template", `^TestMaxExecDepth$`)
-		r.skipTest("text/template", `^TestMaxExecDepth$`)
+		r.skipTests("html/template", "TestMaxExecDepth")
+		r.skipTests("text/template", "TestMaxExecDepth")
 	}
 	// The ZIP filesystem needs File.ReadAt, a stub on Windows.
 	if windows {
-		r.skipTest("html/template", `^TestParseZipFS$`)
+		r.skipTests("html/template", "TestParseZipFS")
 	}
 	// The Windows host volume mounted as the WASI root lacks /dev/null.
 	if hostOS == "windows" && (wasip1 || wasip2) {
-		r.skipTest("html/template", `^TestEmptyTemplateHTML$`)
+		r.skipTests("html/template", "TestEmptyTemplateHTML")
 	}
 
 	return r
