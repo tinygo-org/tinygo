@@ -9,8 +9,8 @@ import (
 	_ "unsafe"
 )
 
-// Baremetal targets report GOARCH arm and are slow.
-var small = runtime.GOARCH == "arm"
+// Baremetal targets are slow.
+var small = runtime.GOARCH == "arm" || runtime.GOARCH == "riscv"
 
 var (
 	workers  = 6

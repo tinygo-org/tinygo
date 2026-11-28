@@ -9,8 +9,8 @@ import (
 // Deep calls leave pointers to large buffers in the unused part of a goroutine
 // stack. The GC must not treat those stale words as roots.
 
-// Baremetal targets report GOARCH arm and have little RAM.
-var small = runtime.GOARCH == "arm"
+// Baremetal targets have little RAM.
+var small = runtime.GOARCH == "arm" || runtime.GOARCH == "riscv"
 
 var (
 	goroutines = 100

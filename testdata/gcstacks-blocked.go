@@ -5,8 +5,8 @@ import "runtime"
 // Goroutines blocked on channels that nothing else references can never run
 // again. The GC should be able to free their stacks.
 
-// Baremetal targets report GOARCH arm and have little RAM.
-var small = runtime.GOARCH == "arm"
+// Baremetal targets have little RAM.
+var small = runtime.GOARCH == "arm" || runtime.GOARCH == "riscv"
 
 var goroutines = 200
 

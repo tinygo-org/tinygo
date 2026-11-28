@@ -9,8 +9,8 @@ import (
 // Goroutines keep the only reference to heap objects in locals while parked. A
 // missed stack root lets churn overwrite the object, and check fails.
 
-// Baremetal targets report GOARCH arm and have little RAM.
-var small = runtime.GOARCH == "arm"
+// Baremetal targets have little RAM.
+var small = runtime.GOARCH == "arm" || runtime.GOARCH == "riscv"
 
 // size picks the count for the full run or for small targets.
 func size(full, little int) int {
